@@ -13,7 +13,8 @@ struct DetailView: View {
   @State private var episodes: [PlexMetadata] = []
   @State private var related: [PlexHub] = []
   @State private var error: String?
-  @State private var headerSize: CGSize = .zero
+  /// The visible height of the page; the header's backdrop is at least a share of it.
+  @State private var viewport: CGFloat = 800
 
   @Environment(\.playItem) private var playItem
   @Environment(\.contentLeading) private var leading
@@ -41,6 +42,7 @@ struct DetailView: View {
     }
     .scrollIndicators(.never)
     .astraScrollEdges()
+    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewport = $0 }
     // The backdrop runs under the title bar; the back button below stays inside the safe area.
     .ignoresSafeArea(edges: .top)
     .background(Astra.Color.bg.ignoresSafeArea())
@@ -69,64 +71,73 @@ struct DetailView: View {
 
   // MARK: Header
 
+  /// The header grows with its text instead of squeezing it into a fixed
+  /// frame, so the title, summary and buttons can never spill over the back
+  /// button or the seasons below. The backdrop fills whatever height that is.
   private var header: some View {
-    ZStack(alignment: .bottomLeading) {
-      RemoteImage(url: library.imageURL(shown.backdrop, width: headerSize.width, height: headerSize.height, scale: 1.5))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-        .onGeometryChange(for: CGSize.self, of: { $0.size }) { headerSize = $0 }
-      HeroScrim()
-
-      VStack(alignment: .leading, spacing: 16) {
-        HeroTitle(library: library, item: shown)
-        MetaRow(item: shown)
-        if let tagline = shown.tagline, !tagline.isEmpty {
-          Text(tagline).font(.system(size: 15, weight: .medium)).italic().foregroundStyle(Astra.Color.muted)
-        }
-        if let summary = shown.summary, !summary.isEmpty {
-          Text(summary)
-            .font(.system(size: 14.5))
-            .lineSpacing(4)
-            .foregroundStyle(Astra.Color.ink.opacity(0.85))
-            .lineLimit(5)
-            .frame(maxWidth: 620, alignment: .leading)
-        }
-        HStack(spacing: 14) {
-          Button {
-            playItem(shown)
-          } label: {
-            Label(playLabel, systemImage: "play.fill")
-          }
-          .astraPrimaryButton()
-          .keyboardShortcut(.defaultAction)
-
-          Button {
-            Task {
-              await library.setWatched(shown, watched: !shown.isWatched)
-              await load(refresh: true)
-            }
-          } label: {
-            Label(shown.isWatched ? "Watched" : "Mark Watched", systemImage: shown.isWatched ? "checkmark" : "eye")
-          }
-          .astraSecondaryButton()
-        }
-        .astraGlassGroup(spacing: 14)
-        .padding(.top, 4)
-        if !shown.directors.isEmpty {
-          Text("Directed by \(shown.directors.map(\.tag).joined(separator: ", "))")
-            .font(.system(size: 13)).foregroundStyle(Astra.Color.muted)
-        }
-        if let error {
-          Text(error).font(.system(size: 13)).foregroundStyle(.red.opacity(0.8))
-        }
+    VStack(alignment: .leading, spacing: 16) {
+      HeroTitle(library: library, item: shown)
+      MetaRow(item: shown)
+      if let tagline = shown.tagline, !tagline.isEmpty {
+        Text(tagline).font(.system(size: 15, weight: .medium)).italic().foregroundStyle(Astra.Color.muted)
+          .lineLimit(1)
       }
-      .padding(.leading, leading)
-      .padding(.trailing, Astra.Spacing.pageTrailing)
-      .padding(.bottom, 30)
-      .animation(Astra.Motion.base, value: item)
+      if let summary = shown.summary, !summary.isEmpty {
+        Text(summary)
+          .font(.system(size: 14.5))
+          .lineSpacing(4)
+          .foregroundStyle(Astra.Color.ink.opacity(0.85))
+          .lineLimit(4)
+          .frame(maxWidth: 620, alignment: .leading)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      HStack(spacing: 14) {
+        Button {
+          playItem(shown)
+        } label: {
+          Label(playLabel, systemImage: "play.fill")
+        }
+        .astraPrimaryButton()
+        .keyboardShortcut(.defaultAction)
+
+        if shown.type != .collection {
+          DownloadButton(item: shown)
+        }
+
+        Button {
+          Task {
+            await library.setWatched(shown, watched: !shown.isWatched)
+            await load(refresh: true)
+          }
+        } label: {
+          Label(shown.isWatched ? "Watched" : "Mark Watched", systemImage: shown.isWatched ? "checkmark" : "eye")
+        }
+        .astraSecondaryButton()
+      }
+      .astraGlassGroup(spacing: 14)
+      .padding(.top, 4)
+      if !shown.directors.isEmpty {
+        Text("Directed by \(shown.directors.map(\.tag).joined(separator: ", "))")
+          .font(.system(size: 13)).foregroundStyle(Astra.Color.muted).lineLimit(1)
+      }
+      if let error {
+        Text(error).font(.system(size: 13)).foregroundStyle(Astra.Color.muted)
+      }
     }
-    .frame(maxWidth: .infinity)
-    .astraHeaderHeight(cap: Astra.Layout.detailHeaderHeight)
+    .padding(.leading, leading)
+    .padding(.trailing, Astra.Spacing.pageTrailing)
+    // Room for the backdrop above the text, and for the back button.
+    .padding(.top, max(140, viewport * 0.32))
+    .padding(.bottom, 30)
+    .frame(maxWidth: .infinity, minHeight: min(Astra.Layout.detailHeaderHeight, viewport * 0.72), alignment: .bottomLeading)
+    .background {
+      ZStack {
+        ArtworkImage(library: library, item: shown, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .clipped()
+        HeroScrim()
+      }
+    }
   }
 
   private var playLabel: String {
@@ -153,11 +164,11 @@ struct DetailView: View {
               }
               .buttonStyle(.plain)
               .font(.system(size: 13, weight: .semibold))
-              .foregroundStyle(selected ? Color.white : Astra.Color.muted)
+              .foregroundStyle(selected ? Color.black : Astra.Color.muted)
               .padding(.horizontal, 16)
               .frame(height: 34)
               .background {
-                if selected { Capsule().fill(Astra.Color.purple) } else { Capsule().fill(.white.opacity(0.08)) }
+                if selected { Capsule().fill(Astra.Color.accent) } else { Capsule().fill(.white.opacity(0.08)) }
               }
               .animation(Astra.Motion.base, value: selected)
             }
@@ -167,15 +178,28 @@ struct DetailView: View {
         .scrollIndicators(.never)
         .scrollClipDisabled()
       }
-      ContentRow(title: selectedSeason?.title ?? "Episodes") {
-        ForEach(episodes) { episode in
-          EpisodeCard(library: library, item: episode)
+      HStack(spacing: Astra.Spacing.m) {
+        Text(selectedSeason?.title ?? "Episodes")
+          .font(Astra.Font.rowTitle)
+          .foregroundStyle(Astra.Color.ink)
+          .lineLimit(1)
+        if let selectedSeason, seasons.count > 1 {
+          DownloadButton(item: selectedSeason, compact: true)
         }
       }
-      .id(selectedSeason?.id)
-      .transition(.opacity)
+      .padding(.leading, leading)
+      // The row stays in place when the season changes; only its cards are replaced.
+      ScrollView(.horizontal) {
+        LazyHStack(alignment: .top, spacing: 14) {
+          ForEach(episodes) { episode in
+            EpisodeCard(library: library, item: episode)
+          }
+        }
+        .padding(.horizontal, leading)
+      }
+      .scrollIndicators(.never)
+      .scrollClipDisabled()
     }
-    .animation(Astra.Motion.page, value: selectedSeason?.id)
   }
 
   private var castRow: some View {
@@ -255,7 +279,7 @@ struct EpisodeCard: View {
             if item.isWatched {
               Image(systemName: "checkmark.circle.fill")
                 .symbolRenderingMode(.palette)
-                .foregroundStyle(.white, Astra.Color.purple)
+                .foregroundStyle(.black, .white)
                 .font(.system(size: 18))
                 .padding(8)
             }
@@ -272,6 +296,8 @@ struct EpisodeCard: View {
           if let duration = item.durationLabel {
             Text(duration).font(.system(size: 12)).foregroundStyle(Astra.Color.muted)
           }
+          // Room for the download button drawn over this corner.
+          Color.clear.frame(width: 30, height: 1)
         }
         if let summary = item.summary, !summary.isEmpty {
           Text(summary).font(.system(size: 12)).foregroundStyle(Astra.Color.muted).lineLimit(2)
@@ -281,5 +307,10 @@ struct EpisodeCard: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(AstraCardButtonStyle())
+    // Outside the card's button, so it gets its own clicks.
+    .overlay(alignment: .topTrailing) {
+      DownloadButton(item: item, compact: true)
+        .offset(x: 4, y: height + 1)
+    }
   }
 }

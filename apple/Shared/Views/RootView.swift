@@ -31,7 +31,7 @@ struct RootView: View {
         VStack {
           Spacer()
           HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Astra.Color.purpleLight)
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Astra.Color.ink)
             Text(error).font(.system(size: 13, weight: .medium)).foregroundStyle(Astra.Color.ink)
             Button {
               app.player.lastError = nil

@@ -3,16 +3,16 @@ import SwiftUI
 /// Astra tokens from DESIGN_SYSTEM.md, in one place.
 enum Astra {
   enum Color {
-    static let bg = SwiftUI.Color(hex: 0x07060B)
-    static let surface = SwiftUI.Color(hex: 0x15131D)
-    static let surface2 = SwiftUI.Color(hex: 0x1C1A26)
-    static let ink = SwiftUI.Color(hex: 0xF2F0F7)
-    static let muted = SwiftUI.Color(hex: 0xF2F0F7).opacity(0.66)
-    static let purple = SwiftUI.Color(hex: 0x7C4DFF)
-    static let purpleLight = SwiftUI.Color(hex: 0x9B74FF)
+    // Neutral, cinematic greys. No purple accent anywhere (KP, 2026-11-06):
+    // selection and progress are white; colour comes from the artwork.
+    static let bg = SwiftUI.Color(hex: 0x0A0A0B)
+    static let surface = SwiftUI.Color(hex: 0x161618)
+    static let surface2 = SwiftUI.Color(hex: 0x1E1E21)
+    static let ink = SwiftUI.Color(hex: 0xF5F5F7)
+    static let muted = SwiftUI.Color(hex: 0xF5F5F7).opacity(0.62)
+    /// Selection, progress and focus: white.
+    static let accent = SwiftUI.Color.white
     static let hairline = SwiftUI.Color.white.opacity(0.09)
-    static let playGradient = LinearGradient(
-      colors: [SwiftUI.Color(hex: 0x8A5CFF), SwiftUI.Color(hex: 0x7246F5)], startPoint: .top, endPoint: .bottom)
   }
 
   enum Font {
@@ -89,17 +89,12 @@ enum Astra {
     #endif
   }
 
-  /// The docked Mac sidebar's geometry. The page's left inset follows it, so
-  /// expanding the sidebar moves the content instead of covering it.
+  /// The docked Mac sidebar's geometry; pages start to the right of it.
   enum Sidebar {
     static let margin: CGFloat = 14
     static let collapsedWidth: CGFloat = 62
-    static let expandedWidth: CGFloat = 196
     static let gap: CGFloat = 28
-
-    static func contentInset(expanded: Bool) -> CGFloat {
-      margin + (expanded ? expandedWidth : collapsedWidth) + gap
-    }
+    static let contentInset: CGFloat = margin + collapsedWidth + gap
   }
 
   enum Radius {

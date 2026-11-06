@@ -103,13 +103,18 @@ public struct PlexServerClient: Sendable {
   /// "More like this" and collections for the details page.
   public func relatedHubs(ratingKey: String, count: Int = 12) async throws -> [PlexHub] {
     let body: HubBody = try await get(
-      "/hubs/metadata/\(ratingKey)/related", query: [.init(name: "count", value: String(count))])
+      "/hubs/metadata/\(ratingKey)/related",
+      query: [.init(name: "count", value: String(count)), .init(name: "includeGuids", value: "1")])
     return (body.Hub ?? []).filter { !$0.items.isEmpty }
   }
 
   public func search(_ text: String, limit: Int = 30) async throws -> [PlexMetadata] {
     let body: HubBody = try await get(
-      "/hubs/search", query: [.init(name: "query", value: text), .init(name: "limit", value: String(limit))])
+      "/hubs/search",
+      query: [
+        .init(name: "query", value: text), .init(name: "limit", value: String(limit)),
+        .init(name: "includeGuids", value: "1"),
+      ])
     return (body.Hub ?? []).flatMap(\.items).filter {
       [.movie, .show, .episode].contains($0.type)
     }

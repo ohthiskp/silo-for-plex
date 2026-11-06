@@ -53,6 +53,9 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.entertainment
+        # TMDB read token for artwork and the streaming switcher, from the
+        # TMDB_TOKEN build setting / environment (GitHub secret in CI). Empty: Plex artwork only.
+        AstraTMDBToken: $(TMDB_TOKEN)
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: Astra is licensed under GPL-3.0.
         NSAppTransportSecurity:
@@ -92,6 +95,8 @@ targets:
         group: MpvShared
       - path: ../ios/Runner/MpvPlayer/ExternalDisplayManager.swift
         group: MpvShared
+      - path: ../ios/Runner/MpvPlayer/MpvPipController.swift
+        group: MpvShared
       - path: ../ios/plezy.icon
         group: Resources
         buildPhase: resources
@@ -127,6 +132,7 @@ targets:
         NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
         NSBonjourServices: [_plexmediasvr._tcp]
         ITSAppUsesNonExemptEncryption: false
+        AstraTMDBToken: $(TMDB_TOKEN)
     settings:
       base:
         PRODUCT_NAME: Astra

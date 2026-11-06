@@ -34,7 +34,17 @@ final class PlayerController {
   private(set) var subtitleTracks: [Track] = []
   private(set) var audioId: Int?
   private(set) var subtitleId: Int?
+  private(set) var volume: Double = 100
+  private(set) var muted = false
+  private(set) var speed: Double = 1
+  /// iPhone Picture in Picture, or the Mac's small floating window.
+  private(set) var isPictureInPicture = false
   var lastError: String?
+  /// Opens the details page of what is playing (the title's chevron on iPhone).
+  @ObservationIgnored var openDetails: ((PlexMetadata) -> Void)?
+  #if os(iOS)
+    @ObservationIgnored private var pip: PipCoordinator?
+  #endif
 
   @ObservationIgnored weak var window: PlatformWindow?
   #if os(macOS)
@@ -62,12 +72,26 @@ final class PlayerController {
 
   // MARK: - Open and close
 
-  func play(_ item: PlexMetadata, library: LibraryStore) throws {
-    guard let server else { throw PlexError.notSignedIn }
+  /// The item playing, for switching between its versions.
+  @ObservationIgnored private var item: PlexMetadata?
+  private(set) var currentMediaID: Int?
+
+  /// Plays `item`: from `local` (a downloaded file) when given, else the
+  /// original file on the server.
+  func play(_ item: PlexMetadata, library: LibraryStore, local: PlaybackSource? = nil) throws {
     guard let window else { throw PlexError.invalidResponse }
     // Always the original file; the preference only picks between versions.
-    let source = try PlaybackResolver.directPlay(item, client: server, quality: .stored())
+    let source: PlaybackSource
+    if let local {
+      source = local
+    } else {
+      guard let server else { throw PlexError.notSignedIn }
+      source = try PlaybackResolver.directPlay(item, client: server, quality: .stored())
+    }
     if isActive { close() }
+    self.item = item
+    currentMediaID = local == nil ? source.media.id : nil
+    quality = .stored()
 
     let core = MpvPlayerCore()
     core.delegate = bridge
@@ -103,7 +127,7 @@ final class PlayerController {
 
     for (name, format) in [
       ("time-pos", "double"), ("duration", "double"), ("pause", "flag"), ("paused-for-cache", "flag"),
-      ("eof-reached", "flag"), ("width", "double"), ("height", "double"), ("track-list", "node"), ("aid", "string"), ("sid", "string"),
+      ("eof-reached", "flag"), ("volume", "double"), ("mute", "flag"), ("speed", "double"), ("width", "double"), ("height", "double"), ("track-list", "node"), ("aid", "string"), ("sid", "string"),
     ] {
       core.observeProperty(name, format: format)
     }
@@ -122,6 +146,10 @@ final class PlayerController {
       // The video sits under the hosting view, which must not paint over it.
       window.rootViewController?.view.backgroundColor = .clear
       core.updateFrame()
+      let pip = PipCoordinator(core: core)
+      pip.onChange = { [weak self] active in self?.isPictureInPicture = active }
+      pip.enableAutoStart()
+      self.pip = pip
     #endif
 
     isActive = true
@@ -133,9 +161,14 @@ final class PlayerController {
     reporter?.cancel()
     reporter = nil
     report(.stopped)
+    #if os(iOS)
+      pip?.teardown()
+      pip = nil
+    #endif
     core?.dispose()
     core = nil
     isActive = false
+    isPictureInPicture = false
     if let key = source?.ratingKey { library?.playbackEnded(ratingKey: key) }
     source = nil
     #if os(macOS)
@@ -145,6 +178,22 @@ final class PlayerController {
       try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     #endif
   }
+
+  /// Auto / HD / 4K from the player's chip: saves the preference (the same
+  /// one as Settings) and, if it picks a different original file, switches
+  /// to it at the same position. Never transcodes.
+  func setQuality(_ quality: PlaybackQuality) {
+    quality.save()
+    self.quality = quality
+    guard var item, let library, currentMediaID != nil,
+      let media = PlaybackResolver.preferredMedia(item.media, quality: quality), media.id != currentMediaID
+    else { return }
+    item.viewOffset = Int(position * 1000)
+    try? play(item, library: library)
+  }
+
+  /// The quality the chip shows as chosen.
+  private(set) var quality: PlaybackQuality = .stored()
 
   // MARK: - Transport
 
@@ -179,6 +228,50 @@ final class PlayerController {
     core?.setProperty("sid", value: id.map(String.init) ?? "no")
   }
 
+  func setVolume(_ value: Double) {
+    volume = min(100, max(0, value))
+    core?.setProperty("volume", value: String(format: "%.0f", volume))
+    if muted, volume > 0 { setMuted(false) }
+  }
+
+  func setMuted(_ value: Bool) {
+    muted = value
+    core?.setProperty("mute", value: value ? "yes" : "no")
+  }
+
+  func setSpeed(_ value: Double) {
+    speed = value
+    core?.setProperty("speed", value: String(format: "%.2f", value))
+  }
+
+  static let speeds: [Double] = [0.5, 0.75, 1, 1.25, 1.5, 2]
+
+  static var supportsPictureInPicture: Bool {
+    #if os(iOS)
+      PipCoordinator.isSupported
+    #else
+      true
+    #endif
+  }
+
+  /// iPhone: system Picture in Picture. Mac: a small floating window in the
+  /// corner of the screen, above other apps (mpv has no Mac PiP).
+  func togglePictureInPicture() {
+    #if os(iOS)
+      pip?.toggle()
+    #else
+      guard let host else { return }
+      isPictureInPicture = host.toggleMini()
+    #endif
+  }
+
+  /// The title's details page, from the player.
+  func showDetails() {
+    guard let item, let openDetails else { return }
+    close()
+    openDetails(item)
+  }
+
   func toggleFullScreen() {
     #if os(macOS)
       host?.toggleFullScreen()
@@ -199,6 +292,9 @@ final class PlayerController {
     case "time-pos": if let v = value as? Double { position = v }
     case "duration": if let v = value as? Double, v > 0 { duration = v }
     case "pause": if let v = value as? Bool { paused = v }
+    case "volume": if let v = value as? Double { volume = v }
+    case "mute": if let v = value as? Bool { muted = v }
+    case "speed": if let v = value as? Double { speed = v }
     case "paused-for-cache": buffering = (value as? Bool) ?? false
     case "width": videoWidth = (value as? Double) ?? 0
     case "height": videoHeight = (value as? Double) ?? 0

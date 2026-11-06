@@ -153,18 +153,6 @@ struct LibraryGridView: View {
   }
 }
 
-/// Downloads aren't in the SwiftUI app yet; the destination says so plainly.
-struct DownloadsView: View {
-  var body: some View {
-    AstraPage {
-      AstraSectionHeader(title: "Downloads")
-      EmptyState(
-        symbol: "arrow.down.circle", title: "No downloads",
-        message: "Downloading for offline viewing isn't in this version of Astra yet.")
-    }
-  }
-}
-
 struct SearchView: View {
   var library: LibraryStore
 

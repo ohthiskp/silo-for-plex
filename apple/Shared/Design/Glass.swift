@@ -49,18 +49,17 @@ extension View {
     modifier(AstraGlass(shape: shape, variant: variant, interactive: interactive, tint: tint))
   }
 
-  /// The primary action (Play, Sign in): Apple's prominent glass button.
-  /// White on the cinematic screens, violet for sign-in.
-  @ViewBuilder func astraPrimaryButton(violet: Bool = false) -> some View {
+  /// The primary action (Play, Sign in): Apple's prominent glass button, white with black text.
+  @ViewBuilder func astraPrimaryButton() -> some View {
     if #available(macOS 26.0, iOS 26.0, *) {
       self
         .buttonStyle(.glassProminent)
-        .tint(violet ? Astra.Color.purple : .white)
-        .foregroundStyle(violet ? Color.white : Color.black)
+        .tint(.white)
+        .foregroundStyle(Color.black)
         .font(.system(size: 15, weight: .semibold))
         .controlSize(.extraLarge)
     } else {
-      buttonStyle(PlayButtonStyle(violet: violet))
+      buttonStyle(PlayButtonStyle())
     }
   }
 
@@ -167,23 +166,16 @@ struct GlassIconButtonStyle: ButtonStyle {
 
 // MARK: - Before macOS 26
 
-/// White or violet pill for the primary action.
+/// White pill for the primary action.
 struct PlayButtonStyle: ButtonStyle {
-  var violet = false
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.system(size: 15, weight: .semibold))
-      .foregroundStyle(violet ? .white : .black)
+      .foregroundStyle(.black)
       .padding(.horizontal, 26)
       .frame(height: 48)
-      .background {
-        if violet {
-          Capsule().fill(Astra.Color.playGradient)
-        } else {
-          Capsule().fill(.white)
-        }
-      }
+      .background(Capsule().fill(.white))
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
       .animation(Astra.Motion.fast, value: configuration.isPressed)
       .contentShape(Capsule())

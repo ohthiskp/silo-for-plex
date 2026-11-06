@@ -454,3 +454,156 @@ final class HomeDeduplicationTests: XCTestCase {
     XCTAssertEqual(more.map(\.ratingKey), ["77"])
   }
 }
+
+// MARK: - Downloads
+
+final class DownloadTests: XCTestCase {
+  func makeItem(_ json: String) throws -> PlexMetadata {
+    try JSONDecoder().decode(PlexMetadata.self, from: Data(json.utf8))
+  }
+
+  let client = PlexServerClient(
+    baseURL: URL(string: "https://server.test:32400")!, token: "tok", serverName: "Home", info: testInfo,
+    transport: FakeTransport { _ in (200, Data()) })
+
+  func testRecordSavesTheVersionThePreferencePicksAsTheOriginalFile() throws {
+    let item = try makeItem(
+      """
+      {"ratingKey":"7","type":"movie","title":"Film","year":2024,"duration":7200000,"Media":[
+        {"id":1,"width":1920,"height":1080,"Part":[{"id":11,"key":"/library/parts/11/1/file.mkv","container":"mkv","size":"4000"}]},
+        {"id":2,"width":3840,"height":2160,"Part":[{"id":22,"key":"/library/parts/22/1/file.mp4","container":"mp4","size":9000}]}
+      ]}
+      """)
+    let hd = try XCTUnwrap(DownloadRecord.make(for: item, quality: .hd))
+    XCTAssertEqual(hd.partKey, "/library/parts/11/1/file.mkv")
+    XCTAssertEqual(hd.record.fileName, "7.mkv")
+    XCTAssertEqual(hd.record.bytes, 4000)
+    XCTAssertEqual(hd.record.resolutionBadge, "HD")
+
+    let uhd = try XCTUnwrap(DownloadRecord.make(for: item, quality: .auto))
+    XCTAssertEqual(uhd.partKey, "/library/parts/22/1/file.mp4")
+    XCTAssertEqual(uhd.record.fileName, "7.mp4")
+    XCTAssertEqual(uhd.record.resolutionBadge, "4K UHD")
+  }
+
+  func testShowsAndItemsWithoutFilesCannotBeRecorded() throws {
+    XCTAssertNil(DownloadRecord.make(for: try makeItem(#"{"ratingKey":"1","type":"show","title":"S"}"#), quality: .auto))
+    XCTAssertNil(DownloadRecord.make(for: try makeItem(#"{"ratingKey":"1","type":"movie","title":"M"}"#), quality: .auto))
+  }
+
+  func testRatingKeyCannotEscapeTheFolder() {
+    XCTAssertEqual(DownloadRecord.safeName("../../etc"), "etc")
+    XCTAssertEqual(DownloadRecord.safeName("/"), "item")
+  }
+
+  func testDownloadRequestAsksForTheOriginalWithTokenInHeader() {
+    let request = PlaybackResolver.downloadRequest(partKey: "/library/parts/22/1/file.mkv", client: client)
+    XCTAssertEqual(request.url?.absoluteString, "https://server.test:32400/library/parts/22/1/file.mkv?download=1")
+    XCTAssertEqual(request.value(forHTTPHeaderField: "X-Plex-Token"), "tok")
+  }
+
+  func testEpisodesGroupByShowInOrderAndIndexRoundTrips() throws {
+    func episode(_ key: String, _ show: String, _ s: Int, _ e: Int) throws -> DownloadRecord {
+      try XCTUnwrap(
+        DownloadRecord.make(
+          for: try makeItem(
+            """
+            {"ratingKey":"\(key)","type":"episode","title":"Ep","grandparentTitle":"\(show)","parentIndex":\(s),"index":\(e),
+             "Media":[{"id":1,"Part":[{"id":1,"key":"/p/\(key)","container":"mkv"}]}]}
+            """), quality: .auto)?.record)
+    }
+    var index = DownloadIndex()
+    index.upsert(try episode("3", "Severance", 2, 1))
+    index.upsert(try episode("1", "Severance", 1, 2))
+    index.upsert(try episode("2", "Andor", 1, 1))
+    index.upsert(try episode("1", "Severance", 1, 2))
+    XCTAssertEqual(index.records.count, 3)
+    XCTAssertEqual(index.shows.map(\.title), ["Andor", "Severance"])
+    XCTAssertEqual(index.shows[1].episodes.map(\.ratingKey), ["1", "3"])
+    XCTAssertEqual(index.shows[1].episodes[0].episodeLabel, "S1 · E2")
+
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("astra-index-\(UUID()).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try index.save(to: url)
+    let loaded = DownloadIndex.load(from: url)
+    XCTAssertEqual(loaded.records.map(\.ratingKey).sorted(), ["1", "2", "3"])
+    XCTAssertEqual(loaded.record("3")?.showTitle, "Severance")
+
+    index.remove("3")
+    XCTAssertNil(index.record("3"))
+  }
+
+  func testLocalPlaybackUsesTheFileAndResumes() throws {
+    let record = try XCTUnwrap(
+      DownloadRecord.make(
+        for: try makeItem(
+          #"{"ratingKey":"9","type":"movie","title":"Film","duration":7200000,"Media":[{"id":1,"width":1920,"height":1080,"Part":[{"id":1,"key":"/p","container":"mkv"}]}]}"#
+        ), quality: .auto)?.record)
+    let file = URL(fileURLWithPath: "/tmp/9.mkv")
+    let source = PlaybackResolver.local(record, fileURL: file, resumeMs: 600_000)
+    XCTAssertEqual(source.url, file)
+    XCTAssertTrue(source.headers.isEmpty)
+    XCTAssertEqual(source.startSeconds, 600)
+    XCTAssertEqual(source.ratingKey, "9")
+    XCTAssertEqual(PlaybackResolver.local(record, fileURL: file, resumeMs: 7_190_000).startSeconds, 0)
+  }
+}
+
+// MARK: - TMDB
+
+final class TMDBTests: XCTestCase {
+  func testDiscoverOnServiceDecodesAndFiltersByProvider() async throws {
+    let transport = FakeTransport { request in
+      XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer t")
+      return (
+        200,
+        Data(
+          """
+          {"results":[
+            {"id":1399,"name":"Game of Thrones","first_air_date":"2011-04-17","poster_path":"/p.jpg","vote_average":8.4},
+            {"id":5,"name":"No Art"},
+            {"id":6,"name":""}
+          ]}
+          """.utf8)
+      )
+    }
+    let tmdb = TMDBClient(token: "t", transport: transport)
+    let items = try await tmdb.onService(StreamingService.byID("max")!, .tv)
+    XCTAssertEqual(items.map(\.id), ["tv:1399"])
+    XCTAssertEqual(items[0].year, 2011)
+    let query = URLComponents(url: try XCTUnwrap(transport.requests.first?.url), resolvingAgainstBaseURL: false)!
+    XCTAssertEqual(query.path, "/3/discover/tv")
+    XCTAssertEqual(query.queryItems?.first { $0.name == "with_watch_providers" }?.value, "1899")
+    XCTAssertEqual(query.queryItems?.first { $0.name == "watch_region" }?.value, "US")
+  }
+
+  func testArtworkPrefersPngLogo() async throws {
+    let tmdb = TMDBClient(
+      token: "t",
+      transport: FakeTransport { _ in
+        (
+          200,
+          Data(
+            #"{"poster_path":"/p.jpg","backdrop_path":"/b.jpg","images":{"logos":[{"file_path":"/l.svg"},{"file_path":"/l.png"}]}}"#
+              .utf8)
+        )
+      })
+    let art = try await tmdb.artwork(id: 603, kind: .movie)
+    XCTAssertEqual(art.logoPath, "/l.png")
+    XCTAssertEqual(TMDBArtwork.url(art.posterPath, size: "w500")?.absoluteString, "https://image.tmdb.org/t/p/w500/p.jpg")
+    XCTAssertNil(TMDBArtwork.url(nil, size: "w500"))
+  }
+
+  func testTmdbKeyFromPlexGuids() throws {
+    let movie = try JSONDecoder().decode(
+      PlexMetadata.self,
+      from: Data(#"{"ratingKey":"1","type":"movie","title":"M","Guid":[{"id":"imdb://tt1"},{"id":"tmdb://603"}]}"#.utf8))
+    XCTAssertEqual(movie.tmdbKey, "movie:603")
+    let show = try JSONDecoder().decode(
+      PlexMetadata.self, from: Data(#"{"ratingKey":"2","type":"show","title":"S","Guid":[{"id":"tmdb://1399"}]}"#.utf8))
+    XCTAssertEqual(show.tmdbKey, "tv:1399")
+    let episode = try JSONDecoder().decode(
+      PlexMetadata.self, from: Data(#"{"ratingKey":"3","type":"episode","title":"E","Guid":[{"id":"tmdb://9"}]}"#.utf8))
+    XCTAssertNil(episode.tmdbKey)
+  }
+}

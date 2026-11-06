@@ -54,16 +54,28 @@ actor ImagePipeline {
   }
 }
 
-/// Artwork that fades in once decoded, over a quiet placeholder.
-struct RemoteImage: View {
+/// Artwork that fades in once decoded, over a quiet placeholder. An image
+/// already in memory shows on the first frame, with no fade.
+struct RemoteImage<Placeholder: View>: View {
   var url: URL?
-  var contentMode: ContentMode = .fill
+  var contentMode: ContentMode
+  var placeholder: Placeholder
 
   @State private var image: PlatformImage?
+  @State private var loadedURL: URL?
+
+  init(url: URL?, contentMode: ContentMode = .fill, placeholder: Placeholder) {
+    self.url = url
+    self.contentMode = contentMode
+    self.placeholder = placeholder
+    let hit = url.flatMap { ImagePipeline.shared.cached($0) }
+    _image = State(initialValue: hit)
+    _loadedURL = State(initialValue: hit == nil ? nil : url)
+  }
 
   var body: some View {
     ZStack {
-      Astra.Color.surface
+      placeholder
       if let image {
         Image(platformImage: image)
           .resizable()
@@ -73,14 +85,69 @@ struct RemoteImage: View {
       }
     }
     .task(id: url) {
-      guard let url else { return image = nil }
+      guard let url else {
+        image = nil
+        loadedURL = nil
+        return
+      }
+      guard url != loadedURL else { return }
       if let hit = ImagePipeline.shared.cached(url) {
         image = hit
+        loadedURL = url
         return
       }
       let loaded = await ImagePipeline.shared.image(for: url)
       guard !Task.isCancelled else { return }
+      loadedURL = url
       withAnimation(Astra.Motion.base) { image = loaded }
     }
+  }
+}
+
+extension RemoteImage where Placeholder == SwiftUI.Color {
+  init(url: URL?, contentMode: ContentMode = .fill) {
+    self.init(url: url, contentMode: contentMode, placeholder: Astra.Color.surface)
+  }
+}
+
+/// A movie's or show's poster, backdrop or logo from TMDB, falling back to
+/// Plex's own artwork. Episodes keep Plex's stills.
+struct ArtworkImage<Placeholder: View>: View {
+  var library: LibraryStore
+  var item: PlexMetadata
+  var kind: LibraryStore.ArtKind
+  var width: CGFloat
+  var height: CGFloat
+  var contentMode: ContentMode = .fill
+  var placeholder: Placeholder
+
+  @State private var url: URL?
+  @State private var resolved = false
+
+  var body: some View {
+    ZStack {
+      if resolved {
+        RemoteImage(url: url, contentMode: contentMode, placeholder: placeholder)
+      } else {
+        placeholder
+      }
+    }
+    .task(id: "\(item.id)|\(kind)") {
+      let found = await library.artworkURL(for: item, kind, width: width, height: height)
+      guard !Task.isCancelled else { return }
+      url = found
+      resolved = true
+    }
+  }
+}
+
+extension ArtworkImage where Placeholder == SwiftUI.Color {
+  init(
+    library: LibraryStore, item: PlexMetadata, kind: LibraryStore.ArtKind, width: CGFloat, height: CGFloat,
+    contentMode: ContentMode = .fill
+  ) {
+    self.init(
+      library: library, item: item, kind: kind, width: width, height: height, contentMode: contentMode,
+      placeholder: Astra.Color.surface)
   }
 }

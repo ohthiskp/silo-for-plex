@@ -32,7 +32,8 @@
       window.backgroundColor = .black
       window.isReleasedWhenClosed = false
       window.collectionBehavior = [.fullScreenPrimary]
-      window.minSize = main.minSize
+      // Small enough for the floating mini player.
+      window.minSize = NSSize(width: 320, height: 180)
       window.appearance = NSAppearance(named: .darkAqua)
 
       let root = NSView(frame: NSRect(origin: .zero, size: main.frame.size))
@@ -68,7 +69,35 @@
     }
 
     func toggleFullScreen() {
+      if isMini { _ = toggleMini() }
       window.toggleFullScreen(nil)
+    }
+
+    private(set) var isMini = false
+    private var fullFrame: NSRect?
+
+    /// Shrinks the player into a small window floating in the screen's
+    /// bottom-right corner, above other windows and on every Space, or
+    /// puts it back. Returns whether it is now small.
+    func toggleMini() -> Bool {
+      if window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+      if isMini {
+        window.level = .normal
+        window.collectionBehavior = [.fullScreenPrimary]
+        if let fullFrame { window.setFrame(fullFrame, display: true, animate: true) }
+        isMini = false
+      } else {
+        fullFrame = window.frame
+        let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? window.frame
+        let size = NSSize(width: 480, height: 270)
+        let frame = NSRect(
+          x: visible.maxX - size.width - 20, y: visible.minY + 20, width: size.width, height: size.height)
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.setFrame(frame, display: true, animate: true)
+        isMini = true
+      }
+      return isMini
     }
 
     func windowWillClose(_ notification: Notification) {

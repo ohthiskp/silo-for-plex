@@ -27,6 +27,7 @@ final class AppModel {
   private(set) var server: PlexServerClient?
   private(set) var library: LibraryStore?
   let player = PlayerController()
+  let downloads = DownloadStore()
 
   let info: PlexClientInfo
   private let account: PlexAccountClient
@@ -113,6 +114,7 @@ final class AppModel {
 
   func signOut() {
     player.close()
+    downloads.library = nil
     tokens.clear()
     UserDefaults.standard.removeObject(forKey: Self.serverKey)
     accountToken = nil
@@ -161,6 +163,7 @@ final class AppModel {
       server = client
       let store = LibraryStore(client: client)
       library = store
+      downloads.library = store
       player.server = client
       phase = .ready
       await store.loadHome()
@@ -174,8 +177,43 @@ final class AppModel {
     guard let library else { return }
     Task {
       do {
-        let playable = try await library.playable(for: item)
-        try player.play(playable, library: library)
+        let resolved = try await library.resolve(item)
+        // A downloaded movie or episode plays from disk.
+        if let local = downloads.source(for: resolved) {
+          return try player.play(resolved, library: library, local: local)
+        }
+        let playable = try await library.playable(for: resolved)
+        try player.play(playable, library: library, local: downloads.source(for: playable))
+      } catch {
+        player.lastError = error.localizedDescription
+      }
+    }
+  }
+
+  /// Plays a downloaded file from disk, resuming where Plex says when the server answers.
+  func playDownload(_ record: DownloadRecord) {
+    Task {
+      var item = PlexMetadata(ratingKey: record.ratingKey, type: record.type, title: record.title)
+      if let library, let fresh = try? await library.details(record.ratingKey, refresh: true) { item = fresh }
+      guard let local = downloads.source(for: item) else {
+        player.lastError = "The downloaded file is missing."
+        return
+      }
+      do {
+        guard let library else { throw PlexError.notSignedIn }
+        try player.play(item, library: library, local: local)
+      } catch {
+        player.lastError = error.localizedDescription
+      }
+    }
+  }
+
+  /// Runs `action` with the Plex item for `item`; a TMDB title is looked up on the server first.
+  func resolve(_ item: PlexMetadata, then action: @escaping (PlexMetadata) -> Void) {
+    guard item.isCatalogOnly, let library else { return action(item) }
+    Task {
+      do {
+        action(try await library.resolve(item))
       } catch {
         player.lastError = error.localizedDescription
       }

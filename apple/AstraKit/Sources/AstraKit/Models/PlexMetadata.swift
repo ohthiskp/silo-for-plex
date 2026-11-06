@@ -86,6 +86,19 @@ public struct PlexPart: Codable, Sendable, Hashable, Identifiable {
     case streams = "Stream"
   }
 
+  public init(
+    id: Int, key: String? = nil, duration: Int? = nil, file: String? = nil, size: Int64? = nil,
+    container: String? = nil, streams: [PlexStream] = []
+  ) {
+    self.id = id
+    self.key = key
+    self.duration = duration
+    self.file = file
+    self.size = size
+    self.container = container
+    self.streams = streams
+  }
+
   public init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     id = try c.decodeLenientInt(.id) ?? 0
@@ -116,6 +129,19 @@ public struct PlexMedia: Codable, Sendable, Hashable, Identifiable {
     case id, duration, bitrate, width, height, videoResolution, videoCodec, videoProfile, audioCodec, audioChannels,
       container
     case parts = "Part"
+  }
+
+  public init(
+    id: Int, duration: Int? = nil, bitrate: Int? = nil, width: Int? = nil, height: Int? = nil,
+    container: String? = nil, parts: [PlexPart] = []
+  ) {
+    self.id = id
+    self.duration = duration
+    self.bitrate = bitrate
+    self.width = width
+    self.height = height
+    self.container = container
+    self.parts = parts
   }
 
   public init(from decoder: Decoder) throws {

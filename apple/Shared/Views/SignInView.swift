@@ -40,7 +40,7 @@ struct SignInView: View {
             .font(.system(size: 16))
             .foregroundStyle(Astra.Color.muted)
           Button("Sign in with Plex") { app.signIn() }
-            .astraPrimaryButton(violet: true)
+            .astraPrimaryButton()
             .keyboardShortcut(.defaultAction)
         }
         .transition(.opacity)
@@ -50,9 +50,7 @@ struct SignInView: View {
     .padding(.horizontal, Astra.Spacing.l)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(
-      RadialGradient(
-        colors: [Astra.Color.purple.opacity(0.22), Astra.Color.bg], center: .top, startRadius: 40, endRadius: 700)
-      .ignoresSafeArea()
+      Astra.Color.bg.ignoresSafeArea()
     )
   }
 }
@@ -72,7 +70,7 @@ struct ServerPickerView: View {
             HStack(spacing: 14) {
               Image(systemName: "server.rack")
                 .font(.system(size: 18))
-                .foregroundStyle(Astra.Color.purpleLight)
+                .foregroundStyle(Astra.Color.ink)
               VStack(alignment: .leading, spacing: 2) {
                 Text(server.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Astra.Color.ink)
                 Text((server.owned ?? false) ? "Your server" : "Shared with you")

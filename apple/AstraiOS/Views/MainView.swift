@@ -7,15 +7,16 @@ struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
 
-  // Same destinations as the Mac sidebar, minus Downloads (not built yet),
-  // which keeps the iPhone tab bar to its five-tab limit.
-  enum TabID: Hashable { case home, movies, shows, settings, search }
+  // Same destinations as the Mac sidebar. Settings opens from Home's gear
+  // button, which keeps the tab bar to its five-tab limit.
+  enum TabID: Hashable { case home, movies, shows, downloads, search }
 
   @State private var tab: TabID = .home
   @State private var homePath: [Route] = []
   @State private var moviesPath: [Route] = []
   @State private var showsPath: [Route] = []
   @State private var searchPath: [Route] = []
+  @State private var downloadsPath: [Route] = []
 
   var body: some View {
     TabView(selection: $tab) {
@@ -32,14 +33,26 @@ struct MainView: View {
           LibraryGridView(library: library, title: "Shows", sections: library.sections.filter { $0.type == "show" })
         }
       }
-      Tab("Settings", systemImage: "gearshape.fill", value: TabID.settings) {
-        NavigationStack { SettingsView().navigationTitle("Settings") }
+      Tab("Downloads", systemImage: "arrow.down.circle", value: TabID.downloads) {
+        stack($downloadsPath) { DownloadsView() }
       }
       Tab(value: TabID.search, role: .search) {
         stack($searchPath) { SearchView(library: library) }
       }
     }
     .environment(\.playItem) { app.play($0) }
+    .onAppear {
+      // The title's chevron in the player opens its details in the current tab.
+      app.player.openDetails = { item in
+        switch tab {
+        case .home: homePath.append(.details(item))
+        case .movies: moviesPath.append(.details(item))
+        case .shows: showsPath.append(.details(item))
+        case .downloads: downloadsPath.append(.details(item))
+        case .search: searchPath.append(.details(item))
+        }
+      }
+    }
   }
 
   /// A navigation stack whose rows open details by pushing onto `path`.
@@ -55,6 +68,6 @@ struct MainView: View {
           }
         }
     }
-    .environment(\.openItem) { item in path.wrappedValue.append(.details(item)) }
+    .environment(\.openItem) { item in app.resolve(item) { path.wrappedValue.append(.details($0)) } }
   }
 }

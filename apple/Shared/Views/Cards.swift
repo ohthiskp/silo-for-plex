@@ -42,7 +42,13 @@ struct ArtCard: View {
       openItem(item)
     } label: {
       VStack(alignment: .leading, spacing: 8) {
-        RemoteImage(url: library.imageURL(item.art ?? item.backdrop ?? item.thumb, width: width, height: height))
+        Group {
+          if item.type == .movie || item.type == .show {
+            ArtworkImage(library: library, item: item, kind: .backdrop, width: width, height: height)
+          } else {
+            RemoteImage(url: library.imageURL(item.art ?? item.backdrop ?? item.thumb, width: width, height: height))
+          }
+        }
           .frame(width: width, height: height)
           .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
           .overlay(alignment: .bottomLeading) {
@@ -81,7 +87,11 @@ struct ContinueCard: View {
       playItem(item)
     } label: {
       ZStack(alignment: .bottomLeading) {
-        RemoteImage(url: library.imageURL(item.type == .episode ? item.thumb : item.backdrop, width: width, height: height))
+        if item.type == .episode {
+          RemoteImage(url: library.imageURL(item.thumb, width: width, height: height))
+        } else {
+          ArtworkImage(library: library, item: item, kind: .backdrop, width: width, height: height)
+        }
         LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .center, endPoint: .bottom)
         VStack(alignment: .leading, spacing: 6) {
           Text(item.displayTitle)
@@ -132,14 +142,14 @@ struct PosterCard: View {
       openItem(item)
     } label: {
       VStack(alignment: .leading, spacing: 8) {
-        RemoteImage(url: library.imageURL(item.poster, width: width, height: height))
+        ArtworkImage(library: library, item: item, kind: .poster, width: width, height: height)
           .frame(width: width, height: height)
           .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
           .overlay(alignment: .topTrailing) {
             if item.isWatched {
               Image(systemName: "checkmark.circle.fill")
                 .symbolRenderingMode(.palette)
-                .foregroundStyle(.white, Astra.Color.purple)
+                .foregroundStyle(.black, .white)
                 .font(.system(size: 18))
                 .padding(8)
             }
@@ -168,7 +178,7 @@ struct ProgressBar: View {
       .frame(height: 4)
       .overlay(alignment: .leading) {
         GeometryReader { geo in
-          Capsule().fill(Astra.Color.purple).frame(width: max(4, geo.size.width * value))
+          Capsule().fill(Astra.Color.accent).frame(width: max(4, geo.size.width * value))
         }
       }
   }

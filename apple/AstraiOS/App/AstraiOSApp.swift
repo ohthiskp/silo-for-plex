@@ -10,7 +10,7 @@ struct AstraiOSApp: App {
       RootView()
         .environment(app)
         .preferredColorScheme(.dark)
-        .tint(Astra.Color.purpleLight)
+        .tint(.white)
         .task { await app.start() }
     }
   }
