@@ -1,7 +1,7 @@
 name: plezy
 description: "Astra: a media app for your Plex server, based on Plezy"
 publish_to: "none"
-version: 2.2.1+1
+version: 3.0.0+1
 
 environment:
   # Dart floor stays 3.12: freezed 3.x emits `final` constructor parameters,

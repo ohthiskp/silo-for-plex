@@ -34,6 +34,7 @@ import '../widgets/clickable_cursor.dart';
 import '../widgets/loading_indicator_box.dart';
 import '../astra/astra_home.dart';
 import '../media/catalog_item_ref.dart';
+import '../astra/home_view.dart';
 import '../astra/service_pill.dart';
 import '../widgets/profile_switching_overlay.dart';
 import 'profile/profile_switch_screen.dart';
@@ -1005,6 +1006,25 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     if (PlatformDetector.isTV()) {
       return _buildTvContent(context);
     }
+
+    // Astra 3.0 home on iPhone, iPad and Mac.
+    return AstraHomeView(
+      heroItems: _heroItems,
+      continueWatching: _onDeck,
+      hubs: _hubs,
+      scrollController: _scrollController,
+      onRefresh: () async {
+        await AstraHome.instance.load(force: true);
+        manualRefresh();
+      },
+      loading: _isLoading || _areHubsLoading || AstraHome.instance.loading,
+    );
+  }
+
+  // ignore: unused_element
+  Widget _buildLegacyContent(BuildContext context) {
+    final svc = SettingsService.instance;
+    final showHeroSection = svc.read(SettingsService.showHeroSection);
 
     final showServerNameOnHubs = svc.read(SettingsService.showServerNameOnHubs);
     final hubsSpanMultipleServers = _hubsSpanMultipleServers();
