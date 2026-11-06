@@ -63,10 +63,12 @@ class AstraTitleText extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: AstraColors.ink,
-        fontSize: wide ? 48 : 34,
-        height: 1.05,
-        fontWeight: FontWeight.w300,
-        letterSpacing: wide ? 10 : 6,
+        fontFamily: 'Didot',
+        fontFamilyFallback: const ['Bodoni 72', 'Georgia', 'Times New Roman', 'serif'],
+        fontSize: wide ? 54 : 36,
+        height: 1.08,
+        fontWeight: FontWeight.w400,
+        letterSpacing: wide ? 18 : 9,
         shadows: const [Shadow(color: Color(0x99000000), blurRadius: 18, offset: Offset(0, 3))],
       ),
     );

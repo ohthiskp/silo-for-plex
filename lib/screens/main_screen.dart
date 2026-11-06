@@ -1,5 +1,6 @@
 import '../astra/astra_style.dart';
 import '../astra/sidebar.dart';
+import '../astra/tab_bar.dart';
 import 'dart:async';
 import '../media/ids.dart';
 import '../media/media_server_client.dart';
@@ -2359,42 +2360,11 @@ class _MainScreenState extends State<MainScreen>
               // this builder reruns on label toggles AND on every
               // MainScreen rebuild (offline bar appearing/disappearing).
               _scheduleNavBarMeasure(rail: false);
-              // Astra: a floating frosted pill instead of a full-width bar.
-              return SafeArea(
-                top: false,
-                minimum: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: AstraGlass(
-                  radius: 34,
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeBottom: true,
-                    child: NavigationBarTheme(
-                      data: NavigationBarTheme.of(context).copyWith(
-                        height: hideLabels ? 58 : 66,
-                        backgroundColor: Colors.transparent,
-                        surfaceTintColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        elevation: 0,
-                        indicatorColor: const Color(0x26FFFFFF),
-                        indicatorShape: const StadiumBorder(),
-                        labelTextStyle: WidgetStateProperty.resolveWith(
-                          (states) => TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: states.contains(WidgetState.selected) ? AstraColors.ink : AstraColors.muted,
-                          ),
-                        ),
-                        iconTheme: WidgetStateProperty.resolveWith(
-                          (states) => IconThemeData(
-                            size: 23,
-                            color: states.contains(WidgetState.selected) ? AstraColors.ink : AstraColors.muted,
-                          ),
-                        ),
-                      ),
-                      child: _buildBottomNavigationBar(context, hideLabels: hideLabels),
-                    ),
-                  ),
-                ),
+              // Astra 3.0: liquid-glass tab bar (Home, Search, Downloads) + Settings.
+              return AstraTabBar(
+                current: _currentTab,
+                onSelect: _selectTab,
+                onSettings: _openSettings,
               );
             },
           ),

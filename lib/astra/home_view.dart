@@ -9,6 +9,8 @@ import '../utils/media_image_helper.dart';
 import '../utils/media_navigation_helper.dart';
 import '../utils/provider_extensions.dart';
 import '../widgets/optimized_media_image.dart';
+import '../navigation/main_screen_scope.dart';
+import '../screens/search_screen.dart';
 import 'astra_style.dart';
 import 'service_pill.dart';
 
@@ -166,6 +168,39 @@ class _AstraHomeViewState extends State<AstraHomeView> {
                 ? const Center(child: AstraServicePill())
                 : const AstraServicePill(compact: true),
           ),
+          if (wide)
+            Positioned(
+              top: topInset + 22,
+              right: 34,
+              height: 50,
+              child: Row(
+                children: [
+                  _TopIcon(
+                    icon: Icons.search_rounded,
+                    label: 'Search',
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SearchScreen())),
+                  ),
+                  const SizedBox(width: 14),
+                  Semantics(
+                    button: true,
+                    label: 'Profile and settings',
+                    child: GestureDetector(
+                      onTap: () => MainScreenFocusScope.of(context, listen: false)?.openSettings?.call(),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0x66FFFFFF), width: 2),
+                          gradient: const LinearGradient(colors: [Color(0xFF8D6BFF), Color(0xFF4A2BB8)]),
+                        ),
+                        child: const Icon(Icons.person_rounded, color: Colors.white, size: 24),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -366,6 +401,14 @@ class _Row extends StatelessWidget {
                 Text(title, style: const TextStyle(color: AstraColors.ink, fontSize: 19, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
                 const SizedBox(width: 4),
                 const Icon(Icons.chevron_right_rounded, color: AstraColors.ink, size: 22),
+                const Spacer(),
+                if (MediaQuery.sizeOf(context).width >= 900)
+                  const Row(
+                    children: [
+                      Text('See All', style: TextStyle(color: AstraColors.muted, fontSize: 13, fontWeight: FontWeight.w500)),
+                      Icon(Icons.chevron_right_rounded, color: AstraColors.muted, size: 18),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -532,4 +575,21 @@ class _ArtCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TopIcon extends StatelessWidget {
+  const _TopIcon({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: label,
+    child: InkResponse(
+      onTap: onTap,
+      radius: 24,
+      child: SizedBox(width: 44, height: 44, child: Icon(icon, color: Colors.white, size: 26)),
+    ),
+  );
 }

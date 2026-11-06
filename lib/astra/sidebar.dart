@@ -57,20 +57,34 @@ class _AstraSidebarState extends State<AstraSidebar> {
     final movies = firstOf(MediaKind.movie);
     final shows = firstOf(MediaKind.show);
 
+    // Exactly the prototype: Home, Discover, Movies, TV Shows, Watchlist,
+    // Library, then Settings at the bottom.
     final items = <_Item>[
-      _Item(Icons.search_rounded, 'Search', widget.currentTab == NavigationTabId.search, () => widget.onSelectTab(NavigationTabId.search)),
       _Item(Icons.home_rounded, 'Home', widget.currentTab == NavigationTabId.discover, () => widget.onSelectTab(NavigationTabId.discover)),
-      if (widget.hasExplore)
-        _Item(Icons.explore_outlined, 'Discover', widget.currentTab == NavigationTabId.explore, () => widget.onSelectTab(NavigationTabId.explore)),
-      if (movies != null) _Item(Icons.movie_outlined, 'Movies', isLibraryKind(MediaKind.movie), () => widget.onSelectLibrary(movies)),
-      if (shows != null) _Item(Icons.tv_rounded, 'TV Shows', isLibraryKind(MediaKind.show), () => widget.onSelectLibrary(shows)),
+      _Item(
+        Icons.explore_outlined,
+        'Discover',
+        widget.currentTab == NavigationTabId.explore,
+        () => widget.onSelectTab(widget.hasExplore ? NavigationTabId.explore : NavigationTabId.search),
+      ),
+      _Item(Icons.movie_outlined, 'Movies', isLibraryKind(MediaKind.movie), () {
+        if (movies != null) widget.onSelectLibrary(movies);
+      }),
+      _Item(Icons.tv_rounded, 'TV Shows', isLibraryKind(MediaKind.show), () {
+        if (shows != null) widget.onSelectLibrary(shows);
+      }),
+      _Item(
+        Icons.bookmark_border_rounded,
+        'Watchlist',
+        widget.hasExplore && widget.currentTab == NavigationTabId.explore,
+        () => widget.onSelectTab(widget.hasExplore ? NavigationTabId.explore : NavigationTabId.discover),
+      ),
       _Item(
         Icons.layers_outlined,
         'Library',
         widget.currentTab == NavigationTabId.libraries && !isLibraryKind(MediaKind.movie) && !isLibraryKind(MediaKind.show),
         () => widget.onSelectTab(NavigationTabId.libraries),
       ),
-      _Item(Icons.download_outlined, 'Downloads', widget.currentTab == NavigationTabId.downloads, () => widget.onSelectTab(NavigationTabId.downloads)),
     ];
     final settings = _Item(Icons.settings_outlined, 'Settings', widget.currentTab == NavigationTabId.settings, () => widget.onSelectTab(NavigationTabId.settings));
 
