@@ -429,7 +429,8 @@ BuildAppDebug() {
     --sdk-root "$HOST_TOOLS/flutter_patched_sdk" \
     --tfa --target=flutter \
     -DTVOS_BUILD=true \
-    -DSUPPORTER_MODE=iap \
+    -DSUPPORTER_MODE=unlocked \
+    ${ASTRA_DART_DEFINES:-} \
     --output-dill "$OUTDIR/App.framework/flutter_assets/kernel_blob.bin" \
     "$FLUTTER_APPLICATION_PATH/lib/main.dart"
 
@@ -589,7 +590,8 @@ BuildAppRelease() {
     -DFLUTTER_BUILD_MODE=release \
     -DTARGET_PLATFORM=TVOS \
     -DTVOS_BUILD=true \
-    -DSUPPORTER_MODE=iap \
+    -DSUPPORTER_MODE=unlocked \
+    ${ASTRA_DART_DEFINES:-} \
     --output-dill "$OUTDIR/app.dill" \
     "$FLUTTER_APPLICATION_PATH/lib/main.dart"
 

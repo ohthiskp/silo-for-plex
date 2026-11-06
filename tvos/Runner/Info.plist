@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Plezy</string>
+	<string>Astra</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<!-- tvOS takes CFBundleAlternateIcons as an array of icon names. The asset catalog compiler
@@ -47,7 +47,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Plezy</string>
+	<string>Astra</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -60,14 +60,14 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.edde746.plezy.play</string>
+			<string>com.ohthiskp.astra.play</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>plezy</string>
+				<string>astra</string>
 			</array>
 		</dict>
 	</array>
-	<!-- plezy:// links reach Dart through DeepLinkPlugin (com.plezy/deep_link);
+	<!-- astra:// links reach Dart through DeepLinkPlugin (com.plezy/deep_link);
 	     Flutter's router must not also push them as named routes. -->
 	<key>FlutterDeepLinkingEnabled</key>
 	<false/>
