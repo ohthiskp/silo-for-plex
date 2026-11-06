@@ -83,17 +83,17 @@ class _AstraHomeViewState extends State<AstraHomeView> {
     final wide = size.width >= 900;
     final topInset = MediaQuery.paddingOf(context).top;
     final heroHeight = wide ? (size.height * 0.68).clamp(520.0, 760.0) : (size.height * 0.64).clamp(460.0, 620.0);
-    final rowInset = wide ? 130.0 : 20.0;
+    final rowInset = wide ? 156.0 : 20.0;
 
     final rows = <Widget>[
       if (widget.continueWatching.isNotEmpty)
         _Row(
           title: 'Continue Watching',
           inset: rowInset,
-          height: wide ? 168 : 132,
+          height: wide ? 156 : 112,
           children: [
             for (final item in widget.continueWatching)
-              _ContinueCard(item: item, width: wide ? 262 : 214, height: wide ? 118 : 96),
+              _ContinueCard(item: item, width: wide ? 360 : 230, height: wide ? 154 : 108),
           ],
         ),
       for (final hub in widget.hubs)
@@ -101,8 +101,8 @@ class _AstraHomeViewState extends State<AstraHomeView> {
           _Row(
             title: hub.title,
             inset: rowInset,
-            height: wide ? 150 : 128,
-            children: [for (final item in hub.items) _ArtCard(item: item, width: wide ? 180 : 150, height: wide ? 112 : 92)],
+            height: wide ? 168 : 128,
+            children: [for (final item in hub.items) _ArtCard(item: item, width: wide ? 220 : 150, height: wide ? 138 : 92)],
           ),
     ];
 
@@ -229,9 +229,9 @@ class _Hero extends StatelessWidget {
           itemBuilder: (context, i) => _HeroPage(item: items[i], wide: wide),
         ),
         Positioned(
-          left: wide ? 130 : 0,
-          right: wide ? null : 0,
-          bottom: wide ? 48 : 18,
+          left: 0,
+          right: 0,
+          bottom: wide ? 26 : 18,
           child: IgnorePointer(
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -268,7 +268,6 @@ class _HeroPage extends StatelessWidget {
     final client = context.getMediaClientForItemOrNull(item);
     final art = item.artPath ?? item.grandparentArtPath ?? item.thumbPath;
     final title = item.grandparentTitle ?? item.title ?? '';
-    final meta = astraMetaLine(item);
     final logo = item.clearLogoPath;
     final logoW = wide ? 460.0 : 290.0;
     final logoH = wide ? 150.0 : 104.0;
@@ -290,12 +289,7 @@ class _HeroPage extends StatelessWidget {
         else
           AstraTitleText(title, wide: wide),
         const SizedBox(height: 16),
-        if (meta.isNotEmpty)
-          Text(
-            meta,
-            textAlign: wide ? TextAlign.start : TextAlign.center,
-            style: TextStyle(color: AstraColors.ink.withValues(alpha: 0.88), fontSize: wide ? 14 : 13, fontWeight: FontWeight.w500),
-          ),
+        AstraMetaRow(item: item, center: !wide, fontSize: wide ? 15 : 13),
         if (wide && (item.summary ?? '').isNotEmpty) ...[
           const SizedBox(height: 12),
           ConstrainedBox(
@@ -314,16 +308,18 @@ class _HeroPage extends StatelessWidget {
           children: [
             AstraPlayButton(
               label: 'Play',
-              purple: wide,
-              width: wide ? null : 140,
+              purple: false,
+              width: wide ? 150 : 140,
+              height: wide ? 48 : 46,
+              radius: 12,
               onTap: () => navigateToMediaItem(context, item, playDirectly: !item.isCatalogItem),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             AstraGlassButton(
               label: 'Details',
-              icon: wide ? Icons.info_outline_rounded : null,
-              width: wide ? null : 130,
-              outlined: wide,
+              width: wide ? 136 : 130,
+              height: wide ? 48 : 46,
+              radius: 12,
               onTap: () => navigateToMediaItem(context, item),
             ),
           ],
@@ -369,7 +365,7 @@ class _HeroPage extends StatelessWidget {
               ),
             ),
           if (wide)
-            Positioned(left: 130, bottom: 92, right: 40, child: Align(alignment: Alignment.bottomLeft, child: content))
+            Positioned(left: 156, bottom: 86, right: 40, child: Align(alignment: Alignment.bottomLeft, child: content))
           else
             Positioned(left: 20, right: 20, bottom: 40, child: content),
         ],
@@ -480,6 +476,17 @@ class _ContinueCard extends StatelessWidget {
     final progress = item.hasActiveProgress ? item.viewOffsetMs! / item.durationMs! : 0.0;
     final title = item.grandparentTitle ?? item.title ?? '';
     final sub = astraContinueSubtitle(item);
+    final logo = item.grandparentTitle != null ? null : item.clearLogoPath;
+    final Widget? logoOrTitle = logo != null && logo.isNotEmpty
+        ? ClearLogoImage(
+            client: client,
+            logoPath: logo,
+            width: width * 0.5,
+            height: height * 0.32,
+            fallbackWidth: width * 0.5,
+            fallbackBuilder: (_) => _cardTitle(title),
+          )
+        : _cardTitle(title);
     return _Pressable(
       semanticLabel: title,
       onTap: () => navigateToMediaItem(context, item, playDirectly: true),
@@ -503,16 +510,31 @@ class _ContinueCard extends StatelessWidget {
                     const DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [Color(0xCC000000), Color(0x00000000)],
-                          stops: [0, 0.6],
+                          colors: [Color(0xB3000000), Color(0x00000000)],
+                          stops: [0, 0.65],
                         ),
                       ),
                     ),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Color(0xCC000000), Color(0x00000000)],
+                          stops: [0, 0.5],
+                        ),
+                      ),
+                    ),
+                    if (logoOrTitle != null) Positioned(left: 18, top: 18, right: width * 0.4, child: logoOrTitle),
+                    if (sub.isNotEmpty)
+                      Positioned(
+                        left: 18,
+                        bottom: 22,
+                        child: Text(sub, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w500)),
+                      ),
                     Positioned(
-                      left: 12,
-                      right: 12,
+                      left: 18,
+                      right: 18,
                       bottom: 10,
                       child: ClipRRect(
                         borderRadius: const BorderRadius.all(Radius.circular(3)),
@@ -528,16 +550,26 @@ class _ContinueCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 7),
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AstraColors.ink, fontSize: 13.5, fontWeight: FontWeight.w600)),
-            if (sub.isNotEmpty)
-              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AstraColors.muted, fontSize: 12)),
           ],
         ),
       ),
     );
   }
 }
+
+Widget _cardTitle(String title) => Text(
+  title,
+  maxLines: 2,
+  overflow: TextOverflow.ellipsis,
+  style: const TextStyle(
+    color: Colors.white,
+    fontSize: 22,
+    height: 1.05,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.4,
+    shadows: [Shadow(color: Color(0x99000000), blurRadius: 12)],
+  ),
+);
 
 class _ArtCard extends StatelessWidget {
   const _ArtCard({required this.item, required this.width, required this.height});

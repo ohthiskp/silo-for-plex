@@ -2109,8 +2109,8 @@ class _MainScreenState extends State<MainScreen>
                             bottom: 0,
                             // Astra: Home and Settings are full-bleed under the floating
                             // sidebar; other tabs keep clear of it.
-                            left: contentLayout.left + (astraSidebar && !_astraFullBleedTab ? 104 : 0),
-                            width: contentLayout.width - (astraSidebar && !_astraFullBleedTab ? 104 : 0),
+                            left: contentLayout.left + (astraSidebar && !_astraFullBleedTab ? 96 : 0),
+                            width: contentLayout.width - (astraSidebar && !_astraFullBleedTab ? 96 : 0),
                             child: TweenAnimationBuilder<double>(
                               duration: SideNavigationRailState.expandDuration,
                               curve: SideNavigationRailState.expandCurve,
@@ -2149,8 +2149,9 @@ class _MainScreenState extends State<MainScreen>
                             Positioned(
                               top: 0,
                               bottom: 0,
-                              left: 20,
-                              child: Center(
+                              left: 0,
+                              child: Align(
+                                alignment: Alignment.topLeft,
                                 child: FocusScope(
                                   node: _sidebarFocusScope,
                                   child: AstraSidebar(

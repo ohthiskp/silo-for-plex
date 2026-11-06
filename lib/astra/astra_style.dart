@@ -40,13 +40,52 @@ String astraContinueSubtitle(MediaItem item) {
   if (item.kind == MediaKind.episode) {
     final s = item.parentIndex;
     final e = item.index;
-    if (s != null && e != null) return 'S$s • E$e';
+    if (s != null && e != null) {
+      final left = item.hasActiveProgress ? _runtime(item.durationMs! - item.viewOffsetMs!) : '';
+      return left.isEmpty ? 'S$s E$e' : 'S$s E$e · $left left';
+    }
   }
   if (item.hasActiveProgress) {
     final left = _runtime(item.durationMs! - item.viewOffsetMs!);
     if (left.isNotEmpty) return '$left left';
   }
   return '';
+}
+
+/// "2024  [PG-13]  2h 46m  Sci-Fi, Adventure" with the rating boxed.
+class AstraMetaRow extends StatelessWidget {
+  const AstraMetaRow({super.key, required this.item, this.center = false, this.fontSize = 14});
+  final MediaItem item;
+  final bool center;
+  final double fontSize;
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(color: AstraColors.ink.withValues(alpha: 0.9), fontSize: fontSize, fontWeight: FontWeight.w500);
+    final runtime = item.kind != MediaKind.show ? _runtime(item.durationMs) : '';
+    final genres = (item.genres ?? const []).take(2).join(', ');
+    final cert = item.contentRating ?? '';
+    return Wrap(
+      alignment: center ? WrapAlignment.center : WrapAlignment.start,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 14,
+      runSpacing: 6,
+      children: [
+        if (item.year != null) Text('${item.year}', style: style),
+        if (cert.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            decoration: BoxDecoration(
+              color: const Color(0x1FFFFFFF),
+              borderRadius: const BorderRadius.all(Radius.circular(4)),
+              border: Border.all(color: const Color(0x40FFFFFF)),
+            ),
+            child: Text(cert, style: style.copyWith(fontSize: fontSize - 1, fontWeight: FontWeight.w600)),
+          ),
+        if (runtime.isNotEmpty) Text(runtime, style: style),
+        if (genres.isNotEmpty) Text(genres, style: style),
+      ],
+    );
+  }
 }
 
 /// Wide-tracked title used when a title has no logo artwork.
@@ -119,6 +158,7 @@ class AstraPlayButton extends StatelessWidget {
     this.width,
     this.icon = Icons.play_arrow_rounded,
     this.height = 46,
+    this.radius,
   });
   final String label;
   final VoidCallback onTap;
@@ -126,6 +166,7 @@ class AstraPlayButton extends StatelessWidget {
   final double? width;
   final IconData icon;
   final double height;
+  final double? radius;
 
   @override
   Widget build(BuildContext context) {
@@ -143,7 +184,7 @@ class AstraPlayButton extends StatelessWidget {
               ? const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF8A5CFF), Color(0xFF7246F5)])
               : null,
           color: purple ? null : const Color(0xFFF4F2F8),
-          borderRadius: BorderRadius.all(Radius.circular(height / 2)),
+          borderRadius: BorderRadius.all(Radius.circular(radius ?? height / 2)),
           boxShadow: [
             BoxShadow(
               color: purple ? const Color(0x667C4DFF) : const Color(0x55000000),
@@ -175,6 +216,7 @@ class AstraGlassButton extends StatelessWidget {
     this.width,
     this.outlined = false,
     this.height = 46,
+    this.radius,
   });
   final String label;
   final VoidCallback onTap;
@@ -182,6 +224,7 @@ class AstraGlassButton extends StatelessWidget {
   final double? width;
   final bool outlined;
   final double height;
+  final double? radius;
 
   @override
   Widget build(BuildContext context) {
@@ -191,8 +234,8 @@ class AstraGlassButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 22),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : const Color(0x1FFFFFFF),
-        borderRadius: BorderRadius.all(Radius.circular(height / 2)),
+        color: outlined ? Colors.transparent : const Color(0x2EFFFFFF),
+        borderRadius: BorderRadius.all(Radius.circular(radius ?? height / 2)),
         border: Border.all(color: outlined ? const Color(0x52FFFFFF) : const Color(0x24FFFFFF)),
       ),
       child: Row(
@@ -209,7 +252,7 @@ class AstraGlassButton extends StatelessWidget {
       child: outlined
           ? inner
           : ClipRRect(
-              borderRadius: BorderRadius.all(Radius.circular(height / 2)),
+              borderRadius: BorderRadius.all(Radius.circular(radius ?? height / 2)),
               child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: inner),
             ),
     );

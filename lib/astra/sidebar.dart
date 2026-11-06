@@ -25,7 +25,7 @@ class AstraSidebar extends StatefulWidget {
   final ValueChanged<String> onSelectLibrary;
   final bool hasExplore;
 
-  static const double collapsedWidth = 72;
+  static const double collapsedWidth = 96;
   static const double expandedWidth = 220;
 
   @override
@@ -33,7 +33,6 @@ class AstraSidebar extends StatefulWidget {
 }
 
 class _AstraSidebarState extends State<AstraSidebar> {
-  bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +59,8 @@ class _AstraSidebarState extends State<AstraSidebar> {
     // Exactly the prototype: Home, Discover, Movies, TV Shows, Watchlist,
     // Library, then Settings at the bottom.
     final items = <_Item>[
-      _Item(Icons.home_rounded, 'Home', widget.currentTab == NavigationTabId.discover, () => widget.onSelectTab(NavigationTabId.discover)),
+      _Item(Icons.search_rounded, 'Search', widget.currentTab == NavigationTabId.search, () => widget.onSelectTab(NavigationTabId.search)),
+      _Item(Icons.home_outlined, 'Home', widget.currentTab == NavigationTabId.discover, () => widget.onSelectTab(NavigationTabId.discover)),
       _Item(
         Icons.explore_outlined,
         'Discover',
@@ -88,26 +88,31 @@ class _AstraSidebarState extends State<AstraSidebar> {
     ];
     final settings = _Item(Icons.settings_outlined, 'Settings', widget.currentTab == NavigationTabId.settings, () => widget.onSelectTab(NavigationTabId.settings));
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-        width: _hover ? AstraSidebar.expandedWidth : AstraSidebar.collapsedWidth,
-        decoration: BoxDecoration(
-          borderRadius: const BorderRadius.all(Radius.circular(36)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 40, offset: const Offset(0, 18))],
+    // Docked dark panel, icons only, exactly like the approved Mac design.
+    return Container(
+      width: AstraSidebar.collapsedWidth,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF16141E), Color(0xFF0E0D14)],
         ),
-        child: AstraGlass(
-          radius: 36,
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        borderRadius: BorderRadius.horizontal(right: Radius.circular(30)),
+        border: Border(right: BorderSide(color: Color(0x14FFFFFF))),
+        boxShadow: [BoxShadow(color: Color(0x66000000), blurRadius: 30, offset: Offset(6, 0))],
+      ),
+      child: SafeArea(
+        right: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(11, 70, 11, 24),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              for (final i in items) _NavButton(item: i, expanded: _hover),
-              const SizedBox(height: 40),
-              _NavButton(item: settings, expanded: _hover),
+              for (final i in items) _NavButton(item: i, expanded: false),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                child: Divider(height: 1, thickness: 1, color: Color(0x24FFFFFF)),
+              ),
+              _NavButton(item: settings, expanded: false),
             ],
           ),
         ),
@@ -138,55 +143,34 @@ class _NavButtonState extends State<_NavButton> {
   Widget build(BuildContext context) {
     final sel = widget.item.selected;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Semantics(
         button: true,
         selected: sel,
         label: widget.item.label,
         excludeSemantics: true,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() => _hover = false),
-          child: GestureDetector(
-            onTap: widget.item.onTap,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              height: 46,
-              decoration: BoxDecoration(
-                color: sel
-                    ? const Color(0x2BFFFFFF)
-                    : _hover
-                    ? const Color(0x14FFFFFF)
-                    : Colors.transparent,
-                borderRadius: const BorderRadius.all(Radius.circular(15)),
-              ),
-              child: ClipRect(
-                child: OverflowBox(
-                  alignment: Alignment.centerLeft,
-                  maxWidth: AstraSidebar.expandedWidth - 24,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 48,
-                        child: Icon(widget.item.icon, size: 23, color: sel || _hover ? Colors.white : AstraColors.muted),
-                      ),
-                      AnimatedOpacity(
-                        opacity: widget.expanded ? 1 : 0,
-                        duration: Duration(milliseconds: widget.expanded ? 220 : 90),
-                        child: Text(
-                          widget.item.label,
-                          maxLines: 1,
-                          style: TextStyle(
-                            color: sel ? Colors.white : AstraColors.ink.withValues(alpha: 0.85),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+        child: Tooltip(
+          message: widget.item.label,
+          waitDuration: const Duration(milliseconds: 600),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _hover = true),
+            onExit: (_) => setState(() => _hover = false),
+            child: GestureDetector(
+              onTap: widget.item.onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 74,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: sel
+                      ? const Color(0x29FFFFFF)
+                      : _hover
+                      ? const Color(0x12FFFFFF)
+                      : Colors.transparent,
+                  borderRadius: const BorderRadius.all(Radius.circular(18)),
                 ),
+                child: Icon(widget.item.icon, size: 26, color: Colors.white.withValues(alpha: sel || _hover ? 1 : 0.82)),
               ),
             ),
           ),
