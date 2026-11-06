@@ -39,7 +39,7 @@ Source: "staging\arm64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
     }
 
     return @"
-#define Name "Plezy"
+#define Name "Astra"
 #define Version "$Version"
 #define Publisher "edde746"
 #define ExeName "plezy.exe"
@@ -68,7 +68,7 @@ ArchitecturesInstallIn64BitMode=$ArchAllowed
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
-ElevationRequired=Plezy is installed in %1, which requires administrator privileges to update.%n%nRe-run this installer using "Run as administrator", or download the latest installer from https://github.com/edde746/plezy/releases/latest
+ElevationRequired=Astra is installed in %1, which requires administrator privileges to update.%n%nRe-run this installer using "Run as administrator", or download the latest installer from https://github.com/edde746/plezy/releases/latest
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -207,7 +207,7 @@ begin
 
     { A machine-wide install that took over a directory registered per-user
       leaves that user's uninstall entry and Start Menu group pointing at files
-      this install now owns, listing Plezy twice in Apps & Features. }
+      this install now owns, listing Astra twice in Apps & Features. }
     if IsAdminInstallMode then
     begin
       if RegQueryStringValue(HKCU, UninstallSubkey, 'Inno Setup: App Path', PreviousDir) and

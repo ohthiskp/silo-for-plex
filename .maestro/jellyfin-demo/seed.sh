@@ -42,5 +42,5 @@ python3 "${SEED_ROOT}/maestro_real_jellyfin.py" bootstrap \
 stop_jellyfin
 JELLYFIN_PID=""
 rm -rf "${SEED_CONFIG}/log" "${SEED_CACHE}" "${SEED_ROOT}/seed-jellyfin.log"
-printf '%s\n' 'Plezy Jellyfin demo seed v1' >"${SEED_CONFIG}/.plezy-demo-seed"
+printf '%s\n' 'Astra Jellyfin demo seed v1' >"${SEED_CONFIG}/.plezy-demo-seed"
 trap - EXIT INT TERM

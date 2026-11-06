@@ -235,7 +235,7 @@ extension DownloadDatabaseOperations on AppDatabase {
         final scopeId = row.clientScopeId;
         final plexScope = PlexProfileScopeId.tryParse(scopeId ?? '');
         final transferScope = PlexTransferScopeId.tryParse(scopeId ?? '');
-        // A scoped Plex row already identifies the Plezy profile whose token
+        // A scoped Plex row already identifies the Astra profile whose token
         // and cache namespace produced it. Logout first moves preserved rows
         // through a sanitized transfer namespace so a new profile can adopt
         // the physical file without inheriting the old profile's watch state.

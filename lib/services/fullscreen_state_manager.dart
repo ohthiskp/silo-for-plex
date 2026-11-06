@@ -26,7 +26,7 @@ class FullscreenStateManager extends ChangeNotifier with WindowListener {
   /// Fullscreen that predates the scope belongs to the app window — the
   /// "start in fullscreen" setting, or a toggle from the browse UI — and must
   /// outlive the scope that happens to be open. Only fullscreen the scope
-  /// itself entered is the scope's to drop (edde746/plezy#1624).
+  /// itself entered is the scope's to drop (upstream #1624).
   bool get scopeOwnsFullscreen => _scopeOwnsFullscreen;
 
   /// Opens a fullscreen ownership scope. Nested opens (the video player

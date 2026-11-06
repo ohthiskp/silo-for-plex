@@ -17,7 +17,7 @@ protocol MpvPipDelegate: AnyObject {
 
 #if os(tvOS)
   // tvOS stub: AVPictureInPictureController has different constraints on tvOS
-  // and is not supported by the Plezy flow. Provide a no-op shell so callers
+  // and is not supported by the Astra flow. Provide a no-op shell so callers
   // in MpvPlayerPlugin compile unchanged; isSupported reports false so PiP is
   // never attempted at runtime.
   class MpvPipController: NSObject {

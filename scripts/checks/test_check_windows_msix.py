@@ -142,7 +142,7 @@ class WindowsMsixGuardTest(unittest.TestCase):
     def test_unresolved_interpolation_is_rejected(self) -> None:
         # A new variable in the template has to be declared where the checker
         # can see it, or the manifest it validates is not the one that ships.
-        script = self._mutate("<DisplayName>Plezy</DisplayName>", "<DisplayName>$AppName</DisplayName>")
+        script = self._mutate("<DisplayName>Astra</DisplayName>", "<DisplayName>$AppName</DisplayName>")
 
         result = self._run(script)
 

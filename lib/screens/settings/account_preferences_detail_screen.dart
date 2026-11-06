@@ -42,7 +42,7 @@ final _languageOptions = <DialogOption<String>>[
 /// Nothing on this screen is a device setting. Every row reads and writes the
 /// account's own record — Jellyfin/Emby `UserConfiguration`, plex.tv
 /// `/api/v2/user/profile` — so a change here follows the account into every
-/// Plezy install and into the server's own apps.
+/// Astra install and into the server's own apps.
 ///
 /// The audio and subtitle rows in particular are *applied by the server* when
 /// it answers a query (see [AccountPreferenceKey.appliedByServer]): storing the

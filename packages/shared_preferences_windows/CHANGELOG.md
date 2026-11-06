@@ -1,4 +1,4 @@
-## 2.4.1 (Plezy vendored patch)
+## 2.4.1 (Astra vendored patch)
 
 Vendored from pub.dev `shared_preferences_windows` 2.4.1. Upstream writes the whole
 preference document with a bare `writeAsStringSync`, which truncates the live
@@ -6,7 +6,7 @@ file before writing it, so every preference write has a window in which the
 only copy on disk is empty or half-written. A crash inside that window leaves a
 store that fails to parse on every later launch — and it holds the
 credential-vault key, so the loss is not recoverable by rewriting it. This is
-the corruption behind Plezy issue #1732.
+the corruption behind upstream issue #1732.
 
 The local patch stages the document to a sibling `.tmp`, flushes it, then
 renames it over the target, and sweeps a stale staging file once the canonical

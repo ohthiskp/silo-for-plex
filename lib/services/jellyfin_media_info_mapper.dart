@@ -87,7 +87,7 @@ List<MediaAudioTrack> _withDefaultAudioSelection(List<MediaAudioTrack> tracks, i
 ///
 /// `DefaultSubtitleStreamIndex` is the server's whole answer: it folds in the
 /// user's `SubtitleMode`, their language preference, and any per-item choice
-/// Plezy persisted through playback progress reports (including `-1` for a
+/// Astra persisted through playback progress reports (including `-1` for a
 /// deliberate off). A null index is part of that answer — "play no subtitle" —
 /// not a missing field. Synthesising a selection from the container's
 /// default/forced flags overrode `SubtitleMode: None` at the server-selected

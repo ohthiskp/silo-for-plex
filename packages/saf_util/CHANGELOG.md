@@ -1,4 +1,4 @@
-## 3.1.0 (Plezy vendored patch)
+## 3.1.0 (Astra vendored patch)
 
 Vendored from `flutter-cavalry/saf_util` at
 `e300a03ea34b49414b42f309e02531ece57cd0d1`. The local Result-lifecycle patch

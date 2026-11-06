@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../utils/platform_detector.dart';
 import 'car_ux_restrictions_service.dart';
 
-/// Android Automotive OS driver-distraction gating for Plezy's `video` app
+/// Android Automotive OS driver-distraction gating for Astra's `video` app
 /// category (car app quality `DD-2` / `DD-3`).
 ///
 /// Two obligations follow from `DD-2`, and this single predicate serves both:

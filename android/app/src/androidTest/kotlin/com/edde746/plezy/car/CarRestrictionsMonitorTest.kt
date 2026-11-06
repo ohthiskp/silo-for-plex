@@ -16,7 +16,7 @@ import org.junit.runner.RunWith
  * Everything here is invisible to the Dart unit tests: `android.car` is a compile-time stub, so a
  * missing `useLibrary`, a wrong `uses-library` declaration, a car service that refuses to connect,
  * or an unresolvable default display all compile fine and merely make [CarRestrictionsMonitor.start]
- * return false — at which point Plezy silently falls back to lifecycle gating and parked background
+ * return false — at which point Astra silently falls back to lifecycle gating and parked background
  * audio never works, with no crash to notice.
  *
  * On a non-automotive device the monitor must stay inert instead of throwing, which is the other

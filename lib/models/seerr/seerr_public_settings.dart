@@ -60,7 +60,7 @@ class SeerrPublicSettings {
 
   /// Path under the instance base URL that serves `image.tmdb.org` artwork
   /// (append `/t/p/<size>/<file>`), or null when the admin left image caching
-  /// off. The web UI then loads straight from TMDB, and so does Plezy: the
+  /// off. The web UI then loads straight from TMDB, and so does Astra: the
   /// route is mounted either way, but nothing says it works.
   ///
   /// Jellyseerr 2.6.0 moved the route from `/imageproxy/*` to

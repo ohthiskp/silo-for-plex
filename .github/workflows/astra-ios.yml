@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: silo-ios
+  group: astra-ios
   cancel-in-progress: false
 
 env:
@@ -94,7 +94,7 @@ jobs:
           PLATFORM: IOS
         run: |
           python3 -m pip install --quiet --break-system-packages pyjwt cryptography 2>/dev/null || python3 -m pip install --quiet pyjwt cryptography
-          python3 tool/silo/asc_preflight.py
+          python3 tool/astra/asc_preflight.py
 
       - name: Setup Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -111,7 +111,7 @@ jobs:
             ios/Pods
             ~/Library/Caches/CocoaPods
             ~/.cocoapods
-          key: silo-ios-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock', 'ios/Podfile.lock') }}
+          key: astra-ios-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock', 'ios/Podfile.lock') }}
 
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile --no-example

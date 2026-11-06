@@ -23,7 +23,7 @@ enum TvTextInputPresentation {
   /// Always use the platform text input implementation.
   platform,
 
-  /// Always use Plezy's in-app Flutter keyboard overlay.
+  /// Always use Astra's in-app Flutter keyboard overlay.
   flutterOverlay,
 }
 

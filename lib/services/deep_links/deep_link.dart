@@ -34,7 +34,7 @@ sealed class DeepLink {
   /// The profile the link names, as written in the link.
   final String? profile;
 
-  /// Parses [link], or returns null when it is not a well-formed Plezy link.
+  /// Parses [link], or returns null when it is not a well-formed Astra link.
   static DeepLink? tryParse(String link) {
     final uri = Uri.tryParse(link.trim());
     if (uri == null || uri.scheme != scheme) return null;
@@ -284,7 +284,7 @@ final class LiveLink extends DeepLink {
 }
 
 /// `plezy://external-player/<result>/<session>`: an external player handing
-/// control back to Plezy (x-callback-url). The player appends its own query
+/// control back to Astra (x-callback-url). The player appends its own query
 /// parameters, so the whole [uri] is kept for `ExternalPlayerService`.
 final class ExternalPlayerReturnLink extends DeepLink {
   const ExternalPlayerReturnLink(this.uri);

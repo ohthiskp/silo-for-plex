@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Plezy's curated ISO 639 compatibility catalog, preserved from the application's original generated table. This is not a complete ISO registry.",
+  "description": "Astra's curated ISO 639 compatibility catalog, preserved from the application's original generated table. This is not a complete ISO registry.",
   "languages": {
     "aa": {
       "primary": "aa",

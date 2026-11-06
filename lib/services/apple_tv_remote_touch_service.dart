@@ -62,7 +62,7 @@ const Duration _liftVelocityWindow = Duration(milliseconds: 100);
 const int _glideMinConsecutiveSteps = 2;
 
 /// Bridges tvOS touch-surface events (Siri Remote and Apple's iOS Remote app)
-/// into the focus-tree key events Plezy already handles for D-pad navigation.
+/// into the focus-tree key events Astra already handles for D-pad navigation.
 ///
 /// Like the native focus engine, one focus step prices by on-screen geometry:
 /// the focused control's extent along the swipe axis plus a fixed travel

@@ -545,7 +545,7 @@ class MpvPlayerCoreBase: NSObject {
     checkError(mpv_request_log_messages(mpv, defaultLogLevel))
 
     #if os(macOS)
-      // Every URL Plezy opens is a media-server stream or a local file, never
+      // Every URL Astra opens is a media-server stream or a local file, never
       // a site mpv's bundled ytdl_hook could resolve. On a failed open the
       // hook spawns yt-dlp, when one is on PATH, with the full stream URL —
       // access token included — in its argv, where other processes can read
@@ -737,7 +737,7 @@ class MpvPlayerCoreBase: NSObject {
   /// plus what AVSampleBufferAudioRenderer reads ahead. That audio plays out
   /// at the old speed, the video follows its clock, and playback lands
   /// (old - new) x four seconds away from where the new speed puts it: a Watch
-  /// Together room's pause, rate change and play left Plezy 1.8 s ahead or 2 s
+  /// Together room's pause, rate change and play left Astra 1.8 s ahead or 2 s
   /// behind. Seeking back to the position read before the write flushes that
   /// audio, so playback continues at the new speed from where it was. The
   /// position is read first because mpv's audio clock is the queued audio

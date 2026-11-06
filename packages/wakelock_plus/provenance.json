@@ -33,7 +33,7 @@
   },
   "refreshContract": [
     "Audit a new immutable upstream commit and update it together with the package version.",
-    "Reapply every Plezy delta and keep the schema host-only; never add dartOut or dartTestOut.",
+    "Reapply every Astra delta and keep the schema host-only; never add dartOut or dartTestOut.",
     "Update exact Pigeon and platform-interface versions and their nested lock checksums together.",
     "Run flutter pub get --enforce-lockfile, regenerate all three host outputs as one set, and update artifact hashes together.",
     "Run python3 ../../scripts/verify_runtime_inputs.py, compare the external Dart client contract, and smoke Android, iOS, and tvOS before landing."

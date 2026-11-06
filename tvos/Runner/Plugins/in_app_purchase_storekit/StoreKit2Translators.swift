@@ -1,7 +1,7 @@
 // Copyright 2013 The Flutter Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-// Plezy tvOS copy: in_app_purchase_storekit 0.4.13+3 (pub.dev), file
+// Astra tvOS copy: in_app_purchase_storekit 0.4.13+3 (pub.dev), file
 // darwin/.../StoreKit2/StoreKit2Translators.swift. Local delta: add tvOS
 // versions to the iOS 17.4/18.0 availability checks. Update this together
 // with InAppPurchasePlugin.swift using the guidance in that file.

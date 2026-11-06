@@ -135,7 +135,7 @@ class RecordingConflictException extends MediaServerException {
 ///
 /// Plex signals this with `terminationCode`/`terminationText` on the
 /// MediaContainer of a timeline report response. The MediaBrowser backends
-/// deliver admin stops as a WebSocket remote-control command Plezy does not
+/// deliver admin stops as a WebSocket remote-control command Astra does not
 /// subscribe to, so they never throw this — intentionally unsupported there.
 ///
 /// Progress reporting must stop when this is thrown: continuing the heartbeat

@@ -22,7 +22,7 @@ class PlayerCommands {
   final Future<void> Function(double rate) setRate;
 }
 
-/// Plezy's player behind the Open Watch Party SDK (SDK.md §16.4): one adapter
+/// Astra's player behind the Open Watch Party SDK (SDK.md §16.4): one adapter
 /// per opened file, attached with the [copy] that file is.
 ///
 /// Reads come from the player's state. Commands finish when the player has

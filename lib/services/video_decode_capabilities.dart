@@ -5,7 +5,7 @@ import '../utils/async_singleton.dart';
 import '../utils/device_channel.dart';
 import 'settings_service.dart';
 
-/// The video codecs Plezy negotiates with a media server, most efficient
+/// The video codecs Astra negotiates with a media server, most efficient
 /// first. Every transcode target lists them in this order so a server able to
 /// encode more than one picks the best; the hardware probe and the user's
 /// refusals only remove entries, never reorder them.

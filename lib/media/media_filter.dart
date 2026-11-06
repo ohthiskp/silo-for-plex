@@ -61,7 +61,7 @@ abstract final class MediaFilterType {
   static const tag = 'tag';
 }
 
-/// Field names Plezy gives its own meaning to, independent of backend.
+/// Field names Astra gives its own meaning to, independent of backend.
 abstract final class MediaFilterField {
   static const unwatched = 'unwatched';
   static const favorite = 'favorite';

@@ -21,7 +21,7 @@ import '../utils/app_logger.dart';
 /// answered the window's aspect instead of the picture's (#2447).
 ///
 /// mpv places subtitles against the displayed video rect, which the fill turns
-/// into the whole window; `sub-video-rect-aspect` (a Plezy mpv patch) hands it
+/// into the whole window; `sub-video-rect-aspect` (a upstream mpv patch) hands it
 /// the picture's real aspect so corner-anchored ASS events and PGS bitmaps stay
 /// on the picture the shader composites (#2120).
 ///

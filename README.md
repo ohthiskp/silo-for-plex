@@ -14,18 +14,12 @@ A media app for your Plex server on Mac (and iPhone soon), built for smooth play
 
 Requires macOS 14 Sonoma or later.
 
-## Based on Plezy
-
-Astra is a fork of [Plezy](https://github.com/edde746/plezy) by Edvard Wikhall ([@edde746](https://github.com/edde746)). Plezy does the heavy lifting: the Plex and Jellyfin clients, the mpv player and much more. Astra changes the look and the name, and turns off services that belong to the Plezy project (crash reporting, log uploads, Discord, and Trakt/MyAnimeList/AniList/Simkl sign-in), as Plezy's [TRADEMARKS.md](TRADEMARKS.md) asks of forks.
-
-Astra is not made or endorsed by the Plezy project. If you like how Astra plays video, consider [supporting Plezy](https://plezy.app).
-
 ## License
 
-GPL-3.0, the same as Plezy. See [LICENSE](LICENSE). Playback uses [mpv](https://mpv.io) via [MPVKit](https://github.com/mpvkit/MPVKit).
+GPL-3.0. See [LICENSE](LICENSE). Playback uses [mpv](https://mpv.io) via [MPVKit](https://github.com/mpvkit/MPVKit).
 
 ## Building
 
-Releases are built by the **Astra macOS** GitHub Actions workflow (`.github/workflows/silo-macos.yml`). Run it from the Actions tab; it builds Astra.app, makes Astra.dmg, publishes a release, and updates the in-app update feed on the `appcast` branch (needs the `SPARKLE_ED_SEED` repository secret).
+Releases are built by the **Astra macOS** GitHub Actions workflow (`.github/workflows/astra-macos.yml`). Run it from the Actions tab; it builds Astra.app, makes Astra.dmg, publishes a release, and updates the in-app update feed on the `appcast` branch (needs the `SPARKLE_ED_SEED` repository secret).
 
-To pull in new Plezy changes: `git fetch upstream && git merge upstream/main`.
+To pull in upstream changes: `git fetch upstream && git merge upstream/main`.

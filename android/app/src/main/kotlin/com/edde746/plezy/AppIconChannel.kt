@@ -116,7 +116,7 @@ internal class AppIconSwitcher(private val packageManager: PackageManager, priva
  *
  * Android finishes every activity started through a component that gets disabled, and the
  * running task was almost always started through the launcher alias a switch disables. Applying
- * the switch at once therefore closes Plezy in the user's face (DONT_KILL_APP keeps only the
+ * the switch at once therefore closes Astra in the user's face (DONT_KILL_APP keeps only the
  * process). Deferred to the moment the user leaves, the task closes behind the launcher, which
  * already shows the new icon when it comes up.
  *
@@ -158,7 +158,7 @@ internal class AppIconSelection(private val switcher: AppIconSwitcher) {
 /**
  * `com.plezy/app_icon`: isSupported, getCurrent and setIcon({id}) over [AppIconSelection]. The
  * activity forwards its lifecycle so a pick is applied when the user leaves: Home, Recents or
- * Back, but not another activity Plezy opens itself or a picture-in-picture player.
+ * Back, but not another activity Astra opens itself or a picture-in-picture player.
  */
 internal class AppIconChannel(private val activity: Activity) {
   companion object {

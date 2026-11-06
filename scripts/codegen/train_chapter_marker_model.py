@@ -623,7 +623,7 @@ def _get_json(url, headers, data=None):
 
 
 def fetch_plex(base, token):
-    headers = {"X-Plex-Token": token, "X-Plex-Client-Identifier": "plezy-chapter-model", "X-Plex-Product": "Plezy"}
+    headers = {"X-Plex-Token": token, "X-Plex-Client-Identifier": "plezy-chapter-model", "X-Plex-Product": "Astra"}
     sections = _get_json(f"{base}/library/sections", headers)["MediaContainer"].get("Directory", [])
     keys = []
     for section in sections:
@@ -655,7 +655,7 @@ def fetch_plex(base, token):
 
 
 def fetch_jellyfin(base, user, password):
-    auth = 'MediaBrowser Client="Plezy", Device="chapter-model", DeviceId="plezy-chapter-model", Version="1"'
+    auth = 'MediaBrowser Client="Astra", Device="chapter-model", DeviceId="plezy-chapter-model", Version="1"'
     login = _get_json(
         f"{base}/Users/AuthenticateByName",
         {"Content-Type": "application/json", "X-Emby-Authorization": auth},

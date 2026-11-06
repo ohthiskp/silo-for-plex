@@ -1,5 +1,5 @@
 # Vendored from fluttercommunity/wakelock_plus at immutable commit
-# 4f4be85aafe1f8216c2fdd3376263d6f40529684. Plezy retains the tvOS
+# 4f4be85aafe1f8216c2fdd3376263d6f40529684. Astra retains the tvOS
 # deployment target, root-lint unawaited wrappers, serialized Linux portal
 # lifecycle, web requested/effective wake-lock state, and a host-only Pigeon
 # schema. The Dart client remains owned by wakelock_plus_platform_interface

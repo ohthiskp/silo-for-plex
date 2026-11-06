@@ -10,7 +10,7 @@ part 'profile.freezed.dart';
 /// Top-level profile — the user-facing identity in the app.
 ///
 /// Two kinds:
-/// - [LocalProfile]: a Plezy-only profile created by the user. May have
+/// - [LocalProfile]: a Astra-only profile created by the user. May have
 ///   an optional 4-digit PIN.
 /// - [PlexHomeProfile]: auto-surfaced from a connected Plex account's
 ///   Home users. PIN protection is handled server-side by Plex via the

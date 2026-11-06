@@ -1,7 +1,7 @@
 // Copyright 2013 The Flutter Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-// Plezy tvOS copy: a trimmed InAppPurchasePlugin from in_app_purchase_storekit
+// Astra tvOS copy: a trimmed InAppPurchasePlugin from in_app_purchase_storekit
 // 0.4.13+3 (pub.dev), file darwin/.../InAppPurchasePlugin.swift, serving only
 // the plugin's StoreKit 2 API. The upstream class also implements StoreKit 1
 // on top of the plugin's Objective-C module, whose podspec declares only iOS

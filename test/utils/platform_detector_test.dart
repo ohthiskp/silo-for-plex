@@ -166,7 +166,7 @@ void main() {
     });
 
     test('installed and portable executable paths are not packaged installs', () {
-      expect(PlatformDetector.isPackagedExecutablePath(r'C:\Program Files\Plezy\plezy.exe'), isFalse);
+      expect(PlatformDetector.isPackagedExecutablePath(r'C:\Program Files\Astra\plezy.exe'), isFalse);
       expect(PlatformDetector.isPackagedExecutablePath(r'D:\portable\plezy-windows-x64\plezy.exe'), isFalse);
     });
 

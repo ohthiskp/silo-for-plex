@@ -39,7 +39,7 @@ class ServicesSettingsScreen extends StatelessWidget {
                 ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ),
-            // Silo: tracker sign-in runs through the Plezy project's registrations, so only Seerr is offered.
+            // Astra: tracker sign-in runs through the upstream project's registrations, so only Seerr is offered.
             SettingsGroup(children: [_seerr()]),
             if (DiscordRPCService.isAvailable)
               SettingsGroup(

@@ -356,7 +356,7 @@ class JellyfinConnectionAuthService {
   }
 
   /// Emby 4.9.5 returns 404 for every `/QuickConnect/*` route. Emby Connect is
-  /// a separate account-level product and is not an authentication flow Plezy
+  /// a separate account-level product and is not an authentication flow Astra
   /// implements.
   void _requireQuickConnectSupport() {
     if (!dialect.supportsQuickConnect) {

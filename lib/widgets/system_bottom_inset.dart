@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 /// Reserves the system bottom inset — Android's navigation bar, iOS's home
 /// indicator — at the end of a scroll view.
 ///
-/// Plezy always runs edge-to-edge on Android: `targetSdk` is 36, and Android
+/// Astra always runs edge-to-edge on Android: `targetSdk` is 36, and Android
 /// 15 enforces edge-to-edge for apps targeting 35+ while Android 16 removes
 /// the opt-out entirely. So `MediaQuery.padding.bottom` is a real overlap on
 /// phones (~48dp with 3-button navigation, less with gesture navigation) and

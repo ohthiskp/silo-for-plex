@@ -102,7 +102,7 @@ class DiscordRPCService {
   final DiscordRPC Function() _rpcFactory;
 
   static bool get isAvailable {
-    // Silo: the Discord application and poster host belong to the Plezy project.
+    // Astra: the Discord application and poster host belong to the upstream project.
     return false;
     // ignore: dead_code
     if (!PlatformDetector.isDesktopOS()) {
