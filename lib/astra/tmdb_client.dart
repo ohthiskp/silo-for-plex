@@ -208,6 +208,148 @@ class TmdbClient {
       return item;
     }
   }
+  /// Finds a TMDB id by title and year (for server items without TMDB guids).
+  Future<int?> findId(String title, int? year, MediaKind kind) async {
+    final isShow = kind == MediaKind.show;
+    try {
+      final json = await _get(isShow ? '/search/tv' : '/search/movie', {
+        'query': title,
+        if (year != null) (isShow ? 'first_air_date_year' : 'year'): '$year',
+      });
+      if (json is! Map || json['results'] is! List) return null;
+      final first = (json['results'] as List).whereType<Map>().firstOrNull;
+      return first?['id'] as int?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Everything the Astra details page shows for one title.
+  Future<TmdbDetail?> detail(int id, MediaKind kind) async {
+    final isShow = kind == MediaKind.show;
+    try {
+      await _ensureGenres();
+      final json = await _get(isShow ? '/tv/$id' : '/movie/$id', {
+        'append_to_response': [
+          'credits',
+          'videos',
+          'recommendations',
+          'images',
+          'external_ids',
+          if (isShow) 'content_ratings' else 'release_dates',
+        ].join(','),
+        'include_image_language': 'en,null',
+      });
+      if (json is! Map) return null;
+      final base = await enrich(CatalogItem(source: CatalogSourceId.tmdb, kind: kind, title: (isShow ? json['name'] : json['title']) as String? ?? '', ids: CatalogItemIds(tmdb: id)));
+      final credits = json['credits'];
+      final cast = <TmdbPerson>[
+        if (credits is Map && credits['cast'] is List)
+          for (final c in (credits['cast'] as List).whereType<Map>().take(20))
+            TmdbPerson(
+              name: c['name'] as String? ?? '',
+              role: c['character'] as String? ?? '',
+              photo: image(c['profile_path'] as String?, 'w185'),
+            ),
+      ];
+      final crew = credits is Map && credits['crew'] is List ? (credits['crew'] as List).whereType<Map>().toList() : <Map>[];
+      List<String> crewNames(bool Function(Map) test) => [
+        for (final c in crew)
+          if (test(c) && c['name'] is String) c['name'] as String,
+      ].toSet().toList();
+      final directors = isShow
+          ? [
+              if (json['created_by'] is List)
+                for (final c in (json['created_by'] as List).whereType<Map>())
+                  if (c['name'] is String) c['name'] as String,
+            ]
+          : crewNames((c) => c['job'] == 'Director');
+      final writers = crewNames((c) => c['department'] == 'Writing').take(3).toList();
+      final studios = [
+        for (final c in ((isShow ? json['networks'] : json['production_companies']) as List? ?? const []).whereType<Map>())
+          if (c['name'] is String) c['name'] as String,
+      ];
+      final videos = json['videos'];
+      final trailers = <TmdbVideo>[
+        if (videos is Map && videos['results'] is List)
+          for (final v in (videos['results'] as List).whereType<Map>())
+            if (v['site'] == 'YouTube' && v['key'] is String)
+              TmdbVideo(name: v['name'] as String? ?? 'Trailer', key: v['key'] as String, type: v['type'] as String? ?? ''),
+      ]..sort((a, b) => (a.type == 'Trailer' ? 0 : 1).compareTo(b.type == 'Trailer' ? 0 : 1));
+      final recs = json['recommendations'];
+      final related = <CatalogItem>[
+        if (recs is Map && recs['results'] is List)
+          for (final r in (recs['results'] as List))
+            if (_toItem(r, forcedKind: kind) case final item?) item,
+      ];
+      return TmdbDetail(
+        item: CatalogItem(
+          source: CatalogSourceId.tmdb,
+          kind: kind,
+          title: base.title,
+          year: base.year ?? int.tryParse(((isShow ? json['first_air_date'] : json['release_date']) as String? ?? '').split('-').first),
+          overview: json['overview'] as String?,
+          rating: (json['vote_average'] as num?)?.toDouble(),
+          votes: json['vote_count'] as int?,
+          genres: base.genres,
+          certification: base.certification,
+          runtimeMinutes: base.runtimeMinutes,
+          episodeCount: base.episodeCount,
+          ids: base.ids,
+          posterUrl: image(json['poster_path'] as String?, 'w500'),
+          backdropUrl: base.backdropUrl,
+          logoUrl: base.logoUrl,
+          tagline: json['tagline'] as String?,
+        ),
+        cast: cast,
+        directors: directors,
+        writers: writers,
+        studio: studios.firstOrNull,
+        trailers: trailers.take(6).toList(),
+        related: related.take(18).toList(),
+        seasons: isShow ? json['number_of_seasons'] as int? : null,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class TmdbPerson {
+  const TmdbPerson({required this.name, required this.role, this.photo});
+  final String name;
+  final String role;
+  final String? photo;
+}
+
+class TmdbVideo {
+  const TmdbVideo({required this.name, required this.key, required this.type});
+  final String name;
+  final String key;
+  final String type;
+  String get thumbnail => 'https://img.youtube.com/vi/$key/hqdefault.jpg';
+  Uri get url => Uri.parse('https://www.youtube.com/watch?v=$key');
+}
+
+class TmdbDetail {
+  const TmdbDetail({
+    required this.item,
+    required this.cast,
+    required this.directors,
+    required this.writers,
+    required this.studio,
+    required this.trailers,
+    required this.related,
+    required this.seasons,
+  });
+  final CatalogItem item;
+  final List<TmdbPerson> cast;
+  final List<String> directors;
+  final List<String> writers;
+  final String? studio;
+  final List<TmdbVideo> trailers;
+  final List<CatalogItem> related;
+  final int? seasons;
 }
 
 class TmdbException implements Exception {

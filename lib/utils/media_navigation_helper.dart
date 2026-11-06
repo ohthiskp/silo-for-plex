@@ -17,7 +17,9 @@ import '../screens/media_detail_screen.dart';
 import '../screens/playlist/playlist_detail_screen.dart';
 import '../services/settings_service.dart';
 import '../utils/global_key_utils.dart';
+import '../astra/detail_screen.dart';
 import 'catalog_navigation_helper.dart';
+import 'platform_detector.dart';
 import 'dialogs.dart';
 import 'formatters.dart';
 import 'music_navigation.dart';
@@ -313,6 +315,7 @@ Future<MediaNavigationResult> navigateToMediaItemDetails(
   bool isOffline = false,
   void Function(MediaItem source)? onRefresh,
   MediaItem? metadataOverride,
+  bool legacy = false,
 }) async {
   // Catalog stand-ins (Explore tab) must never reach MediaDetailScreen — it
   // hard-requires a server id. Guarded here (not only in navigateToMediaItem)
@@ -321,6 +324,24 @@ Future<MediaNavigationResult> navigateToMediaItemDetails(
     final catalogItem = mi.catalogItem;
     if (catalogItem == null) return MediaNavigationResult.unsupported;
     await navigateToCatalogItem(context, catalogItem);
+    return MediaNavigationResult.navigated;
+  }
+
+  // Astra 3.0: movies and shows open the Astra details page on phones,
+  // tablets and Mac; "Episodes" there comes back here with [legacy].
+  if (!legacy && !isOffline && !PlatformDetector.isTV() && (mi.kind == MediaKind.movie || mi.kind == MediaKind.show)) {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AstraDetailScreen(
+          item: mi,
+          onLegacyDetails: (c, lib) async {
+            await navigateToMediaItemDetails(c, lib, legacy: true, onRefresh: onRefresh);
+          },
+          onRequest: navigateToLegacyCatalogItem,
+        ),
+      ),
+    );
     return MediaNavigationResult.navigated;
   }
 
