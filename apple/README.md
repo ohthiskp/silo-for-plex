@@ -34,6 +34,10 @@ The bundle id is `app.astra.swiftui.mac`, so it installs alongside the Flutter A
 
 ## Rules
 
+- Glass is Apple's Liquid Glass (macOS 26): system `.glass`/`.glassProminent` buttons, `glassEffect`
+  for custom floating shapes, `GlassEffectContainer` for groups (`AstraMac/Design/Glass.swift`). Only the
+  floating layer gets glass (sidebar, buttons, search, player controls), never artwork or rows; the
+  player uses clear glass over a dimming scrim. Before macOS 26 it falls back to materials.
 - Tokens and motion come from `DESIGN_SYSTEM.md` (`AstraMac/Design/Theme.swift`). Animate opacity
   and transform only; images are resized by Plex and decoded off the main thread.
 - The shared mpv files are owned by `astra-playback`; change them there, not by copying.

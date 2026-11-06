@@ -37,6 +37,7 @@ struct DetailView: View {
       .padding(.bottom, 80)
     }
     .scrollIndicators(.never)
+    .astraScrollEdges()
     .ignoresSafeArea(edges: .top)
     .background(Astra.Color.bg)
     .overlay(alignment: .topLeading) {
@@ -45,7 +46,7 @@ struct DetailView: View {
       } label: {
         Image(systemName: "chevron.left")
       }
-      .buttonStyle(GlassIconButtonStyle(size: 40))
+      .astraIconButton(size: 40)
       .keyboardShortcut("[", modifiers: .command)
       .padding(.leading, Astra.Layout.leading)
       .padding(.top, 36)
@@ -86,7 +87,7 @@ struct DetailView: View {
           } label: {
             Label(playLabel, systemImage: "play.fill")
           }
-          .buttonStyle(PlayButtonStyle())
+          .astraPrimaryButton()
           .keyboardShortcut(.defaultAction)
 
           Button {
@@ -97,8 +98,9 @@ struct DetailView: View {
           } label: {
             Label(shown.isWatched ? "Watched" : "Mark Watched", systemImage: shown.isWatched ? "checkmark" : "eye")
           }
-          .buttonStyle(GlassButtonStyle())
+          .astraSecondaryButton()
         }
+        .astraGlassGroup(spacing: 14)
         .padding(.top, 4)
         if !shown.directors.isEmpty {
           Text("Directed by \(shown.directors.map(\.tag).joined(separator: ", "))")

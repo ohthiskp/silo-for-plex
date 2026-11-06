@@ -40,6 +40,7 @@ struct HomeView: View {
       .padding(.bottom, 80)
     }
     .scrollIndicators(.never)
+    .astraScrollEdges()
     .overlay {
       if library.isLoadingHome {
         ProgressView().controlSize(.large).transition(.opacity)
@@ -94,14 +95,15 @@ struct HeroCarousel: View {
             } label: {
               Label(item.progress != nil ? "Resume" : "Play", systemImage: "play.fill")
             }
-            .buttonStyle(PlayButtonStyle())
+            .astraPrimaryButton()
             Button {
               openItem(item)
             } label: {
               Label("Details", systemImage: "info.circle")
             }
-            .buttonStyle(GlassButtonStyle())
+            .astraSecondaryButton()
           }
+          .astraGlassGroup(spacing: 14)
           .padding(.top, 6)
           PageDots(count: items.count, index: index)
             .padding(.top, 10)

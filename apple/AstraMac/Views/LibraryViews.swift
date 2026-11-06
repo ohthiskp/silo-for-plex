@@ -44,6 +44,7 @@ struct LibraryGridView: View {
       .padding(.bottom, 60)
     }
     .scrollIndicators(.never)
+    .astraScrollEdges()
     .ignoresSafeArea(edges: .top)
     .task(id: sort) {
       items = []
@@ -96,6 +97,7 @@ struct SearchView: View {
       .padding(.top, 56)
     }
     .scrollIndicators(.never)
+    .astraScrollEdges()
     .ignoresSafeArea(edges: .top)
     .onAppear { focused = true }
     .task(id: query) {

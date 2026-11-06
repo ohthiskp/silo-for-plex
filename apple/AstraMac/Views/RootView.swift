@@ -97,9 +97,10 @@ struct ErrorView: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: 420)
       HStack(spacing: 12) {
-        Button("Try Again") { Task { await app.retry() } }.buttonStyle(PlayButtonStyle())
-        Button("Sign Out") { app.signOut() }.buttonStyle(GlassButtonStyle())
+        Button("Try Again") { Task { await app.retry() } }.astraPrimaryButton()
+        Button("Sign Out") { app.signOut() }.astraSecondaryButton()
       }
+      .astraGlassGroup(spacing: 12)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Astra.Color.bg)

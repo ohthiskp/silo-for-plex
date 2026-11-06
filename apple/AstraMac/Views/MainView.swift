@@ -99,6 +99,8 @@ struct Sidebar: View {
   var sections: [PlexLibrarySection]
   var onReselect: () -> Void
   @Environment(\.openSettings) private var openSettings
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Namespace private var selectionSpace
 
   var body: some View {
     VStack(spacing: 6) {
@@ -129,7 +131,9 @@ struct Sidebar: View {
   private func icon(_ symbol: String, _ title: String, _ item: SidebarItem) -> some View {
     let selected = selection == item
     return Button {
-      selection = item
+      withAnimation(reduceMotion ? Astra.Motion.fast : .spring(response: 0.38, dampingFraction: 0.82)) {
+        selection = item
+      }
       onReselect()
     } label: {
       Image(systemName: symbol)
@@ -137,15 +141,17 @@ struct Sidebar: View {
         .frame(width: 44, height: 44)
         .foregroundStyle(selected ? Color.white : Astra.Color.muted)
         .background {
+          // A violet fill, not glass: it sits on the sidebar's glass. It slides
+          // from the old icon to the new one instead of blinking.
           if selected {
             Circle().fill(Astra.Color.purple.opacity(0.9))
               .shadow(color: Astra.Color.purple.opacity(0.5), radius: 10)
+              .matchedGeometryEffect(id: "selection", in: selectionSpace)
           }
         }
         .contentShape(Circle())
     }
     .buttonStyle(.plain)
     .help(title)
-    .animation(Astra.Motion.base, value: selected)
   }
 }

@@ -98,7 +98,8 @@ struct ContinueCard: View {
           .font(.system(size: 18, weight: .bold))
           .foregroundStyle(.white)
           .frame(width: 48, height: 48)
-          .astraGlass(in: Circle())
+          .background(.black.opacity(0.4), in: Circle())
+          .overlay(Circle().stroke(.white.opacity(0.25)))
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
       .frame(width: width, height: height)

@@ -70,7 +70,7 @@ struct PlayerOverlay: View {
       } label: {
         Image(systemName: "xmark")
       }
-      .buttonStyle(GlassIconButtonStyle(size: 42))
+      .astraIconButton(size: 42, variant: .clear)
       .help("Close (Esc)")
 
       VStack(alignment: .leading, spacing: 3) {
@@ -86,7 +86,7 @@ struct PlayerOverlay: View {
       } label: {
         Image(systemName: "arrow.up.left.and.arrow.down.right")
       }
-      .buttonStyle(GlassIconButtonStyle(size: 42))
+      .astraIconButton(size: 42, variant: .clear)
       .help("Full Screen")
     }
   }
@@ -99,7 +99,7 @@ struct PlayerOverlay: View {
       } label: {
         Image(systemName: "gobackward.10")
       }
-      .buttonStyle(GlassIconButtonStyle(size: 64))
+      .astraIconButton(size: 64, variant: .clear)
 
       Button {
         player.togglePause()
@@ -107,7 +107,7 @@ struct PlayerOverlay: View {
         Image(systemName: player.paused ? "play.fill" : "pause.fill")
           .contentTransition(.symbolEffect(.replace))
       }
-      .buttonStyle(GlassIconButtonStyle(size: 86))
+      .astraIconButton(size: 86, variant: .clear)
 
       Button {
         player.seek(by: 10)
@@ -115,8 +115,9 @@ struct PlayerOverlay: View {
       } label: {
         Image(systemName: "goforward.10")
       }
-      .buttonStyle(GlassIconButtonStyle(size: 64))
+      .astraIconButton(size: 64, variant: .clear)
     }
+    .astraGlassGroup(spacing: 44)
   }
 
   private var bottomBar: some View {
@@ -148,6 +149,7 @@ struct PlayerOverlay: View {
       }
       .font(.system(size: 13, weight: .semibold).monospacedDigit())
       .foregroundStyle(.white.opacity(0.9))
+      .astraGlassGroup(spacing: 10)
     }
   }
 
@@ -177,7 +179,7 @@ struct PlayerOverlay: View {
       .font(.system(size: 12.5, weight: .semibold))
       .padding(.horizontal, 14)
       .frame(height: 32)
-      .astraGlass(in: Capsule(), interactive: true)
+      .astraGlass(in: Capsule(), variant: .clear, interactive: true)
     }
     .menuStyle(.button)
     .buttonStyle(.plain)

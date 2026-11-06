@@ -25,10 +25,11 @@ struct SignInView: View {
             .textSelection(.enabled)
           HStack(spacing: 12) {
             Button("Open Plex Again") { NSWorkspace.shared.open(url) }
-              .buttonStyle(GlassButtonStyle())
+              .astraSecondaryButton()
             Button("Cancel") { app.cancelSignIn() }
-              .buttonStyle(GlassButtonStyle())
+              .astraSecondaryButton()
           }
+          .astraGlassGroup(spacing: 12)
           ProgressView().controlSize(.small).padding(.top, 6)
         }
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -38,7 +39,7 @@ struct SignInView: View {
             .font(.system(size: 16))
             .foregroundStyle(Astra.Color.muted)
           Button("Sign in with Plex") { app.signIn() }
-            .buttonStyle(PlayButtonStyle(violet: true))
+            .astraPrimaryButton(violet: true)
             .keyboardShortcut(.defaultAction)
         }
         .transition(.opacity)
@@ -79,7 +80,8 @@ struct ServerPickerView: View {
             }
             .padding(.horizontal, 18)
             .frame(width: 420, height: 62)
-            .astraGlass(in: RoundedRectangle(cornerRadius: 16), interactive: true)
+            .background(Astra.Color.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Astra.Color.hairline))
             .contentShape(RoundedRectangle(cornerRadius: 16))
           }
           .buttonStyle(.plain)
