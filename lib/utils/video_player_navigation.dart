@@ -31,7 +31,6 @@ import 'platform_detector.dart';
 import 'download_version_utils.dart';
 import 'media_version_resolver.dart';
 import 'provider_extensions.dart';
-import 'quality_preset_labels.dart';
 import '../i18n/strings.g.dart';
 
 const String kVideoPlayerRouteName = '/video_player';
@@ -382,6 +381,18 @@ Future<bool?> navigateToVideoPlayer(
   final mediaSourceId =
       selectedMediaSourceId ?? downloadedMediaSourceId ?? roomVersion?.sourceId ?? preferredVersion?.sourceId;
 
+  // Nothing above chose a version, so the device's Video Quality setting
+  // may pick one (PlaybackQualityManager.chooseVersionIndex).
+  final autoSelectVersion =
+      !isOffline &&
+      !strictMediaSelection &&
+      selectedMediaIndex == null &&
+      selectedMediaSourceId == null &&
+      downloadedMediaIndex == null &&
+      downloadedMediaSourceId == null &&
+      roomVersion == null &&
+      savedVersion == null;
+
   final launchIdentity = VideoPlayerLaunchIdentity(
     metadata: metadata,
     mediaIndex: mediaIndex,
@@ -498,6 +509,7 @@ Future<bool?> navigateToVideoPlayer(
         selectedMediaSourceId: mediaSourceId,
         preferredVersionSignature: preferredVersion?.signature,
         selectedQualityPreset: selectedQualityPreset,
+        autoSelectVersion: autoSelectVersion,
         isOffline: isOffline,
         watchTogetherCopy: watchTogetherCopy,
         initialPosition: initialPosition,
@@ -564,38 +576,17 @@ Future<bool?> navigateToVideoPlayerWithRefresh(
   return result;
 }
 
-/// Sum of [MediaPart.sizeBytes] across all parts of [version]. Returns
-/// null when any part is missing a size (a partial sum would be misleading
-/// for the "Original" row in the quality picker).
-int? _versionSizeBytes(MediaVersion? version) {
-  if (version == null || version.parts.isEmpty) return null;
-  var total = 0;
-  for (final p in version.parts) {
-    final s = p.sizeBytes;
-    if (s == null || s <= 0) return null;
-    total += s;
-  }
-  return total > 0 ? total : null;
-}
-
 /// The shared "Play Version..." flow behind the detail screen's split Play
 /// segment and the context menu entry: pick a version when the item has a
-/// choice, pick a transcode quality when the backend can transcode, persist
-/// the pick, and launch playback.
+/// choice, persist the pick, and launch playback. Quality is not asked here:
+/// the device's Video Quality setting applies to every playback.
 ///
 /// Returns true when playback navigation started; false when the user
-/// dismissed a picker or the context went away. The returned future completes
-/// after the player route pops, so callers can refresh on return.
+/// dismissed the picker or the context went away. The returned future
+/// completes after the player route pops, so callers can refresh on return.
 Future<bool> promptAndPlayVersion(BuildContext context, MediaItem item) async {
   final itemServerId = serverIdOrNull(item.serverId);
   final client = context.tryGetMediaClientForServer(itemServerId);
-  final itemServerOnline =
-      itemServerId != null && context.read<MultiServerProvider>().serverManager.isClientOnline(itemServerId);
-  // Same flag the in-player Version & Quality sheet reads — keeps both
-  // surfaces honest about what the active backend can actually do. Also
-  // requires a reachable server: capabilities are static, and a server
-  // dropping between surface build and tap must not offer transcodes.
-  final canTranscode = itemServerOnline && (client?.capabilities.videoTranscoding ?? false);
   final versions = client == null
       ? item.mediaVersions ?? const <MediaVersion>[]
       : await resolveMediaVersions(item, client);
@@ -609,17 +600,6 @@ Future<bool> promptAndPlayVersion(BuildContext context, MediaItem item) async {
   }
 
   final selectedVersion = selectedVersionIndex < versions.length ? versions[selectedVersionIndex] : null;
-  TranscodeQualityPreset selectedQuality = TranscodeQualityPreset.original;
-  if (canTranscode) {
-    final picked = await showQualityPickerDialog(
-      context,
-      sourceBitrateKbps: selectedVersion?.bitrate,
-      sourceDurationMs: item.durationMs,
-      sourceSizeBytes: _versionSizeBytes(selectedVersion),
-    );
-    if (picked == null || !context.mounted) return false;
-    selectedQuality = picked;
-  }
 
   // Remember the pick so Continue Watching / plain Play resume this version
   // (#1492) — same store the in-player version switch writes.
@@ -633,7 +613,6 @@ Future<bool> promptAndPlayVersion(BuildContext context, MediaItem item) async {
     metadata: item,
     selectedMediaIndex: selectedVersionIndex,
     selectedMediaSourceId: selectedVersion?.id,
-    selectedQualityPreset: selectedQuality,
   );
   return true;
 }

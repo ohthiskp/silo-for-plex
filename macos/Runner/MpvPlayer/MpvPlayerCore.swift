@@ -285,6 +285,29 @@ class MpvPlayerCore: MpvPlayerCoreBase {
     }
   }
 
+  /// Astra quality badge: the dynamic range the display really receives,
+  /// read by Dart as the `astra-output-range` property. "HDR" when the video
+  /// layer is in EDR (HDR on, HDR content) on a screen with HDR headroom,
+  /// else "SDR". The Mac never presents Dolby Vision as such, so it never
+  /// answers "Dolby Vision".
+  override func getPropertyAsync(_ name: String, completion: @escaping (Result<String?, Error>) -> Void) {
+    guard name == "astra-output-range" else {
+      super.getPropertyAsync(name, completion: completion)
+      return
+    }
+    DispatchQueue.main.async {
+      guard self.hdrEnabled, self.lastSigPeak > 1.0 else {
+        completion(.success("SDR"))
+        return
+      }
+      guard let screen = self.window?.screen else {
+        completion(.success(nil))
+        return
+      }
+      completion(.success(screen.maximumPotentialExtendedDynamicRangeColorComponentValue > 1.0 ? "HDR" : "SDR"))
+    }
+  }
+
   /// How long the hidden layers stay in the tree after mpv is gone; matches
   /// vo_avfoundation's AVF_LAYER_RETIRE_DELAY_NS for its OSD layer.
   private static let layerRetireDelay: TimeInterval = 0.2

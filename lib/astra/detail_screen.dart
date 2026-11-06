@@ -7,10 +7,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../media/catalog_item_ref.dart';
 import '../media/media_item.dart';
 import '../media/media_kind.dart';
+import '../media/media_version.dart';
 import '../models/catalog/catalog_item.dart';
 import '../providers/catalog_sources_provider.dart';
 import '../services/catalog/catalog_library_matcher.dart';
 import '../services/catalog/catalog_source.dart';
+import '../services/playback_quality_manager.dart';
 import '../utils/external_ids.dart';
 import '../utils/media_image_helper.dart';
 import '../utils/media_navigation_helper.dart';
@@ -125,28 +127,31 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
     return [if (year != null) '$year', ?cert, ?length].where((e) => e.isNotEmpty).join('  •  ');
   }
 
-  bool get _is4k {
+  /// Badge for the version this device will actually start, under its
+  /// Video Quality setting (see PlaybackQualityManager): "4K UHD" only when
+  /// a 4K version will play, "HD" for 720p–1080p, nothing otherwise. HDR and
+  /// Dolby Vision are not claimed here, because the output path is only
+  /// known once playback starts; the player badges show the real format.
+  String? get _qualityBadge {
     final media = _library?.raw?['Media'];
-    if (media is List) {
-      return media.whereType<Map>().any((m) => '${m['videoResolution']}'.toLowerCase() == '4k');
-    }
-    return false;
-  }
-
-  bool get _isDolbyVision {
-    final media = _library?.raw?['Media'];
-    if (media is! List) return false;
+    if (media is! List) return null;
+    final versions = <MediaVersion>[];
     for (final m in media.whereType<Map>()) {
-      final parts = m['Part'];
-      if (parts is! List) continue;
-      for (final p in parts.whereType<Map>()) {
-        final streams = p['Stream'];
-        if (streams is List && streams.whereType<Map>().any((s) => s['DOVIPresent'] == true || s['DOVIPresent'] == '1')) {
-          return true;
-        }
-      }
+      try {
+        versions.add(MediaVersion.fromJson(Map<String, dynamic>.from(m)));
+      } catch (_) {}
     }
-    return false;
+    if (versions.isEmpty) return null;
+    final preference = PlaybackQualityManager.readPreference();
+    final index = PlaybackQualityManager.chooseVersionIndex(versions, preference) ?? 0;
+    var tier = PlaybackQualityManager.tierHeight(versions[index]);
+    final ceiling = preference.maxTierHeight;
+    // HD with only a taller file: the server brings it down to 1080p.
+    if (tier != null && ceiling != null && tier > ceiling) tier = ceiling;
+    if (tier == null) return null;
+    if (tier >= 2160) return '4K UHD';
+    if (tier >= 720) return 'HD';
+    return null;
   }
 
   String? get _rottenTomatoes {
@@ -416,8 +421,7 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
           runSpacing: 8,
           children: [
             if (_metaLine.isNotEmpty) Text(_metaLine, style: const TextStyle(color: AstraColors.muted, fontSize: 14.5)),
-            if (_is4k) const _Badge('4K'),
-            if (_isDolbyVision) const Text('Dolby Vision', style: TextStyle(color: AstraColors.ink, fontSize: 13.5, fontWeight: FontWeight.w600)),
+            if (_qualityBadge case final badge?) _Badge(badge),
           ],
         ),
         if (tmdbScore != null || rt != null) ...[

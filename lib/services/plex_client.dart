@@ -85,6 +85,7 @@ import 'playback_initialization_types.dart';
 import 'subtitle_preference.dart';
 import 'track_selection_service.dart';
 import 'video_decode_capabilities.dart';
+import 'playback_quality_manager.dart';
 
 part 'plex_client/parts/live_tv.dart';
 part 'plex_client/parts/playlists.dart';
@@ -3734,13 +3735,41 @@ class PlexClient
   @override
   Future<PlaybackInitializationResult> getPlaybackInitialization(PlaybackInitializationOptions options) async {
     try {
-      final data = await getVideoPlaybackData(
+      var data = await getVideoPlaybackData(
         options.metadata.id,
         mediaIndex: options.selectedMediaIndex,
         selectedMediaSourceId: options.selectedMediaSourceId,
         preferredVersionSignature: options.preferredVersionSignature,
         position: options.startPosition,
       );
+
+      // Astra Video Quality: with nothing else deciding the version, pick the
+      // best one this device should play under its Auto/HD/4K setting. The
+      // re-read is served from the metadata cache the first read just wrote.
+      final autoPreference = options.autoSelectVersionFor;
+      if (autoPreference != null &&
+          options.selectedMediaSourceId == null &&
+          options.preferredVersionSignature == null &&
+          options.metadata.kind != MediaKind.track) {
+        final versions = data.availableVersions;
+        final picked = PlaybackQualityManager.chooseVersionIndex(
+          versions,
+          autoPreference,
+          onCellularOnly: options.onCellularOnly,
+        );
+        if (picked != null && picked != data.selectedMediaIndex) {
+          appLogger.i(
+            'Video quality ${autoPreference.name}: playing version $picked '
+            '(${versions[picked].displayLabel}) instead of ${data.selectedMediaIndex}',
+          );
+          data = await getVideoPlaybackData(
+            options.metadata.id,
+            mediaIndex: picked,
+            selectedMediaSourceId: versions[picked].id.isEmpty ? null : versions[picked].id,
+            position: options.startPosition,
+          );
+        }
+      }
 
       if (!data.hasValidVideoUrl) {
         throw PlaybackException(t.messages.fileInfoNotAvailable, reason: PlaybackFailureReason.noPlayableSource);

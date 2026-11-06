@@ -6,6 +6,7 @@ import '../media/media_source_info.dart';
 import '../media/media_version.dart';
 import '../models/audio_quality_preset.dart';
 import '../models/transcode_quality_preset.dart';
+import '../models/video_quality_preference.dart';
 import '../mpv/mpv.dart';
 import 'subtitle_preference.dart';
 
@@ -75,6 +76,16 @@ class PlaybackInitializationOptions {
   /// could only fail the same way.
   final bool forceTranscode;
 
+  /// Set only on a fresh launch whose version nothing has decided yet: the
+  /// backend lets `PlaybackQualityManager` pick among the item's versions
+  /// for this preference instead of taking the first one. Reloads, retries
+  /// and episode carries leave it null so they keep the version in play.
+  final VideoQualityPreference? autoSelectVersionFor;
+
+  /// Whether the device is on a cellular-only connection, for Auto's
+  /// data-saving ceiling in [autoSelectVersionFor].
+  final bool onCellularOnly;
+
   const PlaybackInitializationOptions({
     required this.metadata,
     required this.selectedMediaIndex,
@@ -89,6 +100,8 @@ class PlaybackInitializationOptions {
     this.transcodeSessionId,
     this.startPosition,
     this.forceTranscode = false,
+    this.autoSelectVersionFor,
+    this.onCellularOnly = false,
   });
 }
 

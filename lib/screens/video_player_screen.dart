@@ -65,6 +65,7 @@ import '../services/mpv_sidecar_open_guard.dart';
 import '../services/playback_open_outcome.dart';
 import '../services/playback_progress_tracker.dart';
 import '../services/playback_source_resolver.dart';
+import '../services/playback_quality_manager.dart';
 import '../services/multi_server_manager.dart';
 import '../services/offline_watch_sync_service.dart';
 import '../services/display_mode_service.dart';
@@ -498,9 +499,14 @@ class VideoPlayerScreen extends StatefulWidget {
   final bool Function()? isLaunchCurrent;
   final PlaybackLaunchObserver? launchObserver;
 
-  /// Quality preset override for this playback. When `null`, the screen uses
-  /// the user's [SettingsService.defaultQualityPreset].
+  /// Quality preset override for this playback. When `null`, the screen asks
+  /// [PlaybackQualityManager] for the device's Video Quality ceiling.
   final TranscodeQualityPreset? selectedQualityPreset;
+
+  /// Whether nothing chose the version yet (no explicit pick, download, Watch
+  /// Together file or remembered choice), so the quality manager may pick
+  /// the best one for this device's Video Quality setting.
+  final bool autoSelectVersion;
 
   /// Audio stream ID to pass to the transcoder when [selectedQualityPreset]
   /// is non-original. When `null`, the playback service picks the `selected`
@@ -524,6 +530,7 @@ class VideoPlayerScreen extends StatefulWidget {
     this.preferredVersionSignature,
     this.isOffline = false,
     this.selectedQualityPreset,
+    this.autoSelectVersion = false,
     this.selectedAudioStreamId,
     this.live,
     this.watchTogetherCopy,
@@ -1749,19 +1756,20 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
         if (genericClient == null) {
           throw StateError('No client registered for ${_currentMetadata.serverId}');
         }
-        // Single source of truth for showing quality controls and applying the
-        // saved startup quality. An explicit per-play pick wins; otherwise the
-        // saved default applies, which on a cellular-only connection is the
-        // cellular one when set. The connection type piggybacks on the app's
-        // single connectivity subscription in OfflineModeProvider.
+        // The device's Video Quality setting (Auto / HD / 4K) decides the
+        // startup ceiling through PlaybackQualityManager; an explicit
+        // per-play preset from a caller still wins. The connection type
+        // piggybacks on the app's single connectivity subscription in
+        // OfflineModeProvider.
         _serverSupportsTranscoding = genericClient.capabilities.videoTranscoding;
+        final onCellularOnly = context.read<OfflineModeProvider>().isCellularOnly;
+        final qualityPreference = PlaybackQualityManager.readPreference(settingsService);
         _selectedQualityPreset =
             widget.selectedQualityPreset ??
-            TranscodeQualityPreset.resolveStartupDefault(
+            PlaybackQualityManager.startupPreset(
+              qualityPreference,
               serverSupportsTranscoding: _serverSupportsTranscoding,
-              onCellularOnly: context.read<OfflineModeProvider>().isCellularOnly,
-              cellularDefault: settingsService.read(SettingsService.cellularQualityPreset),
-              generalDefault: settingsService.read(SettingsService.defaultQualityPreset),
+              onCellularOnly: onCellularOnly,
             );
         final playbackResolver = PlaybackSourceResolver(
           serverManager: context.read<MultiServerProvider>().serverManager,
@@ -1774,6 +1782,11 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
             selectedMediaSourceId: _requestedMediaSourceId,
             preferredVersionSignature: widget.preferredVersionSignature,
             qualityPreset: _selectedQualityPreset,
+            // Only a launch with no version already decided (no explicit
+            // pick, download, room file or remembered choice) lets the
+            // quality manager pick among the server's versions.
+            autoSelectVersionFor: widget.autoSelectVersion ? qualityPreference : null,
+            onCellularOnly: onCellularOnly,
             selectedAudioStreamId: _selectedAudioStreamId,
             preferredAudioTrack: _preferredAudioTrack,
             preferredSubtitleTrack: _preferredSubtitleTrack,
@@ -1797,17 +1810,14 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
         _playbackDataFuture!.ignore();
       }
       if (widget.isLive) {
-        // Live TV skips the resolver but honors the same saved quality
-        // default: on Original the backend may direct-play the channel, on a
-        // capped preset it transcodes at that ceiling (#2198). Both live
-        // backends can transcode, so the capability gate is moot here.
+        // Live TV skips the resolver and the version pick. A live stream has
+        // no version that already fits under a ceiling, so any ceiling is a
+        // transcode (#2198); see PlaybackQualityManager.livePreset.
         _selectedQualityPreset =
             widget.selectedQualityPreset ??
-            TranscodeQualityPreset.resolveStartupDefault(
-              serverSupportsTranscoding: true,
+            PlaybackQualityManager.livePreset(
+              PlaybackQualityManager.readPreference(settingsService),
               onCellularOnly: context.read<OfflineModeProvider>().isCellularOnly,
-              cellularDefault: settingsService.read(SettingsService.cellularQualityPreset),
-              generalDefault: settingsService.read(SettingsService.defaultQualityPreset),
             );
       }
 

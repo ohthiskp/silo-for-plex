@@ -1,15 +1,17 @@
+import 'dart:ui' show ImageFilter;
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
-import '../models/transcode_quality_preset.dart';
+import '../models/video_quality_preference.dart';
 import '../profiles/active_profile_provider.dart';
 import '../providers/multi_server_provider.dart';
 import '../providers/theme_provider.dart';
 import '../screens/settings/add_connection_screen.dart';
 import '../screens/settings/general_settings_screen.dart';
 import '../screens/settings/logs_screen.dart';
-import '../screens/settings/playback_settings_screen.dart';
 import '../screens/settings/services_settings_screen.dart';
 import '../screens/settings/settings_utils.dart';
 import '../screens/settings/subtitle_styling_screen.dart';
@@ -218,29 +220,14 @@ class _Chevron extends StatelessWidget {
 }
 
 class _Value extends StatelessWidget {
-  const _Value(this.text, {this.boxed = false});
+  const _Value(this.text);
   final String text;
-  final bool boxed;
   @override
   Widget build(BuildContext context) {
-    final label = Text(
-      text,
-      style: TextStyle(color: boxed ? _ink : _muted, fontSize: 14, fontWeight: boxed ? FontWeight.w700 : FontWeight.w400),
-    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (boxed)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.all(Radius.circular(7)),
-              border: Border.all(color: const Color(0x4DFFFFFF)),
-            ),
-            child: label,
-          )
-        else
-          label,
+        Text(text, style: const TextStyle(color: _muted, fontSize: 14)),
         const SizedBox(width: 6),
         const _Chevron(),
       ],
@@ -379,28 +366,13 @@ class _CheckForUpdatesButtonState extends State<_CheckForUpdatesButton> {
 class _PlaybackCard extends StatelessWidget {
   const _PlaybackCard();
 
-  static String _quality(TranscodeQualityPreset p) {
-    if (p == TranscodeQualityPreset.original) return 'Original';
-    final name = p.name; // e.g. p1080_8mbps
-    final res = RegExp(r'^p(\d+)').firstMatch(name)?.group(1);
-    return res == null ? name : '${res}p';
-  }
-
   @override
   Widget build(BuildContext context) {
     return _Card(
       icon: Icons.play_arrow_outlined,
       title: 'Playback',
       children: [
-        SettingValueBuilder<TranscodeQualityPreset>(
-          pref: settings.SettingsService.defaultQualityPreset,
-          builder: (context, value, _) => _Row(
-            icon: Icons.desktop_windows_outlined,
-            title: 'Default Quality',
-            trailing: _Value(_quality(value), boxed: true),
-            onTap: () => _push(context, const PlaybackSettingsScreen()),
-          ),
-        ),
+        const _VideoQualityPicker(),
         _Row(
           icon: Icons.subtitles_outlined,
           title: 'Subtitle Style',
@@ -419,6 +391,93 @@ class _PlaybackCard extends StatelessWidget {
           title: 'Autoplay Next Episode',
         ),
       ],
+    );
+  }
+}
+
+/// Settings → Playback → Video Quality: Auto, HD, 4K and nothing else. An
+/// Apple-style sliding segmented control on a frosted track, saved for this
+/// device only and applied to every playback (see PlaybackQualityManager).
+class _VideoQualityPicker extends StatelessWidget {
+  const _VideoQualityPicker();
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingValueBuilder<VideoQualityPreference>(
+      pref: settings.SettingsService.videoQualityPreference,
+      builder: (context, value, _) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.high_quality_outlined, color: _ink.withValues(alpha: 0.85), size: 22),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Video Quality',
+                        style: TextStyle(color: _ink, fontSize: 15.5, fontWeight: FontWeight.w500),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          child: Text(
+                            value.detail,
+                            key: ValueKey(value),
+                            style: const TextStyle(color: _muted, fontSize: 12.5),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.only(left: 40),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.all(Radius.circular(10)),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: CupertinoSlidingSegmentedControl<VideoQualityPreference>(
+                      groupValue: value,
+                      backgroundColor: const Color(0x1AFFFFFF),
+                      thumbColor: const Color(0x40FFFFFF),
+                      padding: const EdgeInsets.all(3),
+                      onValueChanged: (v) {
+                        if (v == null) return;
+                        settings.SettingsService.instance.write(settings.SettingsService.videoQualityPreference, v);
+                      },
+                      children: {
+                        for (final p in VideoQualityPreference.values)
+                          p: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 7),
+                            child: Text(
+                              p.label,
+                              style: TextStyle(
+                                color: p == value ? _ink : _muted,
+                                fontSize: 14,
+                                fontWeight: p == value ? FontWeight.w600 : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
