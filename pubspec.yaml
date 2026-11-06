@@ -1,7 +1,7 @@
 name: plezy
-description: "A beautiful Plex and Jellyfin client for Flutter"
+description: "Silo for Plex: a media app for your Plex server, based on Plezy"
 publish_to: "none"
-version: 2.25.0+159
+version: 2.0.0+1
 
 environment:
   # Dart floor stays 3.12: freezed 3.x emits `final` constructor parameters,

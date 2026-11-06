@@ -1,0 +1,140 @@
+name: Silo macOS
+run-name: ${{ inputs.publish && 'Release' || 'Test build' }} ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a GitHub release and update the in-app update feed
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: silo-macos
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: "3.47.1"
+
+jobs:
+  build-macos:
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Cache Pub and CocoaPods
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.pub-cache
+            macos/Pods
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods
+          key: silo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock', '**/Podfile.lock') }}
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile --no-example
+
+      - name: Read version
+        id: ver
+        run: |
+          NAME=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "build=$(( 100 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
+
+      - name: Build Silo.app
+        run: >
+          flutter build macos --release
+          --build-name=${{ steps.ver.outputs.name }}
+          --build-number=${{ steps.ver.outputs.build }}
+          --dart-define=ENABLE_UPDATE_CHECK=true
+          --dart-define=SUPPORTER_MODE=unlocked
+          --dart-define=GIT_COMMIT=${{ github.sha }}
+
+      - name: Sign to run locally (ad-hoc)
+        run: |
+          APP="build/macos/Build/Products/Release/Silo.app"
+          test -d "$APP"
+          # inside-out: helpers, frameworks and dylibs first, then the app with its entitlements
+          find "$APP/Contents/Frameworks" \( -name "*.xpc" -o -name "*.app" -o -name "*.framework" -o -name "*.dylib" \) -print0 \
+            | sort -zr | while IFS= read -r -d '' item; do codesign --force --sign - "$item"; done
+          find "$APP/Contents/Frameworks" -type f -perm +111 ! -name "*.dylib" ! -path "*/Headers/*" ! -path "*/Modules/*" -print0 \
+            | while IFS= read -r -d '' exe; do codesign --force --sign - "$exe" 2>/dev/null || true; done
+          codesign --force --sign - --entitlements macos/Runner/Release.entitlements "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleName" -c "Print :CFBundleIdentifier" -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" "$APP/Contents/Info.plist"
+
+      - name: Make DMG
+        run: |
+          mkdir -p dmg && cp -R build/macos/Build/Products/Release/Silo.app dmg/
+          ln -s /Applications dmg/Applications
+          cat > "dmg/READ ME FIRST.txt" <<'EOF'
+          Silo for Plex
+
+          1. Drag Silo onto the Applications folder.
+          2. Open Silo from Applications.
+
+          The first time, macOS says it can't verify the app (it isn't notarized by Apple).
+          Click Done, then open System Settings > Privacy & Security, scroll down and click
+          "Open Anyway" next to Silo. You only do this once: later updates install inside the app.
+
+          Silo is based on Plezy (github.com/edde746/plezy) and licensed under GPL-3.0.
+          Source: github.com/ohthiskp/silo-for-plex
+          EOF
+          sed -i '' 's/^          //' "dmg/READ ME FIRST.txt"
+          hdiutil create -format ULMO -srcfolder dmg -volname "Silo" Silo.dmg
+          shasum -a 256 Silo.dmg
+
+      - name: Upload build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: Silo-macOS
+          path: Silo.dmg
+
+      - name: Publish release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.ver.outputs.name }}-build.${{ steps.ver.outputs.build }}"
+          cp Silo.dmg "Silo-${{ steps.ver.outputs.name }}.dmg"
+          gh release create "$TAG" "Silo-${{ steps.ver.outputs.name }}.dmg" Silo.dmg \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Silo ${{ steps.ver.outputs.name }} (build ${{ steps.ver.outputs.build }})" \
+            --notes "Download **Silo.dmg**, open it, and drag Silo into Applications. Already have Silo? It updates itself from inside the app."
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Update in-app update feed
+        if: ${{ inputs.publish }}
+        env:
+          SPARKLE_ED_SEED: ${{ secrets.SPARKLE_ED_SEED }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$SPARKLE_ED_SEED" ]; then
+            echo "::warning::SPARKLE_ED_SEED secret is not set, so in-app updates were not published for this build."
+            exit 0
+          fi
+          python3 -m pip install --quiet --break-system-packages cryptography 2>/dev/null || python3 -m pip install --quiet cryptography
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Silo.dmg"
+          RELEASE_NOTES_URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" \
+            python3 tool/silo/appcast.py Silo.dmg "${{ steps.ver.outputs.name }}" "${{ steps.ver.outputs.build }}" "$URL" feed
+          cd feed
+          git init -q -b appcast
+          git config user.name "silo-release-bot"
+          git config user.email "silo-release-bot@users.noreply.github.com"
+          git add appcast.xml
+          git commit -qm "Update feed: build ${{ steps.ver.outputs.build }}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" appcast

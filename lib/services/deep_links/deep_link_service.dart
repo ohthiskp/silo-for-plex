@@ -124,7 +124,7 @@ class DeepLinkService {
 
     final link = DeepLink.tryParse(url);
     if (link == null) {
-      appLogger.w('Deep link: not a valid Plezy link (host "${Uri.tryParse(url)?.host}")');
+      appLogger.w('Deep link: not a valid Silo link (host "${Uri.tryParse(url)?.host}")');
       _report(t.deepLinks.invalid);
       return;
     }

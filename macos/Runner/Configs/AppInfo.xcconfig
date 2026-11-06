@@ -1,6 +1,6 @@
 
-PRODUCT_NAME = Plezy
+PRODUCT_NAME = Silo
 
-PRODUCT_BUNDLE_IDENTIFIER = com.edde746.plezy
+PRODUCT_BUNDLE_IDENTIFIER = com.ohthiskp.silo
 
-PRODUCT_COPYRIGHT = Copyright © 2025 edde746
+PRODUCT_COPYRIGHT = Silo for Plex. Based on Plezy © 2025 edde746. GPL-3.0

@@ -60,10 +60,8 @@ enum ThemeMode {
 
   /// The presets and Custom are Supporter perks; the built-ins are free in
   /// every build.
-  bool get isSupporterPerk => switch (this) {
-    system || light || dark || oled => false,
-    ember || glacier || forest || plum || paper || custom => true,
-  };
+  // Silo: every theme is included.
+  bool get isSupporterPerk => false;
 }
 
 /// Library density is now an int 1–5 (1 = most compact, 5 = most comfortable).
@@ -982,7 +980,7 @@ class SettingsService extends BaseSharedPreferencesService {
   static final syncOffsetScope = PlayerSettingScopePref('sync_offset_scope', [audioSyncOffset, subtitleSyncOffset]);
   static final displaySwitchDelay = IntPref('display_switch_delay', transform: (v) => v.clamp(0, 10));
 
-  static ThemeMode _tvAwareThemeModeDefault() => PlatformDetector.isTV() ? ThemeMode.oled : ThemeMode.system;
+  static ThemeMode _tvAwareThemeModeDefault() => PlatformDetector.isTV() ? ThemeMode.oled : ThemeMode.ember; // Silo default
   static const themeMode = EnumPref<ThemeMode>(
     'theme_mode',
     values: ThemeMode.values,

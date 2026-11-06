@@ -24,10 +24,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.edde746.plezy</string>
+			<string>com.ohthiskp.silo</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>plezy</string>
+				<string>silo</string>
 			</array>
 		</dict>
 	</array>
@@ -60,10 +60,10 @@
 	<key>FLTEnableImpeller</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
-	<false/>
+	<true/>
 	<key>SUFeedURL</key>
-	<string>https://cdn.jsdelivr.net/gh/edde746/plezy@appcast/appcast.xml</string>
+	<string>https://raw.githubusercontent.com/ohthiskp/silo-for-plex/appcast/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>q7t6eu1txRrqv1PeWDCRV95rFxnmD/D3GZWbUPMwUyU=</string>
+	<string>wU6pypWh34GlWbHDy2ns9vpn8AtykWvvFIfLSWrEG7I=</string>
 </dict>
 </plist>

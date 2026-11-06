@@ -93,12 +93,12 @@ class MonoPalette {
 
   /// Warm charcoal with the brand orange.
   static const ember = MonoPalette(
-    bg: Color(0xFF14110F),
-    surface: Color(0xFF1D1916),
-    outline: Color(0x1FF2EBE6),
-    text: Color(0xFFF2EBE6),
-    textMuted: Color(0xA3F2EBE6),
-    accent: Color(0xFFFF7E57),
+    bg: Color(0xFF05070D),
+    surface: Color(0xFF111726),
+    outline: Color(0x1FEEF1F7),
+    text: Color(0xFFEEF1F7),
+    textMuted: Color(0xA3EEF1F7),
+    accent: Color(0xFFF07A2E),
   );
 
   /// Cool blue-grey with an ice-blue accent.

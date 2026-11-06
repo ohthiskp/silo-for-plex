@@ -102,6 +102,9 @@ class DiscordRPCService {
   final DiscordRPC Function() _rpcFactory;
 
   static bool get isAvailable {
+    // Silo: the Discord application and poster host belong to the Plezy project.
+    return false;
+    // ignore: dead_code
     if (!PlatformDetector.isDesktopOS()) {
       return false;
     }
@@ -388,7 +391,7 @@ class DiscordRPCService {
         return hostedUrl;
       }
     } catch (e) {
-      appLogger.d('Failed to upload thumbnail to Plezy poster host', error: e);
+      appLogger.d('Failed to upload thumbnail to Silo poster host', error: e);
     }
     return null;
   }
