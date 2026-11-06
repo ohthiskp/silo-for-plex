@@ -29,7 +29,6 @@ struct MainView: View {
         stack($searchPath) { SearchView(library: library) }
       }
     }
-    .modifier(MinimizingTabBar())
     .environment(\.playItem) { app.play($0) }
   }
 
@@ -46,17 +45,6 @@ struct MainView: View {
         }
     }
     .environment(\.openItem) { item in path.wrappedValue.append(.details(item)) }
-  }
-}
-
-/// The tab bar tucks away while scrolling down on iOS 26.
-private struct MinimizingTabBar: ViewModifier {
-  func body(content: Content) -> some View {
-    if #available(iOS 26.0, *) {
-      content.tabBarMinimizationBehavior(.onScrollDown)
-    } else {
-      content
-    }
   }
 }
 
