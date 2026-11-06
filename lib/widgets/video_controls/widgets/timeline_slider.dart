@@ -375,9 +375,15 @@ class _TimelineSliderState extends State<TimelineSlider> {
                       // D-pad focus swaps the 4x20 handle for a shadowed knob
                       // (#2383); in pointer mode the handle always shows, and
                       // an unfocused timeline in D-pad mode shows none.
-                      thumbShape: showFocus ? const _FocusKnobThumbShape() : null,
+                      // Astra 3.0: round white knob on a violet track.
+                      thumbShape: showFocus
+                          ? const _FocusKnobThumbShape()
+                          : (!isKeyboardMode || _isFocused)
+                          ? const RoundSliderThumbShape(enabledThumbRadius: 8, elevation: 3)
+                          : null,
+                      thumbColor: Colors.white,
                       thumbSize: WidgetStatePropertyAll(
-                        (!isKeyboardMode || _isFocused) ? const Size(4, 20) : Size.zero,
+                        (!isKeyboardMode || _isFocused) ? const Size(16, 16) : Size.zero,
                       ),
                     ),
                     child: Slider(
@@ -385,7 +391,8 @@ class _TimelineSliderState extends State<TimelineSlider> {
                       min: 0.0,
                       max: max,
                       onChanged: _noopSliderChanged,
-                      activeColor: Colors.white,
+                      activeColor: const Color(0xFF8B5CF6),
+                      thumbColor: Colors.white,
                       inactiveColor: Colors.transparent,
                     ),
                   ),

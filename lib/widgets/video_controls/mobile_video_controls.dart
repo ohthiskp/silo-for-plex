@@ -1,5 +1,7 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:plezy/widgets/app_icon.dart';
 
 import '../../media/media_item.dart';
 import '../../mpv/mpv.dart';
@@ -313,28 +315,37 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
   }
 
   Widget _buildTopBar(BuildContext context) {
-    // A portrait phone header is too narrow for the clock beside the back button,
-    // title, and track/chapter controls.
-    final isPortraitPhone =
-        PlatformDetector.isPhone(context) && MediaQuery.orientationOf(context) == Orientation.portrait;
+    // Astra 3.0: a single frosted close button; title and track controls
+    // live with the timeline at the bottom.
     final topBar = _conditionalSafeArea(
       context: context,
-      bottom: false, // Only respect top safe area when in portrait
+      bottom: false,
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: VideoControlsHeader(
-          metadata: widget.metadata,
-          style: VideoHeaderStyle.multiLine,
-          onCancelAutoHide: widget.onCancelAutoHide,
-          onStartAutoHide: widget.onStartAutoHide,
-          trailing: widget.trackChapterControls,
-          onBack: widget.onBack,
-          showClock: !isPortraitPhone,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        child: Row(
+          children: [
+            _AstraRoundButton(
+              icon: Symbols.close_rounded,
+              label: t.common.close,
+              onTap: () {
+                widget.onCancelAutoHide?.call();
+                widget.onBack?.call();
+              },
+            ),
+            const Spacer(),
+          ],
         ),
       ),
     );
-
     return DesktopAppBarHelper.wrapWithGestureDetector(topBar, opaque: true);
+  }
+
+  void _skip(int seconds) {
+    final pos = widget.player.state.position + Duration(seconds: seconds);
+    final dur = widget.player.state.duration;
+    final clamped = pos < Duration.zero ? Duration.zero : (dur > Duration.zero && pos > dur ? dur : pos);
+    widget.onSeekEnd(clamped);
+    widget.onStartAutoHide?.call();
   }
 
   Widget _buildPlaybackControls(BuildContext _) {
@@ -350,6 +361,7 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
   }
 
   Widget _buildPlaybackControlsContent(BuildContext _) {
+    final step = widget.seekTimeSmall;
     return PlayPauseStreamBuilder(
       player: widget.player,
       builder: (context, isPlaying) {
@@ -358,12 +370,12 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
           children: [
             if (!widget.isLive) ...[
               CircularControlButton(
-                semanticLabel: t.videoControls.previousButton,
-                icon: Symbols.skip_previous_rounded,
-                iconSize: 48,
-                onPressed: widget.onPrevious,
+                semanticLabel: t.videoControls.seekBackwardButton(seconds: step),
+                icon: step == 10 ? Symbols.replay_10_rounded : Symbols.replay_rounded,
+                iconSize: 44,
+                onPressed: () => _skip(-step),
               ),
-              const SizedBox(width: 24),
+              const SizedBox(width: 56),
             ],
             CircularControlButton(
               semanticLabel: isPlaying ? t.videoControls.pauseButton : t.videoControls.playButton,
@@ -379,12 +391,12 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
               },
             ),
             if (!widget.isLive) ...[
-              const SizedBox(width: 24),
+              const SizedBox(width: 56),
               CircularControlButton(
-                semanticLabel: t.videoControls.nextButton,
-                icon: Symbols.skip_next_rounded,
-                iconSize: 48,
-                onPressed: widget.onNext,
+                semanticLabel: t.videoControls.seekForwardButton(seconds: step),
+                icon: step == 10 ? Symbols.forward_10_rounded : Symbols.forward_rounded,
+                iconSize: 44,
+                onPressed: () => _skip(step),
               ),
             ],
           ],
@@ -435,8 +447,36 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
       context: context,
       top: false, // Only respect bottom safe area when in portrait
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: VideoTimelineBar(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 14),
+        child: Column(
+          mainAxisSize: .min,
+          crossAxisAlignment: .stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _astraTitle(widget.metadata),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ClipRRect(
+                  borderRadius: const BorderRadius.all(Radius.circular(14)),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    child: ColoredBox(
+                      color: const Color(0x2EFFFFFF),
+                      child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: widget.trackChapterControls),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            VideoTimelineBar(
           player: widget.player,
           chapters: widget.chapters,
           chaptersLoaded: widget.chaptersLoaded,
@@ -450,8 +490,20 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
           showFinishTime: true,
           thumbnailDataBuilder: widget.thumbnailDataBuilder,
         ),
+          ],
+        ),
       ),
     );
+  }
+
+  static String _astraTitle(MediaItem m) {
+    final show = m.grandparentTitle;
+    if (show != null && show.isNotEmpty) {
+      final s = m.parentIndex;
+      final e = m.index;
+      return s != null && e != null ? '$show · S$s E$e' : show;
+    }
+    return m.title ?? '';
   }
 
   /// Wraps [child] in a SafeArea: full insets in portrait, horizontal-only in
@@ -467,4 +519,30 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
     final isPortrait = MediaQuery.orientationOf(context) == Orientation.portrait;
     return SafeArea(top: isPortrait && top, bottom: isPortrait && bottom, child: child);
   }
+}
+
+class _AstraRoundButton extends StatelessWidget {
+  const _AstraRoundButton({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: label,
+    child: GestureDetector(
+      onTap: onTap,
+      child: ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            width: 46,
+            height: 46,
+            color: const Color(0x2EFFFFFF),
+            child: AppIcon(icon, color: Colors.white, size: 24),
+          ),
+        ),
+      ),
+    ),
+  );
 }
