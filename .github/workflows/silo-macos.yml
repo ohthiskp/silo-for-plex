@@ -98,11 +98,19 @@ jobs:
           hdiutil create -format ULMO -srcfolder dmg -volname "Astra" Astra.dmg
           shasum -a 256 Astra.dmg
 
+      - name: Make zip
+        run: |
+          # ditto keeps the code signature and permissions intact; Sparkle installs updates from this zip too
+          ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/Astra.app Astra.zip
+          shasum -a 256 Astra.zip
+
       - name: Upload build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: Astra-macOS
-          path: Astra.dmg
+          path: |
+            Astra.zip
+            Astra.dmg
 
       - name: Publish release
         if: ${{ inputs.publish }}
@@ -111,10 +119,10 @@ jobs:
         run: |
           TAG="v${{ steps.ver.outputs.name }}-build.${{ steps.ver.outputs.build }}"
           cp Astra.dmg "Astra-${{ steps.ver.outputs.name }}.dmg"
-          gh release create "$TAG" "Astra-${{ steps.ver.outputs.name }}.dmg" Astra.dmg \
+          gh release create "$TAG" Astra.zip "Astra-${{ steps.ver.outputs.name }}.dmg" Astra.dmg \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "Astra ${{ steps.ver.outputs.name }} (build ${{ steps.ver.outputs.build }})" \
-            --notes "Download **Astra.dmg**, open it, and drag Astra into Applications. Already have Astra? It updates itself from inside the app."
+            --notes "Download **Astra.zip**, unzip it, and move Astra into Applications (or use Astra.dmg). Already have Astra? It updates itself from inside the app."
           echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Update in-app update feed
@@ -128,9 +136,9 @@ jobs:
             exit 0
           fi
           python3 -m pip install --quiet --break-system-packages cryptography 2>/dev/null || python3 -m pip install --quiet cryptography
-          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Astra.dmg"
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Astra.zip"
           RELEASE_NOTES_URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" \
-            python3 tool/silo/appcast.py Astra.dmg "${{ steps.ver.outputs.name }}" "${{ steps.ver.outputs.build }}" "$URL" feed
+            python3 tool/silo/appcast.py Astra.zip "${{ steps.ver.outputs.name }}" "${{ steps.ver.outputs.build }}" "$URL" feed
           cd feed
           git init -q -b appcast
           git config user.name "silo-release-bot"
