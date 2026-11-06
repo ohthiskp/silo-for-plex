@@ -1,8 +1,10 @@
+import 'dart:ui';
 import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:plezy/widgets/app_icon.dart';
 import 'package:flutter/services.dart';
 
 import '../../focus/dpad_navigator.dart';
@@ -608,6 +610,11 @@ class DesktopVideoControlsState extends State<DesktopVideoControls> {
 
   @override
   Widget build(BuildContext context) {
+    // Astra 3.0 player on Mac: close button top-left, big transport in the
+    // middle, title + track chips over a violet timeline at the bottom.
+    if (!widget.useDpadNavigation && !PlatformDetector.isTV() && !_isLive) {
+      return _buildAstraLayout(context);
+    }
     return Column(
       children: [
         // Top bar with back button and title (always visible)
@@ -656,6 +663,175 @@ class DesktopVideoControlsState extends State<DesktopVideoControls> {
                   ),
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAstraLayout(BuildContext context) {
+    final leftPadding = Platform.isMacOS ? DesktopWindowPadding.macOSLeftCurrent : 0.0;
+    final m = widget.metadata;
+    final show = m.grandparentTitle;
+    final title = show != null && show.isNotEmpty
+        ? (m.parentIndex != null && m.index != null ? '$show · S${m.parentIndex} E${m.index}' : show)
+        : (m.title ?? '');
+    Widget glassCircle({required IconData icon, required String label, required VoidCallback? onTap}) => Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: ClipOval(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              width: 48,
+              height: 48,
+              color: const Color(0x2EFFFFFF),
+              child: AppIcon(icon, color: Colors.white, size: 24),
+            ),
+          ),
+        ),
+      ),
+    );
+    return Stack(
+      children: [
+        Positioned(
+          top: 22,
+          left: 24 + leftPadding,
+          child: DesktopAppBarHelper.wrapWithGestureDetector(
+            _absorbMissedClicks(glassCircle(icon: Symbols.close_rounded, label: t.common.close, onTap: widget.onBack)),
+            opaque: true,
+          ),
+        ),
+        FirstFrameGuard(
+          hasFirstFrame: widget.hasFirstFrame,
+          placeholder: const SizedBox.shrink(),
+          builder: (context) => Stack(
+            children: [
+              Center(
+                child: _absorbMissedClicks(
+                  Opacity(
+                    opacity: _canControl ? 1 : 0.5,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          iconSize: 46,
+                          color: Colors.white,
+                          tooltip: t.videoControls.seekBackwardButton(seconds: widget.seekTimeSmall),
+                          onPressed: _canControl ? widget.onSeekBackward : null,
+                          icon: AppIcon(widget.getReplayIcon(widget.seekTimeSmall), color: Colors.white, size: 46),
+                        ),
+                        const SizedBox(width: 90),
+                        PlayPauseStreamBuilder(
+                          player: widget.player,
+                          builder: (context, isPlaying) => IconButton(
+                            iconSize: 72,
+                            tooltip: isPlaying ? t.videoControls.pauseButton : t.videoControls.playButton,
+                            onPressed: _canControl ? widget.onPlayPause : null,
+                            icon: AppIcon(
+                              isPlaying ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+                              fill: 1,
+                              color: Colors.white,
+                              size: 72,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 90),
+                        IconButton(
+                          iconSize: 46,
+                          tooltip: t.videoControls.seekForwardButton(seconds: widget.seekTimeSmall),
+                          onPressed: _canControl ? widget.onSeekForward : null,
+                          icon: AppIcon(widget.getForwardIcon(widget.seekTimeSmall), color: Colors.white, size: 46),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 56,
+                right: 56,
+                bottom: 30,
+                child: _absorbMissedClicks(
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const AppIcon(Symbols.chevron_right_rounded, color: Colors.white, size: 24),
+                          const Spacer(),
+                          VolumeControl(
+                            volumeController: widget.volumeController,
+                            focusNode: _volumeFocusNode,
+                            onKeyEvent: _handleVolumeKeyEvent,
+                            onFocusChange: _onFocusChange,
+                            onFocusActivity: widget.onFocusActivity,
+                          ),
+                          const SizedBox(width: 12),
+                          ClipRRect(
+                            borderRadius: const BorderRadius.all(Radius.circular(14)),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                              child: ColoredBox(
+                                color: const Color(0x2EFFFFFF),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  child: TrackChapterControls(
+                                    player: widget.player,
+                                    chapters: widget.chapters,
+                                    chaptersLoaded: widget.chaptersLoaded,
+                                    trackControlsState: _trackControlsState,
+                                    onSeekRequested: widget.onSeekRequested,
+                                    onSeekCompleted: widget.onSeekCompleted,
+                                    focusNodes: _trackControlFocusNodes,
+                                    onFocusChange: _onFocusChange,
+                                    onNavigateLeft: navigateFromTrackToVolume,
+                                    onNavigateUp: () => _timelineFocusNode.requestFocus(),
+                                    onNavigateDown: () {},
+                                    hideChaptersAndQueue: false,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      VideoTimelineBar(
+                        player: widget.player,
+                        chapters: widget.chapters,
+                        chaptersLoaded: widget.chaptersLoaded,
+                        showChapterMarkersOnTimeline: widget.showChapterMarkersOnTimeline,
+                        onSeek: widget.onSeek,
+                        onSeekEnd: widget.onSeekEnd,
+                        onScrubStart: widget.onScrubStart,
+                        onScrubEnd: widget.onScrubEnd,
+                        horizontalLayout: false,
+                        focusNode: _timelineFocusNode,
+                        onKeyEvent: _handleTimelineKeyEvent,
+                        onFocusChange: _onFocusChange,
+                        enabled: _canControl,
+                        thumbnailDataBuilder: widget.thumbnailDataBuilder,
+                        showKeyRepeatThumbnail: _showKeyRepeatThumbnail,
+                        previewPosition: _timelineSeek.pendingPosition,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
