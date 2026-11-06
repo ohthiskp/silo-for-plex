@@ -47,6 +47,9 @@ jobs:
       - name: Write API key
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           mkdir -p "$RUNNER_TEMP/asc"
           # Rebuild a clean PEM from however the key was pasted (TextEdit smart dashes,
@@ -78,6 +81,10 @@ jobs:
           PY
           chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
           echo "ASC_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> "$GITHUB_ENV"
+          # IDs without stray spaces, for xcodebuild (they are identifiers, not secrets)
+          echo "KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')" >> "$GITHUB_ENV"
+          echo "ISSUER_ID=$(printf '%s' "$ASC_ISSUER_ID" | tr -d '[:space:]' | tr 'A-F' 'a-f')" >> "$GITHUB_ENV"
+          echo "TEAM_ID=$(printf '%s' "$APPLE_TEAM_ID" | tr -d '[:space:]')" >> "$GITHUB_ENV"
 
       - name: Register app ID and check the App Store Connect listing
         id: asc
@@ -134,9 +141,9 @@ jobs:
             -archivePath "$RUNNER_TEMP/Astra.xcarchive" archive \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
             | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|warning: .*sign|ARCHIVE (SUCCEEDED|FAILED)" || true
           test -d "$RUNNER_TEMP/Astra.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
 
@@ -152,7 +159,7 @@ jobs:
           <plist version="1.0"><dict>
             <key>method</key><string>app-store-connect</string>
             <key>destination</key><string>upload</string>
-            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
             <key>signingStyle</key><string>automatic</string>
             <key>uploadSymbols</key><false/>
             <key>manageAppVersionAndBuildNumber</key><false/>
@@ -166,8 +173,8 @@ jobs:
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
           echo "### Uploaded Astra ${{ steps.ver.outputs.name }} (${{ steps.ver.outputs.build }}) to TestFlight" >> "$GITHUB_STEP_SUMMARY"
           echo "Apple processes it for 5–30 minutes, then it appears in the TestFlight app." >> "$GITHUB_STEP_SUMMARY"
 

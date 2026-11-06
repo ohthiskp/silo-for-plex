@@ -49,14 +49,19 @@ def diagnose():
     """Check the shape of each credential without printing any secret."""
     import re
     from cryptography.hazmat.primitives.serialization import load_pem_private_key
-    kid = os.environ.get("ASC_KEY_ID", "")
-    iss = os.environ.get("ASC_ISSUER_ID", "")
+    raw_kid = os.environ.get("ASC_KEY_ID", "")
+    raw_iss = os.environ.get("ASC_ISSUER_ID", "")
+    kid = re.sub(r"\s", "", raw_kid)
+    iss = re.sub(r"\s", "", raw_iss).lower()
+    if kid != raw_kid or iss != raw_iss:
+        print("::warning::Removed stray spaces from the key/issuer IDs; fine to leave the secrets as they are.")
+    os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"] = kid, iss
     ok = True
-    if kid != kid.strip() or not re.fullmatch(r"[A-Z0-9]{10}", kid.strip()):
-        print(f"::error::ASC_KEY_ID should be exactly 10 capital letters/digits (got {len(kid)} characters{', with spaces' if kid != kid.strip() else ''}).")
+    if not re.fullmatch(r"[A-Z0-9]{10}", kid):
+        print(f"::error::ASC_KEY_ID should be exactly 10 capital letters/digits (got {len(kid)}).")
         ok = False
-    if iss != iss.strip() or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", iss.strip()):
-        print(f"::error::ASC_ISSUER_ID should look like 57246542-96fe-1a63-e053-0824d011072a (got {len(iss)} characters{', with spaces' if iss != iss.strip() else ''}). Copy it from the top of the Team Keys page.")
+    if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", iss):
+        print(f"::error::ASC_ISSUER_ID should look like 57246542-96fe-1a63-e053-0824d011072a (got {len(iss)} characters). Copy it from the top of the Team Keys page.")
         ok = False
     try:
         k = load_pem_private_key(open(os.environ["ASC_KEY_PATH"], "rb").read(), None)
@@ -73,8 +78,6 @@ def main():
     bundle = os.environ["BUNDLE_ID"]
     platform = os.environ.get("PLATFORM", "IOS")
     q = urllib.parse.quote(bundle)
-    os.environ["ASC_KEY_ID"] = os.environ["ASC_KEY_ID"].strip()
-    os.environ["ASC_ISSUER_ID"] = os.environ["ASC_ISSUER_ID"].strip()
 
     status, res = call("GET", f"/bundleIds?filter[identifier]={q}&limit=5")
     if status == 401:
