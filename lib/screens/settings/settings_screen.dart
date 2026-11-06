@@ -51,6 +51,7 @@ import '../../widgets/system_bottom_inset.dart';
 import '../../profiles/active_profile_provider.dart';
 import '../../profiles/profile.dart';
 import '../../watch_together/services/watch_party_relays.dart';
+import '../../astra/settings_dashboard.dart';
 import 'about_screen.dart';
 import 'add_connection_screen.dart';
 import 'account_preferences_screen.dart';
@@ -69,11 +70,16 @@ import '../../widgets/loading_indicator_box.dart';
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
+    this.classic = false,
     this.downloadDirectoryWritableChecker,
     this.settingsExporter,
     this.settingsImporter,
     this.backgroundWorkDiagnosticsService,
   });
+
+  /// Astra: show the complete classic settings list instead of the card
+  /// dashboard (opened from the dashboard's "All Settings").
+  final bool classic;
 
   @visibleForTesting
   final Future<bool> Function(Directory directory)? downloadDirectoryWritableChecker;
@@ -196,6 +202,14 @@ class _SettingsScreenState extends State<SettingsScreen> with FocusableTab, Moun
   }
 
   Widget _buildContent(BuildContext sheetContext, {required bool hasLibraries}) {
+    // Astra: the card dashboard is Settings' home on phones, tablets and Mac.
+    if (!widget.classic && !PlatformDetector.isTV()) {
+      return AstraSettingsDashboard(
+        openAllSettings: () => Navigator.of(sheetContext).push(
+          MaterialPageRoute<void>(builder: (_) => const SettingsScreen(classic: true)),
+        ),
+      );
+    }
     return Scaffold(
       body: Focus(
         onKeyEvent: _handleKeyEvent,

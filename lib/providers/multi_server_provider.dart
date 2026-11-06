@@ -258,6 +258,21 @@ class MultiServerProvider extends ChangeNotifier with DisposableChangeNotifierMi
     return all.where(filter.contains).toList();
   }
 
+  /// Astra settings: every configured server with its name, whether it is
+  /// reachable right now, and whether it is a Plex server (else Jellyfin/Emby).
+  List<({ServerId serverId, String displayName, bool online, bool isPlex})> get astraServers {
+    final online = onlineServerIds.toSet();
+    return [
+      for (final id in serverIds)
+        (
+          serverId: ServerId(id),
+          displayName: _serverManager.serverDisplayName(ServerId(id)),
+          online: online.contains(id),
+          isPlex: _serverManager.getPlexClient(ServerId(id)) != null,
+        ),
+    ];
+  }
+
   List<({ServerId serverId, String displayName})> _namedServers(List<String> ids) =>
       ids.map((id) => (serverId: ServerId(id), displayName: _serverManager.serverDisplayName(ServerId(id)))).toList();
 
