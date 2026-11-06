@@ -32,6 +32,7 @@ import '../widgets/hub_section.dart';
 import '../widgets/app_menu.dart';
 import '../widgets/clickable_cursor.dart';
 import '../widgets/loading_indicator_box.dart';
+import '../widgets/silo_top_tabs.dart';
 import '../widgets/profile_switching_overlay.dart';
 import 'profile/profile_switch_screen.dart';
 import 'profile/profile_teardown.dart';
@@ -802,12 +803,21 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     return ToolbarScrim(
       child: Row(
         children: [
-          if (!PlatformDetector.isTV())
-            Text(
-              t.discover.title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(color: foregroundColor, fontWeight: .bold),
-            ),
-          const Spacer(),
+          // Silo: a floating pill switcher (For You + libraries) on wide desktop windows.
+          if (!PlatformDetector.isTV() &&
+              PlatformDetector.shouldUseSideNavigation(context) &&
+              MediaQuery.sizeOf(context).width >= 900)
+            const Expanded(
+              child: Align(alignment: Alignment.center, child: SiloTopTabs(forYouLabel: 'For You')),
+            )
+          else ...[
+            if (!PlatformDetector.isTV())
+              Text(
+                t.discover.title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: foregroundColor, fontWeight: .bold),
+              ),
+            const Spacer(),
+          ],
           // TV only: a fullscreen leanback app hides the system clock, while a
           // phone status bar and a desktop menu bar already show one.
           if (PlatformDetector.isTV()) ...[
@@ -1177,7 +1187,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     final heroHeight = isTv
         ? viewportHeight * 0.82
         : useSideNav
-        ? viewportHeight * 0.75
+        ? viewportHeight * 0.86 // Silo: near full-bleed hero
         : isLandscape
         ? math.min(500 + statusBarHeight, viewportHeight)
         : math.min(500 + statusBarHeight, viewportHeight * 0.65);
@@ -1349,6 +1359,32 @@ class _DiscoverScreenState extends State<DiscoverScreen>
               ),
             ),
           ),
+          // Silo: side scrim on wide screens so the title side reads while the
+          // artwork stays bright on the right.
+          if (!isTv && ScreenBreakpoints.isWideTabletOrLarger(MediaQuery.sizeOf(context).width))
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Builder(
+                  builder: (context) {
+                    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            bgColor.withValues(alpha: 0.88),
+                            bgColor.withValues(alpha: 0.55),
+                            bgColor.withValues(alpha: 0.0),
+                          ],
+                          stops: const [0.0, 0.32, 0.62],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           // Gradient Overlay - blends into scaffold background
           Positioned(
             top: 0,
@@ -1416,11 +1452,17 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     // portrait one its capped height; the usual logo and bottom offset would
     // push the content up into the top bar.
     final compact = !isTv && heroHeight < 450;
-    final heroLogoWidth = isTv ? TvLayoutConstants.heroLogoWidth : 400.0;
+    final heroLogoWidth = isTv
+        ? TvLayoutConstants.heroLogoWidth
+        : isLargeScreen
+        ? 540.0
+        : 400.0;
     final heroLogoHeight = isTv
         ? TvLayoutConstants.heroLogoHeight
         : compact
         ? 80.0
+        : isLargeScreen
+        ? 170.0
         : 120.0;
     final heroTitleStyle = theme.textTheme.displaySmall?.copyWith(
       color: colorScheme.onSurface,
@@ -1524,36 +1566,76 @@ class _DiscoverScreenState extends State<DiscoverScreen>
 
                             // Metadata as dot-separated text with content type
                             if (heroItem.year != null || heroItem.contentRating != null || heroItem.rating != null) ...[
-                              const SizedBox(height: 16),
-                              Text(
-                                [
-                                  contentTypeLabel,
-                                  if (heroItem.rating != null) '★ ${formatRating(heroItem.rating!)}',
-                                  if (heroItem.contentRating != null) formatContentRating(heroItem.contentRating!),
-                                  if (heroItem.year != null) heroItem.year.toString(),
-                                ].join(' • '),
-                                style: TextStyle(
-                                  color: colorScheme.onSurface,
-                                  fontSize: isTv ? 18 : 14,
-                                  fontWeight: .w600,
-                                ),
-                                textAlign: alignLeft ? TextAlign.left : TextAlign.center,
+                              const SizedBox(height: 18),
+                              // Silo: rating badge, then year • type • stars.
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                alignment: alignLeft ? WrapAlignment.start : WrapAlignment.center,
+                                spacing: 12,
+                                runSpacing: 6,
+                                children: [
+                                  if (heroItem.contentRating != null)
+                                    DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.onSurface.withValues(alpha: 0.16),
+                                        borderRadius: const BorderRadius.all(Radius.circular(4)),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        child: Text(
+                                          formatContentRating(heroItem.contentRating!),
+                                          style: TextStyle(
+                                            color: colorScheme.onSurface,
+                                            fontSize: isTv
+                                                ? 16
+                                                : isLargeScreen
+                                                ? 14
+                                                : 12,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.4,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  Text(
+                                    [
+                                      if (heroItem.year != null) heroItem.year.toString(),
+                                      contentTypeLabel,
+                                      if (heroItem.rating != null) '★ ${formatRating(heroItem.rating!)}',
+                                    ].join('  •  '),
+                                    style: TextStyle(
+                                      color: colorScheme.onSurface.withValues(alpha: 0.9),
+                                      fontSize: isTv
+                                          ? 18
+                                          : isLargeScreen
+                                          ? 17
+                                          : 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
 
                             if (!alignLeft) ...[const SizedBox(height: 20), _buildSmartPlayButton(heroItem)],
 
                             if (heroItem.summary != null && !shouldHideSpoiler) ...[
-                              const SizedBox(height: 12),
-                              RichText(
+                              const SizedBox(height: 14),
+                              ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: alignLeft && !isTv ? 660 : double.infinity),
+                                child: RichText(
                                 maxLines: isTv ? 3 : 2,
                                 overflow: .ellipsis,
                                 textAlign: alignLeft ? TextAlign.left : TextAlign.center,
                                 text: TextSpan(
                                   style: TextStyle(
-                                    color: colorScheme.onSurface.withValues(alpha: 0.7),
-                                    fontSize: isTv ? 18 : 14,
-                                    height: isTv ? 1.45 : 1.4,
+                                    color: colorScheme.onSurface.withValues(alpha: 0.82),
+                                    fontSize: isTv
+                                        ? 18
+                                        : isLargeScreen
+                                        ? 18
+                                        : 14,
+                                    height: isTv ? 1.45 : 1.5,
                                   ),
                                   children: [
                                     if (isEpisode && heroItem.parentIndex != null && heroItem.index != null)
@@ -1568,6 +1650,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
                                     ),
                                   ],
                                 ),
+                              ),
                               ),
                             ] else if (shouldHideSpoiler &&
                                 isEpisode &&
