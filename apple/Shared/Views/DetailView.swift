@@ -20,7 +20,8 @@ struct DetailView: View {
 
   var body: some View {
     ScrollView(.vertical) {
-      LazyVStack(alignment: .leading, spacing: 30) {
+      // A plain VStack: a lazy one guesses row heights and makes the page jump while scrolling.
+      VStack(alignment: .leading, spacing: 30) {
         header
         if shown.type == .show || shown.type == .season, !seasons.isEmpty || !episodes.isEmpty {
           episodesSection

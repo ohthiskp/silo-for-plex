@@ -6,7 +6,8 @@ struct HomeView: View {
 
   var body: some View {
     ScrollView(.vertical) {
-      LazyVStack(alignment: .leading, spacing: 34) {
+      // A plain VStack: a lazy one guesses row heights and makes the page jump while scrolling.
+      VStack(alignment: .leading, spacing: 34) {
         if library.hero.isEmpty {
           Color.clear.frame(height: 110)
         } else {
@@ -115,7 +116,9 @@ struct HeroCarousel: View {
     }
     .frame(height: Astra.Layout.heroHeight)
     .animation(Astra.Motion.resolved(Astra.Motion.hero, reduceMotion: reduceMotion), value: index)
-    .task(id: items.count) {
+    .task(id: items.map(\.id)) {
+      // New hero items (after a refresh) start from the first one.
+      if index >= items.count { index = 0 }
       // Auto-advance every 8 s; stops when the view goes away.
       while !Task.isCancelled && items.count > 1 {
         try? await Task.sleep(for: .seconds(8))

@@ -260,4 +260,20 @@ final class PlaybackTests: XCTestCase {
       plexPath: "/library/sections/1/all?type=1", query: [.init(name: "sort", value: "addedAt:desc")])
     XCTAssertEqual(url.absoluteString, "https://s.test/library/sections/1/all?type=1&sort=addedAt:desc")
   }
+
+  func testImageSizeBucketsNearbyFramesTogether() throws {
+    let a = try XCTUnwrap(ImageSize.bucketed(width: 1201, height: 675))
+    let b = try XCTUnwrap(ImageSize.bucketed(width: 1279, height: 719))
+    XCTAssertEqual(a.width, 1280)
+    XCTAssertEqual(b.width, 1280)
+    XCTAssertEqual(ImageSize.bucketed(width: 480, height: 270)?.width, 480)
+    XCTAssertEqual(ImageSize.bucketed(width: 480, height: 270)?.height, 270)
+    XCTAssertEqual(ImageSize.bucketed(width: 20, height: 30)?.width, 160)
+    XCTAssertEqual(ImageSize.bucketed(width: 20, height: 30)?.height, 240)
+  }
+
+  func testImageSizeIsNilForAnEmptyFrame() {
+    XCTAssertNil(ImageSize.bucketed(width: 0, height: 0))
+    XCTAssertNil(ImageSize.bucketed(width: 300, height: 0))
+  }
 }

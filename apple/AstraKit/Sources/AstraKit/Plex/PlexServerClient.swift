@@ -166,3 +166,16 @@ public struct PlexServerClient: Sendable {
     }
   }
 }
+
+/// Artwork pixel sizes, rounded up to fixed steps.
+public enum ImageSize {
+  /// Rounds the width up to a multiple of `step` and keeps the aspect ratio.
+  /// Frames that differ by a few points then share one URL, so artwork is not
+  /// refetched (and does not flicker) while a window resizes or a layout animates.
+  /// Returns nil for an empty frame, which happens on a view's first layout pass.
+  public static func bucketed(width: Double, height: Double, step: Double = 160) -> (width: Int, height: Int)? {
+    guard width >= 1, height >= 1, width.isFinite, height.isFinite else { return nil }
+    let w = max(step, (width / step).rounded(.up) * step)
+    return (Int(w), Int((height * w / width).rounded()))
+  }
+}

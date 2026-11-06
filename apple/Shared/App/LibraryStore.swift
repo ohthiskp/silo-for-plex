@@ -128,7 +128,12 @@ final class LibraryStore {
     Task { await loadHome() }
   }
 
+  /// Plex artwork sized for a frame, in steps (see `ImageSize.bucketed`) so a
+  /// resizing window or an animating layout doesn't refetch on every frame.
   func imageURL(_ path: String?, width: CGFloat, height: CGFloat, scale: CGFloat = 2) -> URL? {
-    client.imageURL(path, width: Int(width * scale), height: Int(height * scale))
+    guard let size = ImageSize.bucketed(width: Double(width * scale), height: Double(height * scale)) else {
+      return nil
+    }
+    return client.imageURL(path, width: size.width, height: size.height)
   }
 }
