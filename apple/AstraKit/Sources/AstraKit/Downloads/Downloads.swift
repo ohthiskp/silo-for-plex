@@ -72,7 +72,7 @@ public struct DownloadRecord: Codable, Sendable, Hashable, Identifiable {
   }
 
   /// Rating keys are digits, but never let one escape the folder.
-  static func safeName(_ key: String) -> String {
+  public static func safeName(_ key: String) -> String {
     let cleaned = key.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
     return cleaned.isEmpty ? "item" : cleaned
   }

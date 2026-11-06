@@ -37,7 +37,7 @@ final class LibraryStore {
   }
 
   /// The TMDB read token the build put in Info.plist (`TMDB_TOKEN` build setting).
-  static var bundledTMDBToken: String? {
+  nonisolated static var bundledTMDBToken: String? {
     Bundle.main.object(forInfoDictionaryKey: "AstraTMDBToken") as? String
   }
 
