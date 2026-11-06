@@ -128,6 +128,7 @@ jobs:
           --build-name=${{ steps.ver.outputs.name }}
           --build-number=${{ steps.ver.outputs.build }}
           --dart-define=SUPPORTER_MODE=unlocked
+          --dart-define=TMDB_TOKEN=${{ secrets.TMDB_TOKEN }}
           --dart-define=GIT_COMMIT=${{ github.sha }}
 
       - name: Archive (signed with your team)

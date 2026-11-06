@@ -62,6 +62,7 @@ jobs:
           --build-number=${{ steps.ver.outputs.build }}
           --dart-define=ENABLE_UPDATE_CHECK=true
           --dart-define=SUPPORTER_MODE=unlocked
+          --dart-define=TMDB_TOKEN=${{ secrets.TMDB_TOKEN }}
           --dart-define=GIT_COMMIT=${{ github.sha }}
 
       - name: Sign to run locally (ad-hoc)

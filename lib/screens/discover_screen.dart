@@ -32,7 +32,9 @@ import '../widgets/hub_section.dart';
 import '../widgets/app_menu.dart';
 import '../widgets/clickable_cursor.dart';
 import '../widgets/loading_indicator_box.dart';
-import '../widgets/silo_top_tabs.dart';
+import '../astra/astra_home.dart';
+import '../media/catalog_item_ref.dart';
+import '../astra/service_pill.dart';
 import '../widgets/profile_switching_overlay.dart';
 import 'profile/profile_switch_screen.dart';
 import 'profile/profile_teardown.dart';
@@ -88,7 +90,43 @@ class _DiscoverScreenState extends State<DiscoverScreen>
   int _seenLoadGeneration = 0;
 
   List<MediaItem> get _onDeck => _discover.onDeck;
-  List<MediaHub> get _hubs => _discover.hubs;
+  /// Astra: the hero shows TMDB titles (trending, or the selected service)
+  /// when available, falling back to the user's Continue Watching.
+  List<MediaItem> get _heroItems {
+    final astra = AstraHome.instance.heroItems;
+    return astra.isNotEmpty ? astra : _onDeck;
+  }
+
+  (List<MediaHub>, int)? _mergedHubsKey;
+  List<MediaHub> _mergedHubs = const [];
+
+  /// Astra: For You puts "Trending This Week" first, then the server's rows,
+  /// then the other TMDB rows; a selected service shows only its TMDB rows.
+  /// Cached so the list identity only changes when its inputs do.
+  List<MediaHub> get _hubs {
+    final plex = _discover.hubs;
+    final astra = AstraHome.instance;
+    final key = (plex, astra.generation);
+    if (_mergedHubsKey != key) {
+      final tmdb = astra.hubs;
+      _mergedHubs = tmdb.isEmpty
+          ? plex
+          : astra.isForYou
+          ? [...tmdb.take(1), ...plex, ...tmdb.skip(1)]
+          : tmdb;
+      _mergedHubsKey = key;
+    }
+    return _mergedHubs;
+  }
+
+  void _onAstraChanged() {
+    if (!mounted) return;
+    setState(() {
+      _heroIndex.value = 0;
+      _updateHubKeys();
+    });
+    if (_heroController.hasClients && _heroItems.isNotEmpty) _heroController.jumpToPage(0);
+  }
   bool get _hasMoreContinueWatching => _discover.hasMoreContinueWatching;
   bool get _isLoading => _discover.isLoading;
   bool get _areHubsLoading => _discover.areHubsLoading;
@@ -172,7 +210,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     return keys;
   }
 
-  bool get _isHeroSectionVisible => _onDeck.isNotEmpty && context.settingsRead(SettingsService.showHeroSection);
+  bool get _isHeroSectionVisible => _heroItems.isNotEmpty && context.settingsRead(SettingsService.showHeroSection);
 
   // Memoized on provider list identity (the provider always replaces _onDeck/
   // _hubs with fresh instances on change, never mutates in place) so unrelated
@@ -352,6 +390,8 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     _discover = context.read<DiscoverProvider>();
     _seenLoadGeneration = _discover.loadGeneration;
     _discover.addListener(_onDiscoverChanged);
+    AstraHome.instance.addListener(_onAstraChanged);
+    unawaited(AstraHome.instance.load());
     _updateHubKeys();
     unawaited(_discover.load());
     _startAutoScroll();
@@ -376,7 +416,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     final generation = _discover.loadGeneration;
     final isNewLoad = generation != _seenLoadGeneration;
     _seenLoadGeneration = generation;
-    final heroOutOfBounds = _heroIndex.value >= _onDeck.length;
+    final heroOutOfBounds = _heroIndex.value >= _heroItems.length;
     final signature = _renderSignature;
     final renderChanged = isNewLoad || heroOutOfBounds || signature != _seenRenderSignature;
     _seenRenderSignature = signature;
@@ -389,11 +429,11 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     }
     _applyPendingTvBrowseRailFocus();
 
-    if ((isNewLoad || heroOutOfBounds) && _heroController.hasClients && _onDeck.isNotEmpty) {
+    if ((isNewLoad || heroOutOfBounds) && _heroController.hasClients && _heroItems.isNotEmpty) {
       _heroController.jumpToPage(0);
     }
     // Focus hero when fresh content lands, but only if no modal route is on top
-    if (isNewLoad && !PlatformDetector.isTV() && _onDeck.isNotEmpty && (ModalRoute.of(context)?.isCurrent ?? false)) {
+    if (isNewLoad && !PlatformDetector.isTV() && _heroItems.isNotEmpty && (ModalRoute.of(context)?.isCurrent ?? false)) {
       _heroFocusNode.requestFocus();
     }
 
@@ -402,7 +442,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
       if (PlatformDetector.isTV() && (_onDeck.isNotEmpty || _hubs.isNotEmpty)) {
         _initialLoadComplete = true;
         _focusTvBrowseRailWhenReady(initial: true);
-      } else if (!PlatformDetector.isTV() && _onDeck.isNotEmpty) {
+      } else if (!PlatformDetector.isTV() && _heroItems.isNotEmpty) {
         _initialLoadComplete = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? false)) return;
@@ -449,14 +489,14 @@ class _DiscoverScreenState extends State<DiscoverScreen>
         }
       },
       onRight: () {
-        if (_heroIndex.value < _onDeck.length - 1) {
+        if (_heroIndex.value < _heroItems.length - 1) {
           _heroController.nextPage(duration: tokens(context).slow, curve: Curves.easeInOut);
         }
       },
       onSelect: () {
         final heroIndex = _heroIndex.value;
-        if (_onDeck.isNotEmpty && heroIndex < _onDeck.length) {
-          navigateToMediaItem(context, _onDeck[heroIndex], playDirectly: true);
+        if (_heroItems.isNotEmpty && heroIndex < _heroItems.length) {
+          navigateToMediaItem(context, _heroItems[heroIndex], playDirectly: true);
         }
       },
     )(node, event);
@@ -465,6 +505,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
   @override
   void dispose() {
     _discover.removeListener(_onDiscoverChanged);
+    AstraHome.instance.removeListener(_onAstraChanged);
     WidgetsBinding.instance.removeObserver(this);
     _autoScrollTimer?.cancel();
     _indicatorTimer?.cancel();
@@ -505,14 +546,14 @@ class _DiscoverScreenState extends State<DiscoverScreen>
 
     _startIndicatorProgress();
     _autoScrollTimer = Timer.periodic(_heroAutoScrollDuration, (timer) {
-      if (_onDeck.isEmpty || !_heroController.hasClients || _isAutoScrollPaused) {
+      if (_heroItems.isEmpty || !_heroController.hasClients || _isAutoScrollPaused) {
         return;
       }
 
       // Validate current index is within bounds before calculating next page
-      if (_heroIndex.value >= _onDeck.length) _heroIndex.value = 0;
+      if (_heroIndex.value >= _heroItems.length) _heroIndex.value = 0;
 
-      final nextPage = (_heroIndex.value + 1) % _onDeck.length;
+      final nextPage = (_heroIndex.value + 1) % _heroItems.length;
       _heroController.animateToPage(nextPage, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
       // Wait for page transition to complete before resetting progress
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -594,7 +635,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
 
   // Helper method to calculate visible dot range (max 5 dots)
   ({int start, int end}) _getVisibleDotRange() {
-    final totalDots = _onDeck.length;
+    final totalDots = _heroItems.length;
     if (totalDots <= 5) {
       return (start: 0, end: totalDots - 1);
     }
@@ -609,7 +650,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
 
   // Helper method to determine dot size based on position
   double _getDotSize(int dotIndex, int start, int end) {
-    final totalDots = _onDeck.length;
+    final totalDots = _heroItems.length;
 
     // If we have 5 or fewer dots, all are full size (8px)
     if (totalDots <= 5) {
@@ -800,15 +841,22 @@ class _DiscoverScreenState extends State<DiscoverScreen>
   Widget _buildOverlaidAppBar() {
     final colorScheme = Theme.of(context).colorScheme;
     final foregroundColor = colorScheme.onSurface;
+    final wideDesktop =
+        !PlatformDetector.isTV() &&
+        PlatformDetector.shouldUseSideNavigation(context) &&
+        MediaQuery.sizeOf(context).width >= 900;
+    // Astra: on phones the streaming switcher is the whole top bar, like the
+    // approved design; it scrolls sideways when the services don't fit.
+    if (!PlatformDetector.isTV() && !wideDesktop) {
+      return ToolbarScrim(child: const Row(children: [Expanded(child: AstraServicePill(compact: true))]));
+    }
     return ToolbarScrim(
       child: Row(
         children: [
-          // Silo: a floating pill switcher (For You + libraries) on wide desktop windows.
-          if (!PlatformDetector.isTV() &&
-              PlatformDetector.shouldUseSideNavigation(context) &&
-              MediaQuery.sizeOf(context).width >= 900)
+          // Astra: the floating streaming switcher (For You + services) on wide windows.
+          if (wideDesktop)
             const Expanded(
-              child: Align(alignment: Alignment.center, child: SiloTopTabs(forYouLabel: 'For You')),
+              child: Align(alignment: Alignment.center, child: AstraServicePill()),
             )
           else ...[
             if (!PlatformDetector.isTV())
@@ -974,7 +1022,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
               // Hero Section (Continue Watching) - at top of screen
               Builder(
                 builder: (context) {
-                  if (_onDeck.isNotEmpty && showHeroSection) {
+                  if (_heroItems.isNotEmpty && showHeroSection) {
                     return _buildHeroSection();
                   }
                   // Add top padding when hero is not shown
@@ -1203,15 +1251,15 @@ class _DiscoverScreenState extends State<DiscoverScreen>
               Positioned.fill(child: _buildHeroBackdrop(heroHeight)),
               PageView.builder(
                 controller: _heroController,
-                itemCount: _onDeck.length,
+                itemCount: _heroItems.length,
                 onPageChanged: (index) {
-                  if (index >= 0 && index < _onDeck.length) {
+                  if (index >= 0 && index < _heroItems.length) {
                     _heroIndex.value = index;
                     _resetAutoScrollTimer();
                   }
                 },
                 itemBuilder: (context, index) {
-                  return _buildHeroItem(_onDeck[index], heroHeight);
+                  return _buildHeroItem(_heroItems[index], heroHeight);
                 },
               ),
               // Page indicators with animated progress and pause/play button.
@@ -1351,9 +1399,9 @@ class _DiscoverScreenState extends State<DiscoverScreen>
                   builder: (context, heroIndex, _) => HeroCarouselBackdrop(
                     controller: _heroController,
                     currentIndex: heroIndex,
-                    itemCount: _onDeck.length,
+                    itemCount: _heroItems.length,
                     backdropBuilder: (context, index, active, artSize) =>
-                        _buildHeroArtwork(_onDeck[index], heroHeight, artSize: artSize, active: active),
+                        _buildHeroArtwork(_heroItems[index], heroHeight, artSize: artSize, active: active),
                   ),
                 ),
               ),
@@ -1703,11 +1751,23 @@ class _DiscoverScreenState extends State<DiscoverScreen>
           builder: (context, _) {
             final showFocus = isTv && _heroFocusNode.hasFocus && InputModeTracker.isKeyboardMode(context);
             final colorScheme = Theme.of(context).colorScheme;
-            final backgroundColor = showFocus ? colorScheme.primary : Colors.white;
-            final foregroundColor = showFocus ? colorScheme.onPrimary : Colors.black;
+            // Astra: purple Play on large screens, white on phones (approved design).
+            final purple = ScreenBreakpoints.isWideTabletOrLarger(MediaQuery.sizeOf(context).width) || isTv;
+            final backgroundColor = showFocus
+                ? colorScheme.primary
+                : purple
+                ? const Color(0xFF7C4DFF)
+                : Colors.white;
+            final foregroundColor = showFocus ? colorScheme.onPrimary : (purple ? Colors.white : Colors.black);
             return InkWell(
               onTap: () {
                 appLogger.d('Playing: ${heroItem.title}');
+                // Astra: TMDB hero titles open their page, which offers Play
+                // when the title is on the user's server and Request otherwise.
+                if (heroItem.isCatalogItem) {
+                  navigateToMediaItem(context, heroItem);
+                  return;
+                }
                 navigateToVideoPlayer(context, metadata: heroItem);
               },
               borderRadius: BorderRadius.all(Radius.circular(isTv ? 32 : 24)),

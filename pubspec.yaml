@@ -180,6 +180,7 @@ flutter:
     - assets/shaders/anime4k/
     - assets/player_icons/
     - assets/rating_icons/
+    - assets/providers/
     # App icon picker thumbnails; scripts/codegen/generate_app_icons.py renders them from
     # assets/app_icons/source, which stays out of the bundle.
     - assets/app_icons/previews/

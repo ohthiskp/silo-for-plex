@@ -166,7 +166,7 @@ jobs:
 
       - name: Archive
         run: |
-          export ASTRA_DART_DEFINES="-DGIT_COMMIT=${{ github.sha }}"
+          export ASTRA_DART_DEFINES="-DGIT_COMMIT=${{ github.sha }} -DTMDB_TOKEN=${{ secrets.TMDB_TOKEN }}"
           xcodebuild -workspace tvos/Runner.xcworkspace -scheme Runner -configuration Release \
             -sdk appletvos -destination 'generic/platform=tvOS' \
             -archivePath "$RUNNER_TEMP/AstraTV.xcarchive" archive \
