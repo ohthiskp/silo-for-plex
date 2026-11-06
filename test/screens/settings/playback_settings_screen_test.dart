@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plezy/models/video_quality_preference.dart';
 import 'package:plezy/i18n/strings.g.dart';
 import 'package:plezy/models/audio_channel_limit.dart';
 import 'package:plezy/models/audio_quality_preset.dart';
@@ -194,7 +195,7 @@ void main() {
     expect(find.text('Normalize Volume on Downmix'), findsOneWidget);
   });
 
-  testWidgets('turns the covered-source direct play off from the quality group (#2193)', (tester) async {
+  testWidgets('the quality group offers exactly Auto, HD and 4K and saves the pick', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1000, 1400);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -203,16 +204,22 @@ void main() {
     await tester.pumpWidget(MaterialApp(theme: monoTheme(MonoPalette.dark), home: const PlaybackSettingsScreen()));
     await tester.pumpAndSettle();
 
-    final title = find.text('Play Smaller Videos at Original Quality');
+    final title = find.text('Video Quality');
     await tester.scrollUntilVisible(title, 500, scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(title);
     await tester.pumpAndSettle();
+    expect(find.text('Play Smaller Videos at Original Quality'), findsNothing);
+    expect(SettingsService.instance.read(SettingsService.videoQualityPreference), VideoQualityPreference.auto);
 
-    expect(SettingsService.instance.read(SettingsService.directPlayCoveredQuality), isTrue);
     await tester.tap(title);
     await tester.pumpAndSettle();
+    expect(find.text('Up to 1080p'), findsOneWidget);
+    expect(find.text('Up to 2160p'), findsOneWidget);
+    expect(find.textContaining('Mbps'), findsNothing);
 
-    expect(SettingsService.instance.read(SettingsService.directPlayCoveredQuality), isFalse);
+    await tester.tap(find.text('Up to 1080p'));
+    await tester.pumpAndSettle();
+    expect(SettingsService.instance.read(SettingsService.videoQualityPreference), VideoQualityPreference.hd);
   });
 
   testWidgets('gesture toggles render on mobile and persist', (tester) async {

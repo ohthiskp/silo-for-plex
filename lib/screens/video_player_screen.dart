@@ -1762,7 +1762,11 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
         // piggybacks on the app's single connectivity subscription in
         // OfflineModeProvider.
         _serverSupportsTranscoding = genericClient.capabilities.videoTranscoding;
-        final onCellularOnly = context.read<OfflineModeProvider>().isCellularOnly;
+        // Read only when something uses it, as before: some hosts (tests,
+        // embeds) open the player with an explicit preset and no provider.
+        final onCellularOnly =
+            (widget.selectedQualityPreset == null || widget.autoSelectVersion) &&
+            context.read<OfflineModeProvider>().isCellularOnly;
         final qualityPreference = PlaybackQualityManager.readPreference(settingsService);
         _selectedQualityPreset =
             widget.selectedQualityPreset ??
