@@ -1,4 +1,3 @@
-import AppKit
 import AstraKit
 import SwiftUI
 
@@ -42,10 +41,12 @@ struct RootView: View {
       }
     }
     .animation(Astra.Motion.page, value: app.player.lastError)
-    .background(app.player.isActive ? Color.clear : Astra.Color.bg)
+    .background { (app.player.isActive ? Color.clear : Astra.Color.bg).ignoresSafeArea() }
     .background(WindowAccessor { app.player.window = $0 })
     .animation(Astra.Motion.page, value: app.player.isActive)
-    .ignoresSafeArea()
+    #if os(macOS)
+      .ignoresSafeArea()
+    #endif
   }
 
   @ViewBuilder private var content: some View {
@@ -104,28 +105,5 @@ struct ErrorView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Astra.Color.bg)
-  }
-}
-
-/// Hands the hosting NSWindow to the player, which draws video beneath the SwiftUI layers.
-struct WindowAccessor: NSViewRepresentable {
-  var onWindow: (NSWindow?) -> Void
-
-  func makeNSView(context: Context) -> NSView {
-    let view = WindowReportingView()
-    view.onWindow = onWindow
-    return view
-  }
-
-  func updateNSView(_ nsView: NSView, context: Context) {}
-
-  final class WindowReportingView: NSView {
-    var onWindow: ((NSWindow?) -> Void)?
-
-    override func viewDidMoveToWindow() {
-      super.viewDidMoveToWindow()
-      window?.backgroundColor = .black
-      onWindow?(window)
-    }
   }
 }

@@ -42,9 +42,28 @@ enum Astra {
     }
   }
 
+  /// Sizes that differ between the Mac (docked sidebar, big window) and iPhone.
   enum Layout {
-    /// Left inset of page content, clear of the docked sidebar.
-    static let leading: CGFloat = 104
+    #if os(macOS)
+      /// Left inset of page content, clear of the docked sidebar.
+      static let leading: CGFloat = 104
+      static let heroHeight: CGFloat = 620
+      static let detailHeaderHeight: CGFloat = 640
+      static let artCard = CGSize(width: 240, height: 135)
+      static let continueCard = CGSize(width: 360, height: 202)
+      static let episodeCard = CGSize(width: 300, height: 169)
+      static let posterMinWidth: CGFloat = 160
+      static let titleSize: CGFloat = 52
+    #else
+      static let leading: CGFloat = 20
+      static let heroHeight: CGFloat = 560
+      static let detailHeaderHeight: CGFloat = 560
+      static let artCard = CGSize(width: 168, height: 95)
+      static let continueCard = CGSize(width: 270, height: 152)
+      static let episodeCard = CGSize(width: 240, height: 135)
+      static let posterMinWidth: CGFloat = 104
+      static let titleSize: CGFloat = 38
+    #endif
   }
 
   enum Radius {

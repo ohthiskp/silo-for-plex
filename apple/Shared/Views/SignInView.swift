@@ -1,4 +1,3 @@
-import AppKit
 import AstraKit
 import SwiftUI
 
@@ -24,7 +23,7 @@ struct SignInView: View {
             .foregroundStyle(Astra.Color.ink)
             .textSelection(.enabled)
           HStack(spacing: 12) {
-            Button("Open Plex Again") { NSWorkspace.shared.open(url) }
+            Button("Open Plex Again") { AppModel.open(url) }
               .astraSecondaryButton()
             Button("Cancel") { app.cancelSignIn() }
               .astraSecondaryButton()

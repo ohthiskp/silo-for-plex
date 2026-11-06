@@ -1,5 +1,7 @@
-import AppKit
 import AstraKit
+#if os(iOS)
+  import AVFoundation
+#endif
 import Foundation
 import Observation
 
@@ -32,7 +34,7 @@ final class PlayerController {
   private(set) var subtitleId: Int?
   var lastError: String?
 
-  @ObservationIgnored weak var window: NSWindow?
+  @ObservationIgnored weak var window: PlatformWindow?
   @ObservationIgnored var server: PlexServerClient?
 
   @ObservationIgnored private var core: MpvPlayerCore?
@@ -88,7 +90,15 @@ final class PlayerController {
     core.setProperty("pause", value: "no")
     core.command(["loadfile", source.url.absoluteString, "replace"])
     core.setVisible(true)
-    core.setPaused(false)
+    #if os(macOS)
+      core.setPaused(false)
+    #else
+      try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+      try? AVAudioSession.sharedInstance().setActive(true)
+      // The video sits under the hosting view, which must not paint over it.
+      window.rootViewController?.view.backgroundColor = .clear
+      core.updateFrame()
+    #endif
 
     isActive = true
     startReporting()
@@ -104,7 +114,11 @@ final class PlayerController {
     isActive = false
     if let key = source?.ratingKey { library?.playbackEnded(ratingKey: key) }
     source = nil
-    if let window, window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+    #if os(macOS)
+      if let window, window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+    #else
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    #endif
   }
 
   // MARK: - Transport
@@ -115,7 +129,9 @@ final class PlayerController {
     guard let core else { return }
     paused = value
     core.setProperty("pause", value: value ? "yes" : "no")
-    core.setPaused(value)
+    #if os(macOS)
+      core.setPaused(value)
+    #endif
     report(value ? .paused : .playing)
   }
 
@@ -138,7 +154,18 @@ final class PlayerController {
     core?.setProperty("sid", value: id.map(String.init) ?? "no")
   }
 
-  func toggleFullScreen() { window?.toggleFullScreen(nil) }
+  func toggleFullScreen() {
+    #if os(macOS)
+      window?.toggleFullScreen(nil)
+    #endif
+  }
+
+  /// The window changed size (rotation, split view): resize the video layer.
+  func layoutChanged() {
+    #if os(iOS)
+      core?.updateFrame()
+    #endif
+  }
 
   // MARK: - mpv events
 

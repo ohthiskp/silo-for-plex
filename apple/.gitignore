@@ -2,6 +2,7 @@
 Astra.xcodeproj/
 AstraMac/Resources/Info.plist
 AstraMac/Resources/Astra.entitlements
+AstraiOS/Resources/Info.plist
 # Build output
 .build/
 AstraKit/.build/

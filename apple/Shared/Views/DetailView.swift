@@ -40,18 +40,24 @@ struct DetailView: View {
     .astraScrollEdges()
     .ignoresSafeArea(edges: .top)
     .background(Astra.Color.bg)
-    .overlay(alignment: .topLeading) {
-      Button {
-        if !path.isEmpty { path.removeLast() }
-      } label: {
-        Image(systemName: "chevron.left")
+    #if os(macOS)
+      .overlay(alignment: .topLeading) {
+        Button {
+          if !path.isEmpty { path.removeLast() }
+        } label: {
+          Image(systemName: "chevron.left")
+        }
+        .astraIconButton(size: 40)
+        .keyboardShortcut("[", modifiers: .command)
+        .padding(.leading, Astra.Layout.leading)
+        .padding(.top, 36)
       }
-      .astraIconButton(size: 40)
-      .keyboardShortcut("[", modifiers: .command)
-      .padding(.leading, Astra.Layout.leading)
-      .padding(.top, 36)
-    }
-    .navigationBarBackButtonHidden(true)
+      .navigationBarBackButtonHidden(true)
+    #else
+      // iPhone keeps the system back button (Liquid Glass on iOS 26) and swipe-back.
+      .toolbarBackground(.hidden, for: .navigationBar)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
     .task(id: seed.ratingKey) { await load() }
   }
 
@@ -60,11 +66,11 @@ struct DetailView: View {
   private var header: some View {
     ZStack(alignment: .bottomLeading) {
       GeometryReader { geo in
-        RemoteImage(url: library.imageURL(shown.backdrop, width: geo.size.width, height: 640, scale: 1.5))
-          .frame(width: geo.size.width, height: 640)
+        RemoteImage(url: library.imageURL(shown.backdrop, width: geo.size.width, height: Astra.Layout.detailHeaderHeight, scale: 1.5))
+          .frame(width: geo.size.width, height: Astra.Layout.detailHeaderHeight)
           .clipped()
       }
-      .frame(height: 640)
+      .frame(height: Astra.Layout.detailHeaderHeight)
       HeroScrim()
 
       VStack(alignment: .leading, spacing: 16) {
@@ -114,7 +120,7 @@ struct DetailView: View {
       .padding(.bottom, 30)
       .animation(Astra.Motion.base, value: item)
     }
-    .frame(height: 640)
+    .frame(height: Astra.Layout.detailHeaderHeight)
   }
 
   private var playLabel: String {
@@ -222,8 +228,8 @@ struct DetailView: View {
 struct EpisodeCard: View {
   var library: LibraryStore
   var item: PlexMetadata
-  var width: CGFloat = 300
-  var height: CGFloat = 169
+  var width: CGFloat = Astra.Layout.episodeCard.width
+  var height: CGFloat = Astra.Layout.episodeCard.height
 
   @Environment(\.playItem) private var playItem
 

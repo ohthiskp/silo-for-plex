@@ -1,4 +1,3 @@
-import AppKit
 import AstraKit
 import SwiftUI
 
@@ -114,7 +113,7 @@ struct HeroCarousel: View {
         .padding(.bottom, 40)
       }
     }
-    .frame(height: 620)
+    .frame(height: Astra.Layout.heroHeight)
     .animation(Astra.Motion.resolved(Astra.Motion.hero, reduceMotion: reduceMotion), value: index)
     .task(id: items.count) {
       // Auto-advance every 8 s; stops when the view goes away.
@@ -158,7 +157,7 @@ struct HeroTitle: View {
         .shadow(color: .black.opacity(0.5), radius: 14, y: 4)
     } else {
       Text(item.displayTitle.uppercased())
-        .astraDisplay(52, tracking: 10)
+        .astraDisplay(Astra.Layout.titleSize, tracking: 10)
         .lineLimit(2)
         .minimumScaleFactor(0.6)
         .frame(maxWidth: 640, alignment: .leading)
@@ -169,12 +168,12 @@ struct HeroTitle: View {
 /// A logo, fitted, with no placeholder box behind it.
 struct LogoImage: View {
   var url: URL?
-  @State private var image: NSImage?
+  @State private var image: PlatformImage?
 
   var body: some View {
     ZStack(alignment: .bottomLeading) {
       if let image {
-        Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+        Image(platformImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
           .transition(.opacity)
       }
     }

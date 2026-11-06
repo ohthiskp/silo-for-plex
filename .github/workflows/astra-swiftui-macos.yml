@@ -1,5 +1,5 @@
-name: Astra SwiftUI macOS
-run-name: SwiftUI Mac build ${{ github.sha }}
+name: Astra SwiftUI
+run-name: SwiftUI Mac + iPhone build ${{ github.sha }}
 
 # Builds and tests the native SwiftUI app in apple/. Runs only when apple/ (or
 # the shared mpv core it compiles) changes, so the Flutter app's builds are unaffected.
@@ -9,6 +9,8 @@ on:
       - "apple/**"
       - "shared/apple/MpvPlayer/MpvPlayerCoreBase.swift"
       - "macos/Runner/MpvPlayer/MpvPlayerCore.swift"
+      - "ios/Runner/MpvPlayer/MpvPlayerCore.swift"
+      - "ios/Runner/MpvPlayer/ExternalDisplayManager.swift"
       - ".github/workflows/astra-swiftui-macos.yml"
   workflow_dispatch:
 
@@ -68,6 +70,22 @@ jobs:
             | tee build.log | grep -E "error:|warning: .*(AstraMac|AstraKit)|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build.log
 
+      - name: Build Astra for iPhone (unsigned, compile check)
+        working-directory: apple
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Astra.xcodeproj \
+            -scheme AstraiOS \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath .build \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build-ios.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build-ios.log
+
       - name: Sign to run locally (ad-hoc)
         working-directory: apple
         run: |
@@ -90,4 +108,6 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: build-log
-          path: apple/build.log
+          path: |
+            apple/build.log
+            apple/build-ios.log

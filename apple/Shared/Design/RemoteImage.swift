@@ -1,4 +1,3 @@
-import AppKit
 import ImageIO
 import SwiftUI
 
@@ -11,12 +10,12 @@ import SwiftUI
 actor ImagePipeline {
   static let shared = ImagePipeline()
 
-  private let cache: NSCache<NSURL, NSImage> = {
-    let cache = NSCache<NSURL, NSImage>()
+  private let cache: NSCache<NSURL, PlatformImage> = {
+    let cache = NSCache<NSURL, PlatformImage>()
     cache.totalCostLimit = 256 * 1024 * 1024
     return cache
   }()
-  private var inFlight: [URL: Task<NSImage?, Never>] = [:]
+  private var inFlight: [URL: Task<PlatformImage?, Never>] = [:]
   private let session: URLSession = {
     let config = URLSessionConfiguration.default
     config.urlCache = URLCache(memoryCapacity: 32 << 20, diskCapacity: 512 << 20)
@@ -25,15 +24,15 @@ actor ImagePipeline {
     return URLSession(configuration: config)
   }()
 
-  nonisolated func cached(_ url: URL) -> NSImage? {
+  nonisolated func cached(_ url: URL) -> PlatformImage? {
     cache.object(forKey: url as NSURL)
   }
 
-  func image(for url: URL) async -> NSImage? {
+  func image(for url: URL) async -> PlatformImage? {
     if let hit = cache.object(forKey: url as NSURL) { return hit }
     if let running = inFlight[url] { return await running.value }
     let session = session
-    let task = Task.detached(priority: .userInitiated) { () -> NSImage? in
+    let task = Task.detached(priority: .userInitiated) { () -> PlatformImage? in
       guard let (data, _) = try? await session.data(from: url) else { return nil }
       return Self.decode(data)
     }
@@ -41,17 +40,17 @@ actor ImagePipeline {
     let image = await task.value
     inFlight[url] = nil
     if let image {
-      let cost = Int(image.size.width * image.size.height * 4)
+      let cost = image.pixelArea * 4
       cache.setObject(image, forKey: url as NSURL, cost: cost)
     }
     return image
   }
 
-  private static func decode(_ data: Data) -> NSImage? {
+  private static func decode(_ data: Data) -> PlatformImage? {
     guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
     let options: [CFString: Any] = [kCGImageSourceShouldCacheImmediately: true]
     guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, options as CFDictionary) else { return nil }
-    return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    return PlatformImage.decoded(cgImage)
   }
 }
 
@@ -60,13 +59,13 @@ struct RemoteImage: View {
   var url: URL?
   var contentMode: ContentMode = .fill
 
-  @State private var image: NSImage?
+  @State private var image: PlatformImage?
 
   var body: some View {
     ZStack {
       Astra.Color.surface
       if let image {
-        Image(nsImage: image)
+        Image(platformImage: image)
           .resizable()
           .interpolation(.high)
           .aspectRatio(contentMode: contentMode)

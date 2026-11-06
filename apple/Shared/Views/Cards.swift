@@ -30,8 +30,8 @@ struct ContentRow<Content: View>: View {
 struct ArtCard: View {
   var library: LibraryStore
   var item: PlexMetadata
-  var width: CGFloat = 240
-  var height: CGFloat = 135
+  var width: CGFloat = Astra.Layout.artCard.width
+  var height: CGFloat = Astra.Layout.artCard.height
 
   @Environment(\.openItem) private var openItem
 
@@ -68,8 +68,8 @@ struct ArtCard: View {
 struct ContinueCard: View {
   var library: LibraryStore
   var item: PlexMetadata
-  var width: CGFloat = 360
-  var height: CGFloat = 202
+  var width: CGFloat = Astra.Layout.continueCard.width
+  var height: CGFloat = Astra.Layout.continueCard.height
 
   @Environment(\.playItem) private var playItem
   @Environment(\.openItem) private var openItem
@@ -120,7 +120,7 @@ struct ContinueCard: View {
 struct PosterCard: View {
   var library: LibraryStore
   var item: PlexMetadata
-  var width: CGFloat = 170
+  var width: CGFloat = Astra.Layout.posterMinWidth + 10
 
   @Environment(\.openItem) private var openItem
 

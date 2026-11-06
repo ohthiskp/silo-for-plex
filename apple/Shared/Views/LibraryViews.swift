@@ -11,7 +11,7 @@ struct LibraryGridView: View {
   @State private var loading = false
   @State private var sort = "addedAt:desc"
 
-  private let columns = [GridItem(.adaptive(minimum: 160, maximum: 190), spacing: 18, alignment: .top)]
+  private let columns = [GridItem(.adaptive(minimum: Astra.Layout.posterMinWidth, maximum: Astra.Layout.posterMinWidth + 30), spacing: 18, alignment: .top)]
 
   var body: some View {
     ScrollView(.vertical) {
@@ -70,7 +70,7 @@ struct SearchView: View {
   @State private var results: [PlexMetadata] = []
   @FocusState private var focused: Bool
 
-  private let columns = [GridItem(.adaptive(minimum: 160, maximum: 190), spacing: 18, alignment: .top)]
+  private let columns = [GridItem(.adaptive(minimum: Astra.Layout.posterMinWidth, maximum: Astra.Layout.posterMinWidth + 30), spacing: 18, alignment: .top)]
 
   var body: some View {
     ScrollView(.vertical) {
@@ -131,7 +131,9 @@ struct SettingsView: View {
       }
     }
     .formStyle(.grouped)
-    .frame(width: 460)
+    #if os(macOS)
+      .frame(width: 460)
+    #endif
     .padding(.vertical, 8)
   }
 }

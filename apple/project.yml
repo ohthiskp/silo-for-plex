@@ -6,6 +6,7 @@ options:
   bundleIdPrefix: app.astra
   deploymentTarget:
     macOS: "14.0"
+    iOS: "18.0"
   createIntermediateGroups: true
   developmentLanguage: en
 
@@ -30,6 +31,7 @@ targets:
     platform: macOS
     sources:
       - path: AstraMac
+      - path: Shared
       # The mpv core is shared with the Flutter app and used unchanged (read-only here):
       # MpvPlayerCoreBase is the cross-platform core, MpvPlayerCore its macOS layer host.
       - path: ../shared/apple/MpvPlayer/MpvPlayerCoreBase.swift
@@ -77,7 +79,72 @@ targets:
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
         COMBINE_HIDPI_IMAGES: YES
 
+  AstraiOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: AstraiOS
+      - path: Shared
+      # The iPhone mpv core from the Flutter app, used unchanged (read-only here).
+      - path: ../shared/apple/MpvPlayer/MpvPlayerCoreBase.swift
+        group: MpvShared
+      - path: ../ios/Runner/MpvPlayer/MpvPlayerCore.swift
+        group: MpvShared
+      - path: ../ios/Runner/MpvPlayer/ExternalDisplayManager.swift
+        group: MpvShared
+      - path: ../ios/plezy.icon
+        group: Resources
+        buildPhase: resources
+    dependencies:
+      - package: AstraKit
+      - package: MPVKit
+        product: MPVKit
+    info:
+      path: AstraiOS/Resources/Info.plist
+      properties:
+        CFBundleName: Astra
+        CFBundleDisplayName: Astra
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIImageRespectsSafeAreaInsets: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIBackgroundModes: [audio]
+        UIRequiresFullScreen: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
+        NSBonjourServices: [_plexmediasvr._tcp]
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_NAME: Astra
+        PRODUCT_BUNDLE_IDENTIFIER: app.astra.swiftui.ios
+        ASSETCATALOG_COMPILER_APPICON_NAME: plezy
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+
 schemes:
+  AstraiOS:
+    build:
+      targets:
+        AstraiOS: all
+    run:
+      config: Debug
+    archive:
+      config: Release
   AstraMac:
     build:
       targets:

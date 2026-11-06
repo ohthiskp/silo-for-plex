@@ -1,4 +1,3 @@
-import AppKit
 import AstraKit
 import SwiftUI
 
@@ -15,10 +14,16 @@ struct PlayerOverlay: View {
 
   var body: some View {
     ZStack {
-      // Clear, but hit-testable: clicks toggle pause, double-click goes full screen.
-      Color.black.opacity(0.001)
-        .onTapGesture(count: 2) { player.toggleFullScreen() }
-        .onTapGesture { player.togglePause() }
+      // Clear, but hit-testable. Mac: click pauses, double-click goes full screen.
+      // iPhone: tap shows or hides the controls.
+      #if os(macOS)
+        Color.black.opacity(0.001)
+          .onTapGesture(count: 2) { player.toggleFullScreen() }
+          .onTapGesture { player.togglePause() }
+      #else
+        Color.black.opacity(0.001)
+          .onTapGesture { visible ? hide() : poke() }
+      #endif
 
       chrome
         .opacity(visible ? 1 : 0)
@@ -31,14 +36,21 @@ struct PlayerOverlay: View {
     }
     .animation(Astra.Motion.base, value: visible)
     .animation(Astra.Motion.fast, value: player.buffering)
-    .onContinuousHover { phase in
-      if case .active = phase { poke() }
-    }
+    #if os(macOS)
+      .onContinuousHover { phase in
+        if case .active = phase { poke() }
+      }
+    #endif
     .onAppear { poke() }
     .onChange(of: player.paused) { _, paused in
       if paused { visible = true } else { poke() }
     }
     .onDisappear { hideTask?.cancel() }
+    .onGeometryChange(for: CGSize.self, of: { $0.size }) { _ in player.layoutChanged() }
+    #if os(iOS)
+      .statusBarHidden(!visible)
+      .persistentSystemOverlays(.hidden)
+    #endif
   }
 
   private var chrome: some View {
@@ -58,7 +70,7 @@ struct PlayerOverlay: View {
         Spacer()
         bottomBar
       }
-      .padding(.horizontal, 40)
+      .padding(.horizontal, Self.inset)
       .padding(.vertical, 30)
     }
   }
@@ -81,25 +93,27 @@ struct PlayerOverlay: View {
       }
       Spacer()
       if let badge = player.resolutionBadge { Badge(text: badge) }
-      Button {
-        player.toggleFullScreen()
-      } label: {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-      }
-      .astraIconButton(size: 42, variant: .clear)
-      .help("Full Screen")
+      #if os(macOS)
+        Button {
+          player.toggleFullScreen()
+        } label: {
+          Image(systemName: "arrow.up.left.and.arrow.down.right")
+        }
+        .astraIconButton(size: 42, variant: .clear)
+        .help("Full Screen")
+      #endif
     }
   }
 
   private var transport: some View {
-    HStack(spacing: 44) {
+    HStack(spacing: Self.transportSizes.gap) {
       Button {
         player.seek(by: -10)
         poke()
       } label: {
         Image(systemName: "gobackward.10")
       }
-      .astraIconButton(size: 64, variant: .clear)
+      .astraIconButton(size: Self.transportSizes.small, variant: .clear)
 
       Button {
         player.togglePause()
@@ -107,7 +121,7 @@ struct PlayerOverlay: View {
         Image(systemName: player.paused ? "play.fill" : "pause.fill")
           .contentTransition(.symbolEffect(.replace))
       }
-      .astraIconButton(size: 86, variant: .clear)
+      .astraIconButton(size: Self.transportSizes.large, variant: .clear)
 
       Button {
         player.seek(by: 10)
@@ -115,9 +129,9 @@ struct PlayerOverlay: View {
       } label: {
         Image(systemName: "goforward.10")
       }
-      .astraIconButton(size: 64, variant: .clear)
+      .astraIconButton(size: Self.transportSizes.small, variant: .clear)
     }
-    .astraGlassGroup(spacing: 44)
+    .astraGlassGroup(spacing: Self.transportSizes.gap)
   }
 
   private var bottomBar: some View {
@@ -196,10 +210,24 @@ struct PlayerOverlay: View {
     hideTask = Task {
       try? await Task.sleep(for: .seconds(3))
       guard !Task.isCancelled, !player.paused, scrubbing == nil else { return }
-      visible = false
-      NSCursor.setHiddenUntilMouseMoves(true)
+      hide()
     }
   }
+
+  private func hide() {
+    visible = false
+    #if os(macOS)
+      NSCursor.setHiddenUntilMouseMoves(true)
+    #endif
+  }
+
+  #if os(macOS)
+    static let inset: CGFloat = 40
+    static let transportSizes: (small: CGFloat, large: CGFloat, gap: CGFloat) = (64, 86, 44)
+  #else
+    static let inset: CGFloat = 20
+    static let transportSizes: (small: CGFloat, large: CGFloat, gap: CGFloat) = (56, 76, 36)
+  #endif
 
   static func clock(_ seconds: Double) -> String {
     let total = Int(seconds.rounded(.down))

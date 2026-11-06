@@ -1,7 +1,13 @@
-import AppKit
 import AstraKit
 import Foundation
 import Observation
+import SwiftUI
+
+#if os(macOS)
+  import AppKit
+#else
+  import UIKit
+#endif
 
 /// App-wide state: who is signed in, which server Astra talks to, and the player.
 @MainActor
@@ -34,12 +40,21 @@ final class AppModel {
   init(tokens: TokenStore = KeychainTokenStore()) {
     let bundle = Bundle.main
     let os = ProcessInfo.processInfo.operatingSystemVersion
+    #if os(macOS)
+      let platform = "macOS"
+      let device = "Mac"
+      let deviceName = Host.current().localizedName ?? "Mac"
+    #else
+      let platform = "iOS"
+      let device = UIDevice.current.model
+      let deviceName = UIDevice.current.name
+    #endif
     info = PlexClientInfo(
       version: bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1",
-      platform: "macOS",
+      platform: platform,
       platformVersion: "\(os.majorVersion).\(os.minorVersion)",
-      device: "Mac",
-      deviceName: Host.current().localizedName ?? "Mac",
+      device: device,
+      deviceName: deviceName,
       clientIdentifier: PlexClientInfo.persistentIdentifier()
     )
     account = PlexAccountClient(info: info)
@@ -69,7 +84,7 @@ final class AppModel {
         let pin = try await account.createPin()
         let url = account.authURL(for: pin)
         phase = .waitingForApproval(code: pin.code, url: url)
-        NSWorkspace.shared.open(url)
+        Self.open(url)
         let token = try await account.waitForToken(pin)
         tokens.save(token)
         accountToken = token
@@ -80,6 +95,14 @@ final class AppModel {
         phase = .failed(error.localizedDescription)
       }
     }
+  }
+
+  static func open(_ url: URL) {
+    #if os(macOS)
+      NSWorkspace.shared.open(url)
+    #else
+      UIApplication.shared.open(url)
+    #endif
   }
 
   func cancelSignIn() {
@@ -143,6 +166,19 @@ final class AppModel {
       await store.loadHome()
     } catch {
       phase = .failed(error.localizedDescription)
+    }
+  }
+
+  /// Plays an item; a show or season plays its next episode.
+  func play(_ item: PlexMetadata) {
+    guard let library else { return }
+    Task {
+      do {
+        let playable = try await library.playable(for: item)
+        try player.play(playable, library: library)
+      } catch {
+        player.lastError = error.localizedDescription
+      }
     }
   }
 

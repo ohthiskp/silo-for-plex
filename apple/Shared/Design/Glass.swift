@@ -27,7 +27,7 @@ struct AstraGlass<S: Shape>: ViewModifier {
   var tint: Color?
 
   func body(content: Content) -> some View {
-    if #available(macOS 26.0, *) {
+    if #available(macOS 26.0, iOS 26.0, *) {
       var glass: Glass = variant == .clear ? .clear : .regular
       if let tint { glass = glass.tint(tint) }
       if interactive { glass = glass.interactive() }
@@ -52,7 +52,7 @@ extension View {
   /// The primary action (Play, Sign in): Apple's prominent glass button.
   /// White on the cinematic screens, violet for sign-in.
   @ViewBuilder func astraPrimaryButton(violet: Bool = false) -> some View {
-    if #available(macOS 26.0, *) {
+    if #available(macOS 26.0, iOS 26.0, *) {
       self
         .buttonStyle(.glassProminent)
         .tint(violet ? Astra.Color.purple : .white)
@@ -66,7 +66,7 @@ extension View {
 
   /// Secondary actions (Details, Watched, Cancel): Apple's glass button.
   @ViewBuilder func astraSecondaryButton() -> some View {
-    if #available(macOS 26.0, *) {
+    if #available(macOS 26.0, iOS 26.0, *) {
       self
         .buttonStyle(.glass)
         .foregroundStyle(Astra.Color.ink)
@@ -90,7 +90,7 @@ struct AstraGlassGroup<Content: View>: View {
   @ViewBuilder var content: () -> Content
 
   var body: some View {
-    if #available(macOS 26.0, *) {
+    if #available(macOS 26.0, iOS 26.0, *) {
       GlassEffectContainer(spacing: spacing, content: content)
     } else {
       content()
@@ -118,8 +118,11 @@ struct Pressable: ViewModifier {
       .animation(pressed ? Astra.Motion.fast : Astra.Motion.base, value: hovering)
       .animation(Astra.Motion.fast, value: pressed)
       .onHover { hovering = $0 }
-      .simultaneousGesture(
-        DragGesture(minimumDistance: 0).updating($pressed) { _, state, _ in state = true })
+      #if os(macOS)
+        // A zero-distance drag would steal touches from scroll views on iPhone.
+        .simultaneousGesture(
+          DragGesture(minimumDistance: 0).updating($pressed) { _, state, _ in state = true })
+      #endif
   }
 }
 
@@ -130,7 +133,7 @@ extension View {
 
   /// Soft scroll-edge effect under the floating controls (macOS 26).
   @ViewBuilder func astraScrollEdges() -> some View {
-    if #available(macOS 26.0, *) {
+    if #available(macOS 26.0, iOS 26.0, *) {
       scrollEdgeEffectStyle(.soft, for: .top)
     } else {
       self
