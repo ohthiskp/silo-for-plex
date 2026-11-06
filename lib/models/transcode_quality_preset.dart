@@ -14,29 +14,13 @@ enum TranscodeQualityPreset {
   p1080_8mbps(8000, '1920x1080', 60),
   p1080_10mbps(10000, '1920x1080', 75),
   p1080_12mbps(12000, '1920x1080', 90),
-  p1080_20mbps(20000, '1920x1080', 100),
+  p1080_20mbps(20000, '1920x1080', 100);
 
-  /// Astra's HD setting: a 1080p resolution ceiling only. A source at or
-  /// under 1080p plays as it is whatever its bitrate (a 40 Mbps 1080p remux
-  /// is not re-encoded); a taller one is transcoded to 1080p at
-  /// [videoBitrateKbps]. Chosen by `PlaybackQualityManager`, never listed in
-  /// a picker.
-  upTo1080p(20000, '1920x1080', 100, capsBitrate: false);
-
-  const TranscodeQualityPreset(
-    this.videoBitrateKbps,
-    this.videoResolution,
-    this.videoQuality, {
-    this.capsBitrate = true,
-  });
+  const TranscodeQualityPreset(this.videoBitrateKbps, this.videoResolution, this.videoQuality);
 
   final int? videoBitrateKbps;
   final String? videoResolution;
   final int? videoQuality;
-
-  /// Whether a source above [videoBitrateKbps] needs transcoding even when
-  /// its resolution fits. False for [upTo1080p], which only caps resolution.
-  final bool capsBitrate;
 
   bool get isOriginal => this == TranscodeQualityPreset.original;
 
@@ -60,9 +44,7 @@ enum TranscodeQualityPreset {
     final capKbps = videoBitrateKbps;
     final capHeight = resolutionHeight;
     if (capKbps == null || capHeight == null) return false;
-    if (heightPx == null || heightPx <= 0) return false;
-    if (!capsBitrate) return heightPx <= capHeight;
-    if (bitrateKbps == null || bitrateKbps <= 0) return false;
+    if (bitrateKbps == null || bitrateKbps <= 0 || heightPx == null || heightPx <= 0) return false;
     return bitrateKbps <= capKbps && heightPx <= capHeight;
   }
 
@@ -70,7 +52,7 @@ enum TranscodeQualityPreset {
   /// [original] pinned first, then transcode presets highest-bitrate first.
   static final List<TranscodeQualityPreset> displayOrder = List.unmodifiable([
     original,
-    ...values.where((p) => !p.isOriginal && p.capsBitrate).toList().reversed,
+    ...values.where((p) => !p.isOriginal).toList().reversed,
   ]);
 
   /// The saved default playback starts at, for callers without an explicit

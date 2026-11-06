@@ -1,12 +1,11 @@
 import 'dart:math' as math;
 
 import '../media/media_version.dart';
-import '../models/transcode_quality_preset.dart';
 import '../models/video_quality_preference.dart';
 import 'settings_service.dart';
 import 'video_decode_capabilities.dart';
 
-/// The single place Astra turns the device's Video Quality setting (Auto, HD,
+/// The single place Astra turns the device's Preferred Quality setting (Auto, HD,
 /// 4K) into a playback decision. The rules are written up for the SwiftUI
 /// port in `docs/playback-quality.md`; keep the two in step.
 ///
@@ -17,59 +16,21 @@ import 'video_decode_capabilities.dart';
 ///    hardware decoder on a device that probes for one).
 /// 4. Picks the best version under the preference's ceiling, falling back to
 ///    the nearest one above it when nothing fits.
-/// 5. Says whether the server must transcode to honour the ceiling
-///    ([startupPreset] + `TranscodeQualityPreset.coversSource`).
-/// 6. The result goes to mpv through the normal playback pipeline.
-/// 7. [describeActive] reports what is really playing, for the badges.
+/// 5. The chosen original file goes to mpv through the normal playback
+///    pipeline, untouched: the setting never transcodes, re-encodes or
+///    downscales. A title with one file plays that file whatever the setting.
+/// 6. [describeActive] reports what is really playing, for the badges.
 ///
 /// Astra plays everything through libmpv. There is no AVPlayer/HLS adaptive
-/// path, so a single file never changes quality by itself mid-play: quality
-/// only changes by picking another version or by a Plex server transcode.
+/// path, so a file never changes quality by itself mid-play: quality only
+/// changes by picking another existing version.
 class PlaybackQualityManager {
   const PlaybackQualityManager._();
-
-  /// Bitrate cap for Auto on a cellular-only connection (1080p, 8 Mbps).
-  static const cellularPreset = TranscodeQualityPreset.p1080_8mbps;
 
   /// This device's saved preference. Auto when settings are not loaded yet.
   static VideoQualityPreference readPreference([SettingsService? settings]) {
     final s = settings ?? SettingsService.instanceOrNull;
     return s?.read(SettingsService.videoQualityPreference) ?? VideoQualityPreference.auto;
-  }
-
-  /// The resolution ceiling actually in force: Auto on cellular behaves like
-  /// HD so a phone does not pull a 4K remux over mobile data.
-  static int? effectiveCeiling(VideoQualityPreference preference, {required bool onCellularOnly}) {
-    if (preference == VideoQualityPreference.auto && onCellularOnly) return 1080;
-    return preference.maxTierHeight;
-  }
-
-  /// The transcode preset a new VOD playback starts at. [TranscodeQualityPreset.original]
-  /// direct-plays the chosen version. The other answers are ceilings: the
-  /// Plex client still direct-plays a version that already fits under them
-  /// (see `PlexClient._presetNeedsTranscode`), and only transcodes one that
-  /// does not. A server that cannot transcode always gets original.
-  static TranscodeQualityPreset startupPreset(
-    VideoQualityPreference preference, {
-    required bool serverSupportsTranscoding,
-    required bool onCellularOnly,
-  }) {
-    if (!serverSupportsTranscoding) return TranscodeQualityPreset.original;
-    return switch (preference) {
-      VideoQualityPreference.auto => onCellularOnly ? cellularPreset : TranscodeQualityPreset.original,
-      VideoQualityPreference.hd => TranscodeQualityPreset.upTo1080p,
-      VideoQualityPreference.uhd => TranscodeQualityPreset.original,
-    };
-  }
-
-  /// The preset a live channel starts at. A live stream is not a file with
-  /// versions, and any ceiling makes the server transcode it, so only Auto
-  /// on cellular caps it; HD and 4K play the channel as broadcast (almost
-  /// always 1080i/720p already).
-  static TranscodeQualityPreset livePreset(VideoQualityPreference preference, {required bool onCellularOnly}) {
-    return preference == VideoQualityPreference.auto && onCellularOnly
-        ? cellularPreset
-        : TranscodeQualityPreset.original;
   }
 
   /// Nominal tier of a version in "p" (720, 1080, 2160). A 2.39:1 film is
@@ -107,18 +68,16 @@ class PlaybackQualityManager {
   ///   undecodable codec) are skipped, unless that leaves nothing.
   /// - Under the ceiling, the tallest tier wins; ties go to the higher
   ///   bitrate, then the earlier entry.
-  /// - When every version is above the ceiling (HD with only a 4K file), the
-  ///   lowest one is picked; [startupPreset] then has the server bring it
-  ///   down to 1080p where it can.
+  /// - When every version is above the ceiling (HD with only 4K and 1440p
+  ///   files), the lowest one is picked and played as it is.
   static int? chooseVersionIndex(
     List<MediaVersion> versions,
     VideoQualityPreference preference, {
-    bool onCellularOnly = false,
     bool Function(MediaVersion)? decodable,
   }) {
     if (versions.length < 2) return null;
     final canPlay = decodable ?? canDecode;
-    final ceiling = effectiveCeiling(preference, onCellularOnly: onCellularOnly);
+    final ceiling = preference.maxTierHeight;
 
     var candidates = [
       for (var i = 0; i < versions.length; i++)

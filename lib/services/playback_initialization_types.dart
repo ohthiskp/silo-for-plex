@@ -82,10 +82,6 @@ class PlaybackInitializationOptions {
   /// and episode carries leave it null so they keep the version in play.
   final VideoQualityPreference? autoSelectVersionFor;
 
-  /// Whether the device is on a cellular-only connection, for Auto's
-  /// data-saving ceiling in [autoSelectVersionFor].
-  final bool onCellularOnly;
-
   const PlaybackInitializationOptions({
     required this.metadata,
     required this.selectedMediaIndex,
@@ -101,7 +97,6 @@ class PlaybackInitializationOptions {
     this.startPosition,
     this.forceTranscode = false,
     this.autoSelectVersionFor,
-    this.onCellularOnly = false,
   });
 }
 

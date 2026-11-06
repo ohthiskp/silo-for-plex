@@ -115,7 +115,7 @@ class PlaybackSettingsScreen extends StatelessWidget {
               title: t.settings.quality,
               children: [
                 // Astra's one quality control (Auto / HD / 4K), per device.
-                // Auto already saves data on cellular; see
+                // It picks between existing original files only; see
                 // PlaybackQualityManager.
                 _videoQualityTile(),
                 // Desktop has no hardware-decode probe, so this is where a
@@ -673,7 +673,7 @@ class PlaybackSettingsScreen extends StatelessWidget {
   Widget _videoQualityTile() => SettingSelectionTile<VideoQualityPreference>(
     pref: SettingsService.videoQualityPreference,
     icon: Symbols.high_quality_rounded,
-    title: 'Video Quality',
+    title: 'Preferred Quality',
     subtitleBuilder: (p) => p.label,
     options: VideoQualityPreference.values
         .map((p) => DialogOption(value: p, title: p.label, subtitle: p.detail))

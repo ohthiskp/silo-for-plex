@@ -381,7 +381,7 @@ Future<bool?> navigateToVideoPlayer(
   final mediaSourceId =
       selectedMediaSourceId ?? downloadedMediaSourceId ?? roomVersion?.sourceId ?? preferredVersion?.sourceId;
 
-  // Nothing above chose a version, so the device's Video Quality setting
+  // Nothing above chose a version, so the device's Preferred Quality setting
   // may pick one (PlaybackQualityManager.chooseVersionIndex).
   final autoSelectVersion =
       !isOffline &&
@@ -579,7 +579,7 @@ Future<bool?> navigateToVideoPlayerWithRefresh(
 /// The shared "Play Version..." flow behind the detail screen's split Play
 /// segment and the context menu entry: pick a version when the item has a
 /// choice, persist the pick, and launch playback. Quality is not asked here:
-/// the device's Video Quality setting applies to every playback.
+/// the device's Preferred Quality setting applies to every playback.
 ///
 /// Returns true when playback navigation started; false when the user
 /// dismissed the picker or the context went away. The returned future

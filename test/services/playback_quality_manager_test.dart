@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plezy/media/media_version.dart';
-import 'package:plezy/models/transcode_quality_preset.dart';
 import 'package:plezy/models/video_quality_preference.dart';
 import 'package:plezy/services/playback_quality_manager.dart';
 
@@ -45,10 +44,6 @@ void main() {
       expect(PlaybackQualityManager.chooseVersionIndex(multi, hd, decodable: (_) => true), 0);
     });
 
-    test('Auto on cellular behaves like HD', () {
-      expect(PlaybackQualityManager.chooseVersionIndex(multi, auto, onCellularOnly: true, decodable: (_) => true), 0);
-    });
-
     test('4K without a 4K version falls back to the best lower one', () {
       final no4k = [multi[2], multi[0]];
       expect(PlaybackQualityManager.chooseVersionIndex(no4k, uhd, decodable: (_) => true), 1);
@@ -71,41 +66,6 @@ void main() {
     test('same tier: the higher bitrate wins', () {
       final twins = [v('a', w: 1920, h: 1080, kbps: 8000), v('b', w: 1920, h: 1080, kbps: 30000)];
       expect(PlaybackQualityManager.chooseVersionIndex(twins, hd, decodable: (_) => true), 1);
-    });
-  });
-
-  group('startupPreset', () {
-    test('per preference', () {
-      TranscodeQualityPreset p(VideoQualityPreference q, {bool cell = false, bool tx = true}) =>
-          PlaybackQualityManager.startupPreset(q, serverSupportsTranscoding: tx, onCellularOnly: cell);
-      expect(p(auto), TranscodeQualityPreset.original);
-      expect(p(uhd), TranscodeQualityPreset.original);
-      expect(p(hd), TranscodeQualityPreset.upTo1080p);
-      expect(p(auto, cell: true), TranscodeQualityPreset.p1080_8mbps);
-      expect(p(hd, tx: false), TranscodeQualityPreset.original);
-    });
-
-    test('live TV only caps Auto on cellular', () {
-      expect(PlaybackQualityManager.livePreset(hd, onCellularOnly: false), TranscodeQualityPreset.original);
-      expect(PlaybackQualityManager.livePreset(auto, onCellularOnly: true), TranscodeQualityPreset.p1080_8mbps);
-    });
-  });
-
-  group('upTo1080p ceiling', () {
-    const preset = TranscodeQualityPreset.upTo1080p;
-    test('a 1080p file plays as it is at any bitrate', () {
-      expect(preset.coversSource(bitrateKbps: 45000, heightPx: 1080), isTrue);
-      expect(preset.coversSource(bitrateKbps: null, heightPx: 800), isTrue);
-    });
-    test('a 4K file is transcoded', () {
-      expect(preset.coversSource(bitrateKbps: 15000, heightPx: 2160), isFalse);
-      expect(preset.coversSource(bitrateKbps: 15000, heightPx: 1600), isFalse);
-    });
-    test('never offered in a picker', () {
-      expect(TranscodeQualityPreset.displayOrder, isNot(contains(preset)));
-    });
-    test('bitrate presets keep their bitrate cap', () {
-      expect(TranscodeQualityPreset.p1080_8mbps.coversSource(bitrateKbps: 12000, heightPx: 1080), isFalse);
     });
   });
 

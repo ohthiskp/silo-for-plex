@@ -1,18 +1,19 @@
-/// The one video quality choice Astra shows: Settings → Playback → Video
+/// The one video quality choice Astra shows: Settings → Playback → Preferred
 /// Quality. Saved per device (see `SettingsService.videoQualityPreference`)
 /// and applied to every playback on that device by
-/// `PlaybackQualityManager`; playback never asks again.
+/// `PlaybackQualityManager`; playback never asks again. It only chooses
+/// between the original files a title already has: nothing is ever
+/// transcoded, and a title with one file plays it whatever the setting.
 ///
 /// The names are what is stored, so keep them stable.
 enum VideoQualityPreference {
-  /// Best compatible source. On a cellular-only connection it caps like [hd]
-  /// with a bitrate limit, the way streaming apps save data.
+  /// Best compatible existing original.
   auto,
 
-  /// Best compatible source up to 1920×1080.
+  /// Prefer an original at 1080p or below; otherwise play what exists.
   hd,
 
-  /// Prefer a 3840×2160 source, falling back to the best lower one.
+  /// Prefer a 4K original, falling back to the best lower one.
   uhd;
 
   /// Label shown in Settings.
@@ -24,9 +25,9 @@ enum VideoQualityPreference {
 
   /// One-line explanation under each choice.
   String get detail => switch (this) {
-    VideoQualityPreference.auto => 'Best quality this device can play',
-    VideoQualityPreference.hd => 'Up to 1080p',
-    VideoQualityPreference.uhd => 'Up to 2160p',
+    VideoQualityPreference.auto => 'Best original this device can play',
+    VideoQualityPreference.hd => 'Prefer 1080p or lower',
+    VideoQualityPreference.uhd => 'Prefer 4K',
   };
 
   /// Height ceiling in the "p" sense (1080, 2160), or null for no ceiling.

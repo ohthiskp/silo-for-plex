@@ -759,7 +759,7 @@ class SettingsService extends BaseSharedPreferencesService {
     values: HdrSdrConversion.values,
     defaultValue: HdrSdrConversion.auto,
   );
-  /// Astra's one Video Quality choice (Auto, HD, 4K). Device-local on
+  /// Astra's one Preferred Quality choice (Auto, HD, 4K). Device-local on
   /// purpose: it is reset by Reset All but never exported, so a phone and a
   /// TV keep their own. Read through `PlaybackQualityManager`.
   static const videoQualityPreference = EnumPref<VideoQualityPreference>(

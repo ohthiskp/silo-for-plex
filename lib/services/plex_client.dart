@@ -3743,7 +3743,7 @@ class PlexClient
         position: options.startPosition,
       );
 
-      // Astra Video Quality: with nothing else deciding the version, pick the
+      // Astra Preferred Quality: with nothing else deciding the version, pick the
       // best one this device should play under its Auto/HD/4K setting. The
       // re-read is served from the metadata cache the first read just wrote.
       final autoPreference = options.autoSelectVersionFor;
@@ -3752,11 +3752,7 @@ class PlexClient
           options.preferredVersionSignature == null &&
           options.metadata.kind != MediaKind.track) {
         final versions = data.availableVersions;
-        final picked = PlaybackQualityManager.chooseVersionIndex(
-          versions,
-          autoPreference,
-          onCellularOnly: options.onCellularOnly,
-        );
+        final picked = PlaybackQualityManager.chooseVersionIndex(versions, autoPreference);
         if (picked != null && picked != data.selectedMediaIndex) {
           appLogger.i(
             'Video quality ${autoPreference.name}: playing version $picked '

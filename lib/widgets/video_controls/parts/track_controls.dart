@@ -157,7 +157,7 @@ extension _PlexVideoControlsTrackMethods on _PlexVideoControlsState {
       availableVersions: versionQuality.availableVersions,
       selectedMediaIndex: widget.selectedMediaIndex,
       selectedQualityPreset: widget.selectedQualityPreset,
-      // Quality is the device's Video Quality setting now, not a per-play
+      // Quality is the device's Preferred Quality setting now, not a per-play
       // control: the sheet lists real versions only, never transcode presets.
       serverSupportsTranscoding: false,
       isTranscoding: versionQuality.isTranscoding,

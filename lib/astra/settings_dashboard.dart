@@ -395,7 +395,7 @@ class _PlaybackCard extends StatelessWidget {
   }
 }
 
-/// Settings → Playback → Video Quality: Auto, HD, 4K and nothing else. An
+/// Settings → Playback → Preferred Quality: Auto, HD, 4K and nothing else. An
 /// Apple-style sliding segmented control on a frosted track, saved for this
 /// device only and applied to every playback (see PlaybackQualityManager).
 class _VideoQualityPicker extends StatelessWidget {
@@ -419,7 +419,7 @@ class _VideoQualityPicker extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Video Quality',
+                        'Preferred Quality',
                         style: TextStyle(color: _ink, fontSize: 15.5, fontWeight: FontWeight.w500),
                       ),
                       Padding(

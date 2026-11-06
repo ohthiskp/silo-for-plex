@@ -128,7 +128,7 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
   }
 
   /// Badge for the version this device will actually start, under its
-  /// Video Quality setting (see PlaybackQualityManager): "4K UHD" only when
+  /// Preferred Quality setting (see PlaybackQualityManager): "4K UHD" only when
   /// a 4K version will play, "HD" for 720p–1080p, nothing otherwise. HDR and
   /// Dolby Vision are not claimed here, because the output path is only
   /// known once playback starts; the player badges show the real format.
@@ -144,10 +144,7 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
     if (versions.isEmpty) return null;
     final preference = PlaybackQualityManager.readPreference();
     final index = PlaybackQualityManager.chooseVersionIndex(versions, preference) ?? 0;
-    var tier = PlaybackQualityManager.tierHeight(versions[index]);
-    final ceiling = preference.maxTierHeight;
-    // HD with only a taller file: the server brings it down to 1080p.
-    if (tier != null && ceiling != null && tier > ceiling) tier = ceiling;
+    final tier = PlaybackQualityManager.tierHeight(versions[index]);
     if (tier == null) return null;
     if (tier >= 2160) return '4K UHD';
     if (tier >= 720) return 'HD';

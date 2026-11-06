@@ -64,7 +64,6 @@ void main() {
     List<Map<String, dynamic>> versions,
     VideoQualityPreference preference, {
     bool autoSelect = true,
-    bool cellular = false,
   }) async {
     Uri? decision;
     final client = testPlexClient(
@@ -110,13 +109,9 @@ void main() {
         PlaybackInitializationOptions(
           metadata: testMediaItem(id: '42', backend: MediaBackend.plex, kind: MediaKind.movie, serverId: 'server-id'),
           selectedMediaIndex: 0,
-          qualityPreset: PlaybackQualityManager.startupPreset(
-            preference,
-            serverSupportsTranscoding: true,
-            onCellularOnly: cellular,
-          ),
+          // What the player screen sends for every Preferred Quality value.
+          qualityPreset: TranscodeQualityPreset.original,
           autoSelectVersionFor: autoSelect ? preference : null,
-          onCellularOnly: cellular,
           sessionIdentifier: 'session-id',
           transcodeSessionId: 'transcode-id',
         ),
@@ -139,6 +134,7 @@ void main() {
       final r = await play(versions, VideoQualityPreference.auto);
       expect(r.url, contains('/library/parts/20/file.mkv'));
       expect(r.transcoding, isFalse);
+      expect(r.decision, isNull);
       expect(r.index, 1);
     });
 
@@ -153,13 +149,6 @@ void main() {
       expect(r.url, contains('/library/parts/10/file.mkv'));
       expect(r.transcoding, isFalse);
       expect(r.index, 0);
-    });
-
-    test('Auto on cellular picks 1080p, and 8 Mbps caps the 12 Mbps file', () async {
-      final r = await play(versions, VideoQualityPreference.auto, cellular: true);
-      expect(r.index, 0);
-      expect(r.transcoding, isTrue);
-      expect(r.decision?.queryParameters['X-Plex-Client-Profile-Extra'], contains('name=video.bitrate&value=8000'));
     });
 
     test('an explicit or remembered version is never overridden', () async {
@@ -185,11 +174,19 @@ void main() {
       }
     });
 
-    test('4K file on HD asks the Plex transcoder for 1080p', () async {
+    test('4K file on HD still plays the original 4K file, never a transcode', () async {
       final r = await play([uhd], VideoQualityPreference.hd);
-      expect(r.transcoding, isTrue);
-      expect(r.url, contains('/video/:/transcode/universal/start'));
-      expect(r.decision?.queryParameters['videoResolution'], '1920x1080');
+      expect(r.url, contains('/library/parts/20/file.mkv'));
+      expect(r.transcoding, isFalse);
+      expect(r.decision, isNull, reason: 'no transcode decision is ever requested');
+    });
+
+    test('HD with no 1080p version plays the closest existing original as it is', () async {
+      final qhd = media(5, width: 2560, height: 1440, kbps: 20000, codec: 'hevc');
+      final r = await play([uhd, qhd], VideoQualityPreference.hd);
+      expect(r.url, contains('/library/parts/50/file.mkv'));
+      expect(r.transcoding, isFalse);
+      expect(r.decision, isNull);
     });
 
     test('no 4K available: the 4K setting falls back to the best file', () async {
@@ -206,9 +203,5 @@ void main() {
     expect(reloaded.read(SettingsService.videoQualityPreference), VideoQualityPreference.hd);
     expect(PlaybackQualityManager.readPreference(reloaded), VideoQualityPreference.hd);
     expect(SettingsService.portablePrefs, isNot(contains(SettingsService.videoQualityPreference)));
-  });
-
-  test('legacy presets stay out of the picker', () {
-    expect(TranscodeQualityPreset.displayOrder, isNot(contains(TranscodeQualityPreset.upTo1080p)));
   });
 }

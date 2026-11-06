@@ -204,7 +204,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(theme: monoTheme(MonoPalette.dark), home: const PlaybackSettingsScreen()));
     await tester.pumpAndSettle();
 
-    final title = find.text('Video Quality');
+    final title = find.text('Preferred Quality');
     await tester.scrollUntilVisible(title, 500, scrollable: find.byType(Scrollable).first);
     await tester.ensureVisible(title);
     await tester.pumpAndSettle();
@@ -213,11 +213,11 @@ void main() {
 
     await tester.tap(title);
     await tester.pumpAndSettle();
-    expect(find.text('Up to 1080p'), findsOneWidget);
-    expect(find.text('Up to 2160p'), findsOneWidget);
+    expect(find.text('Prefer 1080p or lower'), findsOneWidget);
+    expect(find.text('Prefer 4K'), findsOneWidget);
     expect(find.textContaining('Mbps'), findsNothing);
 
-    await tester.tap(find.text('Up to 1080p'));
+    await tester.tap(find.text('Prefer 1080p or lower'));
     await tester.pumpAndSettle();
     expect(SettingsService.instance.read(SettingsService.videoQualityPreference), VideoQualityPreference.hd);
   });
