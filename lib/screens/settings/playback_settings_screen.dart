@@ -6,10 +6,9 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../i18n/strings.g.dart';
 import '../../models/audio_channel_limit.dart';
 import '../../models/audio_quality_preset.dart';
-import '../../models/transcode_quality_preset.dart';
+import '../../models/video_quality_preference.dart';
 import '../../models/player_setting_scope.dart';
 import '../../utils/audio_channel_limit_labels.dart';
-import '../../utils/quality_preset_labels.dart';
 import '../../services/settings_service.dart';
 import '../../services/video_decode_capabilities.dart';
 import '../../utils/codec_utils.dart';
@@ -115,15 +114,10 @@ class PlaybackSettingsScreen extends StatelessWidget {
             SettingsGroup(
               title: t.settings.quality,
               children: [
-                _defaultQualityTile(),
-                // Only a phone/tablet has a cellular radio; desktop and TV
-                // never report a cellular-only connection.
-                if (isMobile) _cellularQualityTile(),
-                // TODO: "Remote streaming quality" selector (#2064) goes here,
-                // mirroring cellularQualityPreset's nullable "same as default"
-                // pattern; needs local/remote connection detection in the
-                // failover client.
-                _directPlayCoveredQualityTile(),
+                // Astra's one quality control (Auto / HD / 4K), per device.
+                // It picks between existing original files only; see
+                // PlaybackQualityManager.
+                _videoQualityTile(),
                 // Desktop has no hardware-decode probe, so this is where a
                 // machine too weak for a codec says so (#2443).
                 if (PlatformDetector.isDesktopOS()) _videoCodecsTile(),
@@ -676,36 +670,14 @@ class PlaybackSettingsScreen extends StatelessWidget {
     PlaybackBufferTier.extraLarge => t.settings.playbackBufferExtraLarge,
   };
 
-  Widget _defaultQualityTile() => SettingSelectionTile<TranscodeQualityPreset>(
-    pref: SettingsService.defaultQualityPreset,
+  Widget _videoQualityTile() => SettingSelectionTile<VideoQualityPreference>(
+    pref: SettingsService.videoQualityPreference,
     icon: Symbols.high_quality_rounded,
-    title: t.settings.defaultQualityTitle,
-    subtitleBuilder: qualityPresetLabel,
-    options: TranscodeQualityPreset.displayOrder
-        .map((p) => DialogOption(value: p, title: qualityPresetLabel(p)))
+    title: 'Preferred Quality',
+    subtitleBuilder: (p) => p.label,
+    options: VideoQualityPreference.values
+        .map((p) => DialogOption(value: p, title: p.label, subtitle: p.detail))
         .toList(),
-  );
-
-  Widget _cellularQualityTile() => SettingSelectionTile<TranscodeQualityPreset?>(
-    pref: SettingsService.cellularQualityPreset,
-    icon: Symbols.signal_cellular_alt_rounded,
-    title: t.settings.cellularQualityTitle,
-    subtitleBuilder: (p) => p == null ? t.settings.cellularQualitySameAsDefault : qualityPresetLabel(p),
-    options: [
-      DialogOption<TranscodeQualityPreset?>(value: null, title: t.settings.cellularQualitySameAsDefault),
-      ...TranscodeQualityPreset.displayOrder.map(
-        (p) => DialogOption<TranscodeQualityPreset?>(value: p, title: qualityPresetLabel(p)),
-      ),
-    ],
-  );
-
-  // Plex-only effect: MediaBrowser servers make the equivalent
-  // direct-play-vs-transcode call server-side (#2152, #2193).
-  Widget _directPlayCoveredQualityTile() => SettingSwitchTile(
-    pref: SettingsService.directPlayCoveredQuality,
-    icon: Symbols.bolt_rounded,
-    title: t.settings.directPlayCoveredQuality,
-    subtitle: t.settings.directPlayCoveredQualityDescription,
   );
 
   Widget _videoCodecsTile() => SettingChecklistTile(

@@ -29,6 +29,7 @@ import 'widgets/live_timeline_bar.dart';
 import 'widgets/first_frame_guard.dart';
 import 'widgets/finish_time_builder.dart';
 import 'widgets/play_pause_stream_builder.dart';
+import 'widgets/active_format_badges.dart';
 import 'widgets/video_controls_header.dart';
 import 'widgets/video_timeline_bar.dart';
 import 'widgets/volume_control.dart';
@@ -771,6 +772,8 @@ class DesktopVideoControlsState extends State<DesktopVideoControls> {
                           ),
                           const SizedBox(width: 4),
                           const AppIcon(Symbols.chevron_right_rounded, color: Colors.white, size: 24),
+                          const SizedBox(width: 12),
+                          ActiveFormatBadges(player: widget.player),
                           const Spacer(),
                           VolumeControl(
                             volumeController: widget.volumeController,
@@ -879,6 +882,7 @@ class DesktopVideoControlsState extends State<DesktopVideoControls> {
               onStartAutoHide: widget.onStartAutoHide,
             ),
           ),
+          if (!_isLive) ...[const SizedBox(width: 8), ActiveFormatBadges(player: widget.player)],
           if (_isLive && (widget.captureBuffer == null || widget.isAtLiveEdge)) ...[
             const SizedBox(width: 8),
             Container(

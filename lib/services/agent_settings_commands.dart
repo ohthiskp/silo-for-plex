@@ -334,6 +334,7 @@ class AgentSettingsCommands {
     'dv_conversion_mode',
     'disable_dolby_vision',
     'hdr_sdr_conversion',
+    'video_quality_preference',
     'default_quality_preset',
     'cellular_quality_preset',
     'music_quality_preset',

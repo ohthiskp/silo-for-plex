@@ -36,6 +36,7 @@ export 'base_shared_preferences_service.dart'
 import '../models/audio_channel_limit.dart';
 import '../models/audio_quality_preset.dart';
 import '../models/transcode_quality_preset.dart';
+import '../models/video_quality_preference.dart';
 import '../navigation/navigation_tabs.dart';
 import '../utils/platform_detector.dart';
 import 'trackers/tracker_constants.dart';
@@ -758,15 +759,25 @@ class SettingsService extends BaseSharedPreferencesService {
     values: HdrSdrConversion.values,
     defaultValue: HdrSdrConversion.auto,
   );
+  /// Astra's one Preferred Quality choice (Auto, HD, 4K). Device-local on
+  /// purpose: it is reset by Reset All but never exported, so a phone and a
+  /// TV keep their own. Read through `PlaybackQualityManager`.
+  static const videoQualityPreference = EnumPref<VideoQualityPreference>(
+    'video_quality_preference',
+    values: VideoQualityPreference.values,
+    defaultValue: VideoQualityPreference.auto,
+  );
+
+  /// Legacy Plex-style quality ladder, replaced by [videoQualityPreference].
+  /// Kept so old exports still import; playback no longer reads it.
   static const defaultQualityPreset = EnumPref<TranscodeQualityPreset>(
     'default_quality_preset',
     values: TranscodeQualityPreset.values,
     defaultValue: TranscodeQualityPreset.original,
   );
 
-  /// Startup quality cap applied instead of [defaultQualityPreset] when the
-  /// device is on a cellular-only connection. Null = follow
-  /// [defaultQualityPreset].
+  /// Legacy cellular cap, replaced by Auto's own cellular behavior in
+  /// `PlaybackQualityManager`. Playback no longer reads it.
   static const cellularQualityPreset = NullableEnumPref<TranscodeQualityPreset>(
     'cellular_quality_preset',
     values: TranscodeQualityPreset.values,
@@ -1641,6 +1652,7 @@ class SettingsService extends BaseSharedPreferencesService {
     rememberedBrightnessLevel,
     refusedVideoCodecs,
     audioOutputDevice,
+    videoQualityPreference,
   ];
 
   /// Settings that "Reset All Settings" actually resets.
@@ -1662,6 +1674,7 @@ class SettingsService extends BaseSharedPreferencesService {
     mpvConfigText,
     watchPartyRelayUrl,
     rememberedBrightnessLevel,
+    videoQualityPreference,
   ]);
 
   /// Numeric constraints used by both the settings tiles and typed callers.

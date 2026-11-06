@@ -18,6 +18,7 @@ import 'widgets/content_strip_panel.dart';
 import 'widgets/first_frame_guard.dart';
 import 'widgets/play_pause_stream_builder.dart';
 import 'widgets/live_timeline_bar.dart';
+import 'widgets/active_format_badges.dart';
 import 'widgets/video_controls_header.dart';
 import 'widgets/video_timeline_bar.dart';
 
@@ -462,6 +463,8 @@ class _MobileVideoControlsState extends State<MobileVideoControls> with SingleTi
                     style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                 ),
+                const SizedBox(width: 10),
+                ActiveFormatBadges(player: widget.player),
                 const SizedBox(width: 12),
                 ClipRRect(
                   borderRadius: const BorderRadius.all(Radius.circular(14)),

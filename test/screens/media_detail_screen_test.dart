@@ -2150,10 +2150,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Jellyfin can transcode, so the quality picker follows; keep Original.
-      await tester.tap(inDialog(t.videoControls.qualityOriginal));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      // No quality picker follows: the device's Video Quality setting applies.
+      expect(find.text(t.videoControls.qualityOriginal), findsNothing);
 
       expect(observer.pushedRouteNames, contains(kVideoPlayerRouteName));
       // The pick is remembered so Continue Watching / plain Play resume it.

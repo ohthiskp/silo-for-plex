@@ -285,6 +285,37 @@ class MpvPlayerCore: MpvPlayerCoreBase {
     #endif
   }
 
+  /// Astra quality badge: the dynamic range the display really receives,
+  /// read by Dart as the `astra-output-range` property. tvOS answers with the
+  /// range of the display mode it asked for ("Dolby Vision", "HDR10", "HLG",
+  /// "SDR"), already narrowed to what the TV supports; nil when no mode was
+  /// requested (dynamic-range matching off), since the TV then decides.
+  /// iPhone/iPad answer "HDR" when the video layer is in EDR on a screen with
+  /// HDR headroom, else "SDR". Never a guess: unknown is nil.
+  override func getPropertyAsync(_ name: String, completion: @escaping (Result<String?, Error>) -> Void) {
+    guard name == "astra-output-range" else {
+      super.getPropertyAsync(name, completion: completion)
+      return
+    }
+    DispatchQueue.main.async {
+      completion(.success(self.astraOutputRange()))
+    }
+  }
+
+  private func astraOutputRange() -> String? {
+    #if os(tvOS)
+      guard let key = Self.activeDisplayCriteriaKey else { return nil }
+      return key.split(separator: "|", maxSplits: 1).first.map(String.init)
+    #else
+      guard hdrEnabled, lastSigPeak > 1.0 else { return "SDR" }
+      guard let screen = window?.screen else { return nil }
+      if #available(iOS 17.0, *) {
+        return screen.potentialEDRHeadroom > 1.0 ? "HDR" : "SDR"
+      }
+      return nil
+    #endif
+  }
+
   @discardableResult
   override func updateDisplayCriteria(
     doviProfile: Int64,
