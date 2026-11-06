@@ -45,14 +45,43 @@ def call(method, path, body=None):
         return e.code, json.loads(e.read() or b"{}")
 
 
+def diagnose():
+    """Check the shape of each credential without printing any secret."""
+    import re
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    kid = os.environ.get("ASC_KEY_ID", "")
+    iss = os.environ.get("ASC_ISSUER_ID", "")
+    ok = True
+    if kid != kid.strip() or not re.fullmatch(r"[A-Z0-9]{10}", kid.strip()):
+        print(f"::error::ASC_KEY_ID should be exactly 10 capital letters/digits (got {len(kid)} characters{', with spaces' if kid != kid.strip() else ''}).")
+        ok = False
+    if iss != iss.strip() or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", iss.strip()):
+        print(f"::error::ASC_ISSUER_ID should look like 57246542-96fe-1a63-e053-0824d011072a (got {len(iss)} characters{', with spaces' if iss != iss.strip() else ''}). Copy it from the top of the Team Keys page.")
+        ok = False
+    try:
+        k = load_pem_private_key(open(os.environ["ASC_KEY_PATH"], "rb").read(), None)
+        print(f"Key file parses as {type(k).__name__} on curve {getattr(getattr(k, 'curve', None), 'name', '?')}.")
+    except Exception as e:
+        print(f"::error::ASC_KEY_P8 isn't a valid private key ({type(e).__name__}).")
+        ok = False
+    return ok
+
+
 def main():
+    if not diagnose():
+        sys.exit(1)
     bundle = os.environ["BUNDLE_ID"]
     platform = os.environ.get("PLATFORM", "IOS")
     q = urllib.parse.quote(bundle)
+    os.environ["ASC_KEY_ID"] = os.environ["ASC_KEY_ID"].strip()
+    os.environ["ASC_ISSUER_ID"] = os.environ["ASC_ISSUER_ID"].strip()
 
     status, res = call("GET", f"/bundleIds?filter[identifier]={q}&limit=5")
     if status == 401:
-        print("::error::Apple rejected the API key. Check ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8 (it must be the whole .p8 file).")
+        print("::error::Apple rejected the API key. The IDs look well-formed, so the usual causes are: "
+              "(1) the key was made under Individual Keys instead of Team Keys, "
+              "(2) ASC_KEY_ID doesn't belong to the .p8 that was pasted (the file name AuthKey_XXXXXXXXXX.p8 shows its Key ID), or "
+              "(3) the key was revoked. Apple said: " + json.dumps(res)[:300])
         sys.exit(1)
     if status != 200:
         print(f"::error::App Store Connect API error {status}: {res}")

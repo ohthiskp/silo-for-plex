@@ -41,6 +41,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Python tools
+        run: python3 -m pip install --quiet --break-system-packages pyjwt cryptography 2>/dev/null || python3 -m pip install --quiet pyjwt cryptography
+
       - name: Write API key
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
@@ -64,6 +67,12 @@ jobs:
               sys.exit(1)
           lines = [body[i:i + 64] for i in range(0, len(body), 64)]
           pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
+          try:
+              from cryptography.hazmat.primitives import serialization as ser
+              key = ser.load_pem_private_key(pem.encode(), None)
+              pem = key.private_bytes(ser.Encoding.PEM, ser.PrivateFormat.PKCS8, ser.NoEncryption()).decode()
+          except Exception as e:
+              print(f"::warning::Couldn't normalise the key ({type(e).__name__}); using it as pasted.")
           open(sys.argv[1], "w").write(pem)
           print(f"API key rebuilt ({len(der)} bytes).")
           PY
