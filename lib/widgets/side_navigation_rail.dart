@@ -978,7 +978,19 @@ class SideNavigationRailState extends State<SideNavigationRail> with MountedSetS
                           duration: expandDuration,
                           curve: expandCurve,
                           decoration: BoxDecoration(
-                            color: t.surface,
+                            // Astra 3.0: a dark frosted panel with a hairline
+                            // edge and violet-tinted depth on Mac and iPad.
+                            color: PlatformDetector.isTV() ? t.surface : const Color(0xF20C0B12),
+                            gradient: PlatformDetector.isTV()
+                                ? null
+                                : const LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [Color(0xF2120F1C), Color(0xF20A0910)],
+                                  ),
+                            border: PlatformDetector.isTV()
+                                ? null
+                                : const Border(right: BorderSide(color: Color(0x14FFFFFF))),
                             // Open rails read as an M3E panel: rounded
                             // trailing corners, extra-rounded plus an edge
                             // shadow while floating over content (modal)
