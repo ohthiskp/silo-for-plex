@@ -37,6 +37,7 @@ struct AstraMacApp: App {
 
     Settings {
       SettingsView()
+        .frame(width: 480, height: 420)
         .environment(app)
         .preferredColorScheme(.dark)
     }

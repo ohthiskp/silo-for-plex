@@ -45,25 +45,61 @@ enum Astra {
   /// Sizes that differ between the Mac (docked sidebar, big window) and iPhone.
   enum Layout {
     #if os(macOS)
-      /// Left inset of page content, clear of the docked sidebar.
+      /// Left inset of page content, clear of the collapsed sidebar. Screens
+      /// read `\.contentLeading`, which follows the sidebar's width.
       static let leading: CGFloat = 104
+      /// The hero and details header take this share of the window's height, up to the cap.
       static let heroHeight: CGFloat = 620
       static let detailHeaderHeight: CGFloat = 640
+      static let heroShare: CGFloat = 0.82
       static let artCard = CGSize(width: 240, height: 135)
       static let continueCard = CGSize(width: 360, height: 202)
       static let episodeCard = CGSize(width: 300, height: 169)
       static let posterMinWidth: CGFloat = 160
       static let titleSize: CGFloat = 52
+      static let pageTitleSize: CGFloat = 38
     #else
       static let leading: CGFloat = 20
       static let heroHeight: CGFloat = 560
       static let detailHeaderHeight: CGFloat = 560
+      static let heroShare: CGFloat = 0.72
       static let artCard = CGSize(width: 168, height: 95)
       static let continueCard = CGSize(width: 270, height: 152)
       static let episodeCard = CGSize(width: 240, height: 135)
       static let posterMinWidth: CGFloat = 104
       static let titleSize: CGFloat = 38
+      static let pageTitleSize: CGFloat = 30
     #endif
+  }
+
+  /// Spacing scale. Screens use these instead of literals.
+  enum Spacing {
+    static let xs: CGFloat = 6
+    static let s: CGFloat = 10
+    static let m: CGFloat = 14
+    static let l: CGFloat = 22
+    static let xl: CGFloat = 34
+    /// Space between the page's top safe-area edge and a page header.
+    #if os(macOS)
+      static let pageTop: CGFloat = 24
+      static let pageTrailing: CGFloat = 40
+    #else
+      static let pageTop: CGFloat = 8
+      static let pageTrailing: CGFloat = 20
+    #endif
+  }
+
+  /// The docked Mac sidebar's geometry. The page's left inset follows it, so
+  /// expanding the sidebar moves the content instead of covering it.
+  enum Sidebar {
+    static let margin: CGFloat = 14
+    static let collapsedWidth: CGFloat = 62
+    static let expandedWidth: CGFloat = 196
+    static let gap: CGFloat = 28
+
+    static func contentInset(expanded: Bool) -> CGFloat {
+      margin + (expanded ? expandedWidth : collapsedWidth) + gap
+    }
   }
 
   enum Radius {
@@ -90,5 +126,26 @@ extension View {
       .tracking(tracking)
       .foregroundStyle(Astra.Color.ink)
       .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
+  }
+}
+
+// MARK: - Page inset
+
+private struct ContentLeadingKey: EnvironmentKey {
+  static let defaultValue: CGFloat = Astra.Layout.leading
+}
+
+extension EnvironmentValues {
+  /// The left inset every page aligns its titles, rows and buttons to.
+  var contentLeading: CGFloat {
+    get { self[ContentLeadingKey.self] }
+    set { self[ContentLeadingKey.self] = newValue }
+  }
+}
+
+extension View {
+  /// A header height that fits the window: `share` of the visible height, capped at `cap`.
+  func astraHeaderHeight(cap: CGFloat) -> some View {
+    containerRelativeFrame(.vertical) { length, _ in min(cap, max(360, length * Astra.Layout.heroShare)) }
   }
 }

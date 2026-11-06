@@ -32,16 +32,47 @@ final class LibraryStore {
     let loadedSections = (try? await sectionsTask) ?? []
     do {
       let loadedHubs = try await hubsTask
-      hubs = loadedHubs.filter { !$0.isContinueWatching }
-      continueWatching = loadedContinue.isEmpty
-        ? loadedHubs.first(where: \.isContinueWatching)?.items ?? []
-        : loadedContinue
+      let rows = await Self.deduplicatedRows(
+        continueWatching: loadedContinue.isEmpty
+          ? loadedHubs.first(where: \.isContinueWatching)?.items ?? [] : loadedContinue,
+        hubs: loadedHubs.filter { !$0.isContinueWatching },
+        more: { [client] key, start in (try? await client.hubItems(key: key, start: start)) ?? [] })
+      continueWatching = rows.continueWatching
+      hubs = rows.hubs
       sections = loadedSections
       hero = await pickHero(from: hubs)
     } catch {
       homeError = error.localizedDescription
     }
     isLoadingHome = false
+  }
+
+  /// Rows with every title shown once across the whole page, in Plex's row
+  /// order. Continue Watching claims its titles first. A row left short by
+  /// de-duplication loads more of its own items (up to three more pages)
+  /// instead of repeating titles; a row left empty is dropped.
+  static func deduplicatedRows(
+    continueWatching: [PlexMetadata], hubs: [PlexHub], minimumPerRow: Int = 10,
+    more: (String, Int) async -> [PlexMetadata]
+  ) async -> (continueWatching: [PlexMetadata], hubs: [PlexHub]) {
+    var dedup = HomeDeduplicator()
+    let keptContinue = dedup.filter(continueWatching)
+    var keptHubs: [PlexHub] = []
+    for var hub in hubs {
+      var items = dedup.filter(hub.items)
+      var offset = hub.items.count
+      var pages = 0
+      while items.count < minimumPerRow, hub.more == true, let key = hub.key, pages < 3 {
+        let page = await more(key, offset)
+        if page.isEmpty { break }
+        offset += page.count
+        pages += 1
+        items += dedup.filter(page)
+      }
+      hub.items = items
+      if !items.isEmpty { keptHubs.append(hub) }
+    }
+    return (keptContinue, keptHubs)
   }
 
   /// Up to five recent movies or shows with backdrops, loaded in full so the

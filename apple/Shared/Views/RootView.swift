@@ -5,6 +5,10 @@ import SwiftUI
 struct RootView: View {
   @Environment(AppModel.self) private var app
 
+  private enum Loader { case hidden, loading, connected }
+  /// The launch screen stays up briefly after connecting to say "Connected".
+  @State private var loader: Loader = .loading
+
   var body: some View {
     ZStack {
       // The browsing UI stays alive under the player so its scroll position and
@@ -44,17 +48,41 @@ struct RootView: View {
     .background { (app.player.isActive ? Color.clear : Astra.Color.bg).ignoresSafeArea() }
     .background(WindowAccessor { app.player.window = $0 })
     .animation(Astra.Motion.page, value: app.player.isActive)
-    #if os(macOS)
-      .ignoresSafeArea()
-    #endif
+    .onChange(of: app.phase, initial: true) { _, phase in updateLoader(for: phase) }
+    // Controls stay inside the safe area (clear of the Mac title bar and the
+    // iPhone status bar); only artwork and backgrounds extend under it.
+  }
+
+  private func updateLoader(for phase: AppModel.Phase) {
+    switch phase {
+    case .launching, .connecting:
+      loader = .loading
+    case .ready where loader == .loading:
+      loader = .connected
+      Task {
+        try? await Task.sleep(for: .seconds(1.1))
+        withAnimation(Astra.Motion.hero) { loader = .hidden }
+      }
+    case .ready:
+      break
+    default:
+      withAnimation(Astra.Motion.page) { loader = .hidden }
+    }
   }
 
   @ViewBuilder private var content: some View {
+    if loader != .hidden {
+      LoadingView(connected: loader == .connected)
+        .transition(.opacity)
+    } else {
+      phaseContent
+    }
+  }
+
+  @ViewBuilder private var phaseContent: some View {
     switch app.phase {
-    case .launching:
-      SplashView(message: nil)
-    case .connecting(let name):
-      SplashView(message: "Connecting to \(name)…")
+    case .launching, .connecting:
+      LoadingView(connected: false)
     case .signedOut, .waitingForApproval:
       SignInView()
     case .choosingServer(let servers):
@@ -66,22 +94,6 @@ struct RootView: View {
     case .failed(let message):
       ErrorView(message: message)
     }
-  }
-}
-
-struct SplashView: View {
-  var message: String?
-
-  var body: some View {
-    VStack(spacing: 18) {
-      Text("ASTRA").astraDisplay(44, tracking: 18)
-      if let message {
-        Text(message).font(Astra.Font.meta).foregroundStyle(Astra.Color.muted)
-          .transition(.opacity)
-      }
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Astra.Color.bg)
   }
 }
 
@@ -103,7 +115,8 @@ struct ErrorView: View {
       }
       .astraGlassGroup(spacing: 12)
     }
+    .padding(.horizontal, Astra.Spacing.l)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Astra.Color.bg)
+    .background(Astra.Color.bg.ignoresSafeArea())
   }
 }

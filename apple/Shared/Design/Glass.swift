@@ -114,6 +114,8 @@ struct Pressable: ViewModifier {
 
   func body(content: Content) -> some View {
     content
+      // Apple TV-style lift: scale plus a soft shadow under the pointer.
+      .shadow(color: .black.opacity(hovering ? 0.45 : 0), radius: 18, y: 10)
       .scaleEffect(reduceMotion ? 1 : (pressed ? 0.97 : (hovering ? hoverScale : 1)))
       .animation(pressed ? Astra.Motion.fast : Astra.Motion.base, value: hovering)
       .animation(Astra.Motion.fast, value: pressed)

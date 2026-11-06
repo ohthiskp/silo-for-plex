@@ -18,10 +18,12 @@ struct PlayerOverlay: View {
       // iPhone: tap shows or hides the controls.
       #if os(macOS)
         Color.black.opacity(0.001)
+          .ignoresSafeArea()
           .onTapGesture(count: 2) { player.toggleFullScreen() }
           .onTapGesture { player.togglePause() }
       #else
         Color.black.opacity(0.001)
+          .ignoresSafeArea()
           .onTapGesture { visible ? hide() : poke() }
       #endif
 
@@ -61,6 +63,7 @@ struct PlayerOverlay: View {
         Spacer()
         LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom).frame(height: 220)
       }
+      .ignoresSafeArea()
       .allowsHitTesting(false)
 
       VStack {
@@ -70,8 +73,9 @@ struct PlayerOverlay: View {
         Spacer()
         bottomBar
       }
+      // Inside the safe area: clear of the Mac window buttons and the iPhone notch.
       .padding(.horizontal, Self.inset)
-      .padding(.vertical, 30)
+      .padding(.vertical, Astra.Spacing.l)
     }
   }
 
@@ -84,6 +88,7 @@ struct PlayerOverlay: View {
       }
       .astraIconButton(size: 42, variant: .clear)
       .help("Close (Esc)")
+      .accessibilityLabel("Close Player")
 
       VStack(alignment: .leading, spacing: 3) {
         Text(player.title).font(.system(size: 18, weight: .bold)).foregroundStyle(.white).lineLimit(1)
@@ -92,7 +97,6 @@ struct PlayerOverlay: View {
         }
       }
       Spacer()
-      if let badge = player.resolutionBadge { Badge(text: badge) }
       #if os(macOS)
         Button {
           player.toggleFullScreen()
@@ -101,6 +105,7 @@ struct PlayerOverlay: View {
         }
         .astraIconButton(size: 42, variant: .clear)
         .help("Full Screen")
+        .accessibilityLabel("Full Screen")
       #endif
     }
   }
@@ -114,6 +119,7 @@ struct PlayerOverlay: View {
         Image(systemName: "gobackward.10")
       }
       .astraIconButton(size: Self.transportSizes.small, variant: .clear)
+      .accessibilityLabel("Back 10 Seconds")
 
       Button {
         player.togglePause()
@@ -122,6 +128,7 @@ struct PlayerOverlay: View {
           .contentTransition(.symbolEffect(.replace))
       }
       .astraIconButton(size: Self.transportSizes.large, variant: .clear)
+      .accessibilityLabel(player.paused ? "Play" : "Pause")
 
       Button {
         player.seek(by: 10)
@@ -130,6 +137,7 @@ struct PlayerOverlay: View {
         Image(systemName: "goforward.10")
       }
       .astraIconButton(size: Self.transportSizes.small, variant: .clear)
+      .accessibilityLabel("Forward 10 Seconds")
     }
     .astraGlassGroup(spacing: Self.transportSizes.gap)
   }
@@ -147,60 +155,56 @@ struct PlayerOverlay: View {
           player.seek(to: value)
           scrubbing = nil
         })
-      HStack(spacing: 10) {
+      HStack(spacing: Astra.Spacing.m) {
         Text(Self.clock(scrubbing ?? player.position))
-        Spacer()
-        trackMenu(
-          title: "Audio", symbol: "speaker.wave.2.fill", tracks: player.audioTracks, selected: player.audioId,
-          allowsOff: false
-        ) { player.selectAudio($0 ?? 1) }
-        trackMenu(
-          title: "Subtitles", symbol: "captions.bubble.fill", tracks: player.subtitleTracks,
-          selected: player.subtitleId, allowsOff: true
-        ) { player.selectSubtitle($0) }
-        Spacer()
+        Spacer(minLength: Astra.Spacing.m)
         Text("-" + Self.clock(max(0, player.duration - (scrubbing ?? player.position))))
+        // The resolution of what is really playing, then the captions menu.
+        if let badge = player.resolutionBadge { Badge(text: badge) }
+        captionsMenu
       }
       .font(.system(size: 13, weight: .semibold).monospacedDigit())
       .foregroundStyle(.white.opacity(0.9))
-      .astraGlassGroup(spacing: 10)
     }
   }
 
-  private func trackMenu(
-    title: String, symbol: String, tracks: [PlayerController.Track], selected: Int?, allowsOff: Bool,
-    choose: @escaping (Int?) -> Void
-  ) -> some View {
+  /// Subtitles, and audio when there is more than one track, in one menu.
+  private var captionsMenu: some View {
     Menu {
-      if allowsOff {
+      Section("Subtitles") {
         Button {
-          choose(nil)
+          player.selectSubtitle(nil)
         } label: {
-          if selected == nil { Label("Off", systemImage: "checkmark") } else { Text("Off") }
+          if player.subtitleId == nil { Label("Off", systemImage: "checkmark") } else { Text("Off") }
+        }
+        ForEach(player.subtitleTracks) { track in
+          Button {
+            player.selectSubtitle(track.id)
+          } label: {
+            if player.subtitleId == track.id { Label(track.title, systemImage: "checkmark") } else { Text(track.title) }
+          }
         }
       }
-      ForEach(tracks) { track in
-        Button {
-          choose(track.id)
-        } label: {
-          if selected == track.id { Label(track.title, systemImage: "checkmark") } else { Text(track.title) }
+      if player.audioTracks.count > 1 {
+        Section("Audio") {
+          ForEach(player.audioTracks) { track in
+            Button {
+              player.selectAudio(track.id)
+            } label: {
+              if player.audioId == track.id { Label(track.title, systemImage: "checkmark") } else { Text(track.title) }
+            }
+          }
         }
       }
     } label: {
-      Label(
-        tracks.first { $0.id == selected }?.title ?? (allowsOff ? "Off" : title), systemImage: symbol
-      )
-      .font(.system(size: 12.5, weight: .semibold))
-      .padding(.horizontal, 14)
-      .frame(height: 32)
-      .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+      Image(systemName: player.subtitleId == nil ? "captions.bubble" : "captions.bubble.fill")
     }
     .menuStyle(.button)
-    .buttonStyle(.plain)
+    .buttonStyle(GlassIconButtonStyle(size: 36, variant: .clear))
     .menuIndicator(.hidden)
     .fixedSize()
-    .disabled(tracks.isEmpty)
-    .help(title)
+    .help("Subtitles and Audio")
+    .accessibilityLabel("Subtitles and Audio")
   }
 
   /// Shows the chrome and schedules it to hide again.

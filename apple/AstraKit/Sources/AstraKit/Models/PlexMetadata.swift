@@ -23,6 +23,11 @@ public struct PlexTag: Codable, Sendable, Hashable {
   }
 }
 
+/// An external id from `includeGuids=1`, such as `tmdb://603` or `imdb://tt0133093`.
+public struct PlexGuid: Codable, Sendable, Hashable {
+  public var id: String
+}
+
 public struct PlexImage: Codable, Sendable, Hashable {
   public var type: String
   public var url: String
@@ -135,6 +140,10 @@ public struct PlexMetadata: Codable, Sendable, Hashable, Identifiable {
   public var ratingKey: String
   public var key: String?
   public var guid: String?
+  public var parentGuid: String?
+  public var grandparentGuid: String?
+  /// External ids (TMDB, IMDb, TVDB) when the request asked for `includeGuids`.
+  public var guids: [PlexGuid]
   public var type: PlexItemType
   public var title: String
   public var titleSort: String?
@@ -174,7 +183,7 @@ public struct PlexMetadata: Codable, Sendable, Hashable, Identifiable {
   public var id: String { ratingKey }
 
   enum CodingKeys: String, CodingKey {
-    case ratingKey, key, guid, type, title, titleSort, tagline, summary, year, originallyAvailableAt, contentRating,
+    case ratingKey, key, guid, parentGuid, grandparentGuid, type, title, titleSort, tagline, summary, year, originallyAvailableAt, contentRating,
       studio, audienceRating, rating, duration, viewOffset, viewCount, lastViewedAt, index, parentIndex, leafCount,
       viewedLeafCount, childCount, thumb, art, parentTitle, parentThumb, parentRatingKey, grandparentTitle,
       grandparentThumb, grandparentArt, grandparentRatingKey, librarySectionID
@@ -183,6 +192,7 @@ public struct PlexMetadata: Codable, Sendable, Hashable, Identifiable {
     case roles = "Role"
     case images = "Image"
     case media = "Media"
+    case guids = "Guid"
   }
 
   public init(
@@ -198,6 +208,7 @@ public struct PlexMetadata: Codable, Sendable, Hashable, Identifiable {
     self.viewOffset = viewOffset
     self.thumb = thumb
     self.art = art
+    guids = []
     genres = []
     directors = []
     roles = []
@@ -210,6 +221,9 @@ public struct PlexMetadata: Codable, Sendable, Hashable, Identifiable {
     ratingKey = try c.decodeLenientString(.ratingKey) ?? ""
     key = try c.decodeIfPresent(String.self, forKey: .key)
     guid = try c.decodeIfPresent(String.self, forKey: .guid)
+    parentGuid = try c.decodeIfPresent(String.self, forKey: .parentGuid)
+    grandparentGuid = try c.decodeIfPresent(String.self, forKey: .grandparentGuid)
+    guids = (try? c.decodeIfPresent([PlexGuid].self, forKey: .guids)) ?? []
     type = try c.decodeIfPresent(PlexItemType.self, forKey: .type) ?? .other
     title = try c.decodeLenientString(.title) ?? ""
     titleSort = try c.decodeIfPresent(String.self, forKey: .titleSort)
@@ -288,12 +302,9 @@ extension PlexMetadata {
   }
 
   /// The resolution badge for the first media version ("4K", "HD"), nil for SD or unknown.
-  public var resolutionBadge: String? {
-    guard let media = media.first else { return nil }
-    let res = media.videoResolution?.lowercased()
-    if res == "4k" || (media.width ?? 0) >= 3200 { return "4K" }
-    if res == "1080" || res == "720" || (media.width ?? 0) >= 1280 { return "HD" }
-    return nil
+  /// The badge for the version this device would play at `quality`: "4K UHD" or "HD".
+  public func resolutionBadge(for quality: PlaybackQuality = .auto) -> String? {
+    PlaybackResolver.preferredMedia(media, quality: quality).flatMap { VideoTier.badge(for: $0.tier) }
   }
 
   /// "2h 14m" or "48m".
@@ -304,5 +315,60 @@ extension PlexMetadata {
     let rest = minutes % 60
     if hours > 0 { return rest > 0 ? "\(hours)h \(rest)m" : "\(hours)h" }
     return "\(max(1, minutes))m"
+  }
+}
+
+// MARK: - Identity across rows
+
+extension PlexMetadata {
+  /// Keys that identify the same movie or show wherever it appears, used to
+  /// keep a title from showing up in two Home rows. The TMDB id comes first;
+  /// Plex's own guid and the library rating key cover items without one.
+  /// Episodes and seasons map to their show, so a show in Continue Watching
+  /// is not repeated in another row.
+  public var dedupKeys: [String] {
+    switch type {
+    case .movie:
+      var keys = guids.compactMap { $0.id.hasPrefix("tmdb://") ? "movie:" + $0.id : nil }
+      if let guid { keys.append("movie:" + guid) }
+      keys.append("movie:rk:" + ratingKey)
+      return keys
+    case .show, .season, .episode:
+      var keys: [String] = []
+      let showGuid: String?
+      let showKey: String?
+      switch type {
+      case .episode: (showGuid, showKey) = (grandparentGuid, grandparentRatingKey)
+      case .season: (showGuid, showKey) = (parentGuid, parentRatingKey)
+      default:
+        (showGuid, showKey) = (guid, ratingKey)
+        keys += guids.compactMap { $0.id.hasPrefix("tmdb://") ? "show:" + $0.id : nil }
+      }
+      if let showGuid { keys.append("show:" + showGuid) }
+      if let showKey { keys.append("show:rk:" + showKey) }
+      if keys.isEmpty { keys.append("item:rk:" + ratingKey) }
+      return keys
+    default:
+      return ["item:rk:" + ratingKey]
+    }
+  }
+}
+
+/// Removes titles already seen, keeping order. `seen` carries over between rows.
+public struct HomeDeduplicator: Sendable {
+  public private(set) var seen = Set<String>()
+
+  public init() {}
+
+  /// Whether `item` is new; if it is, its keys are recorded.
+  public mutating func admit(_ item: PlexMetadata) -> Bool {
+    let keys = item.dedupKeys
+    guard seen.isDisjoint(with: keys) else { return false }
+    seen.formUnion(keys)
+    return true
+  }
+
+  public mutating func filter(_ items: [PlexMetadata]) -> [PlexMetadata] {
+    items.filter { admit($0) }
   }
 }

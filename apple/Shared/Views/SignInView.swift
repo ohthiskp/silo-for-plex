@@ -19,6 +19,8 @@ struct SignInView: View {
             .foregroundStyle(Astra.Color.muted)
           Text(code)
             .font(.system(size: 34, weight: .semibold, design: .monospaced))
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
             .tracking(8)
             .foregroundStyle(Astra.Color.ink)
             .textSelection(.enabled)
@@ -45,10 +47,12 @@ struct SignInView: View {
       }
     }
     .animation(Astra.Motion.page, value: app.phase)
+    .padding(.horizontal, Astra.Spacing.l)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(
       RadialGradient(
         colors: [Astra.Color.purple.opacity(0.22), Astra.Color.bg], center: .top, startRadius: 40, endRadius: 700)
+      .ignoresSafeArea()
     )
   }
 }
@@ -78,7 +82,7 @@ struct ServerPickerView: View {
               Image(systemName: "chevron.right").foregroundStyle(Astra.Color.muted)
             }
             .padding(.horizontal, 18)
-            .frame(width: 420, height: 62)
+            .frame(maxWidth: 420, minHeight: 62)
             .background(Astra.Color.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Astra.Color.hairline))
             .contentShape(RoundedRectangle(cornerRadius: 16))
@@ -91,7 +95,9 @@ struct ServerPickerView: View {
         .buttonStyle(.plain)
         .foregroundStyle(Astra.Color.muted)
     }
+    // Rows shrink to fit an iPhone instead of running off both edges.
+    .padding(.horizontal, Astra.Spacing.l)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Astra.Color.bg)
+    .background(Astra.Color.bg.ignoresSafeArea())
   }
 }

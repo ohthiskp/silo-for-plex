@@ -18,23 +18,112 @@ public struct PlaybackSource: Sendable, Equatable {
   public var part: PlexPart
 }
 
-public enum PlaybackResolver {
-  /// Chooses the media version to play: the highest resolution the Mac can
-  /// decode (mpv with VideoToolbox decodes every Plex video codec except
-  /// VC-1 in hardware, and the rest in software), so this keeps it simple
-  /// and picks by size. The video-quality setting will refine this choice.
-  public static func preferredMedia(_ media: [PlexMedia]) -> PlexMedia? {
-    media
-      .filter { !$0.parts.isEmpty && $0.parts.first?.key != nil }
-      .max { ($0.width ?? 0, $0.bitrate ?? 0) < ($1.width ?? 0, $1.bitrate ?? 0) }
+/// Settings → Playback → Preferred Quality. Saved per device, default Auto.
+///
+/// It only chooses between original files the server already has. Astra
+/// never transcodes, re-encodes or downscales: every choice plays an original
+/// file as it is.
+public enum PlaybackQuality: String, CaseIterable, Sendable, Identifiable {
+  case auto
+  case hd
+  case uhd
+
+  public static let storageKey = "astra.playback.preferredQuality"
+
+  public var id: String { rawValue }
+
+  public var title: String {
+    switch self {
+    case .auto: "Auto"
+    case .hd: "HD"
+    case .uhd: "4K"
+    }
   }
 
-  /// A direct-play source for `item` (a movie or an episode with full metadata).
-  /// - Parameter resume: start at the saved position when there is one.
+  /// The saved choice, or Auto when nothing (or something unknown) is saved.
+  public static func stored(in defaults: UserDefaults = .standard) -> PlaybackQuality {
+    defaults.string(forKey: storageKey).flatMap(PlaybackQuality.init(rawValue:)) ?? .auto
+  }
+
+  public func save(in defaults: UserDefaults = .standard) {
+    defaults.set(rawValue, forKey: Self.storageKey)
+  }
+}
+
+/// Video resolution tiers (480, 576, 720, 1080, 1440, 2160, 4320).
+public enum VideoTier {
+  static let tiers = [480, 576, 720, 1080, 1440, 2160, 4320]
+
+  /// The tier for a frame size: max(height, width × 9/16), snapped down to a
+  /// tier with 4% slack. Width counts, so wide films keep their tier:
+  /// 1920×800 is 1080, 3840×1600 is 2160. Same rule as the Flutter app
+  /// (docs/playback-quality.md).
+  public static func tier(width: Int?, height: Int?) -> Int? {
+    let lines = max(Double(height ?? 0), (Double(width ?? 0) * 9 / 16).rounded())
+    guard lines > 0 else { return nil }
+    return tiers.last { Double($0) * 0.96 <= lines } ?? tiers[0]
+  }
+
+  /// "4K UHD" for 2160 and up, "HD" for 720 to 1440, nothing below.
+  public static func badge(for tier: Int?) -> String? {
+    guard let tier else { return nil }
+    if tier >= 2160 { return "4K UHD" }
+    if tier >= 720 { return "HD" }
+    return nil
+  }
+}
+
+extension PlexMedia {
+  /// The tier from the version's size, or from Plex's `videoResolution` when the size is missing.
+  public var tier: Int? {
+    if let tier = VideoTier.tier(width: width, height: height) { return tier }
+    switch videoResolution?.lowercased() {
+    case "4k": return 2160
+    case "1080": return 1080
+    case "720": return 720
+    case "576": return 576
+    case "480", "sd": return 480
+    default: return nil
+    }
+  }
+}
+
+public enum PlaybackResolver {
+  /// The tallest tier each preference aims for. Auto has no ceiling.
+  static func ceiling(_ quality: PlaybackQuality) -> Int {
+    switch quality {
+    case .auto: Int.max
+    case .hd: 1080
+    case .uhd: 2160
+    }
+  }
+
+  /// Chooses which existing original file to play. Nothing is ever converted.
+  ///
+  /// Among the versions at or under the preference's ceiling (none for Auto,
+  /// 1080 for HD, 2160 for 4K) it takes the tallest tier, then the higher
+  /// bitrate, then the earlier version. If every version is above the
+  /// ceiling (HD with only 4K files) it plays the lowest one as it is. So 4K
+  /// with no 4K file plays the best file there is, and a single file always
+  /// plays. mpv decodes every Plex video codec (VideoToolbox in hardware
+  /// where the chip supports it), so no version is dropped as incompatible.
+  public static func preferredMedia(_ media: [PlexMedia], quality: PlaybackQuality = .auto) -> PlexMedia? {
+    let playable = media.filter { $0.parts.first?.key != nil }
+    guard playable.count > 1 else { return playable.first }
+    let limit = ceiling(quality)
+    let fits = playable.filter { ($0.tier ?? 0) <= limit }
+    if !fits.isEmpty {
+      // max(by:) and min(by:) keep the first of equal elements: the earlier version wins a tie.
+      return fits.max { ($0.tier ?? 0, $0.bitrate ?? 0) < ($1.tier ?? 0, $1.bitrate ?? 0) }
+    }
+    return playable.min { ($0.tier ?? 0) < ($1.tier ?? 0) }
+  }
+
+  /// The original file is streamed as it is; Astra never asks Plex to transcode.
   public static func directPlay(
-    _ item: PlexMetadata, client: PlexServerClient, resume: Bool = true
+    _ item: PlexMetadata, client: PlexServerClient, quality: PlaybackQuality = .auto, resume: Bool = true
   ) throws -> PlaybackSource {
-    guard let media = preferredMedia(item.media), let part = media.parts.first, let key = part.key else {
+    guard let media = preferredMedia(item.media, quality: quality), let part = media.parts.first, let key = part.key else {
       throw PlexError.nothingToPlay
     }
     let url = client.baseURL.appending(plexPath: key)

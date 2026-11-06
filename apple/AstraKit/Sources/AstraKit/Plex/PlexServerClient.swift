@@ -39,13 +39,27 @@ public struct PlexServerClient: Sendable {
 
   /// Continue Watching on its own (the Plex endpoint de-duplicates On Deck).
   public func continueWatching(count: Int = 20) async throws -> [PlexMetadata] {
-    let body: HubBody = try await get("/hubs/continueWatching", query: [.init(name: "count", value: String(count))])
+    let body: HubBody = try await get(
+      "/hubs/continueWatching",
+      query: [.init(name: "count", value: String(count)), .init(name: "includeGuids", value: "1")])
     var seenShows = Set<String>()
     return (body.Hub ?? []).flatMap(\.items).filter { item in
       // One entry per show, like the Plex apps.
       guard let show = item.grandparentRatingKey else { return true }
       return seenShows.insert(show).inserted
     }
+  }
+
+  /// More items of a home hub (its `key`), for refilling a row after de-duplication.
+  public func hubItems(key: String, start: Int, count: Int = 20) async throws -> [PlexMetadata] {
+    let body: MetadataBody = try await get(
+      key,
+      query: [
+        .init(name: "X-Plex-Container-Start", value: String(start)),
+        .init(name: "X-Plex-Container-Size", value: String(count)),
+        .init(name: "includeGuids", value: "1"),
+      ])
+    return body.Metadata ?? []
   }
 
   public func librarySections() async throws -> [PlexLibrarySection] {

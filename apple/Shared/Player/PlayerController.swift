@@ -28,6 +28,7 @@ final class PlayerController {
   private(set) var paused = false
   private(set) var buffering = true
   private(set) var videoWidth: Double = 0
+  private(set) var videoHeight: Double = 0
   private(set) var audioTracks: [Track] = []
   private(set) var subtitleTracks: [Track] = []
   private(set) var audioId: Int?
@@ -43,11 +44,14 @@ final class PlayerController {
   @ObservationIgnored private var reporter: Task<Void, Never>?
   @ObservationIgnored private lazy var bridge = MpvDelegateBridge(owner: self)
 
-  /// "4K" / "HD" from the decoded video, not the file's metadata.
+  /// "4K UHD" or "HD" for the frames mpv is actually decoding, never the
+  /// saved preference or the file's metadata. Nothing until the first frame.
+  ///
+  /// There is no Dolby Vision badge on Mac or iPhone: mpv shows Dolby Vision
+  /// files there as HDR (or SDR), not through a Dolby Vision output path.
   var resolutionBadge: String? {
-    if videoWidth >= 3200 { return "4K" }
-    if videoWidth >= 1280 { return "HD" }
-    return nil
+    guard videoWidth > 0 || videoHeight > 0 else { return nil }
+    return VideoTier.badge(for: VideoTier.tier(width: Int(videoWidth), height: Int(videoHeight)))
   }
 
   // MARK: - Open and close
@@ -55,7 +59,8 @@ final class PlayerController {
   func play(_ item: PlexMetadata, library: LibraryStore) throws {
     guard let server else { throw PlexError.notSignedIn }
     guard let window else { throw PlexError.invalidResponse }
-    let source = try PlaybackResolver.directPlay(item, client: server)
+    // Always the original file; the preference only picks between versions.
+    let source = try PlaybackResolver.directPlay(item, client: server, quality: .stored())
     if isActive { close() }
 
     let core = MpvPlayerCore()
@@ -74,13 +79,14 @@ final class PlayerController {
     paused = false
     buffering = true
     videoWidth = 0
+    videoHeight = 0
     audioTracks = []
     subtitleTracks = []
     lastError = nil
 
     for (name, format) in [
       ("time-pos", "double"), ("duration", "double"), ("pause", "flag"), ("paused-for-cache", "flag"),
-      ("eof-reached", "flag"), ("width", "double"), ("track-list", "node"), ("aid", "string"), ("sid", "string"),
+      ("eof-reached", "flag"), ("width", "double"), ("height", "double"), ("track-list", "node"), ("aid", "string"), ("sid", "string"),
     ] {
       core.observeProperty(name, format: format)
     }
@@ -176,6 +182,7 @@ final class PlayerController {
     case "pause": if let v = value as? Bool { paused = v }
     case "paused-for-cache": buffering = (value as? Bool) ?? false
     case "width": videoWidth = (value as? Double) ?? 0
+    case "height": videoHeight = (value as? Double) ?? 0
     case "eof-reached":
       if (value as? Bool) == true { close() }
     case "aid": audioId = (value as? String).flatMap { Int($0) }

@@ -1,27 +1,29 @@
 import AstraKit
 import SwiftUI
 
-/// A titled horizontal row.
+/// A titled horizontal row, aligned to the page inset.
 struct ContentRow<Content: View>: View {
   var title: String
   @ViewBuilder var content: () -> Content
+  @Environment(\.contentLeading) private var leading
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text(title)
         .font(Astra.Font.rowTitle)
         .foregroundStyle(Astra.Color.ink)
-        .padding(.leading, Astra.Layout.leading)
+        .lineLimit(1)
+        .padding(.leading, leading)
+        .padding(.trailing, Astra.Spacing.pageTrailing)
       ScrollView(.horizontal) {
         LazyHStack(alignment: .top, spacing: 14) {
           content()
         }
-        .padding(.horizontal, Astra.Layout.leading)
-        // Room for the hover scale so cards never clip.
-        .padding(.vertical, 8)
+        .padding(.horizontal, leading)
       }
       .scrollIndicators(.never)
-      .padding(.vertical, -8)
+      // Hover scale and shadow draw past the row instead of being clipped.
+      .scrollClipDisabled()
     }
   }
 }

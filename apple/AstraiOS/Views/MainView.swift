@@ -7,11 +7,14 @@ struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
 
-  enum TabID: Hashable { case home, library, settings, search }
+  // Same destinations as the Mac sidebar, minus Downloads (not built yet),
+  // which keeps the iPhone tab bar to its five-tab limit.
+  enum TabID: Hashable { case home, movies, shows, settings, search }
 
   @State private var tab: TabID = .home
   @State private var homePath: [Route] = []
-  @State private var libraryPath: [Route] = []
+  @State private var moviesPath: [Route] = []
+  @State private var showsPath: [Route] = []
   @State private var searchPath: [Route] = []
 
   var body: some View {
@@ -19,8 +22,15 @@ struct MainView: View {
       Tab("Home", systemImage: "house.fill", value: TabID.home) {
         stack($homePath) { HomeView(library: library) }
       }
-      Tab("Library", systemImage: "square.stack.fill", value: TabID.library) {
-        stack($libraryPath) { LibrarySectionsView(library: library) }
+      Tab("Movies", systemImage: "film", value: TabID.movies) {
+        stack($moviesPath) {
+          LibraryGridView(library: library, title: "Movies", sections: library.sections.filter { $0.type == "movie" })
+        }
+      }
+      Tab("Shows", systemImage: "tv", value: TabID.shows) {
+        stack($showsPath) {
+          LibraryGridView(library: library, title: "Shows", sections: library.sections.filter { $0.type == "show" })
+        }
       }
       Tab("Settings", systemImage: "gearshape.fill", value: TabID.settings) {
         NavigationStack { SettingsView().navigationTitle("Settings") }
@@ -36,7 +46,8 @@ struct MainView: View {
   private func stack<Content: View>(_ path: Binding<[Route]>, @ViewBuilder root: () -> Content) -> some View {
     NavigationStack(path: path) {
       root()
-        .toolbarBackground(.hidden, for: .navigationBar)
+        // Top-level pages draw their own Didot titles; pushed details keep the system back button.
+        .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Route.self) { route in
           switch route {
           case .details(let item):
@@ -45,25 +56,5 @@ struct MainView: View {
         }
     }
     .environment(\.openItem) { item in path.wrappedValue.append(.details(item)) }
-  }
-}
-
-/// Movies, TV Shows… as glass-free rows; each opens its poster grid.
-struct LibrarySectionsView: View {
-  var library: LibraryStore
-
-  var body: some View {
-    List(library.sections) { section in
-      NavigationLink {
-        LibraryGridView(library: library, section: section)
-      } label: {
-        Label(section.title, systemImage: section.type == "show" ? "tv" : "film")
-          .font(.system(size: 17, weight: .semibold))
-      }
-      .listRowBackground(Astra.Color.surface)
-    }
-    .scrollContentBackground(.hidden)
-    .background(Astra.Color.bg)
-    .navigationTitle("Library")
   }
 }

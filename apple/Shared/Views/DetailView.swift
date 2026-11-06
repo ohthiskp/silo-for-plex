@@ -13,15 +13,17 @@ struct DetailView: View {
   @State private var episodes: [PlexMetadata] = []
   @State private var related: [PlexHub] = []
   @State private var error: String?
+  @State private var headerSize: CGSize = .zero
 
   @Environment(\.playItem) private var playItem
+  @Environment(\.contentLeading) private var leading
 
   private var shown: PlexMetadata { item ?? seed }
 
   var body: some View {
     ScrollView(.vertical) {
       // A plain VStack: a lazy one guesses row heights and makes the page jump while scrolling.
-      VStack(alignment: .leading, spacing: 30) {
+      VStack(alignment: .leading, spacing: Astra.Spacing.xl - 4) {
         header
         if shown.type == .show || shown.type == .season, !seasons.isEmpty || !episodes.isEmpty {
           episodesSection
@@ -39,8 +41,9 @@ struct DetailView: View {
     }
     .scrollIndicators(.never)
     .astraScrollEdges()
+    // The backdrop runs under the title bar; the back button below stays inside the safe area.
     .ignoresSafeArea(edges: .top)
-    .background(Astra.Color.bg)
+    .background(Astra.Color.bg.ignoresSafeArea())
     #if os(macOS)
       .overlay(alignment: .topLeading) {
         Button {
@@ -50,8 +53,10 @@ struct DetailView: View {
         }
         .astraIconButton(size: 40)
         .keyboardShortcut("[", modifiers: .command)
-        .padding(.leading, Astra.Layout.leading)
-        .padding(.top, 36)
+        .help("Back (⌘[)")
+        .accessibilityLabel("Back")
+        .padding(.leading, leading)
+        .padding(.top, Astra.Spacing.s)
       }
       .navigationBarBackButtonHidden(true)
     #else
@@ -66,12 +71,10 @@ struct DetailView: View {
 
   private var header: some View {
     ZStack(alignment: .bottomLeading) {
-      GeometryReader { geo in
-        RemoteImage(url: library.imageURL(shown.backdrop, width: geo.size.width, height: Astra.Layout.detailHeaderHeight, scale: 1.5))
-          .frame(width: geo.size.width, height: Astra.Layout.detailHeaderHeight)
-          .clipped()
-      }
-      .frame(height: Astra.Layout.detailHeaderHeight)
+      RemoteImage(url: library.imageURL(shown.backdrop, width: headerSize.width, height: headerSize.height, scale: 1.5))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .onGeometryChange(for: CGSize.self, of: { $0.size }) { headerSize = $0 }
       HeroScrim()
 
       VStack(alignment: .leading, spacing: 16) {
@@ -117,11 +120,13 @@ struct DetailView: View {
           Text(error).font(.system(size: 13)).foregroundStyle(.red.opacity(0.8))
         }
       }
-      .padding(.leading, Astra.Layout.leading)
+      .padding(.leading, leading)
+      .padding(.trailing, Astra.Spacing.pageTrailing)
       .padding(.bottom, 30)
       .animation(Astra.Motion.base, value: item)
     }
-    .frame(height: Astra.Layout.detailHeaderHeight)
+    .frame(maxWidth: .infinity)
+    .astraHeaderHeight(cap: Astra.Layout.detailHeaderHeight)
   }
 
   private var playLabel: String {
@@ -157,9 +162,10 @@ struct DetailView: View {
               .animation(Astra.Motion.base, value: selected)
             }
           }
-          .padding(.horizontal, Astra.Layout.leading)
+          .padding(.horizontal, leading)
         }
         .scrollIndicators(.never)
+        .scrollClipDisabled()
       }
       ContentRow(title: selectedSeason?.title ?? "Episodes") {
         ForEach(episodes) { episode in
@@ -174,7 +180,7 @@ struct DetailView: View {
 
   private var castRow: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Cast").font(Astra.Font.rowTitle).foregroundStyle(Astra.Color.ink).padding(.leading, Astra.Layout.leading)
+      Text("Cast").font(Astra.Font.rowTitle).foregroundStyle(Astra.Color.ink).padding(.leading, leading)
       ScrollView(.horizontal) {
         LazyHStack(alignment: .top, spacing: 16) {
           ForEach(Array(shown.roles.prefix(20).enumerated()), id: \.offset) { _, role in
@@ -192,7 +198,7 @@ struct DetailView: View {
             .frame(width: 96)
           }
         }
-        .padding(.horizontal, Astra.Layout.leading)
+        .padding(.horizontal, leading)
       }
       .scrollIndicators(.never)
     }

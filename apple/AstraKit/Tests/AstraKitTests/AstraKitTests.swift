@@ -57,7 +57,7 @@ final class DecodingTests: XCTestCase {
     XCTAssertEqual(episode.episodeLabel, "S1 · E1")
     XCTAssertEqual(episode.progress ?? 0, 0.5, accuracy: 0.001)
     XCTAssertEqual(episode.media.first?.videoResolution, "1080")
-    XCTAssertEqual(episode.resolutionBadge, "HD")
+    XCTAssertEqual(episode.resolutionBadge(), "HD")
 
     let movie = hubs[1].items[0]
     XCTAssertEqual(movie.year, 2024)
@@ -275,5 +275,182 @@ final class PlaybackTests: XCTestCase {
   func testImageSizeIsNilForAnEmptyFrame() {
     XCTAssertNil(ImageSize.bucketed(width: 0, height: 0))
     XCTAssertNil(ImageSize.bucketed(width: 300, height: 0))
+  }
+}
+
+// MARK: - Preferred quality: original files only
+
+final class PreferredQualityTests: XCTestCase {
+  func media(_ json: String) throws -> [PlexMedia] {
+    try JSONDecoder().decode([PlexMedia].self, from: Data(json.utf8))
+  }
+
+  /// A 4K file, a 1080p file and a 720p file of one title.
+  lazy var versions: [PlexMedia] = try! media(
+    """
+    [{"id":1,"width":1920,"height":800,"bitrate":10000,"Part":[{"id":1,"key":"/p/1"}]},
+     {"id":2,"width":3840,"height":1600,"bitrate":50000,"Part":[{"id":2,"key":"/p/2"}]},
+     {"id":3,"width":1280,"height":720,"bitrate":4000,"Part":[{"id":3,"key":"/p/3"}]},
+     {"id":4,"width":7680,"height":4320,"Part":[]}]
+    """)
+
+  func testAutoPicksBestOriginal() {
+    XCTAssertEqual(PlaybackResolver.preferredMedia(versions, quality: .auto)?.id, 2)
+  }
+
+  func testHDPicksBestOriginalAtOrBelow1080() {
+    XCTAssertEqual(PlaybackResolver.preferredMedia(versions, quality: .hd)?.id, 1)
+  }
+
+  func test4KPicks4KOriginal() {
+    XCTAssertEqual(PlaybackResolver.preferredMedia(versions, quality: .uhd)?.id, 2)
+  }
+
+  func testHDFallsBackToClosestOriginalWhenOnly4KExists() throws {
+    let only4K = try media(
+      """
+      [{"id":7,"width":3840,"height":2160,"bitrate":60000,"Part":[{"id":7,"key":"/p/7"}]},
+       {"id":8,"width":4096,"height":2160,"bitrate":40000,"Part":[{"id":8,"key":"/p/8"}]}]
+      """)
+    // No conversion: the lowest version above the ceiling plays as it is (the earlier one on a tie).
+    XCTAssertEqual(PlaybackResolver.preferredMedia(only4K, quality: .hd)?.id, 7)
+  }
+
+  func test4KSkips8KWhenA4KFileExists() throws {
+    let list = try media(
+      """
+      [{"id":1,"width":7680,"height":4320,"Part":[{"id":1,"key":"/p/1"}]},
+       {"id":2,"width":3840,"height":2160,"Part":[{"id":2,"key":"/p/2"}]}]
+      """)
+    XCTAssertEqual(PlaybackResolver.preferredMedia(list, quality: .uhd)?.id, 2)
+    XCTAssertEqual(PlaybackResolver.preferredMedia(list, quality: .auto)?.id, 1)
+  }
+
+  func test4KFallsBackToBestOriginalWhenNo4KExists() throws {
+    let noUHD = try media(
+      """
+      [{"id":1,"width":1280,"height":720,"Part":[{"id":1,"key":"/p/1"}]},
+       {"id":2,"width":1920,"height":1080,"Part":[{"id":2,"key":"/p/2"}]}]
+      """)
+    XCTAssertEqual(PlaybackResolver.preferredMedia(noUHD, quality: .uhd)?.id, 2)
+  }
+
+  func testSingleOriginalPlaysAtEveryPreference() throws {
+    let single = try media(#"[{"id":5,"width":3840,"height":2160,"Part":[{"id":5,"key":"/p/5"}]}]"#)
+    for quality in PlaybackQuality.allCases {
+      XCTAssertEqual(PlaybackResolver.preferredMedia(single, quality: quality)?.id, 5, "\(quality)")
+    }
+  }
+
+  func testDirectPlayStreamsTheOriginalFileForEveryPreference() throws {
+    let client = PlexServerClient(
+      baseURL: URL(string: "https://server.test:32400")!, token: "tok", serverName: "Home", info: testInfo,
+      transport: FakeTransport { _ in (200, Data()) })
+    var item = PlexMetadata(ratingKey: "1", type: .movie, title: "Film", duration: 7_200_000)
+    item.media = versions
+    for (quality, part) in [(PlaybackQuality.auto, "/p/2"), (.hd, "/p/1"), (.uhd, "/p/2")] {
+      let source = try PlaybackResolver.directPlay(item, client: client, quality: quality)
+      XCTAssertEqual(source.url.path, part)
+      // The original file URL: no transcode endpoint and no resolution parameters.
+      XCTAssertFalse(source.url.absoluteString.contains("transcode"))
+      XCTAssertNil(source.url.query)
+    }
+  }
+
+  func testTiersCountWideFilms() {
+    XCTAssertEqual(VideoTier.tier(width: 1920, height: 800), 1080)
+    XCTAssertEqual(VideoTier.tier(width: 3840, height: 1600), 2160)
+    XCTAssertEqual(VideoTier.tier(width: 1916, height: 1036), 1080)
+    XCTAssertEqual(VideoTier.tier(width: 720, height: 480), 480)
+    XCTAssertNil(VideoTier.tier(width: nil, height: nil))
+    XCTAssertEqual(VideoTier.badge(for: 2160), "4K UHD")
+    XCTAssertEqual(VideoTier.badge(for: 1080), "HD")
+    XCTAssertEqual(VideoTier.badge(for: 720), "HD")
+    XCTAssertNil(VideoTier.badge(for: 576))
+  }
+
+  func testPreferenceDefaultsToAutoAndPersists() throws {
+    let suite = "astra.tests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    XCTAssertEqual(PlaybackQuality.stored(in: defaults), .auto)
+    for quality in PlaybackQuality.allCases {
+      quality.save(in: defaults)
+      // A fresh read, as after restarting Astra.
+      XCTAssertEqual(PlaybackQuality.stored(in: UserDefaults(suiteName: suite)!), quality)
+    }
+    XCTAssertEqual(defaults.string(forKey: PlaybackQuality.storageKey), "uhd")
+    defaults.set("8k", forKey: PlaybackQuality.storageKey)
+    XCTAssertEqual(PlaybackQuality.stored(in: defaults), .auto)
+    XCTAssertEqual(PlaybackQuality.allCases.map(\.title), ["Auto", "HD", "4K"])
+  }
+}
+
+// MARK: - Home de-duplication
+
+final class HomeDeduplicationTests: XCTestCase {
+  func items(_ json: String) throws -> [PlexMetadata] {
+    try JSONDecoder().decode([PlexMetadata].self, from: Data(json.utf8))
+  }
+
+  func testSameMovieInTwoLibrariesIsShownOnceByTMDBId() throws {
+    let continueWatching = try items(
+      #"[{"ratingKey":"10","type":"movie","title":"Dune","guid":"plex://movie/a","Guid":[{"id":"tmdb://438631"}]}]"#)
+    let trending = try items(
+      """
+      [{"ratingKey":"99","type":"movie","title":"Dune (4K)","guid":"local://99","Guid":[{"id":"tmdb://438631"}]},
+       {"ratingKey":"11","type":"movie","title":"Arrival","guid":"plex://movie/b","Guid":[{"id":"tmdb://329865"}]}]
+      """)
+    var dedup = HomeDeduplicator()
+    XCTAssertEqual(dedup.filter(continueWatching).map(\.ratingKey), ["10"])
+    XCTAssertEqual(dedup.filter(trending).map(\.ratingKey), ["11"])
+  }
+
+  func testSameTitleDifferentFilmsAreBothKept() throws {
+    let list = try items(
+      """
+      [{"ratingKey":"1","type":"movie","title":"Dune","year":1984,"Guid":[{"id":"tmdb://841"}]},
+       {"ratingKey":"2","type":"movie","title":"Dune","year":2021,"Guid":[{"id":"tmdb://438631"}]}]
+      """)
+    var dedup = HomeDeduplicator()
+    XCTAssertEqual(dedup.filter(list).count, 2)
+  }
+
+  func testEpisodeInContinueWatchingHidesItsShowElsewhere() throws {
+    let continueWatching = try items(
+      #"[{"ratingKey":"501","type":"episode","title":"Pilot","grandparentRatingKey":"50","grandparentGuid":"plex://show/s"}]"#)
+    let shows = try items(
+      """
+      [{"ratingKey":"50","type":"show","title":"Severance","guid":"plex://show/s"},
+       {"ratingKey":"60","type":"show","title":"Andor","guid":"plex://show/t"}]
+      """)
+    var dedup = HomeDeduplicator()
+    _ = dedup.filter(continueWatching)
+    XCTAssertEqual(dedup.filter(shows).map(\.ratingKey), ["60"])
+  }
+
+  func testOrderIsKeptWithinARow() throws {
+    let row = try items(
+      """
+      [{"ratingKey":"3","type":"movie","title":"C"},{"ratingKey":"1","type":"movie","title":"A"},
+       {"ratingKey":"3","type":"movie","title":"C"},{"ratingKey":"2","type":"movie","title":"B"}]
+      """)
+    var dedup = HomeDeduplicator()
+    XCTAssertEqual(dedup.filter(row).map(\.ratingKey), ["3", "1", "2"])
+  }
+
+  func testHubItemsPagesFromTheHubKey() async throws {
+    let transport = FakeTransport { request in
+      XCTAssertEqual(request.url?.path, "/hubs/home/recentlyAdded")
+      let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+      XCTAssertTrue(query.contains(.init(name: "type", value: "1")))
+      XCTAssertTrue(query.contains(.init(name: "X-Plex-Container-Start", value: "16")))
+      return (200, Data(#"{"MediaContainer":{"Metadata":[{"ratingKey":"77","type":"movie","title":"More"}]}}"#.utf8))
+    }
+    let client = PlexServerClient(
+      baseURL: URL(string: "https://server.test:32400")!, token: "tok", serverName: "Home", info: testInfo,
+      transport: transport)
+    let more = try await client.hubItems(key: "/hubs/home/recentlyAdded?type=1", start: 16)
+    XCTAssertEqual(more.map(\.ratingKey), ["77"])
   }
 }

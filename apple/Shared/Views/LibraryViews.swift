@@ -1,24 +1,112 @@
 import AstraKit
 import SwiftUI
 
-/// One library section as a poster grid, loaded a page at a time.
+/// A page title in Didot, aligned to the page inset.
+struct AstraSectionHeader<Trailing: View>: View {
+  var title: String
+  @ViewBuilder var trailing: () -> Trailing
+
+  var body: some View {
+    // Wraps under the title when the window is too narrow for one line.
+    ViewThatFits(in: .horizontal) {
+      HStack(alignment: .firstTextBaseline, spacing: Astra.Spacing.l) {
+        titleText
+        Spacer(minLength: Astra.Spacing.l)
+        trailing()
+      }
+      VStack(alignment: .leading, spacing: Astra.Spacing.m) {
+        titleText
+        trailing()
+      }
+    }
+  }
+
+  private var titleText: some View {
+    Text(title).astraDisplay(Astra.Layout.pageTitleSize, tracking: 6).lineLimit(1)
+  }
+}
+
+extension AstraSectionHeader where Trailing == EmptyView {
+  init(title: String) {
+    self.init(title: title) { EmptyView() }
+  }
+}
+
+/// A scrolling page that respects the safe area (title bar, status bar) and
+/// aligns to the sidebar-aware page inset.
+struct AstraPage<Content: View>: View {
+  @ViewBuilder var content: () -> Content
+  @Environment(\.contentLeading) private var leading
+
+  var body: some View {
+    ScrollView(.vertical) {
+      VStack(alignment: .leading, spacing: Astra.Spacing.l) {
+        content()
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.leading, leading)
+      .padding(.trailing, Astra.Spacing.pageTrailing)
+      .padding(.top, Astra.Spacing.pageTop)
+      .padding(.bottom, 60)
+    }
+    .scrollIndicators(.never)
+    .astraScrollEdges()
+    .background(Astra.Color.bg.ignoresSafeArea())
+  }
+}
+
+/// A quiet centred message for empty and unavailable states.
+struct EmptyState: View {
+  var symbol: String
+  var title: String
+  var message: String
+
+  var body: some View {
+    VStack(spacing: Astra.Spacing.s) {
+      Image(systemName: symbol).font(.system(size: 34, weight: .light)).foregroundStyle(Astra.Color.muted)
+      Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Astra.Color.ink)
+      Text(message).font(Astra.Font.meta).foregroundStyle(Astra.Color.muted).multilineTextAlignment(.center)
+        .frame(maxWidth: 380)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 80)
+  }
+}
+
+private let posterColumns = [
+  GridItem(
+    .adaptive(minimum: Astra.Layout.posterMinWidth, maximum: Astra.Layout.posterMinWidth + 30), spacing: 18,
+    alignment: .top)
+]
+
+/// Movies or Shows: every library of that kind as one poster grid, loaded a
+/// page at a time. With several libraries a picker chooses between them.
 struct LibraryGridView: View {
   var library: LibraryStore
-  var section: PlexLibrarySection
+  var title: String
+  var sections: [PlexLibrarySection]
 
+  @State private var sectionKey: String?
   @State private var items: [PlexMetadata] = []
   @State private var reachedEnd = false
   @State private var loading = false
   @State private var sort = "addedAt:desc"
 
-  private let columns = [GridItem(.adaptive(minimum: Astra.Layout.posterMinWidth, maximum: Astra.Layout.posterMinWidth + 30), spacing: 18, alignment: .top)]
+  private var section: PlexLibrarySection? {
+    sections.first { $0.key == sectionKey } ?? sections.first
+  }
 
   var body: some View {
-    ScrollView(.vertical) {
-      VStack(alignment: .leading, spacing: 22) {
-        HStack {
-          Text(section.title).astraDisplay(38, tracking: 6)
-          Spacer()
+    AstraPage {
+      AstraSectionHeader(title: title) {
+        HStack(spacing: Astra.Spacing.s) {
+          if sections.count > 1 {
+            Picker("Library", selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 })) {
+              ForEach(sections) { Text($0.title).tag($0.key) }
+            }
+            .labelsHidden()
+            .fixedSize()
+          }
           Picker("Sort", selection: $sort) {
             Text("Recently Added").tag("addedAt:desc")
             Text("Title").tag("titleSort")
@@ -26,9 +114,18 @@ struct LibraryGridView: View {
             Text("Rating").tag("audienceRating:desc")
           }
           .labelsHidden()
-          .frame(width: 180)
+          .fixedSize()
         }
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 26) {
+      }
+
+      if sections.isEmpty {
+        EmptyState(
+          symbol: title == "Shows" ? "tv" : "film", title: "No \(title.lowercased()) library",
+          message: "This Plex server has no \(title.lowercased()) library.")
+      } else if items.isEmpty && reachedEnd {
+        EmptyState(symbol: "square.stack", title: "Nothing here yet", message: "This library is empty.")
+      } else {
+        LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
           ForEach(items) { item in
             PosterCard(library: library, item: item)
               .onAppear {
@@ -36,17 +133,10 @@ struct LibraryGridView: View {
               }
           }
         }
-        if loading { ProgressView().frame(maxWidth: .infinity) }
       }
-      .padding(.leading, Astra.Layout.leading)
-      .padding(.trailing, 40)
-      .padding(.top, 56)
-      .padding(.bottom, 60)
+      if loading { ProgressView().frame(maxWidth: .infinity) }
     }
-    .scrollIndicators(.never)
-    .astraScrollEdges()
-    .ignoresSafeArea(edges: .top)
-    .task(id: sort) {
+    .task(id: "\(section?.key ?? "")|\(sort)") {
       items = []
       reachedEnd = false
       await loadMore()
@@ -54,7 +144,7 @@ struct LibraryGridView: View {
   }
 
   private func loadMore() async {
-    guard !loading, !reachedEnd else { return }
+    guard let section, !loading, !reachedEnd else { return }
     loading = true
     defer { loading = false }
     let page = (try? await library.client.libraryItems(sectionKey: section.key, sort: sort, start: items.count)) ?? []
@@ -63,77 +153,123 @@ struct LibraryGridView: View {
   }
 }
 
+/// Downloads aren't in the SwiftUI app yet; the destination says so plainly.
+struct DownloadsView: View {
+  var body: some View {
+    AstraPage {
+      AstraSectionHeader(title: "Downloads")
+      EmptyState(
+        symbol: "arrow.down.circle", title: "No downloads",
+        message: "Downloading for offline viewing isn't in this version of Astra yet.")
+    }
+  }
+}
+
 struct SearchView: View {
   var library: LibraryStore
 
   @State private var query = ""
   @State private var results: [PlexMetadata] = []
+  @State private var searched = false
   @FocusState private var focused: Bool
 
-  private let columns = [GridItem(.adaptive(minimum: Astra.Layout.posterMinWidth, maximum: Astra.Layout.posterMinWidth + 30), spacing: 18, alignment: .top)]
-
   var body: some View {
-    ScrollView(.vertical) {
-      VStack(alignment: .leading, spacing: 26) {
-        HStack(spacing: 12) {
-          Image(systemName: "magnifyingglass").foregroundStyle(Astra.Color.muted)
-          TextField("Movies, shows and episodes", text: $query)
-            .textFieldStyle(.plain)
-            .font(.system(size: 18))
-            .focused($focused)
+    AstraPage {
+      HStack(spacing: 12) {
+        Image(systemName: "magnifyingglass").foregroundStyle(Astra.Color.muted)
+        TextField("Movies, shows and episodes", text: $query)
+          .textFieldStyle(.plain)
+          .font(.system(size: 18))
+          .focused($focused)
+          .submitLabel(.search)
+        if !query.isEmpty {
+          Button {
+            query = ""
+          } label: {
+            Image(systemName: "xmark.circle.fill").foregroundStyle(Astra.Color.muted)
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Clear Search")
         }
-        .padding(.horizontal, 20)
-        .frame(height: 52)
-        .astraGlass(in: Capsule())
-        .frame(maxWidth: 620)
-
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 26) {
-          ForEach(results) { PosterCard(library: library, item: $0) }
-        }
-        .animation(Astra.Motion.base, value: results.map(\.id))
       }
-      .padding(.leading, Astra.Layout.leading)
-      .padding(.trailing, 40)
-      .padding(.top, 56)
+      .padding(.horizontal, 20)
+      .frame(height: 52)
+      .frame(maxWidth: 620)
+      .astraGlass(in: Capsule())
+
+      if searched && results.isEmpty {
+        EmptyState(symbol: "magnifyingglass", title: "No results", message: "Nothing on this server matches “\(query)”.")
+      }
+      LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
+        ForEach(results) { PosterCard(library: library, item: $0) }
+      }
+      .animation(Astra.Motion.base, value: results.map(\.id))
     }
-    .scrollIndicators(.never)
-    .astraScrollEdges()
-    .ignoresSafeArea(edges: .top)
     .onAppear { focused = true }
     .task(id: query) {
       let text = query.trimmingCharacters(in: .whitespaces)
-      guard text.count >= 2 else { return results = [] }
+      guard text.count >= 2 else {
+        results = []
+        searched = false
+        return
+      }
       // Debounce typing.
       try? await Task.sleep(for: .milliseconds(250))
       guard !Task.isCancelled else { return }
       results = (try? await library.client.search(text)) ?? []
+      searched = true
     }
+  }
+}
+
+/// Settings inside the main window (the Mac sidebar's Settings item). The
+/// form scrolls itself, so it isn't wrapped in another scroll view.
+struct SettingsPage: View {
+  @Environment(\.contentLeading) private var leading
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: Astra.Spacing.m) {
+      AstraSectionHeader(title: "Settings")
+        .padding(.leading, leading)
+      SettingsView()
+        .frame(maxWidth: 600, alignment: .leading)
+        // The form's own inset is ~20 pt; line its rows up with the title.
+        .padding(.leading, max(0, leading - 20))
+    }
+    .padding(.top, Astra.Spacing.pageTop)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .background(Astra.Color.bg.ignoresSafeArea())
   }
 }
 
 struct SettingsView: View {
   @Environment(AppModel.self) private var app
+  @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
 
   var body: some View {
     Form {
+      Section {
+        Picker("Preferred Quality", selection: $quality) {
+          ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+      } header: {
+        Text("Playback")
+      } footer: {
+        Text("Astra always plays the original file. When a title has several versions, this picks which one.")
+      }
       Section("Plex") {
         LabeledContent("Server", value: app.server?.serverName ?? "Not connected")
         LabeledContent("Address", value: app.server?.baseURL.host() ?? "—")
-        HStack {
-          Button("Change Server…") { Task { await app.chooseServer() } }
-          Button("Sign Out", role: .destructive) { app.signOut() }
-        }
+        Button("Change Server…") { Task { await app.chooseServer() } }
+        Button("Sign Out", role: .destructive) { app.signOut() }
       }
       Section("About") {
         LabeledContent(
           "Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
-        Text("Astra is licensed under GPL-3.0.").foregroundStyle(.secondary)
       }
     }
     .formStyle(.grouped)
-    #if os(macOS)
-      .frame(width: 460)
-    #endif
-    .padding(.vertical, 8)
+    .scrollContentBackground(.hidden)
   }
 }
