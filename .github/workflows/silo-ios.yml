@@ -46,7 +46,27 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           mkdir -p "$RUNNER_TEMP/asc"
-          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
+          # Rebuild a clean PEM from however the key was pasted (TextEdit smart dashes,
+          # joined lines, Windows line ends, missing BEGIN/END lines, stray spaces).
+          python3 - "$RUNNER_TEMP/asc/AuthKey.p8" <<'PY'
+          import base64, os, re, sys
+          raw = os.environ["ASC_KEY_P8"]
+          raw = raw.replace("\u2013", "-").replace("\u2014", "-").replace("\u2212", "-").replace("\r", "")
+          body = re.sub(r"-+\s*(BEGIN|END)[A-Z ]*PRIVATE KEY\s*-+", "", raw)
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", body)
+          try:
+              der = base64.b64decode(body, validate=True)
+          except Exception:
+              print("::error::ASC_KEY_P8 doesn't look like an App Store Connect .p8 key. Re-paste the whole file contents.")
+              sys.exit(1)
+          if len(der) < 100:
+              print(f"::error::ASC_KEY_P8 looks cut off ({len(der)} bytes decoded). Re-paste the whole .p8 file contents.")
+              sys.exit(1)
+          lines = [body[i:i + 64] for i in range(0, len(body), 64)]
+          pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
+          open(sys.argv[1], "w").write(pem)
+          print(f"API key rebuilt ({len(der)} bytes).")
+          PY
           chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
           echo "ASC_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> "$GITHUB_ENV"
 
