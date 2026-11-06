@@ -938,7 +938,7 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// Android TV: release the native AV pipeline once the app stays
   /// backgrounded past the grace window. A merely paused player keeps its
   /// MediaCodec decoders and (tunneled passthrough) AudioTrack alive, which
-  /// on shared-pipeline TV SoCs degrades every other app until Plezy is
+  /// on shared-pipeline TV SoCs degrades every other app until Astra is
   /// force-stopped. The grace absorbs transient hidden/paused blips
   /// (assistant overlay, HDMI-CEC events) so quick app switches don't churn
   /// codecs.

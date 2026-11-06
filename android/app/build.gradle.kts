@@ -165,7 +165,7 @@ val prepareMpvFfmpegDevelopment = tasks.register("prepareMpvFfmpegDevelopment") 
       }
       File(includeDir, "libavutil/avconfig.h").writeText(
         """
-        |/* Generated for Plezy's little-endian Android ABIs. */
+        |/* Generated for Astra's little-endian Android ABIs. */
         |#ifndef AVUTIL_AVCONFIG_H
         |#define AVUTIL_AVCONFIG_H
         |#define AV_HAVE_BIGENDIAN 0

@@ -507,13 +507,13 @@ Future<SymbolPlan> createSymbolPlan(
   } else if (apple) {
     final explicitArchive = environment['BUGS_APPLE_ARCHIVE'];
     final product = platform == 'macos'
-        ? path.join(build, 'macos/Build/Products/Release/Plezy.app')
+        ? path.join(build, 'macos/Build/Products/Release/Astra.app')
         : explicitArchive != null && explicitArchive.isNotEmpty
         ? path.join(
             path.isAbsolute(explicitArchive) ? explicitArchive : path.join(sourceRoot, explicitArchive),
-            'Products/Applications/Plezy.app',
+            'Products/Applications/Astra.app',
           )
-        : path.join(build, 'ios/iphoneos/Plezy.app');
+        : path.join(build, 'ios/iphoneos/Astra.app');
     if (!Directory(product).existsSync()) throw SymbolFailure('Missing selected release product: $product');
     for (final file in _files(product).where(isDebugObject)) {
       final artifact = await _inspect(file, command, 10);

@@ -1255,7 +1255,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     final heroHeight = isTv
         ? viewportHeight * 0.82
         : useSideNav
-        ? viewportHeight * 0.86 // Silo: near full-bleed hero
+        ? viewportHeight * 0.86 // Astra: near full-bleed hero
         : isLandscape
         ? math.min(500 + statusBarHeight, viewportHeight)
         : math.min(500 + statusBarHeight, viewportHeight * 0.65);
@@ -1427,7 +1427,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
               ),
             ),
           ),
-          // Silo: side scrim on wide screens so the title side reads while the
+          // Astra: side scrim on wide screens so the title side reads while the
           // artwork stays bright on the right.
           if (!isTv && ScreenBreakpoints.isWideTabletOrLarger(MediaQuery.sizeOf(context).width))
             Positioned.fill(
@@ -1635,7 +1635,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
                             // Metadata as dot-separated text with content type
                             if (heroItem.year != null || heroItem.contentRating != null || heroItem.rating != null) ...[
                               const SizedBox(height: 18),
-                              // Silo: rating badge, then year • type • stars.
+                              // Astra: rating badge, then year • type • stars.
                               Wrap(
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 alignment: alignLeft ? WrapAlignment.start : WrapAlignment.center,

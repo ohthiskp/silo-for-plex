@@ -78,7 +78,7 @@ class MalBroadcast {
 
 /// An anime summary node from MAL API v2 catalog endpoints
 /// (`/users/@me/animelist`, `/anime/suggestions`, `/anime/ranking`), with the
-/// fields Plezy requests (see `MalClient.catalogFields`).
+/// fields Astra requests (see `MalClient.catalogFields`).
 @JsonSerializable(createToJson: false)
 class MalAnime {
   /// MAL's audience-rating strings mapped for display.

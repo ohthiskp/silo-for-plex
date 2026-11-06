@@ -287,7 +287,7 @@ class OfflineWatchProgress extends Table {
   /// Auto-incrementing primary key
   IntColumn get id => integer().autoIncrement()();
 
-  /// Active Plezy profile that owns this queued action.
+  /// Active Astra profile that owns this queued action.
   TextColumn get profileId => text().nullable()();
 
   /// Server ID this media belongs to
@@ -338,7 +338,7 @@ class OfflineWatchProgress extends Table {
 /// termination hook; cleared when the user visibly ends the session.
 @DataClassName('MusicSessionRow')
 class MusicSessions extends Table {
-  /// Active Plezy profile that owns this session snapshot.
+  /// Active Astra profile that owns this session snapshot.
   TextColumn get profileId => text()();
 
   /// Canonical queue tracks (insertion order) as a JSON array of MediaItem

@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# Adds Plezy's tvOS Top Shelf extension target and Runner-side bridge source.
+# Adds Astra's tvOS Top Shelf extension target and Runner-side bridge source.
 
 require 'xcodeproj'
 

@@ -7,9 +7,9 @@ part 'livetv_dvr.g.dart';
 List<ChannelMapping> _parseChannelMappings(Object? raw) => parseFlexibleJsonList(raw, ChannelMapping.fromJson);
 
 /// A Plex Live TV DVR (e.g., HDHomeRun tuner, IPTV provider), reduced to what
-/// Plezy renders: identity, lineup labelling, and the enabled-channel mapping.
+/// Astra renders: identity, lineup labelling, and the enabled-channel mapping.
 /// Plex also reports tuner hardware, `Setting`, and `Device` relations for DVR
-/// setup, which Plezy does not implement.
+/// setup, which Astra does not implement.
 @JsonSerializable(createToJson: false)
 class LiveTvDvr {
   @JsonKey(defaultValue: '')

@@ -36,7 +36,7 @@ Future<bool> tvosOpenUrl(Uri uri) async {
   return await _tvosHandoffChannel.invokeMethod<bool>('openUrl', {'url': uri.toString()}) ?? false;
 }
 
-/// Opens [uri] outside Plezy: through the tvOS Runner's handoff channel there,
+/// Opens [uri] outside Astra: through the tvOS Runner's handoff channel there,
 /// url_launcher elsewhere. Returns false rather than throwing when nothing
 /// opened it, so callers can tell the user instead of ignoring the press
 /// (#2877).

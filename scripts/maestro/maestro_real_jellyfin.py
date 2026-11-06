@@ -25,7 +25,7 @@ GUEST_USERNAME = "guest"
 GUEST_PASSWORD = "guest"
 SERVER_NAME = "Maestro Jellyfin"
 BASE_TITLE = "Maestro Movie"
-BASE_OVERVIEW = "A deterministic movie used to verify Plezy's end-to-end flows."
+BASE_OVERVIEW = "A deterministic movie used to verify Astra's end-to-end flows."
 GUEST_TITLE = "Guest Galaxy"
 SHOW_TITLE = "Maestro Show"
 EPISODE_TITLES = ("Maestro Episode 1", "Maestro Episode 2")
@@ -77,7 +77,7 @@ def _write_nfo(path: Path, *, item_id: str, title: str, overview: str, genre: st
         "dateadded": "2026-01-01 00:00:00",
         "plot": overview,
         "outline": overview,
-        "studio": "Plezy E2E",
+        "studio": "Astra E2E",
         "genre": genre,
         "tag": "E2E",
         "mpaa": "E2E",
@@ -99,7 +99,7 @@ def _write_show_nfo(path: Path) -> None:
         "year": "2026",
         "premiered": "2026-01-01",
         "plot": "A deterministic show used to verify episode playback and queue behavior.",
-        "studio": "Plezy E2E",
+        "studio": "Astra E2E",
         "genre": "Test",
         "lockdata": "true",
     }.items():
@@ -429,7 +429,7 @@ def bootstrap_server(
         api.json("POST", "/Startup/Complete")
 
     authorization = (
-        'MediaBrowser Client="Plezy E2E Bootstrap", Device="Host", '
+        'MediaBrowser Client="Astra E2E Bootstrap", Device="Host", '
         'DeviceId="plezy-e2e-bootstrap", Version="1.0"'
     )
 

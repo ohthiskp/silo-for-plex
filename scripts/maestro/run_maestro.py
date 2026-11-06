@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Jellyfin fixture and run Plezy's Android Maestro suites."""
+"""Build the Jellyfin fixture and run Astra's Android Maestro suites."""
 
 from __future__ import annotations
 

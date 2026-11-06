@@ -5,7 +5,7 @@ import 'fullscreen_state_manager.dart';
 /// Windows-only native window wrapper for behavior that lives in the Win32
 /// runner (windows/runner/flutter_window.cpp): a monitor-aware fullscreen
 /// implementation that works around window_manager's multi-monitor fullscreen
-/// bug (edde746/plezy#880), and a frame theme the app controls, which
+/// bug (upstream #880), and a frame theme the app controls, which
 /// window_manager cannot set darker than the OS app theme.
 ///
 /// No-op on non-Windows platforms — callers should keep using

@@ -157,7 +157,7 @@ bool SnapshotMatchesActiveTopology(const DisplayConfigSnapshot& snapshot) {
 // topology -- the documented "return from a temporary mode to the last saved
 // display configuration" SetDisplayConfig scenario. The database entry keeps
 // CCD-level state such as a Dynamic Refresh Rate selection that the recovery
-// record's DEVMODE cannot express, and Plezy's overrides never replace it
+// record's DEVMODE cannot express, and Astra's overrides never replace it
 // (restores only ever save the pre-override snapshot). The awareness flags
 // are documented modifiers to supplied-config calls only, so they are
 // deliberately absent here. Used by crash recovery, which has no in-memory

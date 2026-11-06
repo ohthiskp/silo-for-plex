@@ -620,7 +620,7 @@ mixin _JellyfinBrowseMethods on _JellyfinClientInternals {
 
   /// Jellyfin has no `/sorts` listing endpoint, so this returns a hardcoded
   /// list based on the broad sort set Streamyfin exposes. Keys remain
-  /// backend-neutral where Plezy already had saved preferences (`rating`,
+  /// backend-neutral where Astra already had saved preferences (`rating`,
   /// `lastViewedAt`, …); [JellyfinLibraryQueryTranslator] maps them to
   /// Jellyfin's `SortBy`/`SortOrder` at request time.
   @override
@@ -2369,7 +2369,7 @@ mixin _JellyfinBrowseMethods on _JellyfinClientInternals {
   }
 
   /// Both dialects expose local trailers separately from special features.
-  /// Combine them into Plezy's existing extras row, but keep remote/YouTube
+  /// Combine them into Astra's existing extras row, but keep remote/YouTube
   /// trailers out of scope because they are external URLs, not playable items.
   @override
   Future<List<MediaItem>> fetchExtras(String id) async {
@@ -2483,7 +2483,7 @@ mixin _JellyfinBrowseMethods on _JellyfinClientInternals {
   /// Query for the one dedicated-resume-route window that feeds every Emby
   /// playback shelf.
   ///
-  /// Emby's route conflates the two shelves Plezy models separately: it returns
+  /// Emby's route conflates the two shelves Astra models separately: it returns
   /// the genuinely in-progress items *and* one zero-position next episode per
   /// started series, and no server-side filter separates them (measured on
   /// 4.9.5: `Filters=IsResumable` changes nothing). It is nevertheless the only

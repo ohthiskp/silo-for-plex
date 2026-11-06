@@ -112,7 +112,7 @@ import 'widgets/dialog_action_button.dart';
 import 'widgets/startup_failure_view.dart';
 
 const bool _enableSentry = bool.fromEnvironment('ENABLE_SENTRY', defaultValue: false);
-const String _sentryDsn = ''; // Silo: no crash reporting service
+const String _sentryDsn = ''; // Astra: no crash reporting service
 const String gitCommit = String.fromEnvironment('GIT_COMMIT');
 const String _sentryEnvironment = String.fromEnvironment('SENTRY_ENVIRONMENT');
 const String _sentryDist = String.fromEnvironment('SENTRY_DIST');
@@ -281,7 +281,7 @@ Future<_StartupDependencies> _initializeApplication() async {
   if (_enableSentry) {
     // Crash reporting is observability: it must never veto the launch it
     // exists to report on. `Sentry.init` runs its integrations eagerly, so an
-    // integration throwing used to fail the gate before any Plezy code ran.
+    // integration throwing used to fail the gate before any Astra code ran.
     //
     // Deliberately no `appRunner`. On every non-web platform `Sentry.init`
     // reduces it to `await appRunner()` after the integrations — error capture
@@ -1197,7 +1197,7 @@ FutureOr<SentryEvent?> _beforeSend(SentryEvent event, Hint _) {
   return event;
 }
 
-/// Registers notices for code Plezy ships outside its pub packages.
+/// Registers notices for code Astra ships outside its pub packages.
 ///
 /// Runs in [main], before `SentryFlutter.init`, and must stay ahead of every
 /// [LicenseRegistry.licenses] reader. Sentry's event enricher walks the

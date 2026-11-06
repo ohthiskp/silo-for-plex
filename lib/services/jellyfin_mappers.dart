@@ -136,7 +136,7 @@ class JellyfinImageAbsolutizer {
 /// that logs or persists the URL.
 ///
 /// The legacy `/Users/{id}/Images/Primary` route is used rather than 10.9's
-/// `/UserImage` because Plezy declares no minimum server version; upstream
+/// `/UserImage` because Astra declares no minimum server version; upstream
 /// still routes the legacy shape and annotates it "Kept for backwards
 /// compatibility". The `{imageType}` segment is bound but ignored server-side
 /// — it always serves the profile image.

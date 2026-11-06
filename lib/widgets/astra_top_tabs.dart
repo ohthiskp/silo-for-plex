@@ -9,12 +9,12 @@ import '../navigation/main_screen_scope.dart';
 import '../providers/hidden_libraries_provider.dart';
 import '../providers/libraries_provider.dart';
 
-/// Silo's floating pill switcher over the home hero: "For You" plus the
+/// Astra's floating pill switcher over the home hero: "For You" plus the
 /// movie and TV libraries, glass over the artwork. "For You" is the page
 /// it sits on, so it is always the selected pill; the others open their
 /// library through the main screen's [MainScreenFocusScope.selectLibrary].
-class SiloTopTabs extends StatelessWidget {
-  const SiloTopTabs({super.key, required this.forYouLabel, this.maxLibraries = 4});
+class AstraTopTabs extends StatelessWidget {
+  const AstraTopTabs({super.key, required this.forYouLabel, this.maxLibraries = 4});
 
   final String forYouLabel;
   final int maxLibraries;
@@ -46,9 +46,9 @@ class SiloTopTabs extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _SiloPill(label: forYouLabel, selected: true, onTap: null),
+                  _AstraPill(label: forYouLabel, selected: true, onTap: null),
                   for (final lib in visible)
-                    _SiloPill(
+                    _AstraPill(
                       label: lib.title,
                       selected: false,
                       onTap: selectLibrary == null ? null : () => selectLibrary(lib.globalKey),
@@ -63,18 +63,18 @@ class SiloTopTabs extends StatelessWidget {
   }
 }
 
-class _SiloPill extends StatefulWidget {
-  const _SiloPill({required this.label, required this.selected, required this.onTap});
+class _AstraPill extends StatefulWidget {
+  const _AstraPill({required this.label, required this.selected, required this.onTap});
 
   final String label;
   final bool selected;
   final VoidCallback? onTap;
 
   @override
-  State<_SiloPill> createState() => _SiloPillState();
+  State<_AstraPill> createState() => _AstraPillState();
 }
 
-class _SiloPillState extends State<_SiloPill> {
+class _AstraPillState extends State<_AstraPill> {
   bool _hovered = false;
   bool _pressed = false;
 

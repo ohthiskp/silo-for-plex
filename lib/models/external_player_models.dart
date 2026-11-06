@@ -20,12 +20,12 @@ class ExternalPlayerLaunchOptions {
   /// identify media by name; stream URLs usually end in `file.mkv`.
   final String? filename;
 
-  /// Where the player hands control back to Plezy; null asks for no return
+  /// Where the player hands control back to Astra; null asks for no return
   /// links.
   final ExternalPlayerReturnLinks? returnLinks;
 }
 
-/// The x-callback-url links a player opens to hand control back to Plezy,
+/// The x-callback-url links a player opens to hand control back to Astra,
 /// one per way playback can end.
 class ExternalPlayerReturnLinks {
   const ExternalPlayerReturnLinks({required this.success, required this.cancel, required this.error});
@@ -475,7 +475,7 @@ class KnownPlayers {
   ///
   /// Detection forks `sh` or `where.exe` and calls out over platform channels,
   /// so it is asynchronous and memoised: it runs once per process and a player
-  /// installed while Plezy is running only appears after a restart. Android is
+  /// installed while Astra is running only appears after a restart. Android is
   /// the one platform left unprobed — where there is no reliable check the
   /// player stays listed, because hiding a working player is worse than
   /// listing a missing one.

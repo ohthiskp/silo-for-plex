@@ -9,12 +9,12 @@ import '../../utils/app_logger.dart';
 import '../../utils/external_ids.dart';
 import '../models/watch_copy.dart';
 
-/// Plezy's `ext` member (SPEC.md §10): reverse-DNS, owned by Plezy. It names
+/// Astra's `ext` member (SPEC.md §10): reverse-DNS, owned by Astra. It names
 /// the server, item and version the host shared, so a guest who reaches the
 /// same server opens that exact file. Other apps ignore it.
 const String plezyExtName = 'app.plezy';
 
-/// How a Plezy item is described to a room. Movies and episodes carry their
+/// How a Astra item is described to a room. Movies and episodes carry their
 /// catalogue identity and match on any server and in any OWP app; every other
 /// video (Plex clips, home videos, Jellyfin/Emby `Video` items) goes out as a
 /// `video` without IDs, which only participants on the same server, or with a
@@ -201,7 +201,7 @@ owp.Media _withFile(owp.Media media, owp.MediaFile? file) => owp.Media(
   ext: media.ext,
 );
 
-/// The `app.plezy` member of a received descriptor, when it is Plezy's shape.
+/// The `app.plezy` member of a received descriptor, when it is Astra's shape.
 /// Untrusted (SDK.md §9.7): only ever used to look up this user's own servers.
 ({String server, String item, String? version})? plezyExt(owp.Media media) {
   final member = media.ext?[plezyExtName];

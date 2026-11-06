@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: silo-macos
+  group: astra-macos
   cancel-in-progress: false
 
 env:
@@ -43,7 +43,7 @@ jobs:
             macos/Pods
             ~/Library/Caches/CocoaPods
             ~/.cocoapods
-          key: silo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock', '**/Podfile.lock') }}
+          key: astra-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pubspec.lock', '**/Podfile.lock') }}
 
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile --no-example
@@ -92,7 +92,7 @@ jobs:
           Click Done, then open System Settings > Privacy & Security, scroll down and click
           "Open Anyway" next to Astra. You only do this once: later updates install inside the app.
 
-          Astra is based on Plezy (github.com/edde746/plezy) and licensed under GPL-3.0.
+          Astra is licensed under GPL-3.0.
           Source: github.com/ohthiskp/silo-for-plex
           EOF
           sed -i '' 's/^          //' "dmg/READ ME FIRST.txt"
@@ -139,11 +139,11 @@ jobs:
           python3 -m pip install --quiet --break-system-packages cryptography 2>/dev/null || python3 -m pip install --quiet cryptography
           URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Astra.zip"
           RELEASE_NOTES_URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" \
-            python3 tool/silo/appcast.py Astra.zip "${{ steps.ver.outputs.name }}" "${{ steps.ver.outputs.build }}" "$URL" feed
+            python3 tool/astra/appcast.py Astra.zip "${{ steps.ver.outputs.name }}" "${{ steps.ver.outputs.build }}" "$URL" feed
           cd feed
           git init -q -b appcast
-          git config user.name "silo-release-bot"
-          git config user.email "silo-release-bot@users.noreply.github.com"
+          git config user.name "astra-release-bot"
+          git config user.email "astra-release-bot@users.noreply.github.com"
           git add appcast.xml
           git commit -qm "Update feed: build ${{ steps.ver.outputs.build }}"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" appcast

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Move Plezy's native mpv dependency to an exact commit of the unified
+# Move Astra's native mpv dependency to an exact commit of the unified
 # mpv-build repository (github.com/edde746/mpv-build).
 #
 # Why this exists: the unified repo publishes content-addressed binaries on
 # every push to main -- each asset is named after a hash of the inputs that
 # produced it, so the artifacts for any commit stay downloadable forever and
 # are never overwritten. A commit, not a semver tag, is therefore the unit
-# Plezy pins: picking up an mpv or FFmpeg patch no longer requires cutting a
+# Astra pins: picking up an mpv or FFmpeg patch no longer requires cutting a
 # release upstream, and the pin names the exact bytes we ship on every
 # platform, not just Apple.
 #
@@ -317,7 +317,7 @@ locks = sys.argv[2 + project_count :]
 
 LOCK_PATH = "mpv-build.lock.json"
 VERIFICATION_PATH = "android/gradle/verification-metadata.xml"
-# artifacts.json's Android entry Plezy consumes; the group's per-ABI tarballs
+# artifacts.json's Android entry Astra consumes; the group's per-ABI tarballs
 # are the AAR's own inputs.
 ANDROID_LIBRARY = "mpv-android"
 LOCK_REPO = os.environ["MPV_BUILD_REPO"]

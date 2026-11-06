@@ -37,7 +37,7 @@ DateTime _dateTimeFromMillis(int value) => DateTime.fromMillisecondsSinceEpoch(v
 int _dateTimeToMillis(DateTime value) => value.millisecondsSinceEpoch;
 
 /// Recent rooms per profile. Only Open Watch Party codes (6 symbols) are kept:
-/// rooms of Plezy's former relay had 5, and no relay knows them any more.
+/// rooms of the upstream app's former relay had 5, and no relay knows them any more.
 class RecentRoomsService {
   static const int _maxRooms = 20;
 

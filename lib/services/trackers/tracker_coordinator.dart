@@ -426,7 +426,7 @@ class TrackerCoordinator {
   /// Threshold trackers get the safety-net watched mark. Real-time trackers get
   /// a `stop` carrying the true progress — which is also the user's resume
   /// position, so it is never inflated to force a watched state — followed by
-  /// [RealtimeScrobbleTracker.reconcileWatchedAfterStop] when Plezy counts the
+  /// [RealtimeScrobbleTracker.reconcileWatchedAfterStop] when Astra counts the
   /// playback as watched, because only the tracker knows whether its own stop
   /// already recorded that.
   Future<void> stopPlayback() async {

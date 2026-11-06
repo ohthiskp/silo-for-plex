@@ -106,7 +106,7 @@ Future<SourceDownloadResponse> downloadSource(Uri uri) async {
   final client = HttpClient();
   try {
     final request = await client.getUrl(uri);
-    request.headers.set(HttpHeaders.userAgentHeader, 'Plezy DUCET generator');
+    request.headers.set(HttpHeaders.userAgentHeader, 'Astra DUCET generator');
     final response = await request.close();
     return SourceDownloadResponse(
       statusCode: response.statusCode,

@@ -60,7 +60,7 @@ enum ThemeMode {
 
   /// The presets and Custom are Supporter perks; the built-ins are free in
   /// every build.
-  // Silo: every theme is included.
+  // Astra: every theme is included.
   bool get isSupporterPerk => false;
 }
 
@@ -1169,7 +1169,7 @@ class SettingsService extends BaseSharedPreferencesService {
     await prefs.remove(_legacyUseExoPlayerKey);
     await _resetGlobalsOfKeyedPlayerScopes();
 
-    // The custom relay of Plezy's former Watch Together protocol: no Open
+    // The custom relay of the upstream app's former Watch Together protocol: no Open
     // Watch Party relay answers there.
     await prefs.remove(_legacyCustomRelayUrlKey);
     final storedRelay = readNullableString(watchPartyRelayUrl.key);

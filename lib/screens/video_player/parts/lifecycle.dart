@@ -245,7 +245,7 @@ extension _VideoPlayerLifecycleMethods on VideoPlayerScreenState {
 
   /// Grace expired while still backgrounded: release the native AV pipeline
   /// (MediaCodec decoders + AudioTrack, tunneled passthrough included) so a
-  /// parked Plezy can't starve other apps on shared-hardware TV SoCs, and end
+  /// parked Astra can't starve other apps on shared-hardware TV SoCs, and end
   /// the backend playback session. Fire OS standby never freezes the process,
   /// so paused heartbeats would pin the session in the server dashboard for
   /// as long as the device sits dark (#1911) — and they buy nothing here: the

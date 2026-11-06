@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Re-resolve Plezy's Apple SwiftPM dependencies so a moved pin is actually fetched.
+# Re-resolve Astra's Apple SwiftPM dependencies so a moved pin is actually fetched.
 #
 # Why this exists: the locks name a revision, but nothing in a normal Flutter
 # build ever fetches it. `flutter run/build -d macos` runs its Xcode steps with

@@ -118,7 +118,7 @@ enum PlayLinkFailureReason {
   /// No reachable server has the title.
   notFound,
 
-  /// The link names something Plezy cannot play from a link (music, photos,
+  /// The link names something Astra cannot play from a link (music, photos,
   /// collections).
   unsupportedItem,
 }

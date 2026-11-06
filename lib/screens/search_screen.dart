@@ -257,7 +257,7 @@ class _SearchScreenState extends State<SearchScreen>
     searchFocusNode.requestFocus();
   }
 
-  /// Apply a complete query submitted from the Plezy companion remote: set the
+  /// Apply a complete query submitted from the Astra companion remote: set the
   /// text, dismiss any open on-screen keyboard, land focus on the input without
   /// (re)opening the OSK, and run the search now — the first result takes focus
   /// when it lands (via onSearchCompleted). The user already typed the query on

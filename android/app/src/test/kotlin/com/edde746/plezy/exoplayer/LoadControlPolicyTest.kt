@@ -145,7 +145,7 @@ class LoadControlPolicyTest {
   fun theTiersMatchTheJellyfinClients() {
     // Borrowed verbatim from jellyfin-androidtv BufferLength and jellyfin-android
     // PlayerViewModel so the same words mean the same thing across Jellyfin clients.
-    // Changing these silently diverges Plezy from that shared vocabulary.
+    // Changing these silently diverges Astra from that shared vocabulary.
     assertEquals(
       LoadControlPolicy.BufferDurations(50_000, 120_000),
       LoadControlPolicy.bufferDurations(LoadControlPolicy.BufferTier.LARGE, availableMB = 4096)
