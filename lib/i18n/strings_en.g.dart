@@ -567,7 +567,7 @@ class Translations$settings$en {
 	String get forestTheme => 'Forest';
 
 	/// en: 'Plum'
-	String get plumTheme => 'Plum';
+	String get plumTheme => 'Astra';
 
 	/// en: 'Paper'
 	String get paperTheme => 'Paper';

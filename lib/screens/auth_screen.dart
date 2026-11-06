@@ -281,12 +281,10 @@ class _AuthScreenState extends State<AuthScreen> {
                           mainAxisAlignment: .center,
                           crossAxisAlignment: .center,
                           children: [
-                            Image.asset('assets/plezy.png', width: 120, height: 120),
-                            const SizedBox(height: 24),
-                            Text(
-                              t.app.title,
-                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: .bold),
-                              textAlign: TextAlign.center,
+                            Semantics(
+                              label: t.app.title,
+                              image: true,
+                              child: Image.asset('assets/plezy.png', width: 140, height: 140),
                             ),
                           ],
                         ),
@@ -310,12 +308,12 @@ class _AuthScreenState extends State<AuthScreen> {
                       mainAxisSize: .min,
                       crossAxisAlignment: .stretch,
                       children: [
-                        Image.asset('assets/plezy.png', width: 120, height: 120),
-                        const SizedBox(height: 24),
-                        Text(
-                          t.app.title,
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: .bold),
-                          textAlign: TextAlign.center,
+                        Center(
+                          child: Semantics(
+                            label: t.app.title,
+                            image: true,
+                            child: Image.asset('assets/plezy.png', width: 120, height: 120),
+                          ),
                         ),
                         const SizedBox(height: 48),
                         _buildAuthBody(),

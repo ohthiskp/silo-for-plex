@@ -980,7 +980,7 @@ class SettingsService extends BaseSharedPreferencesService {
   static final syncOffsetScope = PlayerSettingScopePref('sync_offset_scope', [audioSyncOffset, subtitleSyncOffset]);
   static final displaySwitchDelay = IntPref('display_switch_delay', transform: (v) => v.clamp(0, 10));
 
-  static ThemeMode _tvAwareThemeModeDefault() => PlatformDetector.isTV() ? ThemeMode.oled : ThemeMode.ember; // Silo default
+  static ThemeMode _tvAwareThemeModeDefault() => PlatformDetector.isTV() ? ThemeMode.oled : ThemeMode.plum; // Astra default
   static const themeMode = EnumPref<ThemeMode>(
     'theme_mode',
     values: ThemeMode.values,

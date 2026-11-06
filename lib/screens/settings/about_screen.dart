@@ -33,9 +33,11 @@ class AboutScreen extends StatelessWidget {
                     child: Column(
                       children: [
                         const SizedBox(height: 24),
-                        Image.asset('assets/plezy.png', width: 80, height: 80),
-                        const SizedBox(height: 16),
-                        Text(appName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: .bold)),
+                        Semantics(
+                          label: appName,
+                          image: true,
+                          child: Image.asset('assets/plezy.png', width: 96, height: 96),
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           t.about.versionLabel(version: appVersion),

@@ -123,12 +123,12 @@ class MonoPalette {
 
   /// Aubergine with an orchid accent.
   static const plum = MonoPalette(
-    bg: Color(0xFF151118),
-    surface: Color(0xFF1E1823),
-    outline: Color(0x1FF0E9F4),
-    text: Color(0xFFF0E9F4),
-    textMuted: Color(0xA3F0E9F4),
-    accent: Color(0xFFE29BF0),
+    bg: Color(0xFF07060F),
+    surface: Color(0xFF141127),
+    outline: Color(0x1FECE8FB),
+    text: Color(0xFFEEEAFB),
+    textMuted: Color(0xA3EEEAFB),
+    accent: Color(0xFFA98BFF),
   );
 
   /// Warm off-white paper with a deep teal accent; the light preset.
