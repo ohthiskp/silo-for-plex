@@ -3,6 +3,7 @@ import AstraKit
   import AVFoundation
 #endif
 import Foundation
+import SwiftUI
 import Observation
 
 /// Drives the shared mpv core (`MpvPlayerCore`, unchanged from the Flutter app)
@@ -36,6 +37,11 @@ final class PlayerController {
   var lastError: String?
 
   @ObservationIgnored weak var window: PlatformWindow?
+  #if os(macOS)
+    /// Builds the player controls for the Mac player window.
+    @ObservationIgnored var makeOverlay: (() -> AnyView)?
+    @ObservationIgnored private var host: PlayerWindowHost?
+  #endif
   @ObservationIgnored var server: PlexServerClient?
 
   @ObservationIgnored private var core: MpvPlayerCore?
@@ -65,9 +71,20 @@ final class PlayerController {
 
     let core = MpvPlayerCore()
     core.delegate = bridge
-    guard core.initialize(in: window) else {
-      throw PlaybackFailure("mpv could not start.")
-    }
+    #if os(macOS)
+      // Video plays in its own window whose content view is a plain NSView (see PlayerWindowHost).
+      let host = PlayerWindowHost(over: window, content: makeOverlay?() ?? AnyView(EmptyView()))
+      host.onUserClose = { [weak self] in self?.close() }
+      guard core.initialize(in: host.window) else {
+        host.dismiss()
+        throw PlaybackFailure("mpv could not start.")
+      }
+      self.host = host
+    #else
+      guard core.initialize(in: window) else {
+        throw PlaybackFailure("mpv could not start.")
+      }
+    #endif
     self.core = core
     self.source = source
     self.library = library
@@ -98,6 +115,7 @@ final class PlayerController {
     core.setVisible(true)
     #if os(macOS)
       core.setPaused(false)
+      self.host?.show()
     #else
       try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
       try? AVAudioSession.sharedInstance().setActive(true)
@@ -121,7 +139,8 @@ final class PlayerController {
     if let key = source?.ratingKey { library?.playbackEnded(ratingKey: key) }
     source = nil
     #if os(macOS)
-      if let window, window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+      host?.dismiss()
+      host = nil
     #else
       try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     #endif
@@ -162,7 +181,7 @@ final class PlayerController {
 
   func toggleFullScreen() {
     #if os(macOS)
-      window?.toggleFullScreen(nil)
+      host?.toggleFullScreen()
     #endif
   }
 

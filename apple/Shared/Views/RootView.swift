@@ -13,14 +13,19 @@ struct RootView: View {
     ZStack {
       // The browsing UI stays alive under the player so its scroll position and
       // navigation survive playback; it is hidden, not removed.
-      content
-        .opacity(app.player.isActive ? 0 : 1)
-        .allowsHitTesting(!app.player.isActive)
+      #if os(macOS)
+        // The Mac player has its own window (PlayerWindowHost); this one stays as it is.
+        content
+      #else
+        content
+          .opacity(app.player.isActive ? 0 : 1)
+          .allowsHitTesting(!app.player.isActive)
 
-      if app.player.isActive {
-        PlayerOverlay()
-          .transition(.opacity)
-      }
+        if app.player.isActive {
+          PlayerOverlay()
+            .transition(.opacity)
+        }
+      #endif
 
       if let error = app.player.lastError {
         VStack {
@@ -45,13 +50,26 @@ struct RootView: View {
       }
     }
     .animation(Astra.Motion.page, value: app.player.lastError)
-    .background { (app.player.isActive ? Color.clear : Astra.Color.bg).ignoresSafeArea() }
+    .background { (app.player.isActive && !Self.playerHasOwnWindow ? Color.clear : Astra.Color.bg).ignoresSafeArea() }
     .background(WindowAccessor { app.player.window = $0 })
+    #if os(macOS)
+      .onAppear {
+        app.player.makeOverlay = { [app] in
+          AnyView(PlayerOverlay().environment(app).preferredColorScheme(.dark))
+        }
+      }
+    #endif
     .animation(Astra.Motion.page, value: app.player.isActive)
     .onChange(of: app.phase, initial: true) { _, phase in updateLoader(for: phase) }
     // Controls stay inside the safe area (clear of the Mac title bar and the
     // iPhone status bar); only artwork and backgrounds extend under it.
   }
+
+  #if os(macOS)
+    static let playerHasOwnWindow = true
+  #else
+    static let playerHasOwnWindow = false
+  #endif
 
   private func updateLoader(for phase: AppModel.Phase) {
     switch phase {

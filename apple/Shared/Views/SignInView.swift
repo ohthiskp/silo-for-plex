@@ -87,7 +87,7 @@ struct ServerPickerView: View {
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Astra.Color.hairline))
             .contentShape(RoundedRectangle(cornerRadius: 16))
           }
-          .buttonStyle(.plain)
+          .buttonStyle(AstraCardButtonStyle())
           .pressable(hoverScale: 1.02)
         }
       }

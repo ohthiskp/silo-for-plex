@@ -62,7 +62,7 @@ struct ArtCard: View {
       .frame(width: width, alignment: .leading)
       .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(AstraCardButtonStyle())
   }
 }
 
@@ -110,7 +110,7 @@ struct ContinueCard: View {
       .contentShape(Rectangle())
       .pressable(hoverScale: 1.03)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(AstraCardButtonStyle())
     .contextMenu {
       Button("Details") { openItem(item) }
       Button("Mark as Watched") { Task { await library.setWatched(item, watched: true) } }
@@ -155,7 +155,7 @@ struct PosterCard: View {
       .frame(width: width, alignment: .leading)
       .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(AstraCardButtonStyle())
   }
 }
 

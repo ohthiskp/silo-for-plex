@@ -105,26 +105,31 @@ extension View {
   }
 }
 
-/// Scales slightly on hover and press. Transform only, so scrolling rows never relayout.
+/// Apple TV-style hover: a slight lift with a soft shadow. Transform only, so
+/// scrolling rows never relayout. Hover only: a gesture here would sit inside
+/// a Button's label and swallow its clicks on the Mac. Press feedback comes
+/// from `AstraCardButtonStyle`.
 struct Pressable: ViewModifier {
   var hoverScale: CGFloat = 1.04
   @State private var hovering = false
-  @GestureState private var pressed = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   func body(content: Content) -> some View {
     content
-      // Apple TV-style lift: scale plus a soft shadow under the pointer.
       .shadow(color: .black.opacity(hovering ? 0.45 : 0), radius: 18, y: 10)
-      .scaleEffect(reduceMotion ? 1 : (pressed ? 0.97 : (hovering ? hoverScale : 1)))
-      .animation(pressed ? Astra.Motion.fast : Astra.Motion.base, value: hovering)
-      .animation(Astra.Motion.fast, value: pressed)
+      .scaleEffect(reduceMotion ? 1 : (hovering ? hoverScale : 1))
+      .animation(Astra.Motion.base, value: hovering)
       .onHover { hovering = $0 }
-      #if os(macOS)
-        // A zero-distance drag would steal touches from scroll views on iPhone.
-        .simultaneousGesture(
-          DragGesture(minimumDistance: 0).updating($pressed) { _, state, _ in state = true })
-      #endif
+  }
+}
+
+/// Cards: plain label, a small press-in, and the whole card is the hit area.
+struct AstraCardButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .contentShape(Rectangle())
+      .scaleEffect(configuration.isPressed ? 0.97 : 1)
+      .animation(Astra.Motion.fast, value: configuration.isPressed)
   }
 }
 

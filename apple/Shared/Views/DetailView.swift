@@ -280,6 +280,6 @@ struct EpisodeCard: View {
       .frame(width: width, alignment: .leading)
       .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(AstraCardButtonStyle())
   }
 }
