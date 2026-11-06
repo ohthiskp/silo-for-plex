@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Silo"
+    "title": "Astra"
   },
   "appIcon": {
     "title": "Ilova belgisi",
@@ -9,8 +9,8 @@
     "locked": "Supporter imtiyozi",
     "lockedHint": "Muqobil belgilar — Supporter imtiyozi.",
     "changeFailed": "Ilova belgisini oʻzgartirib boʻlmadi",
-    "launcherHint": "Yangi belgi Silo-dan chiqqaningizdan soʻng bosh ekranda paydo boʻladi.",
-    "tvLauncherHint": "Yangi banner Silo-dan chiqqaningizdan soʻng paydo boʻladi. Android TV televizor qayta ishga tushirilmaguncha eskisini koʻrsatishda davom etishi mumkin.",
+    "launcherHint": "Yangi belgi Astra-dan chiqqaningizdan soʻng bosh ekranda paydo boʻladi.",
+    "tvLauncherHint": "Yangi banner Astra-dan chiqqaningizdan soʻng paydo boʻladi. Android TV televizor qayta ishga tushirilmaguncha eskisini koʻrsatishda davom etishi mumkin.",
     "names": {
       "midnight": "Yarim tun",
       "ember": "Choʻgʻ",
@@ -53,7 +53,7 @@
     "quickConnectWaiting": "Tasdiq kutilmoqda…",
     "quickConnectCancel": "Bekor qilish",
     "quickConnectExpired": "Tezkor ulanish vaqti tugadi. Qaytadan urinib koʻring.",
-    "localDataRecoveryRequired": "Silo mahalliy kirish maʼlumotlarini tiklay olmadi. Iltimos, qaytadan kiring.",
+    "localDataRecoveryRequired": "Astra mahalliy kirish maʼlumotlarini tiklay olmadi. Iltimos, qaytadan kiring.",
     "pinCheckRejected": "Plex PIN tekshiruvi rad etildi"
   },
   "common": {
@@ -153,19 +153,19 @@
     "checkFailed": "Yangilanishlarni tekshirish imkoni boʻlmadi"
   },
   "supporter": {
-    "title": "Silo Supporter",
-    "intro": "Silo rivojini qoʻllab-quvvatlaydigan va tashqi koʻrinish uchun qoʻshimcha imkoniyatlarni ochadigan bir martalik xarid:",
+    "title": "Astra Supporter",
+    "intro": "Astra rivojini qoʻllab-quvvatlaydigan va tashqi koʻrinish uchun qoʻshimcha imkoniyatlarni ochadigan bir martalik xarid:",
     "presetThemes": "Tayyor mavzular",
     "presetThemesDescription": "Choʻgʻ, Muzlik, Oʻrmon, Olxoʻri va Qogʻoz",
     "customTheme": "Shaxsiy mavzu",
     "customThemeDescription": "Har bir rangni oʻzingiz tanlang",
     "appIcons": "Ilova belgilari",
-    "appIconsDescription": "Muqobil Silo belgisini tanlang",
+    "appIconsDescription": "Muqobil Astra belgisini tanlang",
     "buy": "${price} evaziga sotib olish",
     "loadingPrice": "Narx yuklanmoqda...",
     "restore": "Xaridlarni tiklash",
     "pending": "Xaridingiz toʻlov yoki tasdiqlashni kutmoqda. Doʻkon uni yakunlashi bilanoq qoʻshimchalar ochiladi.",
-    "thankYouTitle": "Silo-ni qoʻllab-quvvatlaganingiz uchun rahmat",
+    "thankYouTitle": "Astra-ni qoʻllab-quvvatlaganingiz uchun rahmat",
     "thankYouBody": "Supporter qoʻshimchalaringiz ochildi.",
     "tileSubtitle": "Bir martalik xarid bilan mavzular va ilova belgilarini oching",
     "tileSubtitleThemesOnly": "Bir martalik xarid bilan mavzularni oching",
@@ -181,7 +181,7 @@
   },
   "settings": {
     "title": "Sozlamalar",
-    "supportDeveloper": "Silo-ni qoʻllab-quvvatlash",
+    "supportDeveloper": "Astra-ni qoʻllab-quvvatlash",
     "supportDeveloperDescription": "Dasturchini Liberapay orqali qoʻllab-quvvatlang",
     "language": "Til",
     "theme": "Mavzu",
@@ -328,7 +328,7 @@
     "importSettingsDescription": "Parametrlarni fayldan tiklang",
     "importSettingsConfirm": "Bu joriy sozlamalaringiz ustidan yoziladi. Davom etasizmi?",
     "importSettingsSuccess": "Sozlamalar import qilindi",
-    "importSettingsInvalidFile": "Ushbu fayl toʻgʻri Silo sozlamalar fayli emas",
+    "importSettingsInvalidFile": "Ushbu fayl toʻgʻri Astra sozlamalar fayli emas",
     "importSettingsNoUser": "Sozlamalarni import qilishdan oldin tizimga kiring",
     "shortcutsReset": "Tugmalar birlashmasi standart holatga qaytarildi",
     "resetShortcutsConfirm": "Bu oʻzingiz sozlagan tugmalar birlashmalarini standart holatga qaytaradi. Davom etasizmi?",
@@ -465,7 +465,7 @@
     "forceTvMode": "TV rejimini majburlash",
     "forceTvModeDescription": "TV interfeysini majburiy yoqish. Avtomatik aniqlanmaydigan qurilmalar uchun. Qayta ishga tushirish talab qilinadi.",
     "startInFullscreen": "Toʻliq ekranda boshlash",
-    "startInFullscreenDescription": "Silo-ni ochganda toʻliq ekran rejimida ochish",
+    "startInFullscreenDescription": "Astra-ni ochganda toʻliq ekran rejimida ochish",
     "exitFullscreenOnPlayerClose": "Pleyer yopilganda toʻliq ekrandan chiqish",
     "exitFullscreenOnPlayerCloseDescription": "Video pleyerni yopganda avtomatik ravishda toʻliq ekrandan chiqish",
     "autoHidePerformanceOverlay": "Unumdorlik panelini avto-yashirish",
@@ -515,7 +515,7 @@
     "playerScopeGlobal": "Hamma joyda",
     "playerScopeLibrary": "Kutubxona boʻyicha",
     "playerScopeTitle": "Serial yoki film boʻyicha",
-    "exportDialogTitle": "Silo sozlamalarini eksport qilish"
+    "exportDialogTitle": "Astra sozlamalarini eksport qilish"
   },
   "themeEditor": {
     "builtIn": "Oʻrnatilgan",
@@ -756,8 +756,8 @@
       "one": "Xuddi shu faylda yana ${n} qism saqlanadi va u ham oʻchiriladi:",
       "other": "Xuddi shu faylda yana ${n} qism saqlanadi va ular ham oʻchiriladi:"
     },
-    "deleteScopeUnverifiedProbeFailed": "Silo qaysi fayllar olib tashlanishini tekshira olmadi, shuning uchun u yuqorida koʻrsatilgan elementdan koʻproq narsani oʻchirishi mumkin. Bekor qilib qaytadan urining yoki baribir oʻchiring.",
-    "deleteScopeUnverifiedNoFileInfo": "Serveringiz ushbu element uchun fayl tafsilotlarini taqdim etmadi, shuning uchun Silo qaysi fayllar olib tashlanishini tekshira olmaydi. U yuqorida koʻrsatilgan elementdan koʻproq narsani oʻchirishi mumkin.",
+    "deleteScopeUnverifiedProbeFailed": "Astra qaysi fayllar olib tashlanishini tekshira olmadi, shuning uchun u yuqorida koʻrsatilgan elementdan koʻproq narsani oʻchirishi mumkin. Bekor qilib qaytadan urining yoki baribir oʻchiring.",
+    "deleteScopeUnverifiedNoFileInfo": "Serveringiz ushbu element uchun fayl tafsilotlarini taqdim etmadi, shuning uchun Astra qaysi fayllar olib tashlanishini tekshira olmaydi. U yuqorida koʻrsatilgan elementdan koʻproq narsani oʻchirishi mumkin.",
     "mediaDeletedSuccessfully": "Media elementi muvaffaqiyatli oʻchirildi",
     "mediaFailedToDelete": "Media elementini oʻchirib boʻlmadi",
     "rate": "Baho berish",
@@ -1034,7 +1034,7 @@
     "confirmAction": "Harakatni tasdiqlash"
   },
   "profiles": {
-    "addPlezyProfile": "Silo profilini qoʻshish",
+    "addPlezyProfile": "Astra profilini qoʻshish",
     "switchingProfile": "Profil almashtirilmoqda…",
     "deleteThisProfileTitle": "Ushbu profil oʻchirilsinmi?",
     "deleteThisProfileMessage": "${displayName} oʻchiriladi. Ulanishlarga taʼsir qilmaydi.",
@@ -1111,14 +1111,14 @@
     "accessDeniedMany": "${count} ta server ushbu hisobga kirishni rad etdi",
     "signInAgain": "Qaytadan kirish",
     "editMediaBrowserTitle": "${product} ulanishini tahrirlash",
-    "editMediaBrowserIntro": "${serverName} uchun URL-larni qoʻshing yoki olib tashlang. Silo eng kam kechikishga ega boʻlgan mavjud URL-dan foydalanadi."
+    "editMediaBrowserIntro": "${serverName} uchun URL-larni qoʻshing yoki olib tashlang. Astra eng kam kechikishga ega boʻlgan mavjud URL-dan foydalanadi."
   },
   "accountPreferences": {
     "sectionTitle": "Hisob sozlamalari",
     "hubSubtitleSingle": "${account} hisobida saqlangan audio, subtitr va kutubxona parametrlari",
     "hubSubtitleMultiple": "${count} ta hisobda saqlangan audio, subtitr va kutubxona parametrlari",
     "pickAccount": "Har bir hisob oʻz sozlamalarini saqlaydi. Tahrirlash uchun birini tanlang.",
-    "storedOnAccount": "Bu parametrlar hisobning oʻzida saqlanadi — unga kirilgan har bir ilova ulardan foydalanadi, jumladan boshqa qurilmalaringizdagi Silo ham.",
+    "storedOnAccount": "Bu parametrlar hisobning oʻzida saqlanadi — unga kirilgan har bir ilova ulardan foydalanadi, jumladan boshqa qurilmalaringizdagi Astra ham.",
     "noAccounts": "Sozlanadigan hisoblar yoʻq",
     "noAccountsHint": "Plex-ga kiring yoki Jellyfin yoki Emby serverini ulang — shunda oʻsha hisobda saqlangan sozlamalar shu yerda koʻrinadi.",
     "unavailable": "Bu hisobga ulanib boʻlmadi",
@@ -1395,9 +1395,9 @@
     "uploadLogs": "Jurnallarni yuklash"
   },
   "startup": {
-    "failedTitle": "Silo ishga tusha olmadi",
+    "failedTitle": "Astra ishga tusha olmadi",
     "failedBody": "Ishga tushirish paytida nimadir xato ketdi. Quyidagi tafsilotlar aynan nima muvaffaqiyatsiz boʻlganini koʻrsatadi.",
-    "failedBodyRepairable": "Siloning saqlangan sozlamalar fayli shikastlangan va Silo ishga tushishidan oldin uni qayta tiklash kerak. Qayta urinish yordam bermaydi — Saqlashni tiklashni tanlang.",
+    "failedBodyRepairable": "Astraning saqlangan sozlamalar fayli shikastlangan va Astra ishga tushishidan oldin uni qayta tiklash kerak. Qayta urinish yordam bermaydi — Saqlashni tiklashni tanlang.",
     "phaseLabel": "Qadam",
     "showDetails": "Tafsilotlarni koʻrsatish",
     "hideDetails": "Tafsilotlarni yashirish",
@@ -1406,16 +1406,16 @@
     "uploadDetails": "Tafsilotlarni yuklash",
     "repairStorage": "Saqlashni tiklash",
     "repairTitle": "Saqlangan maʼlumotlar tikilsinmi?",
-    "repairBodyCommon": "Siloning sozlamalar fayli shikastlangan va uni oʻqib boʻlmaydi. Tiklash barcha sozlamalarni standart holatiga qaytaradi.",
+    "repairBodyCommon": "Astraning sozlamalar fayli shikastlangan va uni oʻqib boʻlmaydi. Tiklash barcha sozlamalarni standart holatiga qaytaradi.",
     "repairBodyOneCredential": "Bitta saqlangan kirish maʼlumoti shikastlangan va uni oʻqib boʻlmaydi. Tiklash faqat uni olib tashlaydi; boshqa sozlamalaringizga tegilmaydi.",
     "repairBodySignInsKept": "Serverlaringiz va profillaringiz tizimga kirgan holda qoladi.",
     "repairBodySignInsLost": "Saqlangan kirish maʼlumotlaringizni himoya qiluvchi kalitni ushbu fayldan tiklab boʻlmaydi, shuning uchun har bir server va profilga qaytadan kirishingiz kerak boʻladi. Media serveringizdagi hech narsaga taʼsir qilmaydi.",
-    "repairBodySessionsUncertain": "Trekerlar (MAL, AniList, Simkl, Trakt) va Seerr alohida saqlanadi va ular saqlanib qolishi ham, yoʻqolishi ham mumkin. Silo aynan nimani saqlaganini sizga xabar qiladi.",
+    "repairBodySessionsUncertain": "Trekerlar (MAL, AniList, Simkl, Trakt) va Seerr alohida saqlanadi va ular saqlanib qolishi ham, yoʻqolishi ham mumkin. Astra aynan nimani saqlaganini sizga xabar qiladi.",
     "repairConfirm": "Tiklash",
     "repairSucceeded": "Saqlash tiklandi",
     "repairNeedsRestart": "Saqlash tiklandi — qayta ishga tushirish kerak",
-    "restartRequiredBody": "Maʼlumotlaringiz tiklandi, lekin Silo ulardan foydalanishi uchun yangidan ishga tushishi kerak. Silo-ni yoping va qayta oching.",
-    "quitPlezy": "Silo-dan chiqish",
+    "restartRequiredBody": "Maʼlumotlaringiz tiklandi, lekin Astra ulardan foydalanishi uchun yangidan ishga tushishi kerak. Astra-ni yoping va qayta oching.",
+    "quitPlezy": "Astra-dan chiqish",
     "repairFailed": "Tiklash amalga oshmadi",
     "repairKeptSignIns": "Serverlaringiz va profillaringiz hali ham tizimga kirgan.",
     "repairLostSignIns": "Saqlangan kirish maʼlumotlaringizni himoya qiluvchi kalitni tiklab boʻlmadi. Har bir server va profilga qaytadan kirishingiz kerak boʻladi.",
@@ -1424,7 +1424,7 @@
     "backupWarning": "Unda kirish hisob maʼlumotlaringiz bor. Uni yuklamang yoki baham koʻrmang.",
     "deleteBackup": "Nusxani oʻchirish",
     "backupDeleted": "Nusxa oʻchirildi.",
-    "previousFailureTitle": "Silo oxirgi marta ishga tushmadi"
+    "previousFailureTitle": "Astra oxirgi marta ishga tushmadi"
   },
   "licenses": {
     "relatedPackages": "Bogʻliq paketlar",
@@ -1826,7 +1826,7 @@
     "codeCopied": "Xona kodi nusxalandi",
     "shareInvite": "Taklifni ulashish",
     "inviteCopied": "Taklif nusxalandi. Uni xabarga joylashtiring.",
-    "inviteMessage": "Silo-dagi \"Birgalikda tomosha qilish\" xonamga qoʻshiling: \"Birgalikda tomosha qilish\" boʻlimini oching, \"Xonaga qoʻshilish\" tugmasini tanlang va ${code} kodini kiriting.",
+    "inviteMessage": "Astra-dagi \"Birgalikda tomosha qilish\" xonamga qoʻshiling: \"Birgalikda tomosha qilish\" boʻlimini oching, \"Xonaga qoʻshilish\" tugmasini tanlang va ${code} kodini kiriting.",
     "openSessionControls": "Boshqaruv elementlarini ochish",
     "reconnecting": "Qayta ulanmoqda...",
     "reconnectingDescription": "Ulanish uzildi. Xonaga avtomatik ravishda qayta qoʻshilasiz.",
@@ -1852,7 +1852,7 @@
     "chooseAnotherCopy": "Boshqa nusxani tanlash",
     "dontPlay": "Ijro etmaslik",
     "unavailableTitle": "Sizda bu video yoʻq",
-    "unavailableDescription": "Silo uni kutubxonalaringizdan topa olmadi. Nusxani oʻzingiz tanlang yoki qaytadan qidiring.",
+    "unavailableDescription": "Astra uni kutubxonalaringizdan topa olmadi. Nusxani oʻzingiz tanlang yoki qaytadan qidiring.",
     "chooseCopy": "Nusxani tanlash",
     "searchAgain": "Qaytadan qidirish",
     "noCandidates": "Kutubxonalaringizda nusxalar topilmadi.",
@@ -1952,7 +1952,7 @@
       "relayFull": "Birgalikda tomosha qilish xizmati hozir band. Keyinroq qaytadan urinib koʻring.",
       "unreachable": "Birgalikda tomosha relesiga ulanib boʻlmadi. Ulanishni tekshiring.",
       "rateLimited": "Urinishlar juda koʻp. Biroz kuting va qaytadan urinib koʻring.",
-      "clientBlocked": "Silo-ning bu versiyasi reledan foydalana olmaydi. Ilovani yangilang.",
+      "clientBlocked": "Astra-ning bu versiyasi reledan foydalana olmaydi. Ilovani yangilang.",
       "forbidden": "Buni faqat tashkilotchi qila oladi.",
       "notInRoom": "Siz xonada emassiz.",
       "alreadyInRoom": "Siz allaqachon xonadasiz.",
@@ -2050,14 +2050,14 @@
       "bannerAction": "Batafsil",
       "sheetTitle": "Fondagi yuklamalar bloklangan",
       "sheetTitleDegraded": "Fondagi yuklamalar cheklangan boʻlishi mumkin",
-      "sheetIntro": "Android Silo-ning fonda ishonchli yuklab olishiga toʻsqinlik qilmoqda.",
-      "sheetIntroDegraded": "Qurilmangiz Silo fonda qachon yuklay olishini cheklamoqda.",
-      "reasonBackgroundRestricted": "Silo-ning fondagi faoliyati cheklangan. Batareya yoki fondagi foydalanishni \"Cheklanmagan\" qilib belgilang.",
-      "reasonStandbyRestricted": "Android Silo-ni cheklangan kutish holatiga oʻtkazdi. Batareya foydalanishini \"Cheklanmagan\" qilib belgilang.",
+      "sheetIntro": "Android Astra-ning fonda ishonchli yuklab olishiga toʻsqinlik qilmoqda.",
+      "sheetIntroDegraded": "Qurilmangiz Astra fonda qachon yuklay olishini cheklamoqda.",
+      "reasonBackgroundRestricted": "Astra-ning fondagi faoliyati cheklangan. Batareya yoki fondagi foydalanishni \"Cheklanmagan\" qilib belgilang.",
+      "reasonStandbyRestricted": "Android Astra-ni cheklangan kutish holatiga oʻtkazdi. Batareya foydalanishini \"Cheklanmagan\" qilib belgilang.",
       "reasonDownloadChannelBlocked": "Yuklash bildirishnomalari oʻchirilgan, shuning uchun jarayon koʻrsatkichi va boshqaruv elementlari mavjud boʻlmasligi mumkin.",
       "reasonNotificationsDisabled": "Bildirishnomalar oʻchirilgan. Android 13 va undan yangi versiyalarda uzoq davom etadigan fondagi yuklamalar uchun ular talab qilinadi.",
       "reasonDataSaver": "Trafik tejash yoqilgan, bu mobil internetda fondagi yuklamalarni bloklaydi. Wi-Fi orqali yuklamalar ishlashi kerak.",
-      "reasonOemUnknown": "Silo fonda boʻlganida yuklamalar bir necha marta toʻxtadi. Silo-ning batareya yoki fondagi foydalanish sozlamalarini tekshiring.",
+      "reasonOemUnknown": "Astra fonda boʻlganida yuklamalar bir necha marta toʻxtadi. Astra-ning batareya yoki fondagi foydalanish sozlamalarini tekshiring.",
       "openSettings": "Sozlamalarni ochish",
       "stillNotWorking": "Qurilmaga oid yordam",
       "stillNotWorkingDescription": "Qurilmangiz uchun qadamlarni koʻring yoki muammo davom etsa Sozlamalar › Jurnallarni koʻrish boʻlimidan jurnal yuboring.",
@@ -2131,19 +2131,19 @@
       "manualAddressHint": "Qoʻlda ulanish manzili:"
     },
     "pairing": {
-      "discoveryDescription": "Bir xil Plex hisobidagi Silo qurilmalari bu yerda koʻrinadi",
+      "discoveryDescription": "Bir xil Plex hisobidagi Astra qurilmalari bu yerda koʻrinadi",
       "hostAddressHint": "192.168.1.100:48632",
       "connecting": "Ulanilmoqda...",
       "searchingForDevices": "Qurilmalar qidirilmoqda...",
       "noDevicesFound": "Tarmoqda qurilmalar topilmadi",
-      "noDevicesHint": "Kompyuterda Silo-ni oching va bir xil Wi-Fi-ga ulaning",
+      "noDevicesHint": "Kompyuterda Astra-ni oching va bir xil Wi-Fi-ga ulaning",
       "availableDevices": "Mavjud qurilmalar",
       "manualConnection": "Qoʻlda ulanish",
       "cryptoInitFailed": "Xavfsiz ulanish xatoligi. Avval Plex-ga kiring.",
       "validationHostRequired": "Xost manzilini kiriting",
       "validationHostFormat": "Format IP:port koʻrinishida boʻlishi kerak",
       "connectionTimedOut": "Ulanish vaqti tugadi. Ikkala qurilmada ham bir xil tarmoqdan foydalaning.",
-      "sessionNotFound": "Qurilma topilmadi. Silo xost qurilmada ishga tushirilganiga ishonch hosil qiling.",
+      "sessionNotFound": "Qurilma topilmadi. Astra xost qurilmada ishga tushirilganiga ishonch hosil qiling.",
       "authFailed": "Autentifikatsiya xatoligi.",
       "failedToConnect": "Ulanib boʻlmadi: ${error}"
     },
@@ -2389,11 +2389,11 @@
     "connected": "Ulandi",
     "connectedAs": "@${username} sifatida ulandi",
     "disconnectConfirm": "Trakt uzilsinmi?",
-    "disconnectConfirmBody": "Silo Trakt-ga maʼlumot yuborishni toʻxtatadi.",
+    "disconnectConfirmBody": "Astra Trakt-ga maʼlumot yuborishni toʻxtatadi.",
     "scrobble": "Real vaqt rejimida kuzatish",
     "scrobbleDescription": "Ijro paytida Trakt-ga maʼlumot yuborish.",
     "watchedSync": "Koʻrish holatini sinxronlash",
-    "watchedSyncDescription": "Silo-da belgilanganda Trakt-da ham belgilanadi."
+    "watchedSyncDescription": "Astra-da belgilanganda Trakt-da ham belgilanadi."
   },
   "seerr": {
     "title": "Seerr",
@@ -2408,7 +2408,7 @@
     "noSignInMethods": "Ushbu Seerr qoʻllab-quvvatlanadigan kirish usulini taklif qilmaydi.",
     "instance": "Instansiya",
     "disconnectConfirm": "Seerr uzilsinmi?",
-    "disconnectConfirmBody": "Silo ushbu Seerr nusxasini unutadi. Istalgan vaqtda qayta ulanishingiz mumkin.",
+    "disconnectConfirmBody": "Astra ushbu Seerr nusxasini unutadi. Istalgan vaqtda qayta ulanishingiz mumkin.",
     "request": "Soʻrov yuborish",
     "request4k": "4K soʻrov yuborish",
     "seasons": "Mavsumlar",
@@ -2433,7 +2433,7 @@
     "statusBlocklisted": "Bloklangan roʻyxatda",
     "couldNotReach": "${url} manziliga ulanib boʻlmadi: ${error}",
     "noInstanceAtUrl": "${url} manzilida Seerr nusxasi yoʻq (HTTP ${status})",
-    "behindAuthProxy": "Seerr oʻrniga autentifikatsiya qiluvchi teskari proksi (SSO yoki HTTP auth) javob berdi. Silo uning orqali kira olmaydi: ushbu ilova uchun Seerrning /api/v1 yoʻli proksini aylanib oʻtishiga ruxsat bering yoki Seerrga toʻgʻridan-toʻgʻri yetadigan manzildan foydalaning.",
+    "behindAuthProxy": "Seerr oʻrniga autentifikatsiya qiluvchi teskari proksi (SSO yoki HTTP auth) javob berdi. Astra uning orqali kira olmaydi: ushbu ilova uchun Seerrning /api/v1 yoʻli proksini aylanib oʻtishiga ruxsat bering yoki Seerrga toʻgʻridan-toʻgʻri yetadigan manzildan foydalaning.",
     "invalidUrl": "Server manzilini kiriting, masalan: https://seerr.example.com",
     "quickConnectUnsupported": "Bu Seerr nusxasi Tezkor ulanishni qoʻllab-quvvatlamaydi. Buning uchun Seerr 3.4 yoki undan yangi versiya kerak.",
     "notInitialized": "Bu Seerr nusxasining dastlabki sozlamasi yakunlanmagan",
@@ -2456,7 +2456,7 @@
     "scrobble": "Jarayonni avtomatik kuzatish",
     "scrobbleDescription": "Epizod yoki filmni tugatganingizda roʻyxatingizni yangilash.",
     "disconnectConfirm": "${service} uzilsinmi?",
-    "disconnectConfirmBody": "Silo ${service} yangilashni toʻxtatadi. Istalgan vaqtda qayta ulanishingiz mumkin.",
+    "disconnectConfirmBody": "Astra ${service} yangilashni toʻxtatadi. Istalgan vaqtda qayta ulanishingiz mumkin.",
     "connectFailed": "${service} ulana olmadi. Qaytadan urinib koʻring.",
     "names": {
       "mal": "MyAnimeList",
@@ -2467,10 +2467,10 @@
     },
     "simklReconnect": {
       "title": "Simkl-ni qayta ulash",
-      "subtitle": "Simkl bu ulanishda ishlatiladigan kirish usulini toʻxtatmoqda. Qayta ulanganda Silo-ni tasdiqlash uchun simkl.com ochiladi — Silo parolingizni hech qachon koʻrmaydi. Tomosha tarixingiz Simkl-da saqlanib qoladi."
+      "subtitle": "Simkl bu ulanishda ishlatiladigan kirish usulini toʻxtatmoqda. Qayta ulanganda Astra-ni tasdiqlash uchun simkl.com ochiladi — Astra parolingizni hech qachon koʻrmaydi. Tomosha tarixingiz Simkl-da saqlanib qoladi."
     },
     "deviceCode": {
-      "title": "Silo-ni ${service} xizmatida faollashtiring",
+      "title": "Astra-ni ${service} xizmatida faollashtiring",
       "instructions": "QR-kodni skanerlang yoki quyidagi manzilga oʻtib, bu kodni kiriting:",
       "openToActivate": "Faollashtirish uchun ${service} xizmatini oching",
       "copyCode": "Faollashtirish kodini nusxalash",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Get App Store Connect ready for a Silo TestFlight upload.
+"""Get App Store Connect ready for an Astra TestFlight upload.
 
 - Registers the bundle ID with Apple if it isn't registered yet.
 - Checks that an App Store Connect app record exists for it, and explains
@@ -62,7 +62,7 @@ def main():
         print(f"Bundle ID {bundle} is registered.")
     else:
         status, res = call("POST", "/bundleIds", {
-            "data": {"type": "bundleIds", "attributes": {"identifier": bundle, "name": "Silo", "platform": platform}}
+            "data": {"type": "bundleIds", "attributes": {"identifier": bundle, "name": "Astra", "platform": platform}}
         })
         if status not in (200, 201):
             print(f"::error::Couldn't register bundle ID {bundle}: {status} {res}")
@@ -75,7 +75,7 @@ def main():
         print(
             "::error::No App Store Connect app exists for "
             f"{bundle} yet. Create it once: appstoreconnect.apple.com → Apps → + → New App → "
-            f"platform iOS (and tvOS if you want Apple TV), any unique name, bundle ID {bundle}, SKU silo. "
+            f"platform iOS (and tvOS if you want Apple TV), any unique name, bundle ID {bundle}, SKU astra. "
             "Then run this workflow again."
         )
         sys.exit(1)

@@ -1,4 +1,4 @@
-name: Silo iOS (TestFlight)
+name: Astra iOS (TestFlight)
 run-name: TestFlight ${{ github.sha }}
 
 on:
@@ -13,7 +13,7 @@ concurrency:
 
 env:
   FLUTTER_VERSION: "3.47.1"
-  BUNDLE_ID: com.ohthiskp.silo
+  BUNDLE_ID: com.ohthiskp.astra
 
 jobs:
   testflight:
@@ -102,14 +102,14 @@ jobs:
         run: |
           xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/Silo.xcarchive" archive \
+            -archivePath "$RUNNER_TEMP/Astra.xcarchive" archive \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
             | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|warning: .*sign|ARCHIVE (SUCCEEDED|FAILED)" || true
-          test -d "$RUNNER_TEMP/Silo.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
+          test -d "$RUNNER_TEMP/Astra.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
 
       - name: Upload to TestFlight
         env:
@@ -132,14 +132,14 @@ jobs:
           EOF
           sed -i '' 's/^          //' "$RUNNER_TEMP/ExportOptions.plist"
           xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Silo.xcarchive" \
+            -archivePath "$RUNNER_TEMP/Astra.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
-          echo "### Uploaded Silo ${{ steps.ver.outputs.name }} (${{ steps.ver.outputs.build }}) to TestFlight" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Uploaded Astra ${{ steps.ver.outputs.name }} (${{ steps.ver.outputs.build }}) to TestFlight" >> "$GITHUB_STEP_SUMMARY"
           echo "Apple processes it for 5–30 minutes, then it appears in the TestFlight app." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove API key

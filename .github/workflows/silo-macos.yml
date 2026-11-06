@@ -1,4 +1,4 @@
-name: Silo macOS
+name: Astra macOS
 run-name: ${{ inputs.publish && 'Release' || 'Test build' }} ${{ github.sha }}
 
 on:
@@ -55,7 +55,7 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "build=$(( 100 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
 
-      - name: Build Silo.app
+      - name: Build Astra.app
         run: >
           flutter build macos --release
           --build-name=${{ steps.ver.outputs.name }}
@@ -66,7 +66,7 @@ jobs:
 
       - name: Sign to run locally (ad-hoc)
         run: |
-          APP="build/macos/Build/Products/Release/Silo.app"
+          APP="build/macos/Build/Products/Release/Astra.app"
           test -d "$APP"
           # inside-out: helpers, frameworks and dylibs first, then the app with its entitlements
           find "$APP/Contents/Frameworks" \( -name "*.xpc" -o -name "*.app" -o -name "*.framework" -o -name "*.dylib" \) -print0 \
@@ -79,30 +79,30 @@ jobs:
 
       - name: Make DMG
         run: |
-          mkdir -p dmg && cp -R build/macos/Build/Products/Release/Silo.app dmg/
+          mkdir -p dmg && cp -R build/macos/Build/Products/Release/Astra.app dmg/
           ln -s /Applications dmg/Applications
           cat > "dmg/READ ME FIRST.txt" <<'EOF'
-          Silo for Plex
+          Astra
 
-          1. Drag Silo onto the Applications folder.
-          2. Open Silo from Applications.
+          1. Drag Astra onto the Applications folder.
+          2. Open Astra from Applications.
 
           The first time, macOS says it can't verify the app (it isn't notarized by Apple).
           Click Done, then open System Settings > Privacy & Security, scroll down and click
-          "Open Anyway" next to Silo. You only do this once: later updates install inside the app.
+          "Open Anyway" next to Astra. You only do this once: later updates install inside the app.
 
-          Silo is based on Plezy (github.com/edde746/plezy) and licensed under GPL-3.0.
+          Astra is based on Plezy (github.com/edde746/plezy) and licensed under GPL-3.0.
           Source: github.com/ohthiskp/silo-for-plex
           EOF
           sed -i '' 's/^          //' "dmg/READ ME FIRST.txt"
-          hdiutil create -format ULMO -srcfolder dmg -volname "Silo" Silo.dmg
-          shasum -a 256 Silo.dmg
+          hdiutil create -format ULMO -srcfolder dmg -volname "Astra" Astra.dmg
+          shasum -a 256 Astra.dmg
 
       - name: Upload build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: Silo-macOS
-          path: Silo.dmg
+          name: Astra-macOS
+          path: Astra.dmg
 
       - name: Publish release
         if: ${{ inputs.publish }}
@@ -110,11 +110,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v${{ steps.ver.outputs.name }}-build.${{ steps.ver.outputs.build }}"
-          cp Silo.dmg "Silo-${{ steps.ver.outputs.name }}.dmg"
-          gh release create "$TAG" "Silo-${{ steps.ver.outputs.name }}.dmg" Silo.dmg \
+          cp Astra.dmg "Astra-${{ steps.ver.outputs.name }}.dmg"
+          gh release create "$TAG" "Astra-${{ steps.ver.outputs.name }}.dmg" Astra.dmg \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "Silo ${{ steps.ver.outputs.name }} (build ${{ steps.ver.outputs.build }})" \
-            --notes "Download **Silo.dmg**, open it, and drag Silo into Applications. Already have Silo? It updates itself from inside the app."
+            --title "Astra ${{ steps.ver.outputs.name }} (build ${{ steps.ver.outputs.build }})" \
+            --notes "Download **Astra.dmg**, open it, and drag Astra into Applications. Already have Astra? It updates itself from inside the app."
           echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Update in-app update feed
@@ -128,9 +128,9 @@ jobs:
             exit 0
           fi
           python3 -m pip install --quiet --break-system-packages cryptography 2>/dev/null || python3 -m pip install --quiet cryptography
-          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Silo.dmg"
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Astra.dmg"
           RELEASE_NOTES_URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" \
-            python3 tool/silo/appcast.py Silo.dmg "${{ steps.ver.outputs.name }}" "${{ steps.ver.outputs.build }}" "$URL" feed
+            python3 tool/silo/appcast.py Astra.dmg "${{ steps.ver.outputs.name }}" "${{ steps.ver.outputs.build }}" "$URL" feed
           cd feed
           git init -q -b appcast
           git config user.name "silo-release-bot"

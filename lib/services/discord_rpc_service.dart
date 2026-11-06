@@ -391,7 +391,7 @@ class DiscordRPCService {
         return hostedUrl;
       }
     } catch (e) {
-      appLogger.d('Failed to upload thumbnail to Silo poster host', error: e);
+      appLogger.d('Failed to upload thumbnail to Astra poster host', error: e);
     }
     return null;
   }

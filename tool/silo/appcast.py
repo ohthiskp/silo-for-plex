@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sign a Silo macOS DMG for Sparkle and write appcast.xml.
+"""Sign an Astra macOS DMG for Sparkle and write appcast.xml.
 
 Usage: appcast.py <dmg> <short_version> <build_number> <download_url> <out_dir>
 Needs SPARKLE_ED_SEED (base64 Ed25519 seed) in the environment. The matching
@@ -24,9 +24,9 @@ pub = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:
 xml = f"""<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>Silo for Plex</title>
+    <title>Astra</title>
     <item>
-      <title>Silo {html.escape(short)}</title>
+      <title>Astra {html.escape(short)}</title>
       <pubDate>{pub}</pubDate>
       <sparkle:version>{html.escape(build)}</sparkle:version>
       <sparkle:shortVersionString>{html.escape(short)}</sparkle:shortVersionString>

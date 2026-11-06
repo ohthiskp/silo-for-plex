@@ -425,7 +425,7 @@ class MediaImageHelper {
       imageUrl,
       cacheKey: _serverArtworkCacheKey(imageUrl),
       cacheManager: PlexImageCacheManager.instance,
-      headers: const {'User-Agent': 'Silo'},
+      headers: const {'User-Agent': 'Astra'},
     );
     final bounded = boundedDecode(provider, memWidth: memWidth, memHeight: memHeight);
     if (logoToneTarget == null) return bounded;
