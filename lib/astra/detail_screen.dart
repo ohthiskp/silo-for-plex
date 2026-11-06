@@ -248,13 +248,13 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
               SliverToBoxAdapter(child: wide ? _wideHeader(context, artClient, client) : _phoneHeader(context, artClient, client)),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(wide ? 48 : 22, 6, wide ? 48 : 22, 0),
+                  padding: EdgeInsets.fromLTRB(wide ? 130 : 22, 6, wide ? 48 : 22, 0),
                   child: _tabs(),
                 ),
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(wide ? 48 : 22, 8, wide ? 48 : 0, MediaQuery.paddingOf(context).bottom + 60),
+                  padding: EdgeInsets.fromLTRB(wide ? 130 : 22, 8, wide ? 48 : 0, MediaQuery.paddingOf(context).bottom + 60),
                   child: _tabBody(wide),
                 ),
               ),
@@ -262,7 +262,7 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
           ),
           Positioned(
             top: top + (wide ? 22 : 10),
-            left: wide ? 40 : 16,
+            left: wide ? 130 : 16,
             child: _CircleButton(icon: Icons.chevron_left_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
           ),
           if (!wide && _library != null && _kind == MediaKind.show && widget.onLegacyDetails != null)
@@ -361,7 +361,7 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
             ),
           ),
           Positioned(
-            left: 48,
+            left: 130,
             top: 120,
             child: ClipRRect(
               borderRadius: const BorderRadius.all(Radius.circular(16)),
@@ -385,7 +385,7 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
             ),
           ),
           Positioned(
-            left: 316,
+            left: 398,
             top: 128,
             width: 560,
             child: Column(

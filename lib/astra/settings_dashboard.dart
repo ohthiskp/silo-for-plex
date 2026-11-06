@@ -60,7 +60,7 @@ class AstraSettingsDashboard extends StatelessWidget {
           SafeArea(
             bottom: false,
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(pad, width >= 700 ? 36 : 12, pad, 40),
+              padding: EdgeInsets.fromLTRB(width >= 900 ? 130 : pad, width >= 700 ? 36 : 12, pad, 40),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 1240),

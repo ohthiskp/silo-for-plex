@@ -1,4 +1,5 @@
 import '../astra/astra_style.dart';
+import '../astra/sidebar.dart';
 import 'dart:async';
 import '../media/ids.dart';
 import '../media/media_server_client.dart';
@@ -2041,8 +2042,13 @@ class _MainScreenState extends State<MainScreen>
       return SettingValueBuilder<bool>(
         pref: SettingsService.alwaysKeepSidebarOpen,
         builder: (context, alwaysExpanded, _) {
-          final targetContentOffset = _sideNavigationWidth(context, alwaysExpanded: alwaysExpanded);
-          final reservedContentOffset = alwaysExpanded
+          // Astra 3.0: on Mac/iPad the floating glass sidebar sits over the
+          // content, so the content keeps the full width.
+          final astraSidebar = !PlatformDetector.isTV();
+          final targetContentOffset = astraSidebar ? 0.0 : _sideNavigationWidth(context, alwaysExpanded: alwaysExpanded);
+          final reservedContentOffset = astraSidebar
+              ? 0.0
+              : alwaysExpanded
               ? SideNavigationRailState.expandedWidth
               : SideNavigationRailState.collapsedWidthForContext(context);
 
@@ -2134,6 +2140,32 @@ class _MainScreenState extends State<MainScreen>
                               ),
                             ),
                           ),
+                          if (astraSidebar)
+                            Positioned(
+                              top: 0,
+                              bottom: 0,
+                              left: 20,
+                              child: Center(
+                                child: FocusScope(
+                                  node: _sidebarFocusScope,
+                                  child: AstraSidebar(
+                                    currentTab: _currentTab,
+                                    selectedLibraryKey: _selectedLibraryGlobalKey,
+                                    hasExplore: context.select<CatalogSourcesProvider, bool>((p) => p.hasAnySource),
+                                    onSelectTab: (tab) {
+                                      final restorePreviousFocus = tab == _currentTab;
+                                      _selectTab(tab);
+                                      _focusContent(restorePreviousFocus: restorePreviousFocus);
+                                    },
+                                    onSelectLibrary: (key) {
+                                      _selectLibrary(key);
+                                      _focusContent(restorePreviousFocus: false);
+                                    },
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
                           Positioned(
                             top: 0,
                             bottom: 0,
