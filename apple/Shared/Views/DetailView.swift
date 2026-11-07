@@ -120,15 +120,18 @@ struct DetailView: View {
 
         if !shown.isCatalogOnly {
         Button {
+          let watched = library.isWatched(shown)
           Task { @MainActor in
-            await library.setWatched(shown, watched: !shown.isWatched)
+            await library.setWatched(shown, watched: !watched)
             await load(refresh: true)
           }
         } label: {
-          Label(shown.isWatched ? "Watched" : "Mark Watched", systemImage: shown.isWatched ? "checkmark" : "eye")
+          let watched = library.isWatched(shown)
+          Label(watched ? "Watched" : "Mark Watched", systemImage: watched ? "checkmark" : "eye")
             .labelStyle(WatchedLabelStyle(iconOnly: narrow))
+            .contentTransition(.symbolEffect(.replace))
         }
-        .accessibilityLabel(shown.isWatched ? "Watched" : "Mark Watched")
+        .accessibilityLabel(library.isWatched(shown) ? "Watched" : "Mark Watched")
         .modifier(ActionButtonShape(round: narrow))
         }
       }
@@ -308,7 +311,7 @@ struct EpisodeCard: View {
             if let progress = item.progress { ProgressBar(value: progress).padding(10) }
           }
           .overlay(alignment: .topTrailing) {
-            if item.isWatched {
+            if library.isWatched(item) {
               Image(systemName: "checkmark.circle.fill")
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(.black, .white)
@@ -339,6 +342,7 @@ struct EpisodeCard: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(AstraCardButtonStyle())
+    .itemMenu(library: library, item: item)
     // Outside the card's button, so it gets its own clicks.
     .overlay(alignment: .topTrailing) {
       DownloadButton(item: item, compact: true)

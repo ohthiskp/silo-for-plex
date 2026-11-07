@@ -69,6 +69,7 @@ struct ArtCard: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(AstraCardButtonStyle())
+    .itemMenu(library: library, item: item)
   }
 }
 
@@ -121,10 +122,7 @@ struct ContinueCard: View {
       .pressable(hoverScale: 1.03)
     }
     .buttonStyle(AstraCardButtonStyle())
-    .contextMenu {
-      Button("Details") { openItem(item) }
-      Button("Mark as Watched") { Task { await library.setWatched(item, watched: true) } }
-    }
+    .itemMenu(library: library, item: item)
   }
 }
 
@@ -146,7 +144,7 @@ struct PosterCard: View {
           .frame(width: width, height: height)
           .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
           .overlay(alignment: .topTrailing) {
-            if item.isWatched {
+            if library.isWatched(item) {
               Image(systemName: "checkmark.circle.fill")
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(.black, .white)
@@ -166,6 +164,7 @@ struct PosterCard: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(AstraCardButtonStyle())
+    .itemMenu(library: library, item: item)
   }
 }
 
@@ -181,5 +180,62 @@ struct ProgressBar: View {
           Capsule().fill(Astra.Color.accent).frame(width: max(4, geo.size.width * value))
         }
       }
+  }
+}
+
+// MARK: - Long-press menu
+
+extension View {
+  /// Astra: the long-press (right-click on Mac) menu on every title card.
+  func itemMenu(library: LibraryStore, item: PlexMetadata) -> some View {
+    modifier(ItemMenu(library: library, item: item))
+  }
+}
+
+/// Details, Play, Download, Mark Watched / Unwatched, and for episodes Go to
+/// Season and Go to Show. TMDB-only titles get Details only.
+struct ItemMenu: ViewModifier {
+  var library: LibraryStore
+  var item: PlexMetadata
+  @Environment(AppModel.self) private var app
+  @Environment(\.openItem) private var openItem
+  @Environment(\.playItem) private var playItem
+
+  func body(content: Content) -> some View {
+    content.contextMenu {
+      Button { openItem(item) } label: { Label("Details", systemImage: "info.circle") }
+      if !item.isCatalogOnly {
+        Button { playItem(item) } label: { Label("Play", systemImage: "play.fill") }
+        let watched = library.isWatched(item)
+        Button {
+          Task { await library.setWatched(item, watched: !watched) }
+        } label: {
+          Label(watched ? "Mark Unwatched" : "Mark Watched", systemImage: watched ? "eye.slash" : "checkmark.circle")
+        }
+        let isGroup = item.type == .show || item.type == .season
+        let downloadState = isGroup ? app.downloads.state(forEpisodesOf: item) : app.downloads.state(for: item.ratingKey)
+        if item.type != .collection, downloadState == .none {
+          Button { app.downloads.download(item) } label: { Label("Download", systemImage: "arrow.down.circle") }
+        }
+        if item.type == .episode {
+          Divider()
+          if let season = item.parentRatingKey {
+            Button {
+              openItem(PlexMetadata(ratingKey: season, type: .season, title: item.parentTitle ?? "Season"))
+            } label: { Label("Go to Season", systemImage: "square.stack") }
+          }
+          if let show = item.grandparentRatingKey {
+            Button {
+              openItem(PlexMetadata(ratingKey: show, type: .show, title: item.grandparentTitle ?? "Show"))
+            } label: { Label("Go to Show", systemImage: "tv") }
+          }
+        } else if item.type == .season, let show = item.parentRatingKey {
+          Divider()
+          Button {
+            openItem(PlexMetadata(ratingKey: show, type: .show, title: item.parentTitle ?? "Show"))
+          } label: { Label("Go to Show", systemImage: "tv") }
+        }
+      }
+    }
   }
 }

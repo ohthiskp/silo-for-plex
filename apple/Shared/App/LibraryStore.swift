@@ -670,7 +670,20 @@ final class LibraryStore {
     }
   }
 
+  /// Watched state changed in this session, shown at once while the server catches up.
+  private(set) var watchedOverrides: [String: Bool] = [:]
+
+  /// The watched state to show: a change made here wins over the server's copy.
+  func isWatched(_ item: PlexMetadata) -> Bool {
+    watchedOverrides[item.ratingKey] ?? item.isWatched
+  }
+
+  /// Astra: flips the checkmark immediately (KP: Mark Watched felt delayed),
+  /// then tells the server; Home refreshes in the background. On failure the
+  /// old state comes back.
   func setWatched(_ item: PlexMetadata, watched: Bool) async {
+    let before = watchedOverrides[item.ratingKey]
+    watchedOverrides[item.ratingKey] = watched
     do {
       if watched {
         try await client.markWatched(ratingKey: item.ratingKey)
@@ -678,8 +691,11 @@ final class LibraryStore {
         try await client.markUnwatched(ratingKey: item.ratingKey)
       }
       detailCache[item.ratingKey] = nil
-      await loadHome()
+      if let parent = item.parentRatingKey { detailCache[parent] = nil }
+      if let show = item.grandparentRatingKey { detailCache[show] = nil }
+      spawn { [weak self] in await self?.loadHome() }
     } catch {
+      watchedOverrides[item.ratingKey] = before
       homeError = describe(error)
     }
   }
