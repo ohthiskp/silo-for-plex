@@ -16,9 +16,9 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     env:
-      CRASHED_SHA: 5084d15
-      UUID: 5ef1a69e-e7b0-34f6-99b2-df8e4dfb6555
-      OFFSETS: "954076 53285 56153 56149 60640"
+      CRASHED_SHA: d4e4c89
+      UUID: 5e26f1dd-e16d-372f-82b3-d40d3cba3339
+      OFFSETS: "955224 53349 60704"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -33,7 +33,7 @@ jobs:
           xcodegen generate
           xcodebuild archive -project Astra.xcodeproj -scheme AstraiOS -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/A.xcarchive" \
-            -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION=202611070514 \
+            -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION=202611071401 \
             | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)" || true
       - name: Symbolicate
         run: |
