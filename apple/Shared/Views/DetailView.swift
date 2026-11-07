@@ -50,7 +50,7 @@ struct DetailView: View {
           }
         }
       }
-      .padding(.bottom, 80)
+      .padding(.bottom, 110)
     }
     .scrollIndicators(.never)
     .astraScrollEdges()

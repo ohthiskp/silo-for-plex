@@ -106,7 +106,7 @@ struct HomeView: View {
           }
         }
       }
-      .padding(.bottom, 80)
+      .padding(.bottom, 110)
       .onGeometryChange(for: Bool.self, of: { $0.frame(in: .scrollView).minY > -60 }) { showsTopBar = $0 }
     }
     .scrollIndicators(.never)

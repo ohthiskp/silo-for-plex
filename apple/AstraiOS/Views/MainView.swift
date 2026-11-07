@@ -39,7 +39,10 @@ struct MainView: View {
           .toolbar(.hidden, for: .tabBar)
       }
     }
-    .safeAreaInset(edge: .bottom, spacing: 0) {
+    // Astra: an overlay, not a safe-area inset, so pages scroll underneath
+    // and the glass shows them through it (KP: "why isn't it Liquid Glass").
+    // Pages leave room at their bottom for it.
+    .overlay(alignment: .bottom) {
       WideTabBar(selection: tab, downloads: app.downloads.jobs.count) { picked in
         if picked == tab {
           // Tapping the open tab again goes back to its first page.
@@ -137,5 +140,7 @@ struct WideTabBar: View {
     .animation(.snappy(duration: 0.25), value: selection)
     .padding(.horizontal, 16)
     .padding(.bottom, 2)
+    // Stays at the bottom when the keyboard opens (Search).
+    .ignoresSafeArea(.keyboard)
   }
 }
