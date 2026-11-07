@@ -22,6 +22,9 @@ final class LibraryStore {
   private(set) var hero: [PlexMetadata] = []
   /// For You's numbered Top 10 rows (TMDB trending this week), playable ones from the server.
   private(set) var topTen: (movies: [PlexMetadata], shows: [PlexMetadata]) = ([], [])
+  /// Astra (KP, 2026-11-07): For You's single "Top 10 This Week" row, movies
+  /// and series together in trending order, like the streaming apps.
+  private(set) var topTenAll: [PlexMetadata] = []
   /// Every library on the server.
   private(set) var allSections: [PlexLibrarySection] = []
   /// Settings → Content → Library Quality, read when the store is made; a
@@ -127,7 +130,10 @@ final class LibraryStore {
   var homeContinueWatching: [PlexMetadata] { continueWatching }
 
   var homeRows: [PlexHub] {
-    guard let selectedService else { return hubs }
+    // Astra (KP, 2026-11-07): For You is the hero, Continue Watching and the
+    // Top 10 only, like the streaming apps; Plex's own hubs (Recently Added…)
+    // show only when there is no TMDB to build the Top 10 from.
+    guard let selectedService else { return tmdb == nil ? hubs : [] }
     return serviceContent[selectedService.id]?.hubs ?? []
   }
 
@@ -303,6 +309,7 @@ final class LibraryStore {
     guard isCurrent() else { return }
     if !shown.isEmpty || hero.isEmpty { hero = shown }
     topTen = TrendingHero.topTen(trending: trending, index: libraryIndex ?? [:])
+    topTenAll = TrendingHero.today(trending: trending, index: libraryIndex ?? [:], limit: 10)
     isLoadingHero = false
     // Once the library index is ready, the titles on the server become playable.
     guard !trending.isEmpty, libraryIndex == nil, let index = try? await loadLibraryIndex(), !index.isEmpty
@@ -311,6 +318,7 @@ final class LibraryStore {
     guard isCurrent(), !matched.isEmpty else { return }
     hero = matched
     topTen = TrendingHero.topTen(trending: trending, index: index)
+    topTenAll = TrendingHero.today(trending: trending, index: index, limit: 10)
   }
 
   @ObservationIgnored private var weekTrendingTask: Task<[TMDBItem], Never>?
@@ -362,6 +370,7 @@ final class LibraryStore {
     guard !isClosed else { return }
     if !shown.isEmpty { hero = shown }
     topTen = TrendingHero.topTen(trending: trending, index: index)
+    topTenAll = TrendingHero.today(trending: trending, index: index, limit: 10)
   }
 
   /// Reads cineby's page and TMDB's trending in parallel, looks up only the
