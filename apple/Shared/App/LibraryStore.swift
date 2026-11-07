@@ -25,6 +25,9 @@ final class LibraryStore {
   /// Astra (KP, 2026-11-07): For You's single "Top 10 This Week" row, movies
   /// and series together in trending order, like the streaming apps.
   private(set) var topTenAll: [PlexMetadata] = []
+  /// For You's rows after the Top 10: Recommended For You, Because You
+  /// Watched… and Hidden Gems, all from the library (see `ForYou`).
+  private(set) var forYouRows: [PlexHub] = []
   /// Every library on the server.
   private(set) var allSections: [PlexLibrarySection] = []
   /// Settings → Content → Library Quality, read when the store is made; a
@@ -130,10 +133,10 @@ final class LibraryStore {
   var homeContinueWatching: [PlexMetadata] { continueWatching }
 
   var homeRows: [PlexHub] {
-    // Astra (KP, 2026-11-07): For You is the hero, Continue Watching and the
-    // Top 10 only, like the streaming apps; Plex's own hubs (Recently Added…)
-    // show only when there is no TMDB to build the Top 10 from.
-    guard let selectedService else { return tmdb == nil ? hubs : [] }
+    // Astra (KP, 2026-11-07): For You is the hero, Continue Watching, the
+    // Top 10, then rows built from the library; never Plex's own hubs
+    // (Recently Added…).
+    guard let selectedService else { return forYouRows }
     return serviceContent[selectedService.id]?.hubs ?? []
   }
 
@@ -302,14 +305,14 @@ final class LibraryStore {
     }
     let trending = tmdb == nil ? [] : await loadWeekTrending()
     func picks(_ index: [String: PlexMetadata]) async -> [PlexMetadata] {
-      await loadInFull(TrendingHero.today(trending: trending, index: index)).filter { $0.backdrop != nil }
+      await loadInFull(TrendingHero.pick(trending: trending, index: index, limit: 5)).filter { $0.backdrop != nil }
     }
     var shown = await picks(libraryIndex ?? [:])
     if shown.isEmpty { shown = await pickHero(from: hubs) }
     guard isCurrent() else { return }
     if !shown.isEmpty || hero.isEmpty { hero = shown }
     topTen = TrendingHero.topTen(trending: trending, index: libraryIndex ?? [:])
-    topTenAll = TrendingHero.today(trending: trending, index: libraryIndex ?? [:], limit: 10)
+    topTenAll = TrendingHero.pick(trending: trending, index: libraryIndex ?? [:], limit: 10)
     isLoadingHero = false
     // Once the library index is ready, the titles on the server become playable.
     guard !trending.isEmpty, libraryIndex == nil, let index = try? await loadLibraryIndex(), !index.isEmpty
@@ -318,7 +321,7 @@ final class LibraryStore {
     guard isCurrent(), !matched.isEmpty else { return }
     hero = matched
     topTen = TrendingHero.topTen(trending: trending, index: index)
-    topTenAll = TrendingHero.today(trending: trending, index: index, limit: 10)
+    topTenAll = TrendingHero.pick(trending: trending, index: index, limit: 10)
   }
 
   @ObservationIgnored private var weekTrendingTask: Task<[TMDBItem], Never>?
@@ -366,11 +369,11 @@ final class LibraryStore {
   /// Rebuilds the hero and the Top 10 from a new trending list.
   private func showTrending(_ trending: [TMDBItem]) async {
     let index = libraryIndex ?? [:]
-    let shown = await loadInFull(TrendingHero.today(trending: trending, index: index)).filter { $0.backdrop != nil }
+    let shown = await loadInFull(TrendingHero.pick(trending: trending, index: index, limit: 5)).filter { $0.backdrop != nil }
     guard !isClosed else { return }
     if !shown.isEmpty { hero = shown }
     topTen = TrendingHero.topTen(trending: trending, index: index)
-    topTenAll = TrendingHero.today(trending: trending, index: index, limit: 10)
+    topTenAll = TrendingHero.pick(trending: trending, index: index, limit: 10)
   }
 
   /// Reads cineby's page and TMDB's trending in parallel, looks up only the
@@ -688,6 +691,7 @@ final class LibraryStore {
       hubs = rows.hubs
       isLoadingHome = false
       await loadHero(fallback: rows.hubs, isCurrent: isCurrent)
+      await buildForYou(isCurrent: isCurrent)
     } catch {
       guard isCurrent() else { return }
       isLoadingHero = false
@@ -726,6 +730,35 @@ final class LibraryStore {
       if !items.isEmpty { keptHubs.append(hub) }
     }
     return (keptContinue, keptHubs)
+  }
+
+  /// Recommended For You, Because You Watched… and Hidden Gems from the
+  /// library index. Titles already in the hero, Continue Watching or the Top
+  /// 10 are left out, and each title shows in one row only.
+  private func buildForYou(isCurrent: @escaping () -> Bool) async {
+    guard let index = try? await loadLibraryIndex(), !index.isEmpty, isCurrent() else { return }
+    let library = Array(index.values)
+    let popular = Set(tmdb == nil ? [] : await loadWeekTrending().map(\.id))
+    var exclude = Set((hero + continueWatching + topTenAll).flatMap(ForYou.keys))
+    var rows: [PlexHub] = []
+    func add(_ id: String, _ title: String, _ items: [PlexMetadata]) {
+      guard items.count >= 3 else { return }
+      rows.append(PlexHub(hubIdentifier: "astra.\(id)", title: title, items: items))
+      exclude.formUnion(items.flatMap(ForYou.keys))
+    }
+    add("recommended", "Recommended For You", ForYou.recommended(library: library, exclude: exclude))
+    if let seed = ForYou.becauseSeed(library: library, continueWatching: continueWatching) {
+      // Plex's related titles, kept only when they are in this library (and its quality).
+      let owned = Dictionary(library.map { ($0.ratingKey, $0) }, uniquingKeysWith: { a, _ in a })
+      let related = ((try? await client.relatedHubs(ratingKey: seed.ratingKey)) ?? []).flatMap(\.items)
+      var seen = Set<String>()
+      let items = related.compactMap { owned[$0.ratingKey] }
+        .filter { !ForYou.keys($0).contains(where: exclude.contains) && seen.insert($0.ratingKey).inserted }
+      add("because", "Because You Watched \(seed.displayTitle)", Array(items.prefix(15)))
+    }
+    add("gems", "Hidden Gems", ForYou.hiddenGems(library: library, exclude: exclude, popular: popular))
+    guard isCurrent() else { return }
+    forYouRows = rows
   }
 
   /// The fallback hero: up to five recently added movies or shows released in

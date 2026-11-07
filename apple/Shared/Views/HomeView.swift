@@ -428,7 +428,7 @@ struct HeroCarousel: View {
   var height: CGFloat
 
   @State private var index = 0
-  /// Bumped by manual navigation so the auto-advance timer restarts.
+  /// Bumped by manual navigation so the next title is prefetched.
   @State private var interaction = 0
   @State private var switching = false
 
@@ -475,16 +475,21 @@ struct HeroCarousel: View {
         HeroScrim()
       }
     }
+    #if os(iOS)
+      // Swipe the hero sideways to move between its titles.
+      .simultaneousGesture(
+        DragGesture(minimumDistance: 30).onEnded { drag in
+          let dx = drag.translation.width
+          guard abs(dx) > 50, abs(dx) > abs(drag.translation.height) * 1.5 else { return }
+          step(dx < 0 ? 1 : -1)
+        })
+    #endif
     .task(id: "\(interaction)|\(isPageActive)") {
       // Behind another page (Movies, Shows…): no downloads, no switching.
       guard isPageActive else { return }
+      // Astra (KP, 2026-11-07): a manual carousel; the hero only changes when
+      // the user moves it. The next title's artwork is ready before then.
       await prefetch((index + 1) % max(items.count, 1))
-      // Auto-advance every 8 s; restarts after manual navigation, stops when the view goes away.
-      while !Task.isCancelled && items.count > 1 {
-        try? await Task.pause(8)
-        guard !Task.isCancelled else { break }
-        await show((index + 1) % items.count)
-      }
     }
   }
 

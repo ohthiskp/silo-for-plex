@@ -1134,3 +1134,59 @@ final class LibraryQualityTests: XCTestCase {
     XCTAssertEqual(filter.apply(items).map(\.ratingKey), ["a", "b"])
   }
 }
+
+final class ForYouTests: XCTestCase {
+  private func title(
+    _ key: String, _ type: PlexItemType = .movie, tmdb: Int, genres: [String] = [], rating: Double? = nil,
+    watched: Bool = false, lastViewed: Int? = nil
+  ) -> PlexMetadata {
+    var item = PlexMetadata(ratingKey: key, type: type, title: "T\(key)")
+    item.guids = [PlexGuid(id: "tmdb://\(tmdb)")]
+    item.genres = genres.map { PlexTag(tag: $0) }
+    item.audienceRating = rating
+    if type == .show {
+      item.viewedLeafCount = watched ? 3 : 0
+    } else {
+      item.viewCount = watched ? 1 : 0
+    }
+    item.lastViewedAt = lastViewed
+    return item
+  }
+
+  func testRecommendedFavoursWatchedGenresAndSkipsWatchedAndExcluded() {
+    let library = [
+      title("1", tmdb: 1, genres: ["Science Fiction"], watched: true, lastViewed: 100),
+      title("2", tmdb: 2, genres: ["Science Fiction"], watched: true, lastViewed: 90),
+      title("3", tmdb: 3, genres: ["Romance"], rating: 9.5),
+      title("4", tmdb: 4, genres: ["Science Fiction"], rating: 6.5),
+      title("5", tmdb: 5, genres: ["Science Fiction"], rating: 8),
+      title("6", .show, tmdb: 6, genres: ["Science Fiction"], rating: 8),
+    ]
+    let picks = ForYou.recommended(library: library, exclude: ["movie:5"])
+    XCTAssertEqual(picks.map(\.ratingKey), ["4", "6", "3"])
+  }
+
+  func testHiddenGemsAreUnwatchedWellRatedAndNotTrending() {
+    let library = [
+      title("1", tmdb: 1, rating: 8.9),
+      title("2", tmdb: 2, rating: 8.5),
+      title("3", tmdb: 3, rating: 6.0),
+      title("4", tmdb: 4, rating: 9.1, watched: true),
+      title("5", .show, tmdb: 5, rating: 7.8),
+    ]
+    let gems = ForYou.hiddenGems(library: library, exclude: [], popular: ["movie:1"])
+    XCTAssertEqual(gems.map(\.ratingKey), ["2", "5"])
+  }
+
+  func testBecauseSeedIsTheMostRecentlyWatchedTitle() {
+    let library = [
+      title("1", tmdb: 1, watched: true, lastViewed: 100),
+      title("2", .show, tmdb: 2, watched: true, lastViewed: 50),
+    ]
+    var episode = PlexMetadata(ratingKey: "20", type: .episode, title: "E1")
+    episode.grandparentRatingKey = "2"
+    episode.lastViewedAt = 200
+    XCTAssertEqual(ForYou.becauseSeed(library: library, continueWatching: [episode])?.ratingKey, "2")
+    XCTAssertEqual(ForYou.becauseSeed(library: library, continueWatching: [])?.ratingKey, "1")
+  }
+}
