@@ -12,15 +12,25 @@ public protocol HTTPTransport: Sendable {
 
 public struct URLSessionTransport: HTTPTransport {
   let session: URLSession
+  let log: NetworkLog?
 
-  public init(session: URLSession = .astraDefault) {
+  /// Every request is recorded in `log` (Settings → Network Diagnostics), without tokens.
+  public init(session: URLSession = .astraDefault, log: NetworkLog? = .shared) {
     self.session = session
+    self.log = log
   }
 
   public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-    let (data, response) = try await session.data(for: request)
-    guard let http = response as? HTTPURLResponse else { throw PlexError.invalidResponse }
-    return (data, http)
+    let started = Date()
+    do {
+      let (data, response) = try await session.data(for: request)
+      guard let http = response as? HTTPURLResponse else { throw PlexError.invalidResponse }
+      log?.record(request, status: http.statusCode, started: started, error: nil)
+      return (data, http)
+    } catch {
+      log?.record(request, status: nil, started: started, error: error)
+      throw error
+    }
   }
 }
 

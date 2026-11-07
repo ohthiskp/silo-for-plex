@@ -607,3 +607,148 @@ final class TMDBTests: XCTestCase {
     XCTAssertNil(episode.tmdbKey)
   }
 }
+
+// MARK: - Server sessions and provider loading
+
+final class ServerSessionTests: XCTestCase {
+  typealias C = PlexServerResource.Connection
+
+  private func resource(_ name: String = "Ohana", token: String? = "server-token") -> PlexServerResource {
+    PlexServerResource(
+      name: name, clientIdentifier: "id-\(name)", accessToken: token,
+      connections: [C(uri: "https://\(name.lowercased()).test:32400", local: true, relay: false)])
+  }
+
+  private let sectionsJSON = #"""
+    {"MediaContainer":{"Directory":[
+      {"key":"1","title":"Movies","type":"movie"},{"key":"2","title":"TV Shows","type":"show"},
+      {"key":"3","title":"Music","type":"artist"}]}}
+    """#
+
+  func testConnectValidatesTheTokenByListingLibraries() async throws {
+    let transport = FakeTransport { [sectionsJSON] request in
+      request.url!.path == "/library/sections" ? (200, Data(sectionsJSON.utf8)) : (200, Data())
+    }
+    let session = try await ServerConnector(info: testInfo, transport: transport)
+      .connect(to: resource(), accountToken: "account", generation: 7)
+    XCTAssertEqual(session.generation, 7)
+    XCTAssertEqual(session.serverID, "id-Ohana")
+    XCTAssertEqual(session.client.token, "server-token")
+    // Movies and Shows only: the Shows page can never come up empty because sections were missing.
+    XCTAssertEqual(session.sections.map(\.title), ["Movies", "TV Shows"])
+  }
+
+  /// The bug from the recording: a server that answers /identity but refuses
+  /// the token used to be committed, then Home spun forever.
+  func testServerThatRefusesTheTokenIsNotCommitted() async {
+    let transport = FakeTransport { request in
+      request.url!.path == "/identity" ? (200, Data()) : (401, Data())
+    }
+    do {
+      _ = try await ServerConnector(info: testInfo, transport: transport)
+        .connect(to: resource(), accountToken: "account", generation: 1)
+      XCTFail("expected a throw")
+    } catch {
+      XCTAssertEqual(error as? PlexError, .unauthorized)
+    }
+  }
+
+  func testUnreachableServerThrowsAReadableError() async {
+    let transport = FakeTransport { _ in throw URLError(.timedOut) }
+    do {
+      _ = try await ServerConnector(info: testInfo, transport: transport, probeTimeout: 0.1)
+        .connect(to: resource("Attic"), accountToken: "account", generation: 1)
+      XCTFail("expected a throw")
+    } catch {
+      XCTAssertEqual(error as? PlexError, .noReachableConnection("Attic"))
+      XCTAssertEqual(PlexError.describe(error), "Astra couldn't reach Attic on any of its addresses.")
+    }
+  }
+
+  func testGenerationMarksOlderRequestsStale() {
+    var generation = Generation()
+    let first = generation.next()
+    let second = generation.next()
+    XCTAssertFalse(generation.isCurrent(first))
+    XCTAssertTrue(generation.isCurrent(second))
+  }
+}
+
+final class LibraryIndexerTests: XCTestCase {
+  private func client(_ transport: FakeTransport) -> PlexServerClient {
+    PlexServerClient(
+      baseURL: URL(string: "https://server.test:32400")!, token: "tok", serverName: "Home", info: testInfo,
+      transport: transport)
+  }
+
+  private func page(start: Int, count: Int) -> Data {
+    let items = (start..<(start + count)).map {
+      #"{"ratingKey":"\#($0)","type":"movie","title":"M\#($0)","Guid":[{"id":"tmdb://\#($0)"}]}"#
+    }
+    return Data(#"{"MediaContainer":{"Metadata":[\#(items.joined(separator: ","))]}}"#.utf8)
+  }
+
+  private func section(_ key: String, _ type: String) throws -> PlexLibrarySection {
+    try JSONDecoder().decode(
+      PlexLibrarySection.self, from: Data(#"{"key":"\#(key)","title":"T","type":"\#(type)"}"#.utf8))
+  }
+
+  func testReadsLargeLibrariesInPages() async throws {
+    let transport = FakeTransport { [self] request in
+      let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+      let start = Int(query.first { $0.name == "X-Plex-Container-Start" }?.value ?? "0")!
+      XCTAssertEqual(query.first { $0.name == "X-Plex-Container-Size" }?.value, "1000")
+      return (200, page(start: start, count: min(1000, 2500 - start)))
+    }
+    let index = try await LibraryIndexer.build(client: client(transport), sections: [try section("1", "movie")])
+    XCTAssertEqual(index.count, 2500)
+    XCTAssertEqual(index["movie:2499"]?.ratingKey, "2499")
+    XCTAssertEqual(transport.requests.count, 3)
+  }
+
+  /// A failed page used to leave an empty index cached for good, so every
+  /// streaming service then showed nothing until the app was quit.
+  func testAFailedPageThrowsInsteadOfReturningAPartialIndex() async throws {
+    let transport = FakeTransport { _ in throw URLError(.timedOut) }
+    do {
+      _ = try await LibraryIndexer.build(client: client(transport), sections: [try section("1", "movie")])
+      XCTFail("expected a throw")
+    } catch {
+      XCTAssertEqual((error as? URLError)?.code, .timedOut)
+      XCTAssertTrue(PlexError.describe(error, server: "Ohana").hasPrefix("Ohana took too long to answer"))
+    }
+  }
+
+  func testSkipsMusicAndPhotoLibraries() async throws {
+    let transport = FakeTransport { [self] _ in (200, page(start: 0, count: 3)) }
+    _ = try await LibraryIndexer.build(
+      client: client(transport), sections: [try section("1", "artist"), try section("2", "show")])
+    XCTAssertEqual(transport.requests.map { $0.url!.path }, ["/library/sections/2/all"])
+  }
+}
+
+final class NetworkLogTests: XCTestCase {
+  func testTokensNeverReachTheLog() throws {
+    let log = NetworkLog()
+    var request = URLRequest(
+      url: URL(string: "https://server.test:32400/photo/:/transcode?url=/a&X-Plex-Token=SECRET&width=300")!)
+    request.httpMethod = "GET"
+    log.record(request, status: 200, started: Date(), error: nil)
+    let event = try XCTUnwrap(log.recent.first)
+    XCTAssertFalse(event.path.contains("SECRET"))
+    XCTAssertTrue(event.path.contains("width=300"))
+    XCTAssertEqual(event.host, "server.test")
+    XCTAssertTrue(event.succeeded)
+  }
+
+  func testFailuresAreRecordedWithAReason() throws {
+    let log = NetworkLog(capacity: 2)
+    let request = URLRequest(url: URL(string: "https://a.test/x")!)
+    log.record(request, status: nil, started: Date(), error: URLError(.timedOut))
+    log.record(request, status: 401, started: Date(), error: nil)
+    log.record(request, status: 500, started: Date(), error: nil)
+    XCTAssertEqual(log.recent.count, 2, "keeps only the newest")
+    XCTAssertEqual(log.recent.first?.failure, PlexError.unauthorized.errorDescription)
+    XCTAssertEqual(log.recent.last?.failure, PlexError.http(500).errorDescription)
+  }
+}

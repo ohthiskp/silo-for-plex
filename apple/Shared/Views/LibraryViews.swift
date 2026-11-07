@@ -60,6 +60,8 @@ struct EmptyState: View {
   var symbol: String
   var title: String
   var message: String
+  /// An optional button under the message, such as Try Again.
+  var action: (title: String, run: () -> Void)? = nil
 
   var body: some View {
     VStack(spacing: Astra.Spacing.s) {
@@ -67,6 +69,11 @@ struct EmptyState: View {
       Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Astra.Color.ink)
       Text(message).font(Astra.Font.meta).foregroundStyle(Astra.Color.muted).multilineTextAlignment(.center)
         .frame(maxWidth: 380)
+      if let action {
+        Button(action.title, action: action.run)
+          .astraSecondaryButton()
+          .padding(.top, Astra.Spacing.s)
+      }
     }
     .frame(maxWidth: .infinity)
     .padding(.vertical, 80)
@@ -252,6 +259,13 @@ struct SettingsView: View {
         Button("Change Server…") { Task { await app.chooseServer() } }
         Button("Sign Out", role: .destructive) { app.signOut() }
       }
+      Section {
+        NetworkDiagnosticsView()
+      } header: {
+        Text("Network")
+      } footer: {
+        Text("The last requests Astra made, newest first. Tokens are never shown or saved.")
+      }
       Section("About") {
         LabeledContent(
           "Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
@@ -259,5 +273,41 @@ struct SettingsView: View {
     }
     .formStyle(.grouped)
     .scrollContentBackground(.hidden)
+  }
+}
+
+/// Settings → Network: recent requests with their status and time, to see
+/// why something is slow or failing. Refreshes every two seconds while open.
+struct NetworkDiagnosticsView: View {
+  @State private var expanded = false
+
+  var body: some View {
+    DisclosureGroup("Recent Requests", isExpanded: $expanded) {
+      if expanded {
+        TimelineView(.periodic(from: .now, by: 2)) { _ in
+          let events = Array(NetworkLog.shared.recent.suffix(60).reversed())
+          if events.isEmpty {
+            Text("No requests yet.").font(Astra.Font.meta).foregroundStyle(Astra.Color.muted)
+          }
+          ForEach(events) { event in
+            VStack(alignment: .leading, spacing: 2) {
+              HStack(spacing: 8) {
+                Image(systemName: event.succeeded ? "checkmark.circle" : "exclamationmark.triangle")
+                  .foregroundStyle(event.succeeded ? Astra.Color.muted : Astra.Color.ink)
+                Text(event.status.map(String.init) ?? "—").monospacedDigit()
+                Text("\(event.milliseconds) ms").monospacedDigit().foregroundStyle(Astra.Color.muted)
+                Text(event.host).foregroundStyle(Astra.Color.muted).lineLimit(1)
+              }
+              Text(event.path).lineLimit(1).truncationMode(.middle).foregroundStyle(Astra.Color.muted)
+              if let failure = event.failure {
+                Text(failure).foregroundStyle(Astra.Color.ink)
+              }
+            }
+            .font(.system(size: 11))
+            .textSelection(.enabled)
+          }
+        }
+      }
+    }
   }
 }

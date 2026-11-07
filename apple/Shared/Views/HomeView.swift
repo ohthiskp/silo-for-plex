@@ -63,17 +63,28 @@ struct HomeView: View {
           }
         }
 
-        if let service = library.selectedService, !library.isLoadingService, library.homeRows.isEmpty {
+        if let service = library.selectedService, let error = library.serviceError {
+          // The rows already loaded stay above; this only says why new ones didn't come.
+          EmptyState(
+            symbol: "exclamationmark.triangle", title: "\(service.label) didn't load", message: error,
+            action: ("Try Again", { library.retryService() }))
+        } else if let service = library.selectedService, !library.isLoadingService, library.homeRows.isEmpty {
           EmptyState(
             symbol: "tv", title: "Nothing from \(service.label)",
             message: "None of the popular titles on \(service.label) are on your Plex server.")
         }
 
-        if let error = library.homeError {
-          Text(error)
-            .font(Astra.Font.meta)
-            .foregroundStyle(Astra.Color.muted)
-            .padding(.leading, leading)
+        if library.selectedService == nil, let error = library.homeError {
+          if library.hubs.isEmpty && library.continueWatching.isEmpty {
+            EmptyState(
+              symbol: "exclamationmark.triangle", title: "Home didn't load", message: error,
+              action: ("Try Again", { Task { await library.loadHome() } }))
+          } else {
+            Text(error)
+              .font(Astra.Font.meta)
+              .foregroundStyle(Astra.Color.muted)
+              .padding(.leading, leading)
+          }
         }
       }
       .padding(.bottom, 80)
@@ -155,7 +166,7 @@ struct ServicePill: View {
   {
     let selected = library.selectedService == service
     return Button {
-      Task { await library.select(service) }
+      library.select(service)
     } label: {
       content()
         .foregroundStyle(selected ? Color.black : Color.white.opacity(0.9))

@@ -26,12 +26,27 @@ final class AppModel {
   private(set) var phase: Phase = .launching
   private(set) var server: PlexServerClient?
   private(set) var library: LibraryStore?
+  /// The connected server's Plex id.
+  private(set) var serverID: String?
+
+  /// Server switching while connected (Settings → Change Server). The current
+  /// server keeps working until the new one is validated; see `connect(to:)`.
+  struct ServerSwitch: Equatable {
+    var servers: [PlexServerResource] = []
+    var loadingList = true
+    /// The server being validated right now.
+    var connecting: String?
+    var error: String?
+  }
+  var serverSwitch: ServerSwitch?
   let player = PlayerController()
   let downloads = DownloadStore()
 
   let info: PlexClientInfo
   private let account: PlexAccountClient
-  private let picker: ConnectionPicker
+  private let connector: ServerConnector
+  /// Each connection attempt's identity; a slower, older attempt never wins.
+  private var connectGeneration = Generation()
   private let tokens: TokenStore
   private var accountToken: String?
   private var signInTask: Task<Void, Never>?
@@ -59,7 +74,7 @@ final class AppModel {
       clientIdentifier: PlexClientInfo.persistentIdentifier()
     )
     account = PlexAccountClient(info: info)
-    picker = ConnectionPicker(info: info)
+    connector = ServerConnector(info: info)
     self.tokens = tokens
   }
 
@@ -114,11 +129,15 @@ final class AppModel {
 
   func signOut() {
     player.close()
+    serverSwitch = nil
+    _ = connectGeneration.next()
+    library?.close()
     downloads.library = nil
     tokens.clear()
     UserDefaults.standard.removeObject(forKey: Self.serverKey)
     accountToken = nil
     server = nil
+    serverID = nil
     library = nil
     phase = .signedOut
   }
@@ -147,29 +166,78 @@ final class AppModel {
     }
   }
 
+  /// Settings → Change Server. While connected, the list opens over the app
+  /// and the current server stays in use until another one is validated.
   func chooseServer() async {
     guard let accountToken else { return phase = .signedOut }
-    await loadServers(token: accountToken, autoSelect: false)
+    guard phase == .ready, library != nil else {
+      return await loadServers(token: accountToken, autoSelect: false)
+    }
+    serverSwitch = ServerSwitch()
+    do {
+      let servers = try await account.servers(token: accountToken)
+      guard serverSwitch != nil else { return }
+      serverSwitch?.servers = servers
+      serverSwitch?.loadingList = false
+      if servers.isEmpty { serverSwitch?.error = "This Plex account has no servers." }
+    } catch {
+      guard serverSwitch != nil else { return }
+      serverSwitch?.loadingList = false
+      serverSwitch?.error = PlexError.describe(error, server: "Plex")
+    }
   }
 
+  func cancelServerSwitch() {
+    _ = connectGeneration.next()
+    serverSwitch = nil
+  }
+
+  /// Connects to a server. The address is probed and the token checked
+  /// (by listing libraries) before anything changes; only then is the old
+  /// session closed and replaced. If it fails while another server is in
+  /// use, that server keeps working and the error shows in the switcher.
   func connect(to resource: PlexServerResource) async {
     guard let accountToken else { return phase = .signedOut }
-    phase = .connecting(resource.name)
-    do {
-      let url = try await picker.pick(for: resource, accountToken: accountToken)
-      let client = PlexServerClient(
-        baseURL: url, token: resource.accessToken ?? accountToken, serverName: resource.name, info: info)
-      UserDefaults.standard.set(resource.clientIdentifier, forKey: Self.serverKey)
-      server = client
-      let store = LibraryStore(client: client)
-      library = store
-      downloads.library = store
-      player.server = client
-      phase = .ready
-      await store.loadHome()
-    } catch {
-      phase = .failed(error.localizedDescription)
+    let attempt = connectGeneration.next()
+    let switching = phase == .ready && library != nil
+    if switching {
+      if serverSwitch == nil { serverSwitch = ServerSwitch(loadingList: false) }
+      serverSwitch?.connecting = resource.name
+      serverSwitch?.error = nil
+    } else {
+      phase = .connecting(resource.name)
     }
+    do {
+      let session = try await connector.connect(to: resource, accountToken: accountToken, generation: attempt)
+      // Another attempt (or Cancel, or Sign Out) came after this one: drop it.
+      guard connectGeneration.isCurrent(attempt) else { return }
+      commit(session)
+    } catch {
+      guard connectGeneration.isCurrent(attempt) else { return }
+      let message = PlexError.describe(error, server: resource.name)
+      if switching {
+        serverSwitch?.connecting = nil
+        serverSwitch?.error = message
+      } else {
+        phase = .failed(message)
+      }
+    }
+  }
+
+  private func commit(_ session: ServerSession) {
+    let old = library
+    let store = LibraryStore(session: session)
+    UserDefaults.standard.set(session.serverID, forKey: Self.serverKey)
+    server = session.client
+    serverID = session.serverID
+    library = store
+    downloads.library = store
+    player.server = session.client
+    serverSwitch = nil
+    phase = .ready
+    // The old server's requests stop; anything still in flight is ignored.
+    old?.close()
+    Task { await store.loadHome() }
   }
 
   /// Plays an item; a show or season plays its next episode.

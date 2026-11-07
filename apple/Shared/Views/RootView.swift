@@ -107,7 +107,18 @@ struct RootView: View {
       ServerPickerView(servers: servers)
     case .ready:
       if let library = app.library {
+        // A new server session starts with fresh pages: nothing from the
+        // old server (its section keys, rows or scroll state) carries over.
         MainView(library: library)
+          .id(library.generation)
+          .sheet(
+            isPresented: Binding(
+              get: { app.serverSwitch != nil }, set: { if !$0 { app.cancelServerSwitch() } })
+          ) {
+            if let state = app.serverSwitch {
+              ServerSwitchSheet(state: state).environment(app).preferredColorScheme(.dark).tint(.white)
+            }
+          }
       }
     case .failed(let message):
       ErrorView(message: message)
@@ -129,6 +140,7 @@ struct ErrorView: View {
         .frame(maxWidth: 420)
       HStack(spacing: 12) {
         Button("Try Again") { Task { await app.retry() } }.astraPrimaryButton()
+        Button("Choose Server") { Task { await app.chooseServer() } }.astraSecondaryButton()
         Button("Sign Out") { app.signOut() }.astraSecondaryButton()
       }
       .astraGlassGroup(spacing: 12)

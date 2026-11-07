@@ -53,6 +53,9 @@ final class PlayerController {
     @ObservationIgnored private var host: PlayerWindowHost?
   #endif
   @ObservationIgnored var server: PlexServerClient?
+  /// The server the current item came from. Progress goes there even if
+  /// Settings switches to another server mid-playback.
+  @ObservationIgnored private var playbackServer: PlexServerClient?
 
   @ObservationIgnored private var core: MpvPlayerCore?
   @ObservationIgnored private var source: PlaybackSource?
@@ -112,6 +115,7 @@ final class PlayerController {
     self.core = core
     self.source = source
     self.library = library
+    playbackServer = server
 
     title = source.title
     subtitle = source.subtitle
@@ -350,7 +354,7 @@ final class PlayerController {
   }
 
   private func report(_ state: TimelineReport.State) {
-    guard let server, let source else { return }
+    guard let server = playbackServer, let source else { return }
     let report = TimelineReport(
       ratingKey: source.ratingKey, key: source.metadataKey, state: state, timeMs: Int(position * 1000),
       durationMs: duration > 0 ? Int(duration * 1000) : source.durationMs)

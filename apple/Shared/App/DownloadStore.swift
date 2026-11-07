@@ -35,6 +35,9 @@ final class DownloadStore {
   @ObservationIgnored private let indexURL: URL
   @ObservationIgnored private let session: DownloadSession
   @ObservationIgnored weak var library: LibraryStore?
+  /// The server each job was queued from, so a server switch can't send a
+  /// queued job's request to a different server.
+  @ObservationIgnored private var jobClients: [String: PlexServerClient] = [:]
 
   private static let maxConcurrent = 2
 
@@ -97,6 +100,7 @@ final class DownloadStore {
   /// Downloads a movie or episode, or every episode of a show or season.
   func download(_ item: PlexMetadata) {
     guard let library else { return }
+    let client = library.client
     Task {
       do {
         let resolved = try await library.resolve(item)
@@ -119,6 +123,7 @@ final class DownloadStore {
           guard let made = DownloadRecord.make(for: full, quality: .stored()) else { continue }
           failures[full.ratingKey] = nil
           jobs.append(Job(record: made.record, partKey: made.partKey))
+          jobClients[made.record.ratingKey] = client
           Task { await saveImage(for: full, record: made.record) }
         }
         pump()
@@ -132,6 +137,7 @@ final class DownloadStore {
     guard let job = jobs.first(where: { $0.id == ratingKey }) else { return }
     if job.running { session.cancel(ratingKey) }
     jobs.removeAll { $0.id == ratingKey }
+    jobClients[ratingKey] = nil
     pump()
   }
 
@@ -175,8 +181,8 @@ final class DownloadStore {
   }
 
   private func pump() {
-    guard let client = library?.client else { return }
     while jobs.filter(\.running).count < Self.maxConcurrent, let i = jobs.firstIndex(where: { !$0.running }) {
+      guard let client = jobClients[jobs[i].id] ?? library?.client else { return }
       jobs[i].running = true
       let job = jobs[i]
       let request = PlaybackResolver.downloadRequest(partKey: job.partKey, client: client)
@@ -205,6 +211,7 @@ final class DownloadStore {
   private func finish(_ job: Job, error: Error?) {
     let wasCancelled = !jobs.contains { $0.id == job.id }
     jobs.removeAll { $0.id == job.id }
+    jobClients[job.id] = nil
     if let error {
       if !wasCancelled, (error as? URLError)?.code != .cancelled {
         failures[job.id] = error.localizedDescription

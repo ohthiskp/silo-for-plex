@@ -64,29 +64,7 @@ struct ServerPickerView: View {
       Text("Choose a server").astraDisplay(34, tracking: 6)
       VStack(spacing: 10) {
         ForEach(servers) { server in
-          Button {
-            Task { await app.connect(to: server) }
-          } label: {
-            HStack(spacing: 14) {
-              Image(systemName: "server.rack")
-                .font(.system(size: 18))
-                .foregroundStyle(Astra.Color.ink)
-              VStack(alignment: .leading, spacing: 2) {
-                Text(server.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Astra.Color.ink)
-                Text((server.owned ?? false) ? "Your server" : "Shared with you")
-                  .font(.system(size: 12)).foregroundStyle(Astra.Color.muted)
-              }
-              Spacer()
-              Image(systemName: "chevron.right").foregroundStyle(Astra.Color.muted)
-            }
-            .padding(.horizontal, 18)
-            .frame(maxWidth: 420, minHeight: 62)
-            .background(Astra.Color.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Astra.Color.hairline))
-            .contentShape(RoundedRectangle(cornerRadius: 16))
-          }
-          .buttonStyle(AstraCardButtonStyle())
-          .pressable(hoverScale: 1.02)
+          ServerRow(server: server) { Task { await app.connect(to: server) } }
         }
       }
       Button("Sign Out") { app.signOut() }
@@ -97,5 +75,85 @@ struct ServerPickerView: View {
     .padding(.horizontal, Astra.Spacing.l)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Astra.Color.bg.ignoresSafeArea())
+  }
+}
+
+/// One server in a list: name, whose it is, and a chevron or a spinner.
+struct ServerRow: View {
+  var server: PlexServerResource
+  var connecting = false
+  var current = false
+  var action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 14) {
+        Image(systemName: "server.rack")
+          .font(.system(size: 18))
+          .foregroundStyle(Astra.Color.ink)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(server.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Astra.Color.ink)
+          Text(current ? "In use" : (server.owned ?? false) ? "Your server" : "Shared with you")
+            .font(.system(size: 12)).foregroundStyle(Astra.Color.muted)
+        }
+        Spacer()
+        if connecting {
+          ProgressView().controlSize(.small)
+        } else if current {
+          Image(systemName: "checkmark").foregroundStyle(Astra.Color.ink)
+        } else {
+          Image(systemName: "chevron.right").foregroundStyle(Astra.Color.muted)
+        }
+      }
+      .padding(.horizontal, 18)
+      .frame(maxWidth: 420, minHeight: 62)
+      .background(Astra.Color.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Astra.Color.hairline))
+      .contentShape(RoundedRectangle(cornerRadius: 16))
+    }
+    .buttonStyle(AstraCardButtonStyle())
+    .pressable(hoverScale: 1.02)
+  }
+}
+
+/// Change Server while connected: the app stays usable underneath, and the
+/// current server stays in use until the chosen one has been checked.
+struct ServerSwitchSheet: View {
+  @Environment(AppModel.self) private var app
+  var state: AppModel.ServerSwitch
+
+  var body: some View {
+    VStack(spacing: 20) {
+      Text("Change Server").astraDisplay(26, tracking: 4)
+      if state.loadingList {
+        ProgressView().controlSize(.regular).frame(height: 62)
+      } else {
+        VStack(spacing: 10) {
+          ForEach(state.servers) { server in
+            let current = app.serverID == server.clientIdentifier
+            ServerRow(server: server, connecting: state.connecting == server.name, current: current) {
+              guard !current, state.connecting == nil else { return }
+              Task { await app.connect(to: server) }
+            }
+            .disabled(state.connecting != nil && state.connecting != server.name)
+          }
+        }
+      }
+      if let error = state.error {
+        Text(error)
+          .font(Astra.Font.meta)
+          .foregroundStyle(Astra.Color.ink)
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: 420)
+        if let name = app.server?.serverName {
+          Text("Still using \(name).").font(Astra.Font.meta).foregroundStyle(Astra.Color.muted)
+        }
+      }
+      Button("Cancel") { app.cancelServerSwitch() }
+        .astraSecondaryButton()
+    }
+    .padding(28)
+    .frame(minWidth: 380)
+    .background(Astra.Color.bg)
   }
 }

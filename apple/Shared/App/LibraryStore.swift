@@ -2,11 +2,18 @@ import AstraKit
 import Foundation
 import Observation
 
-/// Home rows, libraries and a small metadata cache for the connected server.
+/// Home rows, libraries and a small metadata cache for one server session.
+///
+/// A store belongs to exactly one validated `ServerSession`. Switching servers
+/// makes a new store and closes this one: `close()` cancels its work and every
+/// late response is dropped, so an old server can never overwrite the new one.
 @MainActor
 @Observable
 final class LibraryStore {
   let client: PlexServerClient
+  /// The session this store belongs to (see `ServerSession.generation`).
+  let generation: Int
+  private(set) var isClosed = false
 
   private(set) var continueWatching: [PlexMetadata] = []
   private(set) var hubs: [PlexHub] = []
@@ -16,6 +23,9 @@ final class LibraryStore {
   private(set) var homeError: String?
 
   private var detailCache: [String: PlexMetadata] = [:]
+  /// The newest Home load; an older one that finishes late is ignored.
+  @ObservationIgnored private var homeGeneration = Generation()
+  @ObservationIgnored private var background: [Task<Void, Never>] = []
 
   // MARK: Streaming-service switcher
 
@@ -23,22 +33,55 @@ final class LibraryStore {
   let tmdb: TMDBClient?
   /// Nil is "For You", the Plex home.
   private(set) var selectedService: StreamingService?
-  private(set) var isLoadingService = false
+  /// The service whose rows are loading right now.
+  private(set) var loadingServiceID: String?
+  private(set) var serviceErrors: [String: String] = [:]
   private var serviceContent: [String: (hero: [PlexMetadata], hubs: [PlexHub])] = [:]
-  /// Every movie and show on the server by TMDB key ("movie:603"), built on first use.
-  private var libraryIndex: [String: PlexMetadata]?
+  @ObservationIgnored private var serviceGeneration = Generation()
+  @ObservationIgnored private var serviceTask: Task<Void, Never>?
+  /// Every movie and show on the server by TMDB key ("movie:603"), built once, on first use.
+  @ObservationIgnored private var libraryIndex: [String: PlexMetadata]?
+  /// The read in progress; every service waiting for the index shares it.
+  @ObservationIgnored private var indexTask: Task<[String: PlexMetadata], Error>?
+  /// Poster and backdrop paths that came with TMDB's lists, so cards need no extra lookup.
+  @ObservationIgnored private var seededArt: [String: TMDBArtwork] = [:]
 
   static let serviceKey = "astra.home.service"
 
-  init(client: PlexServerClient, tmdbToken: String? = LibraryStore.bundledTMDBToken) {
-    self.client = client
+  init(session: ServerSession, tmdbToken: String? = LibraryStore.bundledTMDBToken) {
+    client = session.client
+    generation = session.generation
+    // Movies and Shows work straight away, whatever happens to the Home rows.
+    sections = session.sections
     tmdb = tmdbToken.flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : TMDBClient(token: $0) }
     if tmdb != nil { selectedService = StreamingService.byID(UserDefaults.standard.string(forKey: Self.serviceKey)) }
+  }
+
+  /// Stops everything this store started. Called when another server replaces it.
+  func close() {
+    isClosed = true
+    serviceTask?.cancel()
+    indexTask?.cancel()
+    background.forEach { $0.cancel() }
+    background.removeAll()
+    loadingServiceID = nil
+    isLoadingHome = false
   }
 
   /// The TMDB read token the build put in Info.plist (`TMDB_TOKEN` build setting).
   nonisolated static var bundledTMDBToken: String? {
     Bundle.main.object(forInfoDictionaryKey: "AstraTMDBToken") as? String
+  }
+
+  private func describe(_ error: Error) -> String {
+    PlexError.describe(error, server: client.serverName)
+  }
+
+  /// Runs work tied to this store's lifetime; `close()` cancels it.
+  private func spawn(_ work: @escaping @MainActor () async -> Void) {
+    guard !isClosed else { return }
+    background.removeAll { $0.isCancelled }
+    background.append(Task { await work() })
   }
 
   /// What Home shows for the current switcher choice. Only titles on the Plex server.
@@ -54,44 +97,99 @@ final class LibraryStore {
     return serviceContent[selectedService.id]?.hubs ?? []
   }
 
-  func select(_ service: StreamingService?) async {
+  var isLoadingService: Bool { selectedService != nil && loadingServiceID == selectedService?.id }
+
+  /// Why the selected service's rows didn't load, if they didn't.
+  var serviceError: String? { selectedService.flatMap { serviceErrors[$0.id] } }
+
+  /// Switches Home to a service. Returns at once: the rows load behind, and a
+  /// service already loaded shows its rows immediately.
+  func select(_ service: StreamingService?) {
     guard service != selectedService else { return }
     selectedService = service
     UserDefaults.standard.set(service?.id, forKey: Self.serviceKey)
-    await loadService()
+    startService(force: false)
+  }
+
+  /// Loads the selected service again; its current rows stay on screen meanwhile.
+  func retryService() {
+    startService(force: true)
+  }
+
+  private func startService(force: Bool) {
+    // A newer choice replaces the older request instead of queueing behind it.
+    serviceTask?.cancel()
+    let token = serviceGeneration.next()
+    guard !isClosed, tmdb != nil, let service = selectedService,
+      force || serviceContent[service.id] == nil
+    else {
+      loadingServiceID = nil
+      return
+    }
+    loadingServiceID = service.id
+    serviceErrors[service.id] = nil
+    serviceTask = Task { [weak self] in
+      await self?.loadService(service, token: token)
+    }
   }
 
   /// A service's rows: what TMDB lists on that service (the first 100 by
   /// popularity and 60 by rating, per kind), kept only when the title is on
   /// the Plex server, shown as the Plex item.
-  func loadService(force: Bool = false) async {
-    guard let tmdb, let service = selectedService else { return }
-    if !force, serviceContent[service.id] != nil { return }
-    isLoadingService = true
-    defer { isLoadingService = false }
-    let index = await loadLibraryIndex()
+  private func loadService(_ service: StreamingService, token: Int) async {
+    defer {
+      if serviceGeneration.isCurrent(token) { loadingServiceID = nil }
+    }
+    guard let tmdb else { return }
+    let index: [String: PlexMetadata]
+    do {
+      index = try await loadLibraryIndex()
+    } catch {
+      if !Task.isCancelled, !isClosed {
+        serviceErrors[service.id] = "Couldn't read your Plex libraries. \(describe(error))"
+      }
+      return
+    }
+    guard !Task.isCancelled, !isClosed else { return }
 
-    func pages(_ kind: TMDBItem.Kind, topRated: Bool, count: Int) async -> [TMDBItem] {
-      await withTaskGroup(of: (Int, [TMDBItem]).self) { group in
+    func pages(_ kind: TMDBItem.Kind, topRated: Bool, count: Int) async -> (items: [TMDBItem], failed: Int) {
+      await withTaskGroup(of: (Int, [TMDBItem]?).self) { group in
         for page in 1...count {
-          group.addTask { (page, (try? await tmdb.onService(service, kind, topRated: topRated, page: page)) ?? []) }
+          group.addTask { (page, try? await tmdb.onService(service, kind, topRated: topRated, page: page)) }
         }
         var byPage: [Int: [TMDBItem]] = [:]
-        for await (page, items) in group { byPage[page] = items }
-        return (1...count).flatMap { byPage[$0] ?? [] }
+        var failed = 0
+        for await (page, items) in group {
+          if let items { byPage[page] = items } else { failed += 1 }
+        }
+        return ((1...count).flatMap { byPage[$0] ?? [] }, failed)
       }
     }
     func onServer(_ items: [TMDBItem]) -> [PlexMetadata] {
-      items.compactMap { index["\($0.kind.rawValue):\($0.tmdbID)"] }
+      items.compactMap { tmdbItem in
+        let key = "\(tmdbItem.kind.rawValue):\(tmdbItem.tmdbID)"
+        guard let item = index[key] else { return nil }
+        if seededArt[key] == nil {
+          seededArt[key] = TMDBArtwork(
+            posterPath: tmdbItem.posterPath, backdropPath: tmdbItem.backdropPath, logoPath: nil)
+        }
+        return item
+      }
     }
 
     async let m = pages(.movie, topRated: false, count: 5)
     async let t = pages(.tv, topRated: false, count: 5)
     async let tm = pages(.movie, topRated: true, count: 3)
     async let ts = pages(.tv, topRated: true, count: 3)
-    let movies = onServer(await m)
-    let shows = onServer(await t)
-    let top = Self.interleave(onServer(await ts), onServer(await tm))
+    let lists = await [m, t, tm, ts]
+    guard !Task.isCancelled, !isClosed else { return }
+    if lists.allSatisfy({ $0.items.isEmpty }) && lists.contains(where: { $0.failed > 0 }) {
+      serviceErrors[service.id] = "TMDB didn't answer, so \(service.label)'s lists couldn't load. Try again in a moment."
+      return
+    }
+    let movies = onServer(lists[0].items)
+    let shows = onServer(lists[1].items)
+    let top = Self.interleave(onServer(lists[3].items), onServer(lists[2].items))
     let popular = Self.interleave(shows, movies)
 
     // Each title once across the service's rows, in row order.
@@ -102,25 +200,56 @@ final class LibraryStore {
       PlexHub(hubIdentifier: "\(service.id).movies", title: "Movies on \(service.label)", items: dedup.filter(movies)),
       PlexHub(hubIdentifier: "\(service.id).top", title: "Top Rated on \(service.label)", items: dedup.filter(top)),
     ].filter { !$0.items.isEmpty }
-    // The hero shows the most popular ones, loaded in full for their versions.
-    var hero: [PlexMetadata] = []
-    for item in popular.prefix(6) {
-      hero.append((try? await details(item.ratingKey)) ?? item)
-    }
+    // The hero shows the most popular ones, loaded in full (in parallel) for their versions.
+    let hero = await loadInFull(Array(popular.prefix(6)))
+    guard !Task.isCancelled, !isClosed else { return }
     serviceContent[service.id] = (hero, rows)
   }
 
-  private func loadLibraryIndex() async -> [String: PlexMetadata] {
+  /// The library index, read once. Concurrent callers share one read; a
+  /// failed read is not cached, so the next service tries again.
+  private func loadLibraryIndex() async throws -> [String: PlexMetadata] {
     if let libraryIndex { return libraryIndex }
-    var index: [String: PlexMetadata] = [:]
-    for section in sections {
-      let items = (try? await client.libraryItems(sectionKey: section.key, start: 0, size: 20_000)) ?? []
-      for item in items {
-        if let key = item.tmdbKey, index[key] == nil { index[key] = item }
+    if let indexTask { return try await indexTask.value }
+    let client = client
+    let sections = sections
+    let task = Task { try await LibraryIndexer.build(client: client, sections: sections) }
+    indexTask = task
+    defer { indexTask = nil }
+    let index = try await task.value
+    if !isClosed { libraryIndex = index }
+    return index
+  }
+
+  /// Full metadata (versions, logos) for a few items, fetched in parallel, kept in order.
+  private func loadInFull(_ items: [PlexMetadata]) async -> [PlexMetadata] {
+    await withTaskGroup(of: (Int, PlexMetadata).self) { group in
+      for (i, item) in items.enumerated() {
+        group.addTask { [self] in (i, (try? await details(item.ratingKey)) ?? item) }
+      }
+      var out = [PlexMetadata?](repeating: nil, count: items.count)
+      for await (i, item) in group { out[i] = item }
+      return out.compactMap { $0 }
+    }
+  }
+
+  /// Looks up TMDB artwork for the titles on screen ahead of time, eight at
+  /// a time, so cards fade in together instead of one by one.
+  func prefetchArtwork(_ items: [PlexMetadata]) async {
+    var seen = Set<String>()
+    let targets = items.filter { item in
+      guard let key = item.tmdbKey, artwork[key] == nil, seededArt[key] == nil else { return false }
+      return seen.insert(key).inserted
+    }
+    for start in stride(from: 0, to: targets.count, by: 8) {
+      guard !Task.isCancelled else { return }
+      let chunk = targets[start..<min(start + 8, targets.count)]
+      await withTaskGroup(of: Void.self) { group in
+        for item in chunk {
+          group.addTask { [self] in _ = await tmdbArtwork(for: item) }
+        }
       }
     }
-    libraryIndex = index
-    return index
   }
 
   static func interleave(_ a: [PlexMetadata], _ b: [PlexMetadata]) -> [PlexMetadata] {
@@ -161,7 +290,8 @@ final class LibraryStore {
   /// The artwork URL for a card or header: TMDB's when it has one, else Plex's.
   /// Episodes keep Plex's stills.
   func artworkURL(for item: PlexMetadata, _ kind: ArtKind, width: CGFloat, height: CGFloat) async -> URL? {
-    if let art = await tmdbArtwork(for: item) {
+    let seeded = kind == .logo ? nil : item.tmdbKey.flatMap { seededArt[$0] }
+    if let art = (item.tmdbKey.flatMap { artwork[$0] }) ?? seeded ?? (await tmdbArtwork(for: item)) {
       let url: URL? =
         switch kind {
         case .poster: TMDBArtwork.url(art.posterPath, size: "w500")
@@ -203,15 +333,29 @@ final class LibraryStore {
     }
   }
 
+  /// Loads the For You rows. The page shows what it has as soon as the rows
+  /// arrive; artwork, the library index and the chosen service load behind it.
+  /// A newer call (pull to refresh, playback ended) supersedes an older one.
   func loadHome() async {
-    isLoadingHome = hubs.isEmpty
+    guard !isClosed else { return }
+    let token = homeGeneration.next()
+    let isCurrent = { [weak self] in self.map { !$0.isClosed && $0.homeGeneration.isCurrent(token) } ?? false }
+    // The spinner only covers an empty page; a reload keeps the rows on screen.
+    isLoadingHome = hubs.isEmpty && continueWatching.isEmpty
     homeError = nil
+    // A saved streaming service loads alongside, not after, the For You rows.
+    if let service = selectedService, serviceContent[service.id] == nil, loadingServiceID == nil {
+      startService(force: false)
+    }
     async let continueTask = client.continueWatching()
     async let hubsTask = client.homeHubs()
     async let sectionsTask = client.librarySections()
 
     let loadedContinue = (try? await continueTask) ?? []
     let loadedSections = (try? await sectionsTask) ?? []
+    guard isCurrent() else { return }
+    // Movies and Shows keep working even when the Home rows fail.
+    if !loadedSections.isEmpty { sections = loadedSections }
     do {
       let loadedHubs = try await hubsTask
       let rows = await Self.deduplicatedRows(
@@ -219,15 +363,22 @@ final class LibraryStore {
           ? loadedHubs.first(where: \.isContinueWatching)?.items ?? [] : loadedContinue,
         hubs: loadedHubs.filter { !$0.isContinueWatching },
         more: { [client] key, start in (try? await client.hubItems(key: key, start: start)) ?? [] })
+      guard isCurrent() else { return }
       continueWatching = rows.continueWatching
       hubs = rows.hubs
-      sections = loadedSections
-      hero = await pickHero(from: hubs)
-      await loadService()
+      isLoadingHome = false
+      let picked = await pickHero(from: rows.hubs)
+      guard isCurrent() else { return }
+      if !picked.isEmpty || hero.isEmpty { hero = picked }
     } catch {
-      homeError = error.localizedDescription
+      guard isCurrent() else { return }
+      homeError = describe(error)
     }
     isLoadingHome = false
+    spawn { [weak self] in
+      guard let self else { return }
+      await prefetchArtwork(hero + continueWatching + hubs.flatMap(\.items))
+    }
   }
 
   /// Rows with every title shown once across the whole page, in Plex's row
@@ -275,11 +426,7 @@ final class LibraryStore {
     }
     .prefix(5)
 
-    var full: [PlexMetadata] = []
-    for item in candidates {
-      if let loaded = try? await details(item.ratingKey), loaded.backdrop != nil { full.append(loaded) }
-    }
-    return full
+    return await loadInFull(Array(candidates)).filter { $0.backdrop != nil }
   }
 
   func details(_ ratingKey: String, refresh: Bool = false) async throws -> PlexMetadata {
@@ -332,14 +479,14 @@ final class LibraryStore {
       detailCache[item.ratingKey] = nil
       await loadHome()
     } catch {
-      homeError = error.localizedDescription
+      homeError = describe(error)
     }
   }
 
   /// Called when the player closes, so Continue Watching shows the new position.
   func playbackEnded(ratingKey: String) {
     detailCache[ratingKey] = nil
-    Task { await loadHome() }
+    spawn { [weak self] in await self?.loadHome() }
   }
 
   /// Plex artwork sized for a frame, in steps (see `ImageSize.bucketed`) so a
