@@ -86,6 +86,16 @@ final class PlayerController {
     return VideoTier.badge(for: VideoTier.tier(width: Int(videoWidth), height: Int(videoHeight)))
   }
 
+  /// Dolby Vision / HDR10 / HLG of the file playing (from Plex's metadata).
+  /// On iPhone and Mac mpv shows Dolby Vision as HDR, so this names the file.
+  var dynamicRange: DynamicRange? {
+    guard let item else { return nil }
+    if let currentMediaID, let media = item.media.first(where: { $0.id == currentMediaID }) {
+      return media.dynamicRange
+    }
+    return item.dynamicRange()
+  }
+
   // MARK: - Open and close
 
   /// The item playing, for switching between its versions.

@@ -133,7 +133,7 @@ struct ContinueCard: View {
       .buttonStyle(.plain)
       .accessibilityLabel("Play \(item.displayTitle)")
     }
-    .itemMenu(library: library, item: item)
+    .itemMenu(library: library, item: item, inContinueWatching: true)
   }
 }
 
@@ -199,8 +199,8 @@ struct ProgressBar: View {
 
 extension View {
   /// Astra: the long-press (right-click on Mac) menu on every title card.
-  func itemMenu(library: LibraryStore, item: PlexMetadata) -> some View {
-    modifier(ItemMenu(library: library, item: item))
+  func itemMenu(library: LibraryStore, item: PlexMetadata, inContinueWatching: Bool = false) -> some View {
+    modifier(ItemMenu(library: library, item: item, inContinueWatching: inContinueWatching))
   }
 }
 
@@ -209,6 +209,8 @@ extension View {
 struct ItemMenu: ViewModifier {
   var library: LibraryStore
   var item: PlexMetadata
+  /// Continue Watching cards end the menu with a red Remove from Continue Watching.
+  var inContinueWatching = false
   @Environment(AppModel.self) private var app
   @Environment(\.openItem) private var openItem
   @Environment(\.playItem) private var playItem
@@ -246,6 +248,14 @@ struct ItemMenu: ViewModifier {
           Button {
             openItem(PlexMetadata(ratingKey: show, type: .show, title: item.parentTitle ?? "Show"))
           } label: { Label("Go to Show", systemImage: "tv") }
+        }
+      }
+      if inContinueWatching, !item.isCatalogOnly {
+        Divider()
+        Button(role: .destructive) {
+          Task { await library.removeFromContinueWatching(item) }
+        } label: {
+          Label("Remove from Continue Watching", systemImage: "minus.circle")
         }
       }
     }

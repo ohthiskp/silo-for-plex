@@ -28,6 +28,18 @@ let testInfo = PlexClientInfo(
   clientIdentifier: "test-client")
 
 final class DecodingTests: XCTestCase {
+  func testRemoveFromContinueWatchingIsAPutWithTheRatingKey() async throws {
+    let transport = FakeTransport { _ in (200, Data()) }
+    let client = PlexServerClient(
+      baseURL: URL(string: "https://s.test:32400")!, token: "t", serverName: "S", info: testInfo, transport: transport)
+    try await client.removeFromContinueWatching(ratingKey: "42")
+    let request = try XCTUnwrap(transport.requests.first)
+    XCTAssertEqual(request.httpMethod, "PUT")
+    let url = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)!
+    XCTAssertEqual(url.path, "/actions/removeFromContinueWatching")
+    XCTAssertEqual(url.queryItems?.first { $0.name == "ratingKey" }?.value, "42")
+  }
+
   func testHubsDecodeWithLooseTypes() throws {
     // ratingKey as a number, librarySectionID as a string, videoResolution as a number.
     let json = """
@@ -646,6 +658,17 @@ final class TMDBTests: XCTestCase {
     XCTAssertEqual(japanese.logoPath, "/j.png")
     let other = try await art(#"{"images":{"logos":[{"file_path":"/f.svg","iso_639_1":"fr"},{"file_path":"/k.png","iso_639_1":"ko"}]}}"#)
     XCTAssertEqual(other.logoPath, "/k.png")
+  }
+
+  func testDynamicRangeFromTheVideoStream() throws {
+    func movie(_ stream: String) throws -> PlexMetadata {
+      let json = #"{"ratingKey":"1","type":"movie","title":"M","Media":[{"id":1,"Part":[{"id":1,"key":"/p","Stream":[{"id":2,"streamType":2,"codec":"eac3"},\#(stream)]}]}]}"#
+      return try JSONDecoder().decode(PlexMetadata.self, from: Data(json.utf8))
+    }
+    XCTAssertEqual(try movie(#"{"id":1,"streamType":1,"codec":"hevc","DOVIPresent":true,"colorTrc":"smpte2084"}"#).dynamicRange(), .dolbyVision)
+    XCTAssertEqual(try movie(#"{"id":1,"streamType":1,"codec":"hevc","colorTrc":"smpte2084"}"#).dynamicRange(), .hdr10)
+    XCTAssertEqual(try movie(#"{"id":1,"streamType":1,"codec":"hevc","colorTrc":"arib-std-b67"}"#).dynamicRange()?.badge, "HLG")
+    XCTAssertNil(try movie(#"{"id":1,"streamType":1,"codec":"h264","colorTrc":"bt709"}"#).dynamicRange())
   }
 
   func testTmdbKeyFromPlexGuids() throws {

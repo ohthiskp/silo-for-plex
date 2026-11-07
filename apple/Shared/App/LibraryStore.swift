@@ -925,6 +925,19 @@ final class LibraryStore {
     }
   }
 
+  /// Astra (KP, 2026-11-07): the card goes at once; Plex is told after. On
+  /// failure it comes back.
+  func removeFromContinueWatching(_ item: PlexMetadata) async {
+    let before = continueWatching
+    continueWatching.removeAll { $0.ratingKey == item.ratingKey }
+    do {
+      try await client.removeFromContinueWatching(ratingKey: item.ratingKey)
+    } catch {
+      continueWatching = before
+      homeError = describe(error)
+    }
+  }
+
   /// Called when the player closes, so Continue Watching shows the new position.
   func playbackEnded(ratingKey: String) {
     detailCache[ratingKey] = nil

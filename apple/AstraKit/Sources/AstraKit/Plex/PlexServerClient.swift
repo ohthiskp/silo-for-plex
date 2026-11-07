@@ -147,6 +147,13 @@ public struct PlexServerClient: Sendable {
       query: [.init(name: "identifier", value: "com.plexapp.plugins.library"), .init(name: "key", value: ratingKey)])
   }
 
+  /// Takes a title off Continue Watching without changing its watched state
+  /// (Plex's own "Remove from Continue Watching").
+  public func removeFromContinueWatching(ratingKey: String) async throws {
+    try await send(
+      "/actions/removeFromContinueWatching", query: [.init(name: "ratingKey", value: ratingKey)], method: "PUT")
+  }
+
   public func markUnwatched(ratingKey: String) async throws {
     try await send(
       "/:/unscrobble",

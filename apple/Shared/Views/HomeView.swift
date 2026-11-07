@@ -688,8 +688,13 @@ struct MetaRow: View {
         .foregroundStyle(Astra.Color.ink.opacity(0.9))
         .lineLimit(1)
       // No age or star ratings for now (KP, 2026-11-06); only the version this
-      // device would play, never a claim about HDR.
-      if let badge = item.resolutionBadge(for: quality == .auto ? .current() : quality) { Badge(text: badge).fixedSize() }
+      // device would play.
+      let pick = quality == .auto ? PlaybackQuality.current() : quality
+      if let badge = item.resolutionBadge(for: pick) { Badge(text: badge).fixedSize() }
+      // Astra (KP, 2026-11-07): Dolby Vision / HDR of that file, when Plex says.
+      if let range = item.dynamicRange(for: pick) {
+        Badge(text: range == .dolbyVision ? "Dolby Vision" : range.rawValue).fixedSize()
+      }
     }
   }
 }

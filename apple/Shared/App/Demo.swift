@@ -119,7 +119,16 @@ enum Demo {
       "id": id, "duration": seconds * 1000, "videoResolution": resolution, "videoCodec": "hevc",
       "audioCodec": "eac3", "audioChannels": 6, "container": "mkv",
       "width": resolution == "4k" ? 3840 : 1920, "height": resolution == "4k" ? 2160 : 1080,
-      "Part": [["id": id, "key": "/library/parts/\(id)/file.mkv", "duration": seconds * 1000, "size": 8_000_000_000]],
+      "Part": [
+        [
+          "id": id, "key": "/library/parts/\(id)/file.mkv", "duration": seconds * 1000, "size": 8_000_000_000,
+          // 4K demo files are Dolby Vision, so the badges show in screenshots.
+          "Stream": [
+            ["id": id * 10, "streamType": 1, "codec": "hevc", "colorTrc": resolution == "4k" ? "smpte2084" : "bt709",
+             "DOVIPresent": resolution == "4k"]
+          ],
+        ]
+      ],
     ]
   }
 

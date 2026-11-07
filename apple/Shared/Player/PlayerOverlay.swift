@@ -375,13 +375,8 @@ struct PlayerOverlay: View {
                 HStack(spacing: 8) {
                   Text(player.title).font(.system(size: 22, weight: .bold)).lineLimit(1)
                   // Astra (KP, 2026-11-07): the version playing, beside the title.
-                  if shortBadge != "—" {
-                    Text(shortBadge)
-                      .font(.system(size: 11, weight: .heavy))
-                      .padding(.horizontal, 6)
-                      .padding(.vertical, 2)
-                      .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white.opacity(0.8), lineWidth: 1.2))
-                  }
+                  if shortBadge != "—" { TitleTag(text: shortBadge) }
+                  if let range = player.dynamicRange { TitleTag(text: range == .dolbyVision ? "DOLBY VISION" : range.badge) }
                 }
               }
               .foregroundStyle(.white)
@@ -1108,3 +1103,17 @@ extension View {
     }
   }
 #endif
+
+/// An outlined tag beside the player title: "4K", "HD", "HDR", "DOLBY VISION".
+private struct TitleTag: View {
+  var text: String
+
+  var body: some View {
+    Text(text)
+      .font(.system(size: 11, weight: .heavy))
+      .padding(.horizontal, 6)
+      .padding(.vertical, 2)
+      .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white.opacity(0.8), lineWidth: 1.2))
+      .fixedSize()
+  }
+}

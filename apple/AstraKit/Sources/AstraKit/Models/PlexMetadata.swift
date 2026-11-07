@@ -111,6 +111,36 @@ public struct PlexPart: Codable, Sendable, Hashable, Identifiable {
   }
 }
 
+/// The video's dynamic range as the file is encoded (KP, 2026-11-07: "can it
+/// show Dolby Vision and HDR"). A label for the file, read from Plex's video
+/// stream: Dolby Vision when Plex sees a DV layer, HDR10 for PQ, HLG.
+public enum DynamicRange: String, Sendable, Hashable {
+  case dolbyVision = "Dolby Vision"
+  case hdr10 = "HDR10"
+  case hlg = "HLG"
+
+  /// The short badge: "DV", "HDR", "HLG".
+  public var badge: String {
+    switch self {
+    case .dolbyVision: "DV"
+    case .hdr10: "HDR"
+    case .hlg: "HLG"
+    }
+  }
+
+  public init?(stream: PlexStream) {
+    if stream.DOVIPresent == true {
+      self = .dolbyVision
+    } else {
+      switch stream.colorTrc?.lowercased() {
+      case "smpte2084": self = .hdr10
+      case "arib-std-b67": self = .hlg
+      default: return nil
+      }
+    }
+  }
+}
+
 public struct PlexMedia: Codable, Sendable, Hashable, Identifiable {
   public var id: Int
   public var duration: Int?
@@ -333,6 +363,12 @@ extension PlexMetadata {
     PlaybackResolver.preferredMedia(media, quality: quality).flatMap { VideoTier.badge(for: $0.tier) }
   }
 
+  /// Dolby Vision / HDR10 / HLG of the version this device would play, when
+  /// Plex sent its streams (full details do; lists don't). Nil for SDR.
+  public func dynamicRange(for quality: PlaybackQuality = .auto) -> DynamicRange? {
+    PlaybackResolver.preferredMedia(media, quality: quality)?.dynamicRange
+  }
+
   /// "2h 14m" or "48m".
   public var durationLabel: String? {
     guard let duration, duration > 0 else { return nil }
@@ -396,5 +432,12 @@ public struct HomeDeduplicator: Sendable {
 
   public mutating func filter(_ items: [PlexMetadata]) -> [PlexMetadata] {
     items.filter { admit($0) }
+  }
+}
+
+extension PlexMedia {
+  /// The dynamic range of this version's video stream, nil for SDR or unknown.
+  public var dynamicRange: DynamicRange? {
+    parts.lazy.flatMap(\.streams).first { $0.streamType == 1 }.flatMap(DynamicRange.init(stream:))
   }
 }
