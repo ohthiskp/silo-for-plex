@@ -61,7 +61,7 @@ struct DetailView: View {
       }
     }
     .scrollIndicators(.never)
-    .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { scrolled = $1 }
+    .modifier(ScrollOffsetReader(offset: $scrolled))
     .astraScrollEdges()
     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewport = $0 }
     // The backdrop runs under the title bar; the back button below stays inside the safe area.
@@ -383,6 +383,22 @@ private struct WatchedLabelStyle: LabelStyle {
       configuration.icon
     } else {
       Label(configuration)
+    }
+  }
+}
+
+/// Reports how far a scroll view has scrolled (macOS 15 / iOS 18 and later;
+/// older systems keep 0, so the backdrop simply scrolls with the page).
+private struct ScrollOffsetReader: ViewModifier {
+  @Binding var offset: CGFloat
+
+  func body(content: Content) -> some View {
+    if #available(macOS 15.0, iOS 18.0, *) {
+      content.onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) {
+        offset = $1
+      }
+    } else {
+      content
     }
   }
 }
