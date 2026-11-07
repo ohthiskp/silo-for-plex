@@ -13,14 +13,28 @@ jobs:
   probe:
     runs-on: macos-26
     steps:
-      - name: Cineby page structure
+      - name: Cineby home page sections
         run: |
           curl -sSL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" -o page.html -w "HTTP %{http_code} %{size_download} bytes %{url_effective}\n" https://cineby.tech/
-          echo "--- ld+json"
           python3 - <<'PY'
-          import re
-          h=open("page.html").read()
-          for m in re.findall(r'<script type="application/ld\+json">(.*?)</script>', h, re.S): print(m[:1500])
-          i=h.find('/movie/'); print("--- first item markup"); print(h[max(0,i-900):i+900])
-          print("--- api hints"); print(sorted(set(re.findall(r'https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9_./-]*)?', h)))[:60])
+          import re, html as H
+          h = open("page.html").read()
+          # Headings and title links in page order: shows which section each title sits in.
+          tok = re.compile(r'<h[1-4][^>]*>(.*?)</h[1-4]>|/(movie|tv)/([0-9]{1,9})(?=[/"\'?#])|alt="([^"]{1,80})"', re.S)
+          seen = set(); last = None
+          for m in tok.finditer(h):
+              if m.group(1) is not None:
+                  t = H.unescape(re.sub(r'<[^>]+>', '', m.group(1))).strip()
+                  if t: print("\n## " + t[:80])
+              elif m.group(2):
+                  k = m.group(2) + ":" + m.group(3)
+                  if k != last: print("  " + k, end="")
+                  last = k
+              elif m.group(4):
+                  print("  [" + H.unescape(m.group(4)) + "]", end="")
+          print()
+          i = h.find('/movie/'); print("--- markup before first title"); print(h[max(0, i - 2500):i + 400])
+          print("--- next data / api hints")
+          print(sorted(set(re.findall(r'https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9_./-]*)?', h)))[:80])
+          for m in re.findall(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', h, re.S): print(m[:4000])
           PY
