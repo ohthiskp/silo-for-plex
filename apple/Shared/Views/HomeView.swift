@@ -178,7 +178,13 @@ struct ServicePill: View {
         .padding(.trailing, 16)
       }
       .scrollIndicators(.never)
-      .scrollClipDisabled()
+      // Astra: the rail ends (fading out) before the Watchlist button instead
+      // of sliding underneath it.
+      .mask {
+        LinearGradient(
+          stops: [.init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+          startPoint: .leading, endPoint: .trailing)
+      }
       .animation(.snappy(duration: 0.22), value: library.selectedService)
     #else
       ViewThatFits(in: .horizontal) {
