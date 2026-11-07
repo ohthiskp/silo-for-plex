@@ -279,7 +279,7 @@ final class LibraryStore {
     // Astra: today's trending titles straight from TMDB (KP: like cineby's
     // "Top content today"), shown at once without waiting for the library
     // index; titles not on the server get a greyed-out Play.
-    // This week's trending (KP picked it over today's; it changes less often).
+    // TMDB's trending this week (cineby's own list isn't on TMDB; week is the closest steady source).
     let trending = tmdb == nil ? [] : await loadWeekTrending()
     func picks(_ index: [String: PlexMetadata]) async -> [PlexMetadata] {
       await loadInFull(TrendingHero.today(trending: trending, index: index)).filter { $0.backdrop != nil }
