@@ -87,3 +87,14 @@ struct WindowAccessor: View {
     }
   #endif
 }
+
+extension PlatformImage {
+  /// A UIImage / NSImage for a decoded frame.
+  static func from(_ image: CGImage) -> PlatformImage {
+    #if os(macOS)
+      NSImage(cgImage: image, size: NSSize(width: image.width / 2, height: image.height / 2))
+    #else
+      UIImage(cgImage: image, scale: 2, orientation: .up)
+    #endif
+  }
+}

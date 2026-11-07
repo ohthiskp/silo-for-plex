@@ -31,10 +31,16 @@ final class PlayerController {
   /// False from opening a file until mpv shows its first frame; the overlay
   /// shows a loading state instead of a black window meanwhile.
   private(set) var hasFirstFrame = false
-  /// Plex's seek previews for the file playing (nil for downloads, or when the server has none).
-  private(set) var hasThumbnails = false
-  @ObservationIgnored private var thumbnails: SeekThumbnails?
-  @ObservationIgnored private var thumbnailCache: [Int: PlatformImage] = [:]
+  // Astra: seek previews are decoded by Astra from the file itself, like
+  // Infuse (KP, 2026-11-07), not read from Plex. See SeekPreviewGenerator.
+  @ObservationIgnored private var previews: SeekPreviewGenerator?
+  /// Decoded previews by 2-second slot.
+  @ObservationIgnored private var previewCache: [Int: PlatformImage] = [:]
+  /// The newest preview, shown while the next one decodes.
+  @ObservationIgnored private var lastPreview: PlatformImage?
+  @ObservationIgnored private var requestedSlot: Int?
+  /// Bumped when a preview arrives, so the timeline redraws.
+  private(set) var previewVersion = 0
   private(set) var videoWidth: Double = 0
   private(set) var videoHeight: Double = 0
   private(set) var audioTracks: [Track] = []
@@ -184,9 +190,11 @@ final class PlayerController {
     core = nil
     isActive = false
     isPictureInPicture = false
-    thumbnails = nil
-    thumbnailCache = [:]
-    hasThumbnails = false
+    previews?.close()
+    previews = nil
+    previewCache = [:]
+    lastPreview = nil
+    requestedSlot = nil
     if let key = source?.ratingKey { library?.playbackEnded(ratingKey: key) }
     source = nil
     #if os(macOS)
@@ -345,29 +353,38 @@ final class PlayerController {
     }
   }
 
+  /// A preview decoder on its own connection to the same file (nothing is
+  /// opened until the first scrub).
   private func loadThumbnails(for source: PlaybackSource, local: Bool) {
-    thumbnails = nil
-    thumbnailCache = [:]
-    hasThumbnails = false
-    guard !local, let server = playbackServer else { return }
-    let partID = source.part.id
-    Task { [weak self] in
-      let thumbs = try? await server.seekThumbnails(partID: partID)
-      // Still the same file?
-      guard let self, self.source?.part.id == partID, let thumbs else { return }
-      self.thumbnails = thumbs
-      self.hasThumbnails = true
-    }
+    previews?.close()
+    previewCache = [:]
+    lastPreview = nil
+    requestedSlot = nil
+    previews = SeekPreviewGenerator(url: source.url, headers: source.headers)
   }
 
-  /// The preview image for a time on the timeline, decoded once and kept.
+  /// The preview for a time on the timeline: the decoded frame for its
+  /// 2-second slot, else the newest one while that slot decodes.
   func thumbnail(at seconds: Double) -> PlatformImage? {
-    guard let thumbnails, let index = thumbnails.frameIndex(at: seconds) else { return nil }
-    if let hit = thumbnailCache[index] { return hit }
-    guard let data = thumbnails.jpeg(index), let image = PlatformImage(data: data) else { return nil }
-    if thumbnailCache.count > 400 { thumbnailCache.removeAll() }
-    thumbnailCache[index] = image
-    return image
+    _ = previewVersion
+    guard let previews, seconds.isFinite else { return nil }
+    let slot = Int(max(0, seconds) / 2)
+    if let hit = previewCache[slot] { return hit }
+    if requestedSlot != slot {
+      requestedSlot = slot
+      let key = source?.ratingKey
+      previews.request(at: Double(slot) * 2) { [weak self] image in
+        MainActor.assumeIsolated {
+          guard let self, self.source?.ratingKey == key, let image else { return }
+          let preview = PlatformImage.from(image)
+          if self.previewCache.count > 300 { self.previewCache.removeAll() }
+          self.previewCache[slot] = preview
+          self.lastPreview = preview
+          self.previewVersion &+= 1
+        }
+      }
+    }
+    return lastPreview
   }
 
   private func fitWindowToVideo() {
