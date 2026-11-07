@@ -820,3 +820,26 @@ final class PlayerGeometryTests: XCTestCase {
     XCTAssertEqual(mini.maxX, screen.maxX - 20)
   }
 }
+
+final class DownloadCheckTests: XCTestCase {
+  /// The 0% bug: Plex sent no Content-Length, so URLSession's total was -1 and
+  /// the progress callback never fired.
+  func testProgressUsesThePlexFileSizeWhenTheServerSendsNoLength() {
+    XCTAssertEqual(DownloadCheck.fraction(written: 500, reportedTotal: -1, expected: 1000), 0.5)
+    XCTAssertEqual(DownloadCheck.fraction(written: 250, reportedTotal: 1000, expected: 4000), 0.25)
+    XCTAssertNil(DownloadCheck.fraction(written: 10, reportedTotal: -1, expected: nil))
+    XCTAssertEqual(DownloadCheck.fraction(written: 2000, reportedTotal: -1, expected: 1000), 1)
+  }
+
+  func testRejectsErrorsHtmlAndShortFiles() {
+    XCTAssertEqual(DownloadCheck.validate(status: 401, mimeType: nil, fileSize: 0, expected: 10), .server(401))
+    XCTAssertEqual(
+      DownloadCheck.validate(status: 200, mimeType: "text/html", fileSize: 300, expected: nil), .notAVideo("text/html"))
+    XCTAssertEqual(
+      DownloadCheck.validate(status: 200, mimeType: "video/x-matroska", fileSize: 400_000, expected: 1_000_000),
+      .incomplete(got: 400_000, expected: 1_000_000))
+    XCTAssertNil(
+      DownloadCheck.validate(status: 200, mimeType: "video/x-matroska", fileSize: 1_000_000, expected: 1_000_000))
+    XCTAssertNil(DownloadCheck.validate(status: 200, mimeType: nil, fileSize: 5, expected: nil))
+  }
+}

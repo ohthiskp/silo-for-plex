@@ -132,7 +132,7 @@ final class AppModel {
     serverSwitch = nil
     _ = connectGeneration.next()
     library?.close()
-    downloads.library = nil
+    downloads.attach(nil, serverID: nil)
     tokens.clear()
     UserDefaults.standard.removeObject(forKey: Self.serverKey)
     accountToken = nil
@@ -234,7 +234,7 @@ final class AppModel {
     server = session.client
     serverID = session.serverID
     library = store
-    downloads.library = store
+    downloads.attach(store, serverID: session.serverID)
     player.server = session.client
     serverSwitch = nil
     phase = .ready

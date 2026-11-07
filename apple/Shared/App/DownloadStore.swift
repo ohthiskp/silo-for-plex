@@ -18,9 +18,11 @@ final class DownloadStore {
     case failed(String)
   }
 
-  struct Job: Identifiable, Equatable {
+  struct Job: Identifiable, Equatable, Codable {
     var record: DownloadRecord
     var partKey: String
+    /// The server it comes from, so a saved queue only resumes on that server.
+    var serverID: String?
     var fraction: Double = 0
     var running = false
     var id: String { record.ratingKey }
@@ -28,8 +30,14 @@ final class DownloadStore {
 
   private(set) var index: DownloadIndex
   private(set) var jobs: [Job] = []
-  private(set) var failures: [String: String] = [:]
+  /// Downloads that stopped, with why; shown on the Downloads page with Retry.
+  private(set) var failed: [String: (job: Job, reason: String)] = [:]
   var lastError: String?
+  /// The connected server's Plex id (see `attach`).
+  @ObservationIgnored private var serverID: String?
+  /// Partial data from a failed transfer, so Retry continues instead of starting over.
+  @ObservationIgnored private var resumeData: [String: Data] = [:]
+  @ObservationIgnored private let queueURL: URL
 
   let folder: URL
   @ObservationIgnored private let indexURL: URL
@@ -53,6 +61,7 @@ final class DownloadStore {
       try? url.setResourceValues(values)
     #endif
     indexURL = folder.appendingPathComponent("index.json")
+    queueURL = folder.appendingPathComponent("queue.json")
     index = DownloadIndex.load(from: indexURL)
     session = DownloadSession()
     // Forget records whose file was deleted outside Astra.
@@ -60,6 +69,27 @@ final class DownloadStore {
       index.remove(record.ratingKey)
     }
     save()
+    // Downloads that were queued or running when Astra quit start again once
+    // their server is connected (see attach).
+    if let data = try? Data(contentsOf: queueURL), let saved = try? JSONDecoder().decode([Job].self, from: data) {
+      jobs = saved.map { var job = $0; job.running = false; job.fraction = 0; return job }
+    }
+  }
+
+  /// Connects the store to a server session; queued downloads from that server carry on.
+  func attach(_ library: LibraryStore?, serverID: String?) {
+    self.library = library
+    self.serverID = serverID
+    guard let library else { return }
+    for job in jobs where job.serverID == serverID && jobClients[job.id] == nil {
+      jobClients[job.id] = library.client
+    }
+    pump()
+  }
+
+  private func saveQueue() {
+    let pending = jobs.map { var job = $0; job.running = false; return job }
+    try? JSONEncoder().encode(pending).write(to: queueURL, options: .atomic)
   }
 
   // MARK: - Queries
@@ -75,7 +105,7 @@ final class DownloadStore {
   func state(for ratingKey: String) -> State {
     if index.record(ratingKey) != nil { return .done }
     if let job = jobs.first(where: { $0.id == ratingKey }) { return job.running ? .downloading(job.fraction) : .queued }
-    if let failure = failures[ratingKey] { return .failed(failure) }
+    if let failure = failed[ratingKey] { return .failed(failure.reason) }
     return .none
   }
 
@@ -93,7 +123,12 @@ final class DownloadStore {
     return .none
   }
 
-  var hasAnything: Bool { !index.records.isEmpty || !jobs.isEmpty }
+  var hasAnything: Bool { !index.records.isEmpty || !jobs.isEmpty || !failed.isEmpty }
+
+  /// Failed downloads, by title.
+  var failedList: [(job: Job, reason: String)] {
+    failed.values.sorted { $0.job.record.displayTitle < $1.job.record.displayTitle }
+  }
 
   // MARK: - Actions
 
@@ -121,16 +156,37 @@ final class DownloadStore {
           var full = target
           if full.media.isEmpty { full = try await library.details(target.ratingKey, refresh: true) }
           guard let made = DownloadRecord.make(for: full, quality: .stored()) else { continue }
-          failures[full.ratingKey] = nil
-          jobs.append(Job(record: made.record, partKey: made.partKey))
+          failed[full.ratingKey] = nil
+          jobs.append(Job(record: made.record, partKey: made.partKey, serverID: serverID))
           jobClients[made.record.ratingKey] = client
           Task { await saveImage(for: full, record: made.record) }
         }
+        saveQueue()
         pump()
       } catch {
-        lastError = error.localizedDescription
+        lastError = "\(item.displayTitle) didn't download: \(PlexError.describe(error, server: client.serverName))"
       }
     }
+  }
+
+  /// Tries a failed download again, continuing from where it stopped when possible.
+  func retry(_ ratingKey: String) {
+    guard let entry = failed.removeValue(forKey: ratingKey) else { return }
+    var job = entry.job
+    job.running = false
+    job.fraction = 0
+    jobs.append(job)
+    if jobClients[job.id] == nil, job.serverID == serverID { jobClients[job.id] = library?.client }
+    saveQueue()
+    pump()
+  }
+
+  /// Forgets a failed download.
+  func dismissFailure(_ ratingKey: String) {
+    failed[ratingKey] = nil
+    resumeData[ratingKey] = nil
+    jobClients[ratingKey] = nil
+    try? FileManager.default.removeItem(at: folder.appendingPathComponent("\(DownloadRecord.safeName(ratingKey)).jpg"))
   }
 
   func cancel(_ ratingKey: String) {
@@ -138,6 +194,8 @@ final class DownloadStore {
     if job.running { session.cancel(ratingKey) }
     jobs.removeAll { $0.id == ratingKey }
     jobClients[ratingKey] = nil
+    resumeData[ratingKey] = nil
+    saveQueue()
     pump()
   }
 
@@ -181,16 +239,20 @@ final class DownloadStore {
   }
 
   private func pump() {
-    while jobs.filter(\.running).count < Self.maxConcurrent, let i = jobs.firstIndex(where: { !$0.running }) {
-      guard let client = jobClients[jobs[i].id] ?? library?.client else { return }
+    // Only jobs whose server is connected can run.
+    while jobs.filter(\.running).count < Self.maxConcurrent,
+      let i = jobs.firstIndex(where: { !$0.running && jobClients[$0.id] != nil })
+    {
+      guard let client = jobClients[jobs[i].id] else { return }
       jobs[i].running = true
       let job = jobs[i]
       let request = PlaybackResolver.downloadRequest(partKey: job.partKey, client: client)
       let destination = fileURL(job.record)
+      let resume = resumeData.removeValue(forKey: job.id)
       Task {
         do {
           try await session.download(
-            request, id: job.id, to: destination,
+            request, id: job.id, to: destination, expectedBytes: job.record.bytes, resumeData: resume,
             progress: { [weak self] fraction in
               Task { @MainActor in self?.setFraction(fraction, for: job.id) }
             })
@@ -211,13 +273,20 @@ final class DownloadStore {
   private func finish(_ job: Job, error: Error?) {
     let wasCancelled = !jobs.contains { $0.id == job.id }
     jobs.removeAll { $0.id == job.id }
-    jobClients[job.id] = nil
+    defer { saveQueue() }
     if let error {
       if !wasCancelled, (error as? URLError)?.code != .cancelled {
-        failures[job.id] = error.localizedDescription
-        lastError = "\(job.record.displayTitle) didn't download: \(error.localizedDescription)"
+        let reason =
+          (error as? DownloadCheck.Failure)?.errorDescription
+          ?? PlexError.describe(error, server: jobClients[job.id]?.serverName)
+        if let data = (error as? URLError)?.downloadTaskResumeData { resumeData[job.id] = data }
+        failed[job.id] = (job, reason)
+        lastError = "\(job.record.displayTitle) didn't download: \(reason)"
+      } else {
+        jobClients[job.id] = nil
       }
     } else if !wasCancelled {
+      jobClients[job.id] = nil
       var record = job.record
       let image = folder.appendingPathComponent("\(DownloadRecord.safeName(record.ratingKey)).jpg")
       if FileManager.default.fileExists(atPath: image.path) { record.imageName = image.lastPathComponent }
@@ -258,6 +327,7 @@ final class DownloadStore {
 final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
   private struct Pending {
     var destination: URL
+    var expectedBytes: Int64?
     var progress: @Sendable (Double) -> Void
     var continuation: CheckedContinuation<Void, Error>
     var moveError: Error?
@@ -276,12 +346,15 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
   }()
 
   func download(
-    _ request: URLRequest, id: String, to destination: URL, progress: @escaping @Sendable (Double) -> Void
+    _ request: URLRequest, id: String, to destination: URL, expectedBytes: Int64?, resumeData: Data?,
+    progress: @escaping @Sendable (Double) -> Void
   ) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      let task = session.downloadTask(with: request)
+      // Continue a transfer that broke off, when the server allows it.
+      let task = resumeData.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: request)
       lock.withLock {
-        pending[task.taskIdentifier] = Pending(destination: destination, progress: progress, continuation: continuation)
+        pending[task.taskIdentifier] = Pending(
+          destination: destination, expectedBytes: expectedBytes, progress: progress, continuation: continuation)
         taskIDs[id] = task.taskIdentifier
         tasks[task.taskIdentifier] = task
       }
@@ -298,17 +371,26 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     _ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
     totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
   ) {
-    guard totalBytesExpectedToWrite > 0 else { return }
-    let progress = lock.withLock { pending[downloadTask.taskIdentifier]?.progress }
-    progress?(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+    guard let entry = lock.withLock({ pending[downloadTask.taskIdentifier] }),
+      let fraction = DownloadCheck.fraction(
+        written: totalBytesWritten, reportedTotal: totalBytesExpectedToWrite, expected: entry.expectedBytes)
+    else { return }
+    entry.progress(fraction)
   }
 
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
     // The temporary file is deleted when this returns, so move it now.
     guard let entry = lock.withLock({ pending[downloadTask.taskIdentifier] }) else { return }
-    let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0
+    let response = downloadTask.response as? HTTPURLResponse
+    let size = (try? FileManager.default.attributesOfItem(atPath: location.path)[.size] as? NSNumber)?.int64Value ?? 0
     do {
-      guard status == 200 else { throw PlexError.http(status) }
+      // The right status, a video rather than an error page, and every byte.
+      if let failure = DownloadCheck.validate(
+        status: response?.statusCode ?? 0, mimeType: response?.mimeType, fileSize: size,
+        expected: entry.expectedBytes)
+      {
+        throw failure
+      }
       try? FileManager.default.removeItem(at: entry.destination)
       try FileManager.default.moveItem(at: location, to: entry.destination)
     } catch {

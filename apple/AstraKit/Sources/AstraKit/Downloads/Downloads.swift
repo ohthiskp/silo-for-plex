@@ -173,3 +173,44 @@ extension PlaybackResolver {
     return request
   }
 }
+
+/// Download progress and checks, kept apart from URLSession so they are tested.
+public enum DownloadCheck {
+  /// The fraction done. Plex often sends originals without a Content-Length
+  /// (URLSession then reports -1 as the total), so the file size from the
+  /// item's metadata is used instead. Nil when neither is known.
+  public static func fraction(written: Int64, reportedTotal: Int64, expected: Int64?) -> Double? {
+    let total = reportedTotal > 0 ? reportedTotal : (expected ?? 0)
+    guard total > 0 else { return nil }
+    return min(1, max(0, Double(written) / Double(total)))
+  }
+
+  public enum Failure: LocalizedError, Equatable {
+    case server(Int)
+    case notAVideo(String)
+    case incomplete(got: Int64, expected: Int64)
+
+    public var errorDescription: String? {
+      switch self {
+      case .server(401), .server(403): "The server refused the download. Sign in again or check sharing permissions."
+      case .server(let code): "The server answered with an error (\(code))."
+      case .notAVideo(let type): "The server sent \(type) instead of the video file."
+      case .incomplete(let got, let expected):
+        "The download stopped early (\(ByteCountFormatter.string(fromByteCount: got, countStyle: .file)) of \(ByteCountFormatter.string(fromByteCount: expected, countStyle: .file)))."
+      }
+    }
+  }
+
+  /// Whether a finished response really is the whole original file.
+  public static func validate(status: Int, mimeType: String?, fileSize: Int64, expected: Int64?) -> Failure? {
+    guard (200..<300).contains(status) else { return .server(status) }
+    if let mimeType, mimeType.hasPrefix("text/") || mimeType == "application/json" || mimeType == "application/xml" {
+      return .notAVideo(mimeType)
+    }
+    // A few bytes off is fine (Plex's size is the file's; it's never larger).
+    if let expected, expected > 0, fileSize < expected - max(1024, expected / 1000) {
+      return .incomplete(got: fileSize, expected: expected)
+    }
+    return nil
+  }
+}

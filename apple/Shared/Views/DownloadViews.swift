@@ -9,6 +9,7 @@ struct DownloadButton: View {
 
   @Environment(AppModel.self) private var app
   @State private var confirmDelete = false
+  @State private var confirmCancel = false
 
   private var downloads: DownloadStore { app.downloads }
   private var isGroup: Bool { item.type == .show || item.type == .season }
@@ -30,8 +31,14 @@ struct DownloadButton: View {
           .astraSecondaryButton()
       }
     }
-    .help(title)
+    .help(helpText)
     .accessibilityLabel(title)
+    .confirmationDialog("Stop downloading \(item.displayTitle)?", isPresented: $confirmCancel) {
+      Button("Stop Download", role: .destructive) {
+        if isGroup { downloads.cancelEpisodes(of: item) } else { downloads.cancel(item.ratingKey) }
+      }
+      Button("Keep Downloading", role: .cancel) {}
+    }
     .confirmationDialog("Delete the download of \(item.displayTitle)?", isPresented: $confirmDelete) {
       Button("Delete Download", role: .destructive) {
         if isGroup { downloads.deleteEpisodes(of: item) } else { downloads.delete(item.ratingKey) }
@@ -49,6 +56,12 @@ struct DownloadButton: View {
     }
   }
 
+  /// The tooltip: for a failed download, why it failed.
+  private var helpText: String {
+    if case .failed(let reason) = state { return "Retry Download: \(reason)" }
+    return title
+  }
+
   private var title: String {
     switch state {
     case .none: isGroup ? (item.type == .show ? "Download Show" : "Download Season") : "Download"
@@ -61,10 +74,13 @@ struct DownloadButton: View {
 
   private func tap() {
     switch state {
-    case .none, .failed:
+    case .none:
       downloads.download(item)
+    case .failed:
+      downloads.retry(item.ratingKey)
     case .queued, .downloading:
-      if isGroup { downloads.cancelEpisodes(of: item) } else { downloads.cancel(item.ratingKey) }
+      // Never stop a download on a stray click: ask first.
+      confirmCancel = true
     case .done:
       confirmDelete = true
     }
@@ -130,8 +146,30 @@ struct DownloadsView: View {
         }
       }
 
-      if let error = downloads.lastError {
-        Text(error).font(Astra.Font.meta).foregroundStyle(Astra.Color.muted)
+      if !downloads.failedList.isEmpty {
+        section("Didn't download") {
+          ForEach(downloads.failedList, id: \.job.id) { entry in
+            DownloadRow(record: entry.job.record, image: nil) {
+              HStack(spacing: Astra.Spacing.s) {
+                Text(entry.reason)
+                  .lineLimit(2)
+                  .multilineTextAlignment(.trailing)
+                  .frame(maxWidth: 320, alignment: .trailing)
+                Button("Retry") { downloads.retry(entry.job.id) }
+                  .astraSecondaryButton()
+                Button {
+                  downloads.dismissFailure(entry.job.id)
+                } label: {
+                  Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove")
+              }
+              .font(Astra.Font.meta)
+              .foregroundStyle(Astra.Color.muted)
+            }
+          }
+        }
       }
 
       let movies = downloads.index.movies
