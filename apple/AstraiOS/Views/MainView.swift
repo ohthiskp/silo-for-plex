@@ -10,8 +10,14 @@ struct MainView: View {
 
   enum TabID: Hashable { case home, search, libraries }
 
-  @State private var tab: TabID = .home
-  @State private var homePath: [Route] = []
+  @State private var tab: TabID = {
+    switch Demo.tab {
+    case "search": .search
+    case "libraries": .libraries
+    default: .home
+    }
+  }()
+  @State private var homePath: [Route] = Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
   @State private var searchPath: [Route] = []
   @State private var librariesPath: [Route] = []
 

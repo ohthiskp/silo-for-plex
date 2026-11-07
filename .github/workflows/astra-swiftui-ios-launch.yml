@@ -33,6 +33,9 @@ jobs:
 
       - name: Build for the simulator
         working-directory: apple
+        env:
+          # TMDB artwork and the Top 10 in the demo screenshots.
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
         run: |
           set -o pipefail
           brew install xcodegen
@@ -44,6 +47,7 @@ jobs:
             -clonedSourcePackagesDirPath .build/SourcePackages \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
+            TMDB_TOKEN="$TMDB_TOKEN" \
             | tee "$RUNNER_TEMP/build.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name "Astra.app" -maxdepth 2 | head -1)
           test -n "$APP" || { tail -80 "$RUNNER_TEMP/build.log"; exit 1; }
@@ -75,6 +79,29 @@ jobs:
           fi
           echo "Astra is still running after 20 s."
 
+      - name: Demo screenshots
+        if: success()
+        run: |
+          # Astra: the app against its built-in demo server (Shared/App/Demo.swift),
+          # one screenshot per screen, so the UI can be checked without a phone.
+          UDID=$(xcrun simctl list devices booted -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];print(next(x["udid"] for v in d.values() for x in v))')
+          BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          mkdir -p "$RUNNER_TEMP/shots"
+          shot() {
+            name=$1; shift
+            xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$BID" -AstraDemo YES "$@" > /dev/null
+            sleep 25
+            xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shots/$name.png" || true
+          }
+          shot home
+          shot search -AstraDemoTab search
+          shot search-dune -AstraDemoTab search -AstraDemoQuery dune
+          shot libraries -AstraDemoTab libraries
+          shot details-movie -AstraDemoOpen 101
+          shot details-show -AstraDemoOpen 205
+          ls -la "$RUNNER_TEMP/shots"
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
@@ -82,3 +109,4 @@ jobs:
           path: |
             ${{ runner.temp }}/screen.png
             ${{ runner.temp }}/app.log
+            ${{ runner.temp }}/shots

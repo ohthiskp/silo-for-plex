@@ -14,6 +14,13 @@ public struct ServerSession: Sendable {
   public let serverID: String
   public let client: PlexServerClient
   public let sections: [PlexLibrarySection]
+
+  public init(generation: Int, serverID: String, client: PlexServerClient, sections: [PlexLibrarySection]) {
+    self.generation = generation
+    self.serverID = serverID
+    self.client = client
+    self.sections = sections
+  }
 }
 
 /// Opens and validates server sessions. Nothing is committed here: the caller

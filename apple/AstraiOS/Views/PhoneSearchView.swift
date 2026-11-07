@@ -42,7 +42,7 @@ struct PhoneSearchView: View {
   @Environment(\.playItem) private var playItem
   @Environment(\.openItem) private var openItem
   @AppStorage("astra.search.recent") private var recentStore = ""
-  @State private var query = ""
+  @State private var query = Demo.query ?? ""
   @State private var scope: Scope = .all
   @State private var quality: Quality?
   @State private var language: Language = .any
