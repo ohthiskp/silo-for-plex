@@ -73,6 +73,9 @@ final class PlayerController {
   @ObservationIgnored private var core: MpvPlayerCore?
   @ObservationIgnored private var source: PlaybackSource?
   @ObservationIgnored private weak var library: LibraryStore?
+  /// Astra (KP, 2026-11-07): called with an episode that played to the end,
+  /// so the next one starts (continuous playback).
+  @ObservationIgnored var playNext: ((PlexMetadata) -> Void)?
   @ObservationIgnored private var reporter: Task<Void, Never>?
   @ObservationIgnored private lazy var bridge = MpvDelegateBridge(owner: self)
 
@@ -400,7 +403,10 @@ final class PlayerController {
       videoHeight = (value as? Double) ?? 0
       fitWindowToVideo()
     case "eof-reached":
-      if (value as? Bool) == true { close() }
+      guard (value as? Bool) == true else { break }
+      let finished = item
+      close()
+      if let finished, finished.type == .episode { playNext?(finished) }
     case "aid": audioId = (value as? String).flatMap { Int($0) }
     case "sid": subtitleId = (value as? String).flatMap { Int($0) }
     case "track-list": updateTracks(value as? [Any] ?? [])

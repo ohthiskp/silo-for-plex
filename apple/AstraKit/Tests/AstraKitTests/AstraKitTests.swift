@@ -1351,3 +1351,32 @@ final class LocalSearchTests: XCTestCase {
     XCTAssertEqual(LocalSearch.rank(items, text: " "), [])
   }
 }
+
+final class UpNextTests: XCTestCase {
+  private func ep(_ key: String, _ index: Int) -> PlexMetadata {
+    var item = PlexMetadata(ratingKey: key, type: .episode, title: "E\(index)")
+    item.index = index
+    return item
+  }
+
+  private func season(_ key: String, _ index: Int) -> PlexMetadata {
+    var item = PlexMetadata(ratingKey: key, type: .season, title: "S\(index)")
+    item.index = index
+    return item
+  }
+
+  func testNextEpisodeInSeasonByIndex() {
+    let episodes = [ep("3", 3), ep("1", 1), ep("2", 2)]
+    XCTAssertEqual(UpNext.nextInSeason(after: ep("1", 1), episodes: episodes)?.ratingKey, "2")
+    XCTAssertEqual(UpNext.nextInSeason(after: ep("2", 2), episodes: episodes)?.ratingKey, "3")
+    XCTAssertNil(UpNext.nextInSeason(after: ep("3", 3), episodes: episodes))
+  }
+
+  func testNextSeasonSkipsSpecials() {
+    let seasons = [season("s0", 0), season("s2", 2), season("s1", 1), season("s3", 3)]
+    XCTAssertEqual(UpNext.nextSeason(after: 1, seasons: seasons)?.ratingKey, "s2")
+    XCTAssertEqual(UpNext.nextSeason(after: 0, seasons: seasons)?.ratingKey, "s1")
+    XCTAssertNil(UpNext.nextSeason(after: 3, seasons: seasons))
+    XCTAssertEqual(UpNext.first(of: [ep("b", 2), ep("a", 1)])?.ratingKey, "a")
+  }
+}

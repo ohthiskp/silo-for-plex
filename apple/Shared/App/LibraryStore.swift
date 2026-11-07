@@ -980,6 +980,20 @@ final class LibraryStore {
     }
   }
 
+  /// Astra (KP, 2026-11-07): the episode that plays after `episode` ends,
+  /// read fresh from the server (the next in its season, else the first of
+  /// the next season). Nil after a show's last episode.
+  func nextEpisode(after episode: PlexMetadata) async -> PlexMetadata? {
+    guard episode.type == .episode, let seasonKey = episode.parentRatingKey else { return nil }
+    let episodes = (try? await client.children(ratingKey: seasonKey)) ?? []
+    if let next = UpNext.nextInSeason(after: episode, episodes: episodes) { return next }
+    guard let showKey = episode.grandparentRatingKey, let seasonIndex = episode.parentIndex,
+      let seasons = try? await client.children(ratingKey: showKey),
+      let season = UpNext.nextSeason(after: seasonIndex, seasons: seasons)
+    else { return nil }
+    return UpNext.first(of: (try? await client.children(ratingKey: season.ratingKey)) ?? [])
+  }
+
   /// Seasons and episodes change when something is watched.
   private func forgetChildren() {
     childrenCache = [:]
