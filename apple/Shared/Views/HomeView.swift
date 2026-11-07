@@ -494,6 +494,7 @@ struct HeroCarousel: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.contentLeading) private var leading
   @Environment(\.isPageActive) private var isPageActive
+  @Environment(\.openItem) private var openItem
 
   private static let titleTransition = AnyTransition.asymmetric(
     insertion: .opacity.animation(.easeOut(duration: 0.35).delay(0.3)),
@@ -534,6 +535,10 @@ struct HeroCarousel: View {
         HeroScrim()
       }
     }
+    // Astra (KP, 2026-11-07): a tap anywhere on the hero (artwork, logo,
+    // text) opens Details; Play, + and the pager keep their own action.
+    .contentShape(Rectangle())
+    .onTapGesture { openItem(item) }
     #if os(iOS)
       // Swipe the hero sideways to move between its titles.
       .simultaneousGesture(
