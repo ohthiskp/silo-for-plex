@@ -169,20 +169,53 @@ struct LibraryGridView: View {
 struct SearchView: View {
   var library: LibraryStore
 
+  /// Astra (KP, 2026-11-07): the same search as the iPhone, laid out for
+  /// the Mac window: All / Movies / Shows / People, titles from the library
+  /// index at once, the server's answer added after, people from TMDB only.
+  enum Scope: String, CaseIterable, Identifiable {
+    case all, movies, shows, people
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+  }
+
   @State private var query = ""
+  @State private var scope: Scope = .all
   @State private var results: [PlexMetadata] = []
+  @State private var people: [TMDBPerson] = []
   @State private var searched = false
+  @State private var peopleSearched = false
+  /// A person picked from the results: their TMDB filmography replaces the results.
+  @State private var person: TMDBPerson?
+  @State private var credits: [PlexMetadata] = []
+  @State private var creditsLoaded = false
+  @AppStorage("astra.search.recent") private var recentStore = ""
   @FocusState private var focused: Bool
+  @Namespace private var scopePill
+
+  private var recent: [String] { recentStore.split(separator: "\n").map(String.init) }
+  private var typed: Bool { query.trimmingCharacters(in: .whitespaces).count >= 2 }
+
+  private var shownResults: [PlexMetadata] {
+    switch scope {
+    case .all: results
+    case .movies: results.filter { $0.type == .movie }
+    case .shows: results.filter { $0.type == .show || $0.type == .season || $0.type == .episode }
+    case .people: []
+    }
+  }
+
+  private var shownPeople: [TMDBPerson] { scope == .all || scope == .people ? people : [] }
 
   var body: some View {
     AstraPage {
       HStack(spacing: 12) {
         Image(systemName: "magnifyingglass").foregroundStyle(Astra.Color.muted)
-        TextField("Movies, shows and episodes", text: $query)
+        TextField("Movies, shows and people", text: $query)
           .textFieldStyle(.plain)
           .font(.system(size: 18))
           .focused($focused)
           .submitLabel(.search)
+          .onSubmit { remember(query) }
         if !query.isEmpty {
           Button {
             query = ""
@@ -198,28 +231,249 @@ struct SearchView: View {
       .frame(maxWidth: 620)
       .astraGlass(in: Capsule())
 
-      if searched && results.isEmpty {
-        EmptyState(symbol: "magnifyingglass", title: "No results", message: "Nothing on this server matches “\(query)”.")
+      scopes
+
+      if let person {
+        personPage(person)
+      } else if typed {
+        resultsSection
+      } else {
+        idle
       }
-      LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
-        ForEach(results) { PosterCard(library: library, item: $0) }
-      }
-      .animation(Astra.Motion.base, value: results.map(\.id))
     }
     .onAppear { focused = true }
     .task(id: query) {
-      let text = query.trimmingCharacters(in: .whitespaces)
-      guard text.count >= 2 else {
-        results = []
-        searched = false
-        return
-      }
-      // Debounce typing.
-      try? await Task.pause(0.25)
-      guard !Task.isCancelled else { return }
-      results = (try? await library.search(text)) ?? []
-      searched = true
+      person = nil
+      await runSearch()
     }
+    .task(id: person?.id) {
+      credits = []
+      creditsLoaded = false
+      guard let person else { return }
+      let found = (try? await library.tmdb?.credits(of: person.id)) ?? []
+      guard !Task.isCancelled else { return }
+      credits = await library.withServer(found)
+      creditsLoaded = true
+    }
+  }
+
+  private var scopes: some View {
+    HStack(spacing: 8) {
+      ForEach(Scope.allCases) { item in
+        Button {
+          withAnimation(Astra.Motion.fast) {
+            scope = item
+            person = nil
+          }
+        } label: {
+          Text(item.title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(scope == item ? Color.black : Astra.Color.ink)
+            .padding(.horizontal, 18)
+            .frame(height: 32)
+            .background {
+              if scope == item { Capsule().fill(.white).matchedGeometryEffect(id: "scope", in: scopePill) }
+            }
+            .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(scope == item ? .isSelected : [])
+      }
+    }
+  }
+
+  // MARK: Nothing typed
+
+  @ViewBuilder private var idle: some View {
+    if !recent.isEmpty {
+      HStack {
+        sectionTitle("Recent Searches")
+        Spacer()
+        Button("Clear") { recentStore = "" }
+          .buttonStyle(.plain)
+          .font(.system(size: 13, weight: .medium))
+          .foregroundStyle(Astra.Color.muted)
+      }
+      .frame(maxWidth: 620)
+      HStack(spacing: 8) {
+        ForEach(recent.prefix(6), id: \.self) { text in
+          Button {
+            query = text
+          } label: {
+            Label(text, systemImage: "clock.arrow.circlepath")
+              .font(.system(size: 13, weight: .medium))
+              .foregroundStyle(Astra.Color.ink)
+              .padding(.horizontal, 14)
+              .frame(height: 30)
+              .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+              .contentShape(Capsule())
+          }
+          .buttonStyle(.plain)
+        }
+      }
+    }
+    let popular = Array(library.topTenAll.prefix(12))
+    if !popular.isEmpty {
+      sectionTitle("Popular Right Now")
+      LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
+        ForEach(popular) { PosterCard(library: library, item: $0) }
+      }
+    }
+  }
+
+  private func sectionTitle(_ text: String) -> some View {
+    Text(text).font(Astra.Font.rowTitle).foregroundStyle(Astra.Color.ink).padding(.top, 6)
+  }
+
+  // MARK: Results
+
+  @ViewBuilder private var resultsSection: some View {
+    let titles = shownResults
+    let found = shownPeople
+    let done = scope == .people ? peopleSearched : (searched && peopleSearched)
+    if done && titles.isEmpty && found.isEmpty {
+      EmptyState(
+        symbol: "magnifyingglass", title: "No results",
+        message: scope == .people ? "No one matches “\(query)”." : "Nothing matches “\(query)”.")
+    } else if titles.isEmpty && found.isEmpty {
+      ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
+    } else {
+      if !found.isEmpty {
+        if scope == .all { sectionTitle("People") }
+        ScrollView(.horizontal) {
+          LazyHStack(alignment: .top, spacing: 18) {
+            ForEach(found) { candidate in
+              Button {
+                remember(query)
+                withAnimation(Astra.Motion.base) { person = candidate }
+              } label: {
+                PersonCircle(person: candidate)
+              }
+              .buttonStyle(.plain)
+            }
+          }
+        }
+        .scrollIndicators(.never)
+        .scrollClipDisabled()
+      }
+      if !titles.isEmpty {
+        if scope == .all, !found.isEmpty { sectionTitle("Movies & Shows") }
+        LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
+          ForEach(titles) { PosterCard(library: library, item: $0) }
+        }
+        .animation(Astra.Motion.base, value: titles.map(\.id))
+      }
+    }
+  }
+
+  @ViewBuilder private func personPage(_ person: TMDBPerson) -> some View {
+    HStack(spacing: 16) {
+      Button {
+        withAnimation(Astra.Motion.base) { self.person = nil }
+      } label: {
+        Image(systemName: "chevron.left")
+      }
+      .astraIconButton(size: 34, variant: .clear)
+      .accessibilityLabel("Back to Results")
+      RemoteImage(url: TMDBArtwork.url(person.profilePath, size: "w342"))
+        .frame(width: 64, height: 80)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+      VStack(alignment: .leading, spacing: 4) {
+        Text(person.name).font(.system(size: 24, weight: .bold)).foregroundStyle(Astra.Color.ink)
+        Text(person.role).font(.system(size: 14)).foregroundStyle(Astra.Color.muted)
+      }
+    }
+    if !creditsLoaded {
+      ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
+    } else if credits.isEmpty {
+      EmptyState(
+        symbol: "person.crop.rectangle", title: "Nothing here", message: "TMDB has no movies or shows for \(person.name).")
+    } else {
+      // Astra (KP): their whole filmography from TMDB; titles on the server
+      // play, the rest open with Play greyed out.
+      LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
+        ForEach(credits) { PosterCard(library: library, item: $0) }
+      }
+    }
+  }
+
+  // MARK: Searching
+
+  private func runSearch() async {
+    let text = query.trimmingCharacters(in: .whitespaces)
+    guard text.count >= 2 else {
+      results = []
+      people = []
+      searched = false
+      peopleSearched = false
+      return
+    }
+    let local = library.localSearch(text)
+    withAnimation(Astra.Motion.fast) {
+      results = local
+      searched = !local.isEmpty
+      peopleSearched = false
+    }
+    try? await Task.pause(0.2)
+    guard !Task.isCancelled else { return }
+    let tmdbClient = library.tmdb
+    let peopleOnly = scope == .people
+    enum Answer { case titles([PlexMetadata]), people([TMDBPerson]) }
+    await withTaskGroup(of: Answer.self) { group in
+      group.addTask {
+        let found = (try? await tmdbClient?.searchMulti(text))?.people ?? []
+        return .people(Array(found.filter { $0.profilePath != nil }.prefix(12)))
+      }
+      if !peopleOnly {
+        group.addTask { [library] in .titles((try? await library.search(text)) ?? []) }
+      }
+      for await answer in group {
+        guard !Task.isCancelled else { return }
+        withAnimation(Astra.Motion.base) {
+          switch answer {
+          case .titles(let found):
+            results = LibraryStore.merged(local, found)
+            searched = true
+          case .people(let found):
+            people = found
+            peopleSearched = true
+          }
+        }
+      }
+    }
+  }
+
+  private func remember(_ text: String) {
+    let trimmed = text.trimmingCharacters(in: .whitespaces)
+    guard trimmed.count >= 2 else { return }
+    let list = [trimmed] + recent.filter { $0.caseInsensitiveCompare(trimmed) != .orderedSame }
+    recentStore = list.prefix(10).joined(separator: "\n")
+  }
+}
+
+/// A person in Mac search results: round photo, name, what they're known for.
+private struct PersonCircle: View {
+  var person: TMDBPerson
+
+  var body: some View {
+    VStack(spacing: 8) {
+      RemoteImage(url: TMDBArtwork.url(person.profilePath, size: "w185"))
+        .frame(width: 96, height: 96)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Astra.Color.hairline))
+      Text(person.name)
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(Astra.Color.ink)
+        .lineLimit(1)
+      Text(person.role)
+        .font(.system(size: 11))
+        .foregroundStyle(Astra.Color.muted)
+        .lineLimit(1)
+    }
+    .frame(width: 110)
+    .pressable()
+    .contentShape(Rectangle())
   }
 }
 

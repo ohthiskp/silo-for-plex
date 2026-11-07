@@ -188,7 +188,13 @@ struct PlayerOverlay: View {
           .help("Back (Esc)")
           .accessibilityLabel("Close Player")
           VStack(alignment: .leading, spacing: 2) {
-            Text(player.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+            HStack(spacing: 6) {
+              Text(player.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+              // Astra (KP, 2026-11-07): the version and its HDR format beside the title, as on iPhone.
+              if shortBadge != "—" { TitleTag(text: shortBadge) }
+              if let range = player.dynamicRange { TitleTag(text: range == .dolbyVision ? "DOLBY VISION" : range.badge) }
+            }
+            .foregroundStyle(.white)
             if let subtitle = player.subtitle {
               Text(subtitle).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.75))
                 .lineLimit(1)

@@ -166,6 +166,7 @@ struct MainView: View {
 struct Sidebar: View {
   @Binding var selection: SidebarItem
   var choose: (SidebarItem) -> Void
+  @Environment(AppModel.self) private var app
 
   private static let itemSize: CGFloat = 44
   private static let spacing: CGFloat = Astra.Spacing.xs
@@ -176,7 +177,10 @@ struct Sidebar: View {
   var body: some View {
     VStack(spacing: Self.spacing) {
       ForEach(SidebarItem.allCases) { item in
-        SidebarButton(symbol: item.symbol, title: item.title, selected: selection == item) {
+        SidebarButton(
+          symbol: item.symbol, title: item.title, selected: selection == item,
+          count: item == .downloads ? app.downloads.jobs.count : 0
+        ) {
           choose(item)
         }
         .keyboardShortcut(item.shortcut, modifiers: .command)
@@ -205,6 +209,8 @@ struct SidebarButton: View {
   var symbol: String
   var title: String
   var selected: Bool
+  /// Astra (KP, 2026-11-07): Downloads shows how many are running, like the iPhone tab.
+  var count = 0
   var action: () -> Void
 
   var body: some View {
@@ -213,10 +219,25 @@ struct SidebarButton: View {
         .font(.system(size: 17, weight: .semibold))
         .frame(width: 44, height: 44)
         .foregroundStyle(selected ? Color.black : Astra.Color.muted)
+        .overlay(alignment: .topTrailing) {
+          if count > 0 {
+            Text("\(count)")
+              .font(.system(size: 10, weight: .bold))
+              .monospacedDigit()
+              .foregroundStyle(Color.black)
+              .padding(.horizontal, 5)
+              .frame(minWidth: 16, minHeight: 16)
+              .background(Capsule().fill(Astra.Color.accent))
+              .overlay(Capsule().stroke(Color.black.opacity(0.25)))
+              .offset(x: 2, y: 2)
+              .transition(.scale.combined(with: .opacity))
+          }
+        }
+        .animation(.snappy(duration: 0.2), value: count)
         .contentShape(Capsule())
     }
     .buttonStyle(SidebarButtonStyle())
-    .accessibilityLabel(title)
+    .accessibilityLabel(count > 0 ? "\(title), \(count)" : title)
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }
