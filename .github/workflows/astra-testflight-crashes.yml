@@ -3,6 +3,12 @@ run-name: TestFlight crash reports
 
 # Prints the newest crash reports testers sent from TestFlight (Send Beta Feedback).
 on:
+  # Re-run the latest run to read new reports (dispatch needs the default branch).
+  push:
+    branches: [claude/project-thread-otuzui]
+    paths:
+      - tool/astra/asc_crashes.py
+      - .github/workflows/astra-testflight-crashes.yml
   workflow_dispatch:
 
 permissions:
