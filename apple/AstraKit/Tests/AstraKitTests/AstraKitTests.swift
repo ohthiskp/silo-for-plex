@@ -551,6 +551,43 @@ final class DownloadTests: XCTestCase {
 
 // MARK: - TMDB
 
+final class ServiceCatalogTests: XCTestCase {
+  private func item(_ kind: TMDBItem.Kind, _ id: Int) -> TMDBItem {
+    TMDBItem(tmdbID: id, kind: kind, title: "T\(id)")
+  }
+
+  func testEveryRowIsThatServiceOnly() {
+    let netflix = StreamingService.byID("netflix")!
+    let rows = ServiceCatalog.rows(for: netflix)
+    XCTAssertEqual(rows.first?.title, "Trending on Netflix")
+    XCTAssertTrue(rows.contains { $0.title == "New on Netflix" })
+    XCTAssertTrue(rows.contains { $0.title == "Comedy" })
+    for request in rows.flatMap(\.requests) {
+      XCTAssertEqual(request.query(service: netflix)["with_watch_providers"], "8")
+      XCTAssertEqual(request.query(service: netflix)["with_watch_monetization_types"], "flatrate")
+    }
+  }
+
+  func testNewestStopsAtTodayAndGenresDifferForTV() {
+    let netflix = StreamingService.byID("netflix")!
+    let today = Date(timeIntervalSince1970: 1_794_000_000)  // 2026-11-06
+    let new = DiscoverRequest(.tv, .newest).query(service: netflix, today: today)
+    XCTAssertEqual(new["sort_by"], "first_air_date.desc")
+    XCTAssertEqual(new["first_air_date.lte"], "2026-11-06")
+    let action = ServiceCatalog.rows(for: netflix).first { $0.title == "Action & Adventure" }!
+    XCTAssertEqual(Set(action.requests.map { $0.genres ?? "" }), ["10759", "28|12"])
+  }
+
+  func testMergeAlternatesKindsAndKeepsPageOrder() {
+    let merged = ServiceCatalog.merge([
+      (DiscoverRequest(.tv, .popular, page: 1), [item(.tv, 1), item(.tv, 2)]),
+      (DiscoverRequest(.movie, .popular, page: 1), [item(.movie, 1)]),
+      (DiscoverRequest(.tv, .popular, page: 2), [item(.tv, 3), item(.tv, 1)]),
+    ])
+    XCTAssertEqual(merged.map(\.id), ["tv:1", "movie:1", "tv:2", "tv:3"])
+  }
+}
+
 final class TMDBTests: XCTestCase {
   func testDiscoverOnServiceDecodesAndFiltersByProvider() async throws {
     let transport = FakeTransport { request in
@@ -698,12 +735,45 @@ final class LibraryIndexerTests: XCTestCase {
       let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
       let start = Int(query.first { $0.name == "X-Plex-Container-Start" }?.value ?? "0")!
       XCTAssertEqual(query.first { $0.name == "X-Plex-Container-Size" }?.value, "1000")
-      return (200, page(start: start, count: min(1000, 2500 - start)))
+      return (200, page(start: start, count: max(0, min(1000, 2500 - start))))
     }
     let index = try await LibraryIndexer.build(client: client(transport), sections: [try section("1", "movie")])
     XCTAssertEqual(index.count, 2500)
     XCTAssertEqual(index["movie:2499"]?.ratingKey, "2499")
+    // Four pages at once: 0, 1000, 2000 (short, the end) and 3000 (empty).
+    XCTAssertEqual(transport.requests.count, 4)
+  }
+
+  func testOneAtATimeStopsAtTheShortPage() async throws {
+    let transport = FakeTransport { [self] request in
+      let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+      let start = Int(query.first { $0.name == "X-Plex-Container-Start" }?.value ?? "0")!
+      return (200, page(start: start, count: max(0, min(1000, 2500 - start))))
+    }
+    let index = try await LibraryIndexer.build(
+      client: client(transport), sections: [try section("1", "movie")], parallel: 1)
+    XCTAssertEqual(index.count, 2500)
     XCTAssertEqual(transport.requests.count, 3)
+  }
+
+  func testSavedIndexRoundTripsAndAges() throws {
+    let item = try JSONDecoder().decode(
+      PlexMetadata.self,
+      from: Data(#"{"ratingKey":"7","type":"movie","title":"Heat","year":1995,"thumb":"/t","Guid":[{"id":"tmdb://949"}],"Genre":[{"tag":"Crime"}],"Role":[{"tag":"Al Pacino"}]}"#.utf8))
+    let saved = Date(timeIntervalSince1970: 1_000_000)
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let url = LibraryIndexSnapshot.url(serverID: "abc/../123", in: folder)
+    XCTAssertEqual(url.lastPathComponent, "abc123.json")
+    try LibraryIndexSnapshot(savedAt: saved, items: ["movie:949": item.slimmed]).save(to: url)
+    let loaded = try XCTUnwrap(LibraryIndexSnapshot.load(from: url))
+    let back = try XCTUnwrap(loaded.items["movie:949"])
+    XCTAssertEqual(back.title, "Heat")
+    XCTAssertEqual(back.year, 1995)
+    XCTAssertEqual(back.tmdbKey, "movie:949")
+    XCTAssertEqual(back.genres.map(\.tag), ["Crime"])
+    XCTAssertTrue(back.roles.isEmpty)
+    XCTAssertTrue(loaded.isFresh(now: saved.addingTimeInterval(3600)))
+    XCTAssertFalse(loaded.isFresh(now: saved.addingTimeInterval(7 * 3600)))
   }
 
   /// A failed page used to leave an empty index cached for good, so every

@@ -66,26 +66,100 @@ public struct Generation: Sendable, Equatable {
 /// Every movie and show on a server by TMDB key ("movie:603"), for matching
 /// TMDB's streaming lists to the library.
 public enum LibraryIndexer {
-  /// Reads each section in pages (a single 20,000-item request times out on
-  /// slow servers). Throws when any page fails, so a partial or empty index
-  /// is never mistaken for the real one and cached.
+  /// Reads every movie and show section in pages (a single 20,000-item
+  /// request times out on slow servers), sections side by side and up to
+  /// `parallel` pages at once. Throws when any page fails, so a partial or
+  /// empty index is never mistaken for the real one and saved.
   public static func build(
-    client: PlexServerClient, sections: [PlexLibrarySection], pageSize: Int = 1000
+    client: PlexServerClient, sections: [PlexLibrarySection], pageSize: Int = 1000, parallel: Int = 4
   ) async throws -> [String: PlexMetadata] {
-    var index: [String: PlexMetadata] = [:]
-    for section in sections where section.type == "movie" || section.type == "show" {
-      var start = 0
-      while true {
-        try Task.checkCancellation()
-        let page = try await client.libraryItems(
-          sectionKey: section.key, sort: "titleSort", start: start, size: pageSize)
-        for item in page {
-          if let key = item.tmdbKey, index[key] == nil { index[key] = item }
+    let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
+    let perSection = try await withThrowingTaskGroup(of: (Int, [PlexMetadata]).self) { group in
+      for (order, section) in wanted.enumerated() {
+        group.addTask {
+          (order, try await items(in: section, client: client, pageSize: pageSize, parallel: parallel))
         }
-        if page.count < pageSize { break }
-        start += page.count
       }
+      var out = [[PlexMetadata]](repeating: [], count: wanted.count)
+      for try await (order, items) in group { out[order] = items }
+      return out
+    }
+    var index: [String: PlexMetadata] = [:]
+    for item in perSection.joined() {
+      if let key = item.tmdbKey, index[key] == nil { index[key] = item.slimmed }
     }
     return index
   }
+
+  /// One section's items in order, `parallel` pages per round, until a short page.
+  static func items(
+    in section: PlexLibrarySection, client: PlexServerClient, pageSize: Int, parallel: Int
+  ) async throws -> [PlexMetadata] {
+    var all: [PlexMetadata] = []
+    var start = 0
+    while true {
+      try Task.checkCancellation()
+      let round = try await withThrowingTaskGroup(of: (Int, [PlexMetadata]).self) { group in
+        for i in 0..<max(1, parallel) {
+          let offset = start + i * pageSize
+          group.addTask {
+            (i, try await client.libraryItems(sectionKey: section.key, sort: "titleSort", start: offset, size: pageSize))
+          }
+        }
+        var pages = [[PlexMetadata]](repeating: [], count: max(1, parallel))
+        for try await (i, page) in group { pages[i] = page }
+        return pages
+      }
+      for page in round {
+        all += page
+        if page.count < pageSize { return all }
+      }
+      start += round.count * pageSize
+    }
+  }
+}
+
+extension PlexMetadata {
+  /// The fields a card and a TMDB match need; cast, crew and images are
+  /// fetched with the details. Keeps the saved index small.
+  var slimmed: PlexMetadata {
+    var item = self
+    item.roles = []
+    item.directors = []
+    item.images = []
+    return item
+  }
+}
+
+/// The library index saved on disk per server, so streaming tabs open at once
+/// after the first time; it is refreshed in the background.
+public struct LibraryIndexSnapshot: Codable, Sendable {
+  public var savedAt: Date
+  public var items: [String: PlexMetadata]
+
+  public init(savedAt: Date, items: [String: PlexMetadata]) {
+    self.savedAt = savedAt
+    self.items = items
+  }
+
+  /// `…/Astra/LibraryIndex/<server>.json`.
+  public static func url(serverID: String, in folder: URL) -> URL {
+    let safe = serverID.filter { $0.isLetter || $0.isNumber || $0 == "-" }
+    return folder.appendingPathComponent("\(safe.isEmpty ? "server" : safe).json")
+  }
+
+  public static func load(from url: URL) -> LibraryIndexSnapshot? {
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(LibraryIndexSnapshot.self, from: data)
+  }
+
+  public func save(to url: URL) throws {
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try JSONEncoder().encode(self).write(to: url, options: .atomic)
+  }
+
+  /// Older than this, the saved index is used but read again in the background.
+  public static let freshFor: TimeInterval = 6 * 3600
+
+  public func isFresh(now: Date = Date()) -> Bool { now.timeIntervalSince(savedAt) < Self.freshFor }
 }

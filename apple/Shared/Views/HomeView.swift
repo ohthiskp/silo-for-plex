@@ -213,6 +213,7 @@ struct HeroCarousel: View {
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.contentLeading) private var leading
+  @Environment(\.isPageActive) private var isPageActive
 
   private static let titleTransition = AnyTransition.asymmetric(
     insertion: .opacity.animation(.easeOut(duration: 0.35).delay(0.3)),
@@ -253,7 +254,9 @@ struct HeroCarousel: View {
         HeroScrim()
       }
     }
-    .task(id: interaction) {
+    .task(id: "\(interaction)|\(isPageActive)") {
+      // Behind another page (Movies, Shows…): no downloads, no switching.
+      guard isPageActive else { return }
       await prefetch((index + 1) % max(items.count, 1))
       // Auto-advance every 8 s; restarts after manual navigation, stops when the view goes away.
       while !Task.isCancelled && items.count > 1 {
@@ -328,6 +331,10 @@ struct HeroInfo: View {
           Label(item.progress != nil ? "Resume" : "Play", systemImage: "play.fill")
         }
         .astraPrimaryButton()
+        // On the service but not on the Plex server: nothing to play.
+        .disabled(item.isCatalogOnly)
+        .opacity(item.isCatalogOnly ? 0.4 : 1)
+        .help(item.isCatalogOnly ? "Not on your Plex server" : "")
         Button {
           openItem(item)
         } label: {
@@ -396,7 +403,7 @@ struct HeroTitle: View {
           .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: .bottomLeading)
           .shadow(color: .black.opacity(0.5), radius: 14, y: 4)
       } else if resolved {
-        Text(item.displayTitle.uppercased())
+        Text(item.displayTitle)
           .astraDisplay(Astra.Layout.titleSize, tracking: 10)
           .lineLimit(2)
           .minimumScaleFactor(0.5)

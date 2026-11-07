@@ -205,17 +205,7 @@ struct PlayerOverlay: View {
       }
       .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
       .astraGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous), variant: .clear)
-      .overlay {
-        // A thin light edge, brightest top-left, like light catching the glass.
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
-          .strokeBorder(
-            LinearGradient(
-              colors: [.white.opacity(0.6), .white.opacity(0.08), .white.opacity(0.2)],
-              startPoint: .topLeading, endPoint: .bottomTrailing),
-            lineWidth: 1
-          )
-          .allowsHitTesting(false)
-      }
+      .astraGlassEdge(RoundedRectangle(cornerRadius: 28, style: .continuous))
       .shadow(color: .black.opacity(0.2), radius: 24, y: 6)
       .frame(maxWidth: 1500)
       .offset(panelOffset)

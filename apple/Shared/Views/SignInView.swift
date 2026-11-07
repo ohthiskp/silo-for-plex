@@ -6,7 +6,7 @@ struct SignInView: View {
 
   var body: some View {
     VStack(spacing: 28) {
-      Text("ASTRA").astraDisplay(56, tracking: 22)
+      AstraLogo().frame(width: 96, height: 96)
 
       switch app.phase {
       case .waitingForApproval(let code, let url):

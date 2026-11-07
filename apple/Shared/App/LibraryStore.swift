@@ -13,6 +13,8 @@ final class LibraryStore {
   let client: PlexServerClient
   /// The session this store belongs to (see `ServerSession.generation`).
   let generation: Int
+  /// The server's clientIdentifier; names its saved library index.
+  let serverID: String
   private(set) var isClosed = false
 
   private(set) var continueWatching: [PlexMetadata] = []
@@ -56,6 +58,7 @@ final class LibraryStore {
   init(session: ServerSession, tmdbToken: String? = LibraryStore.bundledTMDBToken) {
     client = session.client
     generation = session.generation
+    serverID = session.serverID
     // Movies and Shows work straight away, whatever happens to the Home rows.
     sections = session.sections
     tmdb = tmdbToken.flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : TMDBClient(token: $0) }
@@ -95,13 +98,14 @@ final class LibraryStore {
     }
   }
 
-  /// What Home shows for the current switcher choice. Only titles on the Plex server.
+  /// What Home shows for the current switcher choice.
   var homeHero: [PlexMetadata] {
     guard let selectedService else { return hero }
     return serviceContent[selectedService.id]?.hero ?? []
   }
 
-  var homeContinueWatching: [PlexMetadata] { selectedService == nil ? continueWatching : [] }
+  /// The same on every tab (KP, 2026-11-07).
+  var homeContinueWatching: [PlexMetadata] { continueWatching }
 
   var homeRows: [PlexHub] {
     guard let selectedService else { return hubs }
@@ -144,80 +148,81 @@ final class LibraryStore {
     }
   }
 
-  /// A service's rows: what TMDB lists on that service (the first 100 by
-  /// popularity and 60 by rating, per kind), kept only when the title is on
-  /// the Plex server, shown as the Plex item.
+  /// A service's rows (see `ServiceCatalog`): everything TMDB lists on that
+  /// service, from that service only. A title on the Plex server is shown as
+  /// the Plex item (playable); the rest stay TMDB titles, shown with their
+  /// play button greyed out. Rows appear as soon as TMDB answers; titles are
+  /// matched to the server with the saved library index, or once it is read.
   private func loadService(_ service: StreamingService, token: Int) async {
     defer {
       if serviceGeneration.isCurrent(token) { loadingServiceID = nil }
     }
     guard let tmdb else { return }
-    let index: [String: PlexMetadata]
-    do {
-      index = try await loadLibraryIndex()
-    } catch {
-      if !Task.isCancelled, !isClosed {
-        serviceErrors[service.id] = "Couldn't read your Plex libraries. \(describe(error))"
-      }
-      return
-    }
+    // The index is read alongside TMDB, never before it.
+    let matching = Task { try? await self.loadLibraryIndex() }
+    let specs = ServiceCatalog.rows(for: service)
+    let requests = specs.flatMap(\.requests)
+    let fetched = await Self.fetch(requests, on: service, tmdb: tmdb)
     guard !Task.isCancelled, !isClosed else { return }
-
-    func pages(_ kind: TMDBItem.Kind, topRated: Bool, count: Int) async -> (items: [TMDBItem], failed: Int) {
-      await withTaskGroup(of: (Int, [TMDBItem]?).self) { group in
-        for page in 1...count {
-          group.addTask { (page, try? await tmdb.onService(service, kind, topRated: topRated, page: page)) }
-        }
-        var byPage: [Int: [TMDBItem]] = [:]
-        var failed = 0
-        for await (page, items) in group {
-          if let items { byPage[page] = items } else { failed += 1 }
-        }
-        return ((1...count).flatMap { byPage[$0] ?? [] }, failed)
-      }
-    }
-    func onServer(_ items: [TMDBItem]) -> [PlexMetadata] {
-      items.compactMap { tmdbItem in
-        let key = "\(tmdbItem.kind.rawValue):\(tmdbItem.tmdbID)"
-        guard let item = index[key] else { return nil }
-        if seededArt[key] == nil {
-          seededArt[key] = TMDBArtwork(
-            posterPath: tmdbItem.posterPath, backdropPath: tmdbItem.backdropPath, logoPath: nil)
-        }
-        return item
-      }
-    }
-
-    async let m = pages(.movie, topRated: false, count: 5)
-    async let t = pages(.tv, topRated: false, count: 5)
-    async let tm = pages(.movie, topRated: true, count: 3)
-    async let ts = pages(.tv, topRated: true, count: 3)
-    let lists = await [m, t, tm, ts]
-    guard !Task.isCancelled, !isClosed else { return }
-    if lists.allSatisfy({ $0.items.isEmpty }) && lists.contains(where: { $0.failed > 0 }) {
+    if fetched.allSatisfy({ $0.value.isEmpty }) {
       serviceErrors[service.id] = "TMDB didn't answer, so \(service.label)'s lists couldn't load. Try again in a moment."
       return
     }
-    let movies = onServer(lists[0].items)
-    let shows = onServer(lists[1].items)
-    let top = Self.interleave(onServer(lists[3].items), onServer(lists[2].items))
-    let popular = Self.interleave(shows, movies)
+    let lists = specs.map { spec in
+      (spec, ServiceCatalog.merge(spec.requests.map { ($0, fetched[$0] ?? []) }))
+    }
+    for (_, items) in lists {
+      for item in items where seededArt[item.id] == nil {
+        seededArt[item.id] = TMDBArtwork(posterPath: item.posterPath, backdropPath: item.backdropPath, logoPath: nil)
+      }
+    }
+    let trending = await loadTrending()
+    // Shown now with whatever index is already in memory (often the saved one)…
+    let first = libraryIndex
+    await publishService(service, lists: lists, index: first ?? [:], trending: trending)
+    // …and again once the index is read, so playable titles become playable.
+    if let index = await matching.value, index.count != first?.count, !Task.isCancelled, !isClosed {
+      await publishService(service, lists: lists, index: index, trending: trending)
+    }
+  }
 
+  private func publishService(
+    _ service: StreamingService, lists: [(ServiceCatalog.Row, [TMDBItem])], index: [String: PlexMetadata],
+    trending: [TMDBItem]
+  ) async {
+    func shown(_ item: TMDBItem) -> PlexMetadata { index[item.id] ?? item.asMetadata }
     // Each title once across the service's rows, in row order.
     var dedup = HomeDeduplicator()
-    let rows = [
-      PlexHub(hubIdentifier: "\(service.id).popular", title: "Popular on \(service.label)", items: dedup.filter(popular)),
-      PlexHub(hubIdentifier: "\(service.id).tv", title: "TV Shows on \(service.label)", items: dedup.filter(shows)),
-      PlexHub(hubIdentifier: "\(service.id).movies", title: "Movies on \(service.label)", items: dedup.filter(movies)),
-      PlexHub(hubIdentifier: "\(service.id).top", title: "Top Rated on \(service.label)", items: dedup.filter(top)),
-    ].filter { !$0.items.isEmpty }
-    // The hero: this service's titles that are trending now, else its recent
-    // popular ones; loaded in full (in parallel) for their versions.
-    let trending = await loadTrending()
-    let heroPicks = TrendingHero.pick(trending: trending, service: popular, currentYear: Self.currentYear)
+    let rows = lists.map { spec, items in
+      PlexHub(hubIdentifier: spec.id, title: spec.title, items: Array(dedup.filter(items.map(shown)).prefix(30)))
+    }
+    .filter { !$0.items.isEmpty }
+    // The hero: this service's titles trending now, playable ones first.
+    let popular = lists.first.map { $0.1.map(shown) } ?? []
+    let picks = TrendingHero.pick(trending: trending, service: popular, currentYear: Self.currentYear)
+    let playable = picks.filter { !$0.isCatalogOnly }
+    let heroPicks = playable.count >= 3 ? playable : Array((playable + picks.filter(\.isCatalogOnly)).prefix(8))
     let hero = await loadInFull(heroPicks)
     guard !Task.isCancelled, !isClosed else { return }
     serviceContent[service.id] = (hero, rows)
+  }
+
+  /// Every discover page, 10 at a time (TMDB rate-limits bursts). A failed page is empty.
+  private static func fetch(
+    _ requests: [DiscoverRequest], on service: StreamingService, tmdb: TMDBClient
+  ) async -> [DiscoverRequest: [TMDBItem]] {
+    var out: [DiscoverRequest: [TMDBItem]] = [:]
+    for start in stride(from: 0, to: requests.count, by: 10) {
+      if Task.isCancelled { break }
+      let chunk = requests[start..<min(start + 10, requests.count)]
+      await withTaskGroup(of: (DiscoverRequest, [TMDBItem]).self) { group in
+        for request in chunk {
+          group.addTask { (request, (try? await tmdb.discover(request, on: service)) ?? []) }
+        }
+        for await (request, items) in group { out[request] = items }
+      }
+    }
+    return out
   }
 
   static var currentYear: Int { Calendar.current.component(.year, from: Date()) }
@@ -269,7 +274,19 @@ final class LibraryStore {
     if let indexTask { return try await indexTask.value }
     let client = client
     let sections = sections
-    let task = Task { try await LibraryIndexer.build(client: client, sections: sections) }
+    let url = LibraryIndexSnapshot.url(serverID: serverID, in: Self.indexFolder)
+    // The saved copy first (read off the main thread): tabs open at once.
+    let saved = await Task.detached(priority: .userInitiated) { LibraryIndexSnapshot.load(from: url) }.value
+    if let saved, !saved.items.isEmpty {
+      if !isClosed { libraryIndex = saved.items }
+      if !saved.isFresh() { refreshLibraryIndex(client: client, sections: sections, url: url) }
+      return saved.items
+    }
+    let task = Task.detached(priority: .userInitiated) {
+      let items = try await LibraryIndexer.build(client: client, sections: sections)
+      try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
+      return items
+    }
     indexTask = task
     defer { indexTask = nil }
     let index = try await task.value
@@ -277,11 +294,33 @@ final class LibraryStore {
     return index
   }
 
+  /// Reads the library again in the background and saves it; the next service
+  /// opened uses the new copy. A failure keeps the saved one.
+  private func refreshLibraryIndex(client: PlexServerClient, sections: [PlexLibrarySection], url: URL) {
+    spawn { [weak self] in
+      let fresh = try? await Task.detached(priority: .utility) {
+        let items = try await LibraryIndexer.build(client: client, sections: sections)
+        try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
+        return items
+      }.value
+      guard let self, let fresh, !self.isClosed else { return }
+      self.libraryIndex = fresh
+    }
+  }
+
+  /// Application Support/Astra/LibraryIndex.
+  static var indexFolder: URL {
+    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+      ?? FileManager.default.temporaryDirectory
+    return base.appendingPathComponent("Astra/LibraryIndex", isDirectory: true)
+  }
+
   /// Full metadata (versions, logos) for a few items, fetched in parallel, kept in order.
   private func loadInFull(_ items: [PlexMetadata]) async -> [PlexMetadata] {
     await withTaskGroup(of: (Int, PlexMetadata).self) { group in
       for (i, item) in items.enumerated() {
-        group.addTask { [self] in (i, (try? await details(item.ratingKey)) ?? item) }
+        // A TMDB-only title has nothing on the server to fetch.
+        group.addTask { [self] in (i, item.isCatalogOnly ? item : ((try? await details(item.ratingKey)) ?? item)) }
       }
       var out = [PlexMetadata?](repeating: nil, count: items.count)
       for await (i, item) in group { out[i] = item }

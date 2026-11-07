@@ -16,9 +16,9 @@ enum Astra {
   }
 
   enum Font {
-    /// Didot display type with wide tracking, for titles set as text.
+    /// Large titles set as text: Apple's system font, bold (KP: no Didot).
     static func display(_ size: CGFloat) -> SwiftUI.Font {
-      .custom("Didot", size: size)
+      .system(size: size, weight: .bold)
     }
     static let rowTitle = SwiftUI.Font.system(size: 19, weight: .bold)
     static let meta = SwiftUI.Font.system(size: 14, weight: .medium)
@@ -115,10 +115,11 @@ extension Color {
 }
 
 extension View {
-  /// Didot title styling: wide tracking and a soft shadow.
-  func astraDisplay(_ size: CGFloat, tracking: CGFloat = 9) -> some View {
+  /// Title styling: the system font, bold, tight like Apple's large titles,
+  /// with a soft shadow. `tracking` is kept for callers but no longer spaced out.
+  func astraDisplay(_ size: CGFloat, tracking: CGFloat = 0) -> some View {
     font(Astra.Font.display(size))
-      .tracking(tracking)
+      .tracking(size >= 30 ? -0.4 : 0)
       .foregroundStyle(Astra.Color.ink)
       .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
   }

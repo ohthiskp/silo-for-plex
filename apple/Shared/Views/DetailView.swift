@@ -13,11 +13,14 @@ struct DetailView: View {
   @State private var episodes: [PlexMetadata] = []
   @State private var related: [PlexHub] = []
   @State private var error: String?
+  /// A TMDB title that isn't on the Plex server: shown, but nothing to play.
+  @State private var notOnServer = false
   /// The visible height of the page; the header's backdrop is at least a share of it.
   @State private var viewport: CGFloat = 800
 
   @Environment(\.playItem) private var playItem
   @Environment(\.contentLeading) private var leading
+  @Environment(\.closeCard) private var closeCard
 
   private var shown: PlexMetadata { item ?? seed }
 
@@ -47,20 +50,20 @@ struct DetailView: View {
     .ignoresSafeArea(edges: .top)
     .background(Astra.Color.bg.ignoresSafeArea())
     #if os(macOS)
-      .overlay(alignment: .topLeading) {
+      .overlay(alignment: .topTrailing) {
+        // Astra: details are a card on the Mac; X closes it (Esc too).
         Button {
-          if !path.isEmpty { path.removeLast() }
+          if let closeCard { closeCard() } else if !path.isEmpty { path.removeLast() }
         } label: {
-          Image(systemName: "chevron.left")
+          Image(systemName: "xmark")
         }
-        .astraIconButton(size: 40)
-        .keyboardShortcut("[", modifiers: .command)
-        .help("Back (⌘[)")
-        .accessibilityLabel("Back")
-        .padding(.leading, leading)
-        .padding(.top, Astra.Spacing.s)
+        .astraIconButton(size: 36, variant: .clear)
+        .keyboardShortcut(.cancelAction)
+        .help("Close (Esc)")
+        .accessibilityLabel("Close")
+        .padding(.trailing, 18)
+        .padding(.top, 18)
       }
-      .navigationBarBackButtonHidden(true)
     #else
       // iPhone keeps the system back button (Liquid Glass on iOS 26) and swipe-back.
       .toolbarBackground(.hidden, for: .navigationBar)
@@ -99,11 +102,14 @@ struct DetailView: View {
         }
         .astraPrimaryButton()
         .keyboardShortcut(.defaultAction)
+        .disabled(shown.isCatalogOnly)
+        .opacity(shown.isCatalogOnly ? 0.4 : 1)
 
-        if shown.type != .collection {
+        if shown.type != .collection, !shown.isCatalogOnly {
           DownloadButton(item: shown)
         }
 
+        if !shown.isCatalogOnly {
         Button {
           Task {
             await library.setWatched(shown, watched: !shown.isWatched)
@@ -113,12 +119,16 @@ struct DetailView: View {
           Label(shown.isWatched ? "Watched" : "Mark Watched", systemImage: shown.isWatched ? "checkmark" : "eye")
         }
         .astraSecondaryButton()
+        }
       }
       .astraGlassGroup(spacing: 14)
       .padding(.top, 4)
       if !shown.directors.isEmpty {
         Text("Directed by \(shown.directors.map(\.tag).joined(separator: ", "))")
           .font(.system(size: 13)).foregroundStyle(Astra.Color.muted).lineLimit(1)
+      }
+      if notOnServer {
+        Text("Not on your Plex server.").font(.system(size: 13)).foregroundStyle(Astra.Color.muted)
       }
       if let error {
         Text(error).font(.system(size: 13)).foregroundStyle(Astra.Color.muted)
@@ -232,7 +242,16 @@ struct DetailView: View {
 
   private func load(refresh: Bool = false) async {
     do {
-      let full = try await library.details(seed.ratingKey, refresh: refresh)
+      var key = item?.ratingKey ?? seed.ratingKey
+      if key.hasPrefix("tmdb:") {
+        // A title from a streaming tab: find it on the server, else show TMDB's details.
+        guard let match = try? await library.resolve(seed) else {
+          notOnServer = true
+          return
+        }
+        key = match.ratingKey
+      }
+      let full = try await library.details(key, refresh: refresh)
       withAnimation(Astra.Motion.base) { item = full }
       switch full.type {
       case .show:

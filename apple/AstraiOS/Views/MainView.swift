@@ -68,6 +68,6 @@ struct MainView: View {
           }
         }
     }
-    .environment(\.openItem) { item in app.resolve(item) { path.wrappedValue.append(.details($0)) } }
+    .environment(\.openItem) { item in path.wrappedValue.append(.details(item)) }
   }
 }

@@ -155,6 +155,11 @@ public struct TMDBClient: Sendable {
     return try await list("/discover/\(kind.rawValue)", query, kind: kind)
   }
 
+  /// One discover page for a service row (see `ServiceCatalog`).
+  public func discover(_ request: DiscoverRequest, on service: StreamingService) async throws -> [TMDBItem] {
+    try await list("/discover/\(request.kind.rawValue)", request.query(service: service), kind: request.kind)
+  }
+
   /// Poster, backdrop and title logo for one title (English or text-free logo).
   public func artwork(id: Int, kind: TMDBItem.Kind) async throws -> TMDBArtwork {
     let data = try await get(
@@ -252,6 +257,118 @@ public enum TrendingHero {
       guard let year = item.year, year >= currentYear - 2, let key = item.tmdbKey, seen.insert(key).inserted
       else { continue }
       out.append(item)
+    }
+    return out
+  }
+}
+
+/// One TMDB discover query for a streaming service's row.
+public struct DiscoverRequest: Sendable, Hashable {
+  public enum Order: Sendable, Hashable { case popular, newest, topRated }
+
+  public var kind: TMDBItem.Kind
+  public var order: Order
+  /// TMDB genre ids, any of them ("28|12").
+  public var genres: String?
+  public var page: Int
+
+  public init(_ kind: TMDBItem.Kind, _ order: Order, genres: String? = nil, page: Int = 1) {
+    self.kind = kind
+    self.order = order
+    self.genres = genres
+    self.page = page
+  }
+
+  func query(service: StreamingService, today: Date = Date()) -> [String: String] {
+    var query = [
+      "with_watch_providers": service.providerFilter,
+      "watch_region": TMDBClient.region,
+      "with_watch_monetization_types": "flatrate",
+      "page": String(page),
+    ]
+    let dateField = kind == .movie ? "primary_release_date" : "first_air_date"
+    switch order {
+    case .popular:
+      query["sort_by"] = "popularity.desc"
+    case .newest:
+      query["sort_by"] = "\(dateField).desc"
+      query["\(dateField).lte"] = Self.day.string(from: today)
+      // Skips placeholders and obscure uploads with no audience yet.
+      query["vote_count.gte"] = "15"
+    case .topRated:
+      query["sort_by"] = "vote_average.desc"
+      query["vote_count.gte"] = kind == .tv ? "200" : "500"
+    }
+    if let genres { query["with_genres"] = genres }
+    return query
+  }
+
+  static let day: DateFormatter = {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.timeZone = TimeZone(identifier: "UTC")
+    f.dateFormat = "yyyy-MM-dd"
+    return f
+  }()
+}
+
+/// The rows a streaming service's tab shows, all from that service only.
+public enum ServiceCatalog {
+  public struct Row: Sendable, Hashable {
+    public var id: String
+    public var title: String
+    /// Movies and shows alternate in the row when both are asked for.
+    public var requests: [DiscoverRequest]
+  }
+
+  /// Movie and TV genre ids differ on TMDB.
+  static let genres: [(id: String, title: String, movie: String, tv: String)] = [
+    ("action", "Action & Adventure", "28|12", "10759"),
+    ("comedy", "Comedy", "35", "35"),
+    ("drama", "Drama", "18", "18"),
+    ("scifi", "Sci-Fi & Fantasy", "878|14", "10765"),
+    ("crime", "Crime & Thrillers", "80|53", "80|9648"),
+    ("animation", "Animation", "16", "16"),
+    ("documentary", "Documentaries", "99", "99"),
+  ]
+
+  public static func rows(for service: StreamingService) -> [Row] {
+    func both(_ order: DiscoverRequest.Order, pages: Int, genre: (movie: String, tv: String)? = nil) -> [DiscoverRequest] {
+      (1...pages).flatMap { page in
+        [
+          DiscoverRequest(.tv, order, genres: genre?.tv, page: page),
+          DiscoverRequest(.movie, order, genres: genre?.movie, page: page),
+        ]
+      }
+    }
+    let name = service.label
+    var rows = [
+      Row(id: "\(service.id).trending", title: "Trending on \(name)", requests: both(.popular, pages: 1)),
+      Row(id: "\(service.id).new", title: "New on \(name)", requests: both(.newest, pages: 1)),
+      Row(id: "\(service.id).shows", title: "Shows", requests: (1...3).map { DiscoverRequest(.tv, .popular, page: $0) }),
+      Row(id: "\(service.id).movies", title: "Movies", requests: (1...3).map { DiscoverRequest(.movie, .popular, page: $0) }),
+      Row(id: "\(service.id).top", title: "Top Rated", requests: both(.topRated, pages: 1)),
+    ]
+    rows += genres.map { genre in
+      Row(id: "\(service.id).\(genre.id)", title: genre.title, requests: both(.popular, pages: 1, genre: (genre.movie, genre.tv)))
+    }
+    return rows
+  }
+
+  /// One row's results in page order; where a page was asked for both TV
+  /// and movies, the two alternate. Each title once.
+  public static func merge(_ results: [(request: DiscoverRequest, items: [TMDBItem])]) -> [TMDBItem] {
+    var out: [TMDBItem] = []
+    var seen = Set<String>()
+    let pages = Set(results.map(\.request.page)).sorted()
+    for page in pages {
+      let lists = results.filter { $0.request.page == page }.map(\.items)
+      let longest = lists.map(\.count).max() ?? 0
+      for n in 0..<longest {
+        for list in lists where n < list.count && seen.insert(list[n].id).inserted {
+          out.append(list[n])
+        }
+      }
     }
     return out
   }

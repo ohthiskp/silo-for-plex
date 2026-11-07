@@ -49,30 +49,30 @@ extension View {
     modifier(AstraGlass(shape: shape, variant: variant, interactive: interactive, tint: tint))
   }
 
-  /// The primary action (Play, Sign in): Apple's prominent glass button, white with black text.
-  @ViewBuilder func astraPrimaryButton() -> some View {
-    if #available(macOS 26.0, iOS 26.0, *) {
-      self
-        .buttonStyle(.glassProminent)
-        .tint(.white)
-        .foregroundStyle(Color.black)
-        .font(.system(size: 15, weight: .semibold))
-        .controlSize(.extraLarge)
-    } else {
-      buttonStyle(PlayButtonStyle())
-    }
+  /// The primary action (Play, Sign in): clear Liquid Glass with a light
+  /// white tint and a bright edge, white text (KP, 2026-11-07: Play and
+  /// Details as see-through glass, not a solid white pill).
+  func astraPrimaryButton() -> some View {
+    buttonStyle(ClearGlassButtonStyle(prominent: true))
   }
 
-  /// Secondary actions (Details, Watched, Cancel): Apple's glass button.
-  @ViewBuilder func astraSecondaryButton() -> some View {
-    if #available(macOS 26.0, iOS 26.0, *) {
-      self
-        .buttonStyle(.glass)
-        .foregroundStyle(Astra.Color.ink)
-        .font(.system(size: 15, weight: .semibold))
-        .controlSize(.extraLarge)
-    } else {
-      buttonStyle(FallbackGlassButtonStyle())
+  /// Secondary actions (Details, Watched, Cancel): clear Liquid Glass.
+  func astraSecondaryButton() -> some View {
+    buttonStyle(ClearGlassButtonStyle(prominent: false))
+  }
+
+  /// A thin edge of light around `shape`, brightest top-left, as on the
+  /// glass card KP chose as the reference.
+  func astraGlassEdge<S: InsettableShape>(_ shape: S, strength: Double = 1) -> some View {
+    overlay {
+      shape
+        .strokeBorder(
+          LinearGradient(
+            colors: [.white.opacity(0.6 * strength), .white.opacity(0.08 * strength), .white.opacity(0.22 * strength)],
+            startPoint: .topLeading, endPoint: .bottomTrailing),
+          lineWidth: 1
+        )
+        .allowsHitTesting(false)
     }
   }
 
@@ -208,5 +208,30 @@ struct Badge: View {
       .padding(.horizontal, 6)
       .padding(.vertical, 2)
       .overlay(RoundedRectangle(cornerRadius: Astra.Radius.badge).stroke(.white.opacity(0.25), lineWidth: 1))
+  }
+}
+
+/// Play / Details: a capsule of clear Liquid Glass (macOS 26: `.clear`,
+/// interactive, so it reacts to the pointer and presses like Apple's).
+/// `prominent` adds a soft white tint so the main action stands out.
+struct ClearGlassButtonStyle: ButtonStyle {
+  var prominent: Bool
+  @Environment(\.isEnabled) private var isEnabled
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.system(size: 15, weight: .semibold))
+      .foregroundStyle(.white)
+      .labelStyle(.titleAndIcon)
+      .padding(.horizontal, 22)
+      .frame(height: 46)
+      .contentShape(Capsule())
+      .shadow(color: .black.opacity(0.35), radius: 3)
+      .astraGlass(
+        in: Capsule(), variant: .clear, interactive: true, tint: prominent ? .white.opacity(0.22) : nil)
+      .astraGlassEdge(Capsule(), strength: prominent ? 1 : 0.8)
+      .scaleEffect(configuration.isPressed ? 0.96 : 1)
+      .opacity(isEnabled ? 1 : 0.45)
+      .animation(Astra.Motion.fast, value: configuration.isPressed)
   }
 }

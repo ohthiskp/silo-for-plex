@@ -132,7 +132,7 @@ struct ErrorView: View {
 
   var body: some View {
     VStack(spacing: 20) {
-      Text("ASTRA").astraDisplay(36, tracking: 16)
+      AstraLogo().frame(width: 72, height: 72)
       Text(message)
         .font(.system(size: 15))
         .foregroundStyle(Astra.Color.ink)

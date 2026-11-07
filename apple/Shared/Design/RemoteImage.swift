@@ -47,10 +47,20 @@ actor ImagePipeline {
     return image
   }
 
+  /// Decodes at most `maxPixels` on the long side. TMDB's "original" hero
+  /// backdrops can be 4K or larger; a full-size bitmap is ~35 MB and stalls
+  /// the frame it is first drawn in. 2560 px covers a Retina window.
+  static let maxPixels = 2560
+
   private static func decode(_ data: Data) -> PlatformImage? {
     guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-    let options: [CFString: Any] = [kCGImageSourceShouldCacheImmediately: true]
-    guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, options as CFDictionary) else { return nil }
+    let options: [CFString: Any] = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceShouldCacheImmediately: true,
+      kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+    ]
+    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
     return PlatformImage.decoded(cgImage)
   }
 }

@@ -33,7 +33,7 @@ enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
   var shortcut: KeyEquivalent { KeyEquivalent(Character(String((Self.allCases.firstIndex(of: self) ?? 0) + 1))) }
 }
 
-/// The signed-in app: a docked glass sidebar and a navigation stack.
+/// The signed-in app: a docked glass sidebar, the pages, and details as stacked cards.
 struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
@@ -46,38 +46,91 @@ struct MainView: View {
 
   var body: some View {
     ZStack(alignment: .leading) {
-      NavigationStack(path: $path) {
-        ZStack {
-          ForEach(opened) { item in
-            let current = item == selection
-            page(for: item)
-              .opacity(current ? 1 : 0)
-              .allowsHitTesting(current)
-              .accessibilityHidden(!current)
-          }
-        }
-        .navigationDestination(for: Route.self) { route in
-          switch route {
-          case .details(let item):
-            DetailView(library: library, seed: item, path: $path)
-          }
+      ZStack {
+        ForEach(opened) { item in
+          let current = item == selection
+          page(for: item)
+            // Behind cards or another page: timers and the hero pause.
+            .environment(\.isPageActive, current && path.isEmpty)
+            .opacity(current ? 1 : 0)
+            .allowsHitTesting(current && path.isEmpty)
+            .accessibilityHidden(!current || !path.isEmpty)
         }
       }
       .environment(\.contentLeading, Astra.Sidebar.contentInset)
+
+      cards
 
       Sidebar(selection: $selection) { item in
         if !opened.contains(item) { opened.append(item) }
         // Instant: the page swaps without animation; only the sidebar's pill slides.
         selection = item
-        path.removeAll()
+        withAnimation(Self.cardMotion) { path.removeAll() }
       }
       .padding(.leading, Astra.Sidebar.margin)
     }
     .background(Astra.Color.bg.ignoresSafeArea())
     .environment(\.openItem) { item in
-      app.resolve(item) { path.append(.details($0)) }
+      // A TMDB-only title opens too; its page finds it on the server or greys out Play.
+      withAnimation(Self.cardMotion) { path.append(.details(item)) }
     }
     .environment(\.playItem) { app.play($0) }
+  }
+
+  static let cardMotion = Animation.spring(response: 0.42, dampingFraction: 0.9)
+  /// Each card further up the stack starts this much further right, so the
+  /// edges of the ones below show.
+  private static let cardStep: CGFloat = 26
+
+  /// Details open as cards sliding in from the right over the page, leaving
+  /// the sidebar and a strip of the page visible. Opening another title from
+  /// a card stacks a new card on top; X (or Esc, or a click on the dimmed
+  /// page) closes the top one.
+  private var cards: some View {
+    ZStack(alignment: .leading) {
+      if !path.isEmpty {
+        Color.black.opacity(0.45)
+          .ignoresSafeArea()
+          .contentShape(Rectangle())
+          .onTapGesture { closeTopCard() }
+          .transition(.opacity)
+      }
+      ForEach(Array(path.enumerated()), id: \.offset) { depth, route in
+        let isTop = depth == path.count - 1
+        card(for: route)
+          .padding(.leading, Astra.Sidebar.contentInset + 24 + CGFloat(depth) * Self.cardStep)
+          .padding(.trailing, 14)
+          .padding(.vertical, 14)
+          // Cards under the top one sink back a little.
+          .scaleEffect(isTop ? 1 : 0.985, anchor: .leading)
+          .brightness(isTop ? 0 : -0.12)
+          .allowsHitTesting(isTop)
+          .accessibilityHidden(!isTop)
+          .transition(.move(edge: .trailing))
+          .zIndex(Double(depth))
+      }
+    }
+  }
+
+  private func card(for route: Route) -> some View {
+    let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+    return Group {
+      switch route {
+      case .details(let item):
+        DetailView(library: library, seed: item, path: $path)
+      }
+    }
+    .environment(\.contentLeading, 40)
+    .environment(\.closeCard) { closeTopCard() }
+    .background(Astra.Color.bg)
+    .clipShape(shape)
+    .astraGlassEdge(shape, strength: 0.7)
+    .shadow(color: .black.opacity(0.55), radius: 30, x: -8)
+  }
+
+  private func closeTopCard() {
+    guard !path.isEmpty else { return }
+    withAnimation(Self.cardMotion) { _ = path.removeLast() }
   }
 
   @ViewBuilder private func page(for item: SidebarItem) -> some View {
@@ -134,7 +187,9 @@ struct Sidebar: View {
     .animation(Self.motion, value: selection)
     .padding(9)
     .frame(width: Astra.Sidebar.collapsedWidth)
-    .astraGlass(in: Capsule())
+    // Clear glass with a light edge, like the player's panel (KP's reference card).
+    .astraGlass(in: Capsule(), variant: .clear)
+    .astraGlassEdge(Capsule())
     .frame(maxHeight: .infinity)
   }
 }
