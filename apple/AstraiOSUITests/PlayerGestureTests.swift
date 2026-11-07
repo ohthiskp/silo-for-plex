@@ -34,14 +34,17 @@ final class PlayerGestureTests: XCTestCase {
 
   func testDoubleTapRightSkipsForward() {
     point(0.85, 0.5).doubleTap()
+    // Checked before the screenshot: on a busy runner a screenshot can outlast the badge.
+    let found = badge("astra.skip.forward").waitForExistence(timeout: 5)
     shot("after-double-tap-right")
-    XCTAssertTrue(badge("astra.skip.forward").waitForExistence(timeout: 3), "No +10 s badge after a double tap on the right")
+    XCTAssertTrue(found, "No +10 s badge after a double tap on the right")
   }
 
   func testDoubleTapLeftSkipsBack() {
     point(0.15, 0.5).doubleTap()
+    let found = badge("astra.skip.back").waitForExistence(timeout: 5)
     shot("after-double-tap-left")
-    XCTAssertTrue(badge("astra.skip.back").waitForExistence(timeout: 3), "No -10 s badge after a double tap on the left")
+    XCTAssertTrue(found, "No -10 s badge after a double tap on the left")
   }
 
   /// With the controls showing (a tap first), a double tap beside them still skips.
@@ -51,9 +54,9 @@ final class PlayerGestureTests: XCTestCase {
     sleep(1)
     shot("controls-showing")
     point(0.88, 0.45).doubleTap()
+    let found = badge("astra.skip.forward").waitForExistence(timeout: 5)
     shot("after-double-tap-with-controls")
-    XCTAssertTrue(
-      badge("astra.skip.forward").waitForExistence(timeout: 3), "No +10 s badge when the controls were showing")
+    XCTAssertTrue(found, "No +10 s badge when the controls were showing")
   }
 
   func testSingleTapTogglesControls() {

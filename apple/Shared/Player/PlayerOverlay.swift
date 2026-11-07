@@ -505,7 +505,7 @@ struct PlayerOverlay: View {
       skipShownAt = now
       Task { @MainActor in
         // The UI tests (demo mode) need longer to read the badge.
-        let shown = Demo.isOn ? 4.0 : 0.9
+        let shown = Demo.isOn ? 8.0 : 0.9
         try? await Task.pause(shown)
         if Date().timeIntervalSince(skipShownAt) >= shown - 0.05 { withAnimation(Astra.Motion.base) { skip = nil } }
       }
