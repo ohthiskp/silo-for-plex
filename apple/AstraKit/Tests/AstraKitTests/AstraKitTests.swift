@@ -671,6 +671,25 @@ final class TMDBTests: XCTestCase {
     XCTAssertNil(try movie(#"{"id":1,"streamType":1,"codec":"h264","colorTrc":"bt709"}"#).dynamicRange())
   }
 
+  func testOfficialRatingFromTMDBAndPlex() async throws {
+    let movieJSON = #"{"release_dates":{"results":[{"iso_3166_1":"GB","release_dates":[{"certification":"12A","type":3}]},{"iso_3166_1":"US","release_dates":[{"certification":"","type":1},{"certification":"PG-13","type":3},{"certification":"R","type":4}]}]}}"#
+    let movie = try await TMDBClient(token: "t", transport: FakeTransport { _ in (200, Data(movieJSON.utf8)) })
+      .artwork(id: 1, kind: .movie)
+    XCTAssertEqual(movie.certification, "PG-13")
+    let showJSON = #"{"content_ratings":{"results":[{"iso_3166_1":"DE","rating":"16"},{"iso_3166_1":"US","rating":"TV-MA"}]}}"#
+    let show = try await TMDBClient(token: "t", transport: FakeTransport { _ in (200, Data(showJSON.utf8)) })
+      .artwork(id: 2, kind: .tv)
+    XCTAssertEqual(show.certification, "TV-MA")
+
+    func plex(_ rating: String) throws -> PlexMetadata {
+      try JSONDecoder().decode(
+        PlexMetadata.self, from: Data(#"{"ratingKey":"1","type":"movie","title":"M","contentRating":"\#(rating)"}"#.utf8))
+    }
+    XCTAssertEqual(try plex("PG-13").officialRating, "PG-13")
+    XCTAssertEqual(try plex("gb/15").officialRating, "15")
+    XCTAssertNil(try plex("Not Rated").officialRating)
+  }
+
   func testTmdbKeyFromPlexGuids() throws {
     let movie = try JSONDecoder().decode(
       PlexMetadata.self,

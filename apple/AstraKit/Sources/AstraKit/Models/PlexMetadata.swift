@@ -369,6 +369,16 @@ extension PlexMetadata {
     PlaybackResolver.preferredMedia(media, quality: quality)?.dynamicRange
   }
 
+  /// Plex's age rating as shown on the rating badge: "PG-13", "R", "TV-MA".
+  /// Plex can prefix a country ("gb/15"), which is dropped; "Not Rated" and
+  /// empty values give nil.
+  public var officialRating: String? {
+    guard var rating = contentRating?.trimmingCharacters(in: .whitespaces), !rating.isEmpty else { return nil }
+    if let slash = rating.firstIndex(of: "/") { rating = String(rating[rating.index(after: slash)...]) }
+    let unrated: Set<String> = ["not rated", "unrated", "nr", "none"]
+    return rating.isEmpty || unrated.contains(rating.lowercased()) ? nil : rating
+  }
+
   /// "2h 14m" or "48m".
   public var durationLabel: String? {
     guard let duration, duration > 0 else { return nil }

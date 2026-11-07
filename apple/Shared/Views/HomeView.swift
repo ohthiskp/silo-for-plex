@@ -569,7 +569,7 @@ struct HeroInfo: View {
       // height, so the buttons and pager never move when the hero switches.
       HeroTitle(library: library, item: item, maxHeight: Self.titleBox)
         .frame(height: Self.titleBox, alignment: .bottomLeading)
-      MetaRow(item: item)
+      MetaRow(item: item, library: library)
       Text(item.summary ?? "")
         .font(.system(size: 14.5))
         .lineSpacing(4)
@@ -672,6 +672,8 @@ struct HeroTitle: View {
 
 struct MetaRow: View {
   var item: PlexMetadata
+  /// For the official rating of titles Plex has none for (TMDB-only ones).
+  var library: LibraryStore? = nil
   var fontSize: CGFloat = 15
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
 
@@ -687,8 +689,9 @@ struct MetaRow: View {
         .font(.system(size: fontSize, weight: .medium))
         .foregroundStyle(Astra.Color.ink.opacity(0.9))
         .lineLimit(1)
-      // No age or star ratings for now (KP, 2026-11-06); only the version this
-      // device would play.
+      // Astra (KP, 2026-11-07): the official rating first (PG-13, TV-MA…),
+      // then the version this device would play. Still no star ratings.
+      RatingBadge(item: item, library: library)
       let pick = quality == .auto ? PlaybackQuality.current() : quality
       if let badge = item.resolutionBadge(for: pick) { Badge(text: badge).fixedSize() }
       // Astra (KP, 2026-11-07): Dolby Vision / HDR of that file, when Plex says.
@@ -717,4 +720,27 @@ struct PageDots: View {
 
 extension String {
   var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+/// The official age rating of a movie or show: Plex's when it has one, else
+/// TMDB's US certification. Nothing when neither knows.
+struct RatingBadge: View {
+  var item: PlexMetadata
+  var library: LibraryStore?
+
+  @State private var fetched: String?
+
+  private var rating: String? { item.officialRating ?? fetched }
+
+  var body: some View {
+    Group {
+      if let rating { Badge(text: rating).fixedSize() }
+    }
+    .task(id: item.id) {
+      fetched = nil
+      guard item.officialRating == nil, item.type == .movie || item.type == .show, let library else { return }
+      fetched = await library.tmdbArtwork(for: item)?.certification
+    }
+    .accessibilityLabel(rating.map { "Rated \($0)" } ?? "")
+  }
 }

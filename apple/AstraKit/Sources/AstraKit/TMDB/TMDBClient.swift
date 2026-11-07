@@ -107,11 +107,14 @@ public struct TMDBArtwork: Sendable, Hashable {
   public var posterPath: String?
   public var backdropPath: String?
   public var logoPath: String?
+  /// The official US rating: "PG-13", "R", "TV-MA"… (TMDB release dates / content ratings).
+  public var certification: String?
 
-  public init(posterPath: String?, backdropPath: String?, logoPath: String?) {
+  public init(posterPath: String?, backdropPath: String?, logoPath: String?, certification: String? = nil) {
     self.posterPath = posterPath
     self.backdropPath = backdropPath
     self.logoPath = logoPath
+    self.certification = certification
   }
 
   /// A full image URL. Sizes: poster w342/w500/w780, backdrop w780/w1280/original, logo w300/w500.
@@ -264,11 +267,15 @@ public struct TMDBClient: Sendable {
   public func artwork(id: Int, kind: TMDBItem.Kind) async throws -> TMDBArtwork {
     let data = try await get(
       "/\(kind.rawValue)/\(id)",
-      ["append_to_response": "images", "include_image_language": "en,null,ja,ko,fr,es,de,it,pt,hi,zh,da,sv,no"])
+      [
+        "append_to_response": kind == .movie ? "images,release_dates" : "images,content_ratings",
+        "include_image_language": "en,null,ja,ko,fr,es,de,it,pt,hi,zh,da,sv,no",
+      ])
     let raw = try JSONDecoder().decode(ArtworkRaw.self, from: data)
     return TMDBArtwork(
       posterPath: raw.poster_path, backdropPath: raw.backdrop_path,
-      logoPath: Self.bestLogo(raw.images?.logos ?? [], original: raw.original_language))
+      logoPath: Self.bestLogo(raw.images?.logos ?? [], original: raw.original_language),
+      certification: raw.usCertification)
   }
 
   /// Astra (KP, 2026-11-07: "a lot of them don't have the logo"): the best
@@ -317,6 +324,33 @@ public struct TMDBClient: Sendable {
     var backdrop_path: String?
     var original_language: String?
     var images: Images?
+    var release_dates: Results<ReleaseCountry>?
+    var content_ratings: Results<ContentRating>?
+
+    struct Results<T: Decodable>: Decodable { var results: [T]? }
+    struct ReleaseCountry: Decodable {
+      var iso_3166_1: String?
+      var release_dates: [Release]?
+      struct Release: Decodable {
+        var certification: String?
+        var type: Int?
+      }
+    }
+    struct ContentRating: Decodable {
+      var iso_3166_1: String?
+      var rating: String?
+    }
+
+    /// The US rating: for a movie the theatrical release's (type 3) when it
+    /// has one, else any US release's; for a show its US content rating.
+    var usCertification: String? {
+      if let us = release_dates?.results?.first(where: { $0.iso_3166_1 == "US" })?.release_dates {
+        let rated = us.filter { !($0.certification ?? "").isEmpty }
+        if let pick = rated.first(where: { $0.type == 3 }) ?? rated.first { return pick.certification }
+      }
+      let tv = content_ratings?.results?.first { $0.iso_3166_1 == "US" }?.rating
+      return (tv ?? "").isEmpty ? nil : tv
+    }
   }
 
   func list(_ path: String, _ query: [String: String], kind: TMDBItem.Kind?) async throws -> [TMDBItem] {

@@ -98,7 +98,7 @@ struct DetailView: View {
   private var header: some View {
     VStack(alignment: .leading, spacing: 16) {
       HeroTitle(library: library, item: shown)
-      MetaRow(item: shown)
+      MetaRow(item: shown, library: library)
       if let tagline = shown.tagline, !tagline.isEmpty {
         Text(tagline).font(.system(size: 15, weight: .medium)).italic().foregroundStyle(Astra.Color.muted)
           .lineLimit(1)
