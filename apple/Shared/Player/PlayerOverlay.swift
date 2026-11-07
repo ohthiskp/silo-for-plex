@@ -816,7 +816,7 @@ struct ScrubBar: View {
     let hasImage = content.image != nil
     let cardWidth = hasImage ? size.width : 72
     let x = min(max(0, width * at - cardWidth / 2), max(0, width - cardWidth))
-    VStack(spacing: 6) {
+    VStack(spacing: 8) {
       if let image = content.image {
         Image(platformImage: image)
           .resizable()
@@ -834,7 +834,9 @@ struct ScrubBar: View {
         .background(.black.opacity(0.55), in: Capsule())
     }
     .frame(width: cardWidth)
-    .offset(x: x, y: -30)
+    // Astra (KP, 2026-11-07): lifted clear of the bar and the controls'
+    // glass panel above it, so the time never sits on the panel's edge.
+    .offset(x: x, y: -(max(knob, 22) + 6) - 26)
     .allowsHitTesting(false)
     .transition(.opacity)
   }
