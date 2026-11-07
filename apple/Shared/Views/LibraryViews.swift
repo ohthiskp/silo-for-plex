@@ -96,6 +96,8 @@ struct LibraryGridView: View {
   @State private var sectionKey: String?
   @State private var items: [PlexMetadata] = []
   @State private var reachedEnd = false
+  /// Items read from the server so far (the next page starts here).
+  @State private var loaded = 0
   @State private var loading = false
   @State private var sort = "addedAt:desc"
 
@@ -145,6 +147,7 @@ struct LibraryGridView: View {
     }
     .task(id: "\(section?.key ?? "")|\(sort)") {
       items = []
+      loaded = 0
       reachedEnd = false
       await loadMore()
     }
@@ -154,8 +157,11 @@ struct LibraryGridView: View {
     guard let section, !loading, !reachedEnd else { return }
     loading = true
     defer { loading = false }
-    let page = (try? await library.client.libraryItems(sectionKey: section.key, sort: sort, start: items.count)) ?? []
-    reachedEnd = page.isEmpty
+    let raw = (try? await library.client.libraryItems(sectionKey: section.key, sort: sort, start: loaded)) ?? []
+    reachedEnd = raw.isEmpty
+    // Astra: Library Quality (4K swaps in a movie's 4K copy); paging counts the raw page.
+    loaded += raw.count
+    let page = library.shown(raw)
     items += page.filter { new in !items.contains { $0.id == new.id } }
   }
 }
@@ -211,7 +217,7 @@ struct SearchView: View {
       // Debounce typing.
       try? await Task.pause(0.25)
       guard !Task.isCancelled else { return }
-      results = (try? await library.client.search(text)) ?? []
+      results = (try? await library.search(text)) ?? []
       searched = true
     }
   }
@@ -241,9 +247,25 @@ struct SettingsView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.checkForUpdates) private var checkForUpdates
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
+  @AppStorage(LibraryQuality.storageKey) private var libraryQuality: LibraryQuality = .deviceDefault
 
   var body: some View {
     Form {
+      // Astra: Content → Library Quality, per device (KP, 2026-11-07).
+      Section {
+        Picker("Library Quality", selection: $libraryQuality) {
+          ForEach(LibraryQuality.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .onChange(of: libraryQuality) { app.libraryQualityChanged() }
+      } header: {
+        Text("Content")
+      } footer: {
+        Text(
+          libraryQuality == .hd
+            ? "One copy of each title, in HD. 4K libraries are hidden on this device."
+            : "One copy of each title: the 4K one when there is one, otherwise HD.")
+      }
       Section {
         Picker("Preferred Quality", selection: $quality) {
           ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }

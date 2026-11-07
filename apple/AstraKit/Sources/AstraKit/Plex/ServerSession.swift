@@ -77,7 +77,14 @@ public enum LibraryIndexer {
     // (URLSession queues the rest, and queued requests time out on slow servers).
     var perSection: [[PlexMetadata]] = []
     for section in wanted {
-      perSection.append(try await items(in: section, client: client, pageSize: pageSize, parallel: parallel))
+      // Astra: a section's own listing leaves each item's library out; Library Quality needs it.
+      let sectionID = Int(section.key)
+      perSection.append(
+        try await items(in: section, client: client, pageSize: pageSize, parallel: parallel).map {
+          var item = $0
+          if item.librarySectionID == nil { item.librarySectionID = sectionID }
+          return item
+        })
     }
     var index: [String: PlexMetadata] = [:]
     for item in perSection.joined() {

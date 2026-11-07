@@ -96,7 +96,8 @@ final class PlayerController {
       source = local
     } else {
       guard let server else { throw PlexError.notSignedIn }
-      source = try PlaybackResolver.directPlay(item, client: server, quality: .stored())
+      // Astra: Auto follows Library Quality (an HD device plays the HD version).
+      source = try PlaybackResolver.directPlay(item, client: server, quality: .current())
     }
     if isActive { close() }
     self.item = item
@@ -203,7 +204,7 @@ final class PlayerController {
     quality.save()
     self.quality = quality
     guard var item, let library, currentMediaID != nil,
-      let media = PlaybackResolver.preferredMedia(item.media, quality: quality), media.id != currentMediaID
+      let media = PlaybackResolver.preferredMedia(item.media, quality: .current()), media.id != currentMediaID
     else { return }
     item.viewOffset = Int(position * 1000)
     try? play(item, library: library)

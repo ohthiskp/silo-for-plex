@@ -529,7 +529,7 @@ struct MetaRow: View {
         .lineLimit(1)
       // No age or star ratings for now (KP, 2026-11-06); only the version this
       // device would play, never a claim about HDR.
-      if let badge = item.resolutionBadge(for: quality) { Badge(text: badge).fixedSize() }
+      if let badge = item.resolutionBadge(for: quality == .auto ? .current() : quality) { Badge(text: badge).fixedSize() }
     }
   }
 }

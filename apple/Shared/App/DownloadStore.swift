@@ -157,7 +157,7 @@ final class DownloadStore {
         for target in targets where state(for: target.ratingKey) == .none || isFailed(target.ratingKey) {
           var full = target
           if full.media.isEmpty { full = try await library.details(target.ratingKey, refresh: true) }
-          guard let made = DownloadRecord.make(for: full, quality: .stored()) else { continue }
+          guard let made = DownloadRecord.make(for: full, quality: .current()) else { continue }
           // A second tap may have queued it while details loaded.
           if index.record(made.record.ratingKey) != nil || jobs.contains(where: { $0.id == made.record.ratingKey }) {
             continue

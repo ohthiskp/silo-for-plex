@@ -1080,3 +1080,57 @@ final class CinebyTrendingTests: XCTestCase {
     XCTAssertEqual(merged.map(\.id), ["movie:3", "tv:1", "movie:9"])
   }
 }
+
+final class LibraryQualityTests: XCTestCase {
+  private func section(_ key: String, _ title: String, _ type: String = "movie") throws -> PlexLibrarySection {
+    try JSONDecoder().decode(
+      PlexLibrarySection.self, from: Data(#"{"key":"\#(key)","title":"\#(title)","type":"\#(type)"}"#.utf8))
+  }
+
+  private func movie(_ key: String, tmdb: Int, section: Int) -> PlexMetadata {
+    var item = PlexMetadata(ratingKey: key, type: .movie, title: "M\(tmdb)")
+    item.guids = [PlexGuid(id: "tmdb://\(tmdb)")]
+    item.librarySectionID = section
+    return item
+  }
+
+  func testDetectsFourKLibrariesByName() throws {
+    XCTAssertTrue(LibraryQuality.isUHD(try section("1", "Movies 4K")))
+    XCTAssertTrue(LibraryQuality.isUHD(try section("1", "UHD Films")))
+    XCTAssertTrue(LibraryQuality.isUHD(try section("1", "TV (2160p)")))
+    XCTAssertTrue(LibraryQuality.isUHD(try section("1", "Ultra HD Movies")))
+    XCTAssertFalse(LibraryQuality.isUHD(try section("1", "Movies")))
+    XCTAssertFalse(LibraryQuality.isUHD(try section("1", "Kids 4Kids")))
+  }
+
+  func testHDLeavesFourKLibrariesOut() throws {
+    let sections = [try section("1", "Movies"), try section("2", "Movies 4K")]
+    let filter = LibraryFilter(quality: .hd, sections: sections)
+    XCTAssertEqual(filter.indexSections(sections).map(\.key), ["1"])
+    XCTAssertEqual(filter.browseSections(sections).map(\.key), ["1"])
+    let items = [movie("a", tmdb: 10, section: 1), movie("b", tmdb: 10, section: 2), movie("c", tmdb: 11, section: 2)]
+    XCTAssertEqual(filter.apply(items).map(\.ratingKey), ["a"])
+  }
+
+  func testFourKShowsOneCopyPreferringFourK() throws {
+    let sections = [try section("1", "Movies"), try section("2", "Movies 4K")]
+    let filter = LibraryFilter(quality: .uhd, sections: sections)
+    XCTAssertEqual(filter.indexSections(sections).map(\.key), ["2", "1"])
+    // The 4K library is only browsed when it's the only one of its kind.
+    XCTAssertEqual(filter.browseSections(sections).map(\.key), ["1"])
+    let items = [movie("a", tmdb: 10, section: 1), movie("d", tmdb: 12, section: 1), movie("b", tmdb: 10, section: 2)]
+    // "a" becomes its 4K copy "b" in a's place; "d" has no 4K copy and stays HD.
+    XCTAssertEqual(filter.apply(items).map(\.ratingKey), ["b", "d"])
+    // A 4K copy known only from the index replaces the HD one too.
+    let twins = ["movie:12": movie("e", tmdb: 12, section: 2)]
+    XCTAssertEqual(filter.apply([movie("d", tmdb: 12, section: 1)], twins: twins).map(\.ratingKey), ["e"])
+    // Continue Watching: no swapping, only one copy.
+    XCTAssertEqual(filter.apply(items, swap: false).map(\.ratingKey), ["a", "d"])
+  }
+
+  func testNoFourKLibrariesChangesNothing() throws {
+    let filter = LibraryFilter(quality: .hd, sections: [try section("1", "Movies")])
+    let items = [movie("a", tmdb: 10, section: 1), movie("b", tmdb: 10, section: 1)]
+    XCTAssertEqual(filter.apply(items).map(\.ratingKey), ["a", "b"])
+  }
+}

@@ -14,10 +14,9 @@ struct PlayerOverlay: View {
   @State private var scrubbing: Double?
   @State private var lastPoke = Date.distantPast
   #if os(iOS)
-    /// The swipe in progress: which side, and the level when it started.
-    @State private var swipe: (brightness: Bool, start: Double)?
-    /// Shown on the left while brightness is being changed.
-    @State private var brightnessLevel: Double?
+    /// The double-tap skip being shown: which side and the seconds so far.
+    @State private var skip: (forward: Bool, seconds: Int)?
+    @State private var skipShownAt = Date.distantPast
   #endif
   #if os(macOS)
     // Astra: the control panel can be dragged anywhere over the video (KP, 2026-11-07).
@@ -43,28 +42,25 @@ struct PlayerOverlay: View {
         )
         .ignoresSafeArea()
       #else
-        // Astra: tap shows/hides the controls; swiping up or down on the left
-        // half sets the screen brightness, on the right half the volume (KP).
-        GeometryReader { geo in
-          Color.black.opacity(0.001)
-            .contentShape(Rectangle())
-            .onTapGesture { visible ? hide() : poke() }
-            .gesture(
-              DragGesture(minimumDistance: 14)
-                .onChanged { drag in swipeAdjust(drag, height: geo.size.height, width: geo.size.width) }
-                .onEnded { _ in endSwipeAdjust() }
-            )
-        }
+        // Astra: one tap shows or hides the controls; a double tap on the right
+        // half skips forward 10 s, on the left half back 10 s (KP, 2026-11-07).
+        // UIKit recognizers, so the single tap reliably waits for a double.
+        PlayerTapSurface(
+          onTap: { visible ? hide() : poke() },
+          onDoubleTap: { forward in doubleTapSkip(forward: forward) }
+        )
         .ignoresSafeArea()
 
-        if let level = brightnessLevel {
+        if let skip {
           HStack {
-            LevelPill(symbol: "sun.max.fill", level: level)
-            Spacer()
+            if skip.forward { Spacer() }
+            SkipBadge(forward: skip.forward, seconds: skip.seconds)
+            if !skip.forward { Spacer() }
           }
-          .padding(.leading, 24)
+          .padding(.horizontal, 72)
           .allowsHitTesting(false)
-          .transition(.opacity)
+          .transition(.opacity.combined(with: .scale(scale: 0.9)))
+          .id(skip.forward)
         }
       #endif
 
@@ -120,7 +116,7 @@ struct PlayerOverlay: View {
 
   static let space = "player"
 
-  /// iPhone: while the controls show, loading is the ring around Play.
+  /// iPhone: while the controls show, the play button itself shows loading.
   private var loaderInRing: Bool {
     #if os(iOS)
       visible
@@ -391,7 +387,8 @@ struct PlayerOverlay: View {
       .padding(.bottom, 6)
     }
 
-    /// Back 10 s, a round play/pause whose ring shows loading, forward 10 s.
+    /// Back 10 s, play/pause (a spinner in its place while loading), forward 10 s.
+    /// No ring around Play (KP, 2026-11-07).
     private var phoneTransport: some View {
       HStack(spacing: 64) {
         Button {
@@ -407,14 +404,13 @@ struct PlayerOverlay: View {
           player.togglePause()
         } label: {
           ZStack {
-            Circle().stroke(.white.opacity(0.35), lineWidth: 2)
             if player.buffering || !player.hasFirstFrame {
-              PlayerRingSpinner()
+              ProgressView().controlSize(.large).tint(.white)
+            } else {
+              Image(systemName: player.paused ? "play.fill" : "pause.fill")
+                .font(.system(size: 40, weight: .bold))
+                .contentTransition(.symbolEffect(.replace))
             }
-            Image(systemName: player.paused ? "play.fill" : "pause.fill")
-              .font(.system(size: 34, weight: .bold))
-              .offset(x: player.paused ? 3 : 0)
-              .contentTransition(.symbolEffect(.replace))
           }
           .frame(width: 84, height: 84)
           .contentShape(Circle())
@@ -434,35 +430,16 @@ struct PlayerOverlay: View {
       .shadow(color: .black.opacity(0.35), radius: 8)
     }
 
-    private var screen: UIScreen? {
-      UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
-    }
-
-    /// A vertical swipe: a full screen height is the whole range.
-    private func swipeAdjust(_ drag: DragGesture.Value, height: CGFloat, width: CGFloat) {
-      // Only mostly-vertical swipes.
-      guard abs(drag.translation.height) > abs(drag.translation.width) || swipe != nil, height > 0 else { return }
-      if swipe == nil {
-        let left = drag.startLocation.x < width / 2
-        swipe = (left, left ? Double(screen?.brightness ?? 0.5) : (player.muted ? 0 : player.volume / 100))
-      }
-      guard let swipe else { return }
-      let value = min(1, max(0, swipe.start - Double(drag.translation.height / (height * 0.8))))
-      if swipe.brightness {
-        screen?.brightness = CGFloat(value)
-        withAnimation(Astra.Motion.fast) { brightnessLevel = value }
-      } else {
-        player.setVolume(value * 100)
-        // The volume capsule at the top right shows the level.
-        if !visible { poke() }
-      }
-    }
-
-    private func endSwipeAdjust() {
-      swipe = nil
+    /// Skips 10 s; quick repeated double taps on the same side add up (10, 20, 30…).
+    private func doubleTapSkip(forward: Bool) {
+      player.seek(by: forward ? 10 : -10)
+      let now = Date()
+      let adds = skip?.forward == forward && now.timeIntervalSince(skipShownAt) < 1
+      withAnimation(Astra.Motion.fast) { skip = (forward, adds ? (skip?.seconds ?? 0) + 10 : 10) }
+      skipShownAt = now
       Task { @MainActor in
-        try? await Task.pause(0.8)
-        if swipe == nil { withAnimation(Astra.Motion.base) { brightnessLevel = nil } }
+        try? await Task.pause(0.9)
+        if Date().timeIntervalSince(skipShownAt) >= 0.85 { withAnimation(Astra.Motion.base) { skip = nil } }
       }
     }
 
@@ -852,46 +829,62 @@ extension View {
   }
 }
 
-/// A white arc turning around the play button while the video loads.
-struct PlayerRingSpinner: View {
-  @State private var turning = false
-
-  var body: some View {
-    Circle()
-      .trim(from: 0, to: 0.22)
-      .stroke(.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-      .rotationEffect(.degrees(turning ? 360 : 0))
-      .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: turning)
-      .onAppear { turning = true }
-  }
-}
-
 #if os(iOS)
-  /// The tall glass pill on the left that shows brightness while swiping.
-  struct LevelPill: View {
-    var symbol: String
-    var level: Double
+  /// The round glass badge shown where a double tap skipped: "10" under the arrow.
+  struct SkipBadge: View {
+    var forward: Bool
+    var seconds: Int
 
     var body: some View {
-      VStack(spacing: 10) {
-        Text("\(Int((level * 100).rounded()))%")
-          .font(.system(size: 13, weight: .semibold).monospacedDigit())
-        GeometryReader { geo in
-          ZStack(alignment: .bottom) {
-            Capsule().fill(.white.opacity(0.25))
-            Capsule().fill(.white).frame(height: max(6, geo.size.height * level))
-          }
-        }
-        .frame(width: 6)
-        Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
+      VStack(spacing: 4) {
+        Image(systemName: forward ? "goforward" : "gobackward").font(.system(size: 26, weight: .semibold))
+        Text("\(seconds)s").font(.system(size: 13, weight: .semibold).monospacedDigit())
+          .contentTransition(.numericText())
       }
       .foregroundStyle(.white)
-      .padding(.vertical, 14)
-      .frame(width: 52, height: 220)
-      .astraGlass(in: Capsule(), variant: .clear)
-      .astraGlassEdge(Capsule(), strength: 0.6)
+      .frame(width: 88, height: 88)
+      .astraGlass(in: Circle(), variant: .clear)
+      .astraGlassEdge(Circle(), strength: 0.6)
       .accessibilityElement(children: .ignore)
-      .accessibilityLabel("Brightness \(Int((level * 100).rounded())) percent")
+      .accessibilityLabel(forward ? "Forward \(seconds) seconds" : "Back \(seconds) seconds")
+    }
+  }
+
+  /// A clear full-screen view with UIKit tap recognizers: one tap, or a double
+  /// tap reporting which half of the screen it landed on.
+  struct PlayerTapSurface: UIViewRepresentable {
+    var onTap: () -> Void
+    var onDoubleTap: (_ forward: Bool) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+      let view = UIView()
+      view.backgroundColor = .clear
+      let double = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.double(_:)))
+      double.numberOfTapsRequired = 2
+      let single = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.single(_:)))
+      single.require(toFail: double)
+      view.addGestureRecognizer(double)
+      view.addGestureRecognizer(single)
+      return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+      context.coordinator.onTap = onTap
+      context.coordinator.onDoubleTap = onDoubleTap
+    }
+
+    @MainActor final class Coordinator: NSObject {
+      var onTap: () -> Void = {}
+      var onDoubleTap: (Bool) -> Void = { _ in }
+
+      @objc func single(_ recognizer: UITapGestureRecognizer) { onTap() }
+
+      @objc func double(_ recognizer: UITapGestureRecognizer) {
+        guard let view = recognizer.view else { return }
+        onDoubleTap(recognizer.location(in: view).x >= view.bounds.width / 2)
+      }
     }
   }
 #endif

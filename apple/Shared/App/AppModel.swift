@@ -227,7 +227,18 @@ final class AppModel {
     }
   }
 
+  /// The connected server's session, kept so the library can be rebuilt.
+  @ObservationIgnored private var session: ServerSession?
+
+  /// Settings → Content → Library Quality changed: Home, the tabs and search
+  /// are rebuilt with the new choice (each choice keeps its own saved index).
+  func libraryQualityChanged() {
+    guard let session, let library, library.libraryQuality != LibraryQuality.stored() else { return }
+    commit(session)
+  }
+
   private func commit(_ session: ServerSession) {
+    self.session = session
     let old = library
     let store = LibraryStore(session: session)
     UserDefaults.standard.set(session.serverID, forKey: Self.serverKey)

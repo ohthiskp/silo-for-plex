@@ -22,7 +22,15 @@ final class LibraryStore {
   private(set) var hero: [PlexMetadata] = []
   /// For You's numbered Top 10 rows (TMDB trending this week), playable ones from the server.
   private(set) var topTen: (movies: [PlexMetadata], shows: [PlexMetadata]) = ([], [])
-  private(set) var sections: [PlexLibrarySection] = []
+  /// Every library on the server.
+  private(set) var allSections: [PlexLibrarySection] = []
+  /// Settings → Content → Library Quality, read when the store is made; a
+  /// change makes a new store (AppModel.libraryQualityChanged).
+  let libraryQuality = LibraryQuality.stored()
+  /// One copy of each title for this device's Library Quality.
+  var filter: LibraryFilter { LibraryFilter(quality: libraryQuality, sections: allSections) }
+  /// The libraries the Movies and Shows tabs browse.
+  var sections: [PlexLibrarySection] { filter.browseSections(allSections) }
   private(set) var isLoadingHome = false
   /// True while the For You hero's trending titles are being matched to the server.
   private(set) var isLoadingHero = false
@@ -68,7 +76,7 @@ final class LibraryStore {
     generation = session.generation
     serverID = session.serverID
     // Movies and Shows work straight away, whatever happens to the Home rows.
-    sections = session.sections
+    allSections = session.sections
     tmdb = tmdbToken.flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : TMDBClient(token: $0) }
     if tmdb != nil { selectedService = StreamingService.byID(UserDefaults.standard.string(forKey: Self.serviceKey)) }
     // A saved service starts loading now, so Home never flashes "Nothing from…" first.
@@ -282,7 +290,7 @@ final class LibraryStore {
     // trending this week; TMDB alone when cineby can't be read.
     // The saved library index is a quick disk read: use it so playable titles are marked at once.
     if libraryIndex == nil,
-      FileManager.default.fileExists(atPath: LibraryIndexSnapshot.url(serverID: serverID, in: Self.indexFolder).path)
+      FileManager.default.fileExists(atPath: indexURL.path)
     {
       _ = try? await loadLibraryIndex()
     }
@@ -398,8 +406,8 @@ final class LibraryStore {
     if let indexTask { return try await indexTask.value }
     // Set before any await, so every caller shares this one read.
     let client = client
-    let sections = sections
-    let url = LibraryIndexSnapshot.url(serverID: serverID, in: Self.indexFolder)
+    let sections = filter.indexSections(allSections)
+    let url = indexURL
     let task = Task.detached(priority: .userInitiated) { () throws -> (items: [String: PlexMetadata], stale: Bool) in
       // The saved copy first: tabs open at once.
       if let saved = LibraryIndexSnapshot.load(from: url), !saved.items.isEmpty {
@@ -453,6 +461,22 @@ final class LibraryStore {
       guard let fresh = try? await task.value, let self, !self.isClosed else { return }
       self.setLibraryIndex(fresh)
     }
+  }
+
+  /// One saved index per server and Library Quality ("-v2": items carry their library).
+  private var indexURL: URL {
+    LibraryIndexSnapshot.url(serverID: "\(serverID)-\(libraryQuality.rawValue)-v2", in: Self.indexFolder)
+  }
+
+  /// `items` with Library Quality applied: one copy of each title (see LibraryFilter).
+  /// Uses the index for 4K copies when it is already loaded; never waits for it.
+  func shown(_ items: [PlexMetadata], swap: Bool = true) -> [PlexMetadata] {
+    filter.apply(items, twins: libraryIndex ?? [:], swap: swap)
+  }
+
+  /// Search, with one copy of each title.
+  func search(_ text: String) async throws -> [PlexMetadata] {
+    shown(try await client.search(text))
   }
 
   /// Application Support/Astra/LibraryIndex.
@@ -560,7 +584,7 @@ final class LibraryStore {
   func resolve(_ item: PlexMetadata) async throws -> PlexMetadata {
     guard item.isCatalogOnly else { return item }
     let tmdbID = item.guids.first?.id
-    let results = ((try? await client.search(item.title)) ?? []).filter { $0.type == item.type }
+    let results = ((try? await search(item.title)) ?? []).filter { $0.type == item.type }
     let title = item.title.lowercased()
     let match =
       results.first { $0.guids.contains { $0.id == tmdbID } }
@@ -611,14 +635,24 @@ final class LibraryStore {
     let loadedSections = (try? await sectionsTask) ?? []
     guard isCurrent() else { return }
     // Movies and Shows keep working even when the Home rows fail.
-    if !loadedSections.isEmpty { sections = loadedSections }
+    if !loadedSections.isEmpty { allSections = loadedSections }
     do {
       let loadedHubs = try await hubsTask
+      // Astra: Library Quality first (HD drops 4K libraries; 4K keeps one copy, the 4K one).
+      let filter = self.filter
+      let twins = libraryIndex ?? [:]
       let rows = await Self.deduplicatedRows(
-        continueWatching: loadedContinue.isEmpty
-          ? loadedHubs.first(where: \.isContinueWatching)?.items ?? [] : loadedContinue,
-        hubs: loadedHubs.filter { !$0.isContinueWatching },
-        more: { [client] key, start in (try? await client.hubItems(key: key, start: start)) ?? [] })
+        continueWatching: filter.apply(
+          loadedContinue.isEmpty ? loadedHubs.first(where: \.isContinueWatching)?.items ?? [] : loadedContinue,
+          swap: false),
+        hubs: loadedHubs.filter { !$0.isContinueWatching }.map { hub in
+          var hub = hub
+          hub.items = filter.apply(hub.items, twins: twins)
+          return hub
+        },
+        more: { [client] key, start in
+          filter.apply((try? await client.hubItems(key: key, start: start)) ?? [], twins: twins)
+        })
       guard isCurrent() else { return }
       continueWatching = rows.continueWatching
       hubs = rows.hubs
@@ -699,7 +733,11 @@ final class LibraryStore {
   }
 
   func related(_ ratingKey: String) async -> [PlexHub] {
-    (try? await client.relatedHubs(ratingKey: ratingKey)) ?? []
+    ((try? await client.relatedHubs(ratingKey: ratingKey)) ?? []).compactMap { hub in
+      var hub = hub
+      hub.items = shown(hub.items)
+      return hub.items.isEmpty ? nil : hub
+    }
   }
 
   /// The item Play should start: the movie or episode itself, or for a show

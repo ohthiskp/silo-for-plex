@@ -84,8 +84,10 @@ struct ContinueCard: View {
   @Environment(\.openItem) private var openItem
 
   var body: some View {
+    // Astra: the card opens the details page; only the play button on the
+    // thumbnail starts playback (KP, 2026-11-07).
     Button {
-      playItem(item)
+      openItem(item)
     } label: {
       ZStack(alignment: .bottomLeading) {
         if item.type == .episode {
@@ -107,13 +109,6 @@ struct ContinueCard: View {
           ProgressBar(value: item.progress ?? 0)
         }
         .padding(14)
-        Image(systemName: "play.fill")
-          .font(.system(size: 18, weight: .bold))
-          .foregroundStyle(.white)
-          .frame(width: 48, height: 48)
-          .background(.black.opacity(0.4), in: Circle())
-          .overlay(Circle().stroke(.white.opacity(0.25)))
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
       .frame(width: width, height: height)
       .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
@@ -122,6 +117,22 @@ struct ContinueCard: View {
       .pressable(hoverScale: 1.03)
     }
     .buttonStyle(AstraCardButtonStyle())
+    .overlay {
+      // Its own button, above the card, so a tap on it plays instead of opening details.
+      Button {
+        playItem(item)
+      } label: {
+        Image(systemName: "play.fill")
+          .font(.system(size: 18, weight: .bold))
+          .foregroundStyle(.white)
+          .frame(width: 48, height: 48)
+          .background(.black.opacity(0.4), in: Circle())
+          .overlay(Circle().stroke(.white.opacity(0.25)))
+          .contentShape(Circle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Play \(item.displayTitle)")
+    }
     .itemMenu(library: library, item: item)
   }
 }
