@@ -3,17 +3,9 @@ run-name: SwiftUI Mac release ${{ github.sha }}
 
 # Builds the SwiftUI Mac app, publishes it as a GitHub release and updates the
 # in-app update feed (branch appcast-swiftui, read by Sparkle in the app).
-# Runs on every push to the SwiftUI branch that touches the app (only after the
-# tests and build pass), so each fix reaches the installed app as an update.
-# Can also be run by hand from the Actions tab.
+# KP (2026-11-07): runs only when KP says "send it", after seeing the
+# screenshots; run it by hand from the Actions tab.
 on:
-  push:
-    branches: [claude/project-thread-otuzui]
-    paths:
-      - "apple/**"
-      - "shared/apple/MpvPlayer/MpvPlayerCoreBase.swift"
-      - "macos/Runner/MpvPlayer/MpvPlayerCore.swift"
-      - ".github/workflows/astra-swiftui-release.yml"
   workflow_dispatch:
 
 permissions:

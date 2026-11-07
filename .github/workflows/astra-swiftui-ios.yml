@@ -4,13 +4,10 @@ run-name: SwiftUI iPhone TestFlight ${{ github.sha }}
 # Archives the native SwiftUI iPhone app (apple/, target AstraiOS), signs it
 # with KP's team through the App Store Connect API key, and uploads it to
 # TestFlight (internal testing). Uses the same secrets as astra-ios.yml.
+# KP (2026-11-07): uploads only when KP says "send it", after seeing the
+# simulator screenshots from the launch check. Run it from the Actions tab
+# (or the session dispatches it on KP's word).
 on:
-  # Every change to the app on this branch goes to TestFlight.
-  push:
-    branches: [claude/project-thread-otuzui]
-    paths:
-      - "apple/**"
-      - ".github/workflows/astra-swiftui-ios.yml"
   workflow_dispatch:
     inputs:
       bundle_id:
