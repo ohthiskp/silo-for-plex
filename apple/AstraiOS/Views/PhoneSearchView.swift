@@ -2,7 +2,7 @@ import AstraKit
 import SwiftUI
 
 /// Astra: the iPhone Search tab (KP's mockup, 2026-11-07). A glass search
-/// field, All / Movies / Shows / People, a language filter, then
+/// field, All / Movies / Shows / People, then
 /// rich result rows and people. With nothing typed: Explore, recent searches
 /// and what's popular.
 struct PhoneSearchView: View {
@@ -15,39 +15,14 @@ struct PhoneSearchView: View {
   }
 
 
-  /// Original-language groups (TMDB's language of each title).
-  enum Language: String, CaseIterable, Identifiable {
-    case any, english, bollywood, foreign
-    var id: String { rawValue }
-    var title: String {
-      switch self {
-      case .any: "Any Language"
-      case .english: "English"
-      case .bollywood: "Bollywood"
-      case .foreign: "Foreign"
-      }
-    }
-
-    func matches(_ code: String?) -> Bool {
-      switch self {
-      case .any: return true
-      case .english: return code == "en"
-      case .bollywood: return code == "hi"
-      case .foreign: return code != nil && code != "en"
-      }
-    }
-  }
 
   @Environment(\.playItem) private var playItem
   @Environment(\.openItem) private var openItem
   @AppStorage("astra.search.recent") private var recentStore = ""
   @State private var query = Demo.query ?? ""
   @State private var scope: Scope = .all
-  @State private var language: Language = .any
   @State private var results: [PlexMetadata] = []
   @State private var people: [TMDBPerson] = []
-  /// TMDB's original language for each title, by TMDB key ("movie:603").
-  @State private var languages: [String: String] = [:]
   @State private var searched = false
   @State private var person: TMDBPerson?
   @FocusState private var focused: Bool
@@ -63,9 +38,6 @@ struct PhoneSearchView: View {
       case .people: return false
       case .all: break
       }
-      if language != .any {
-        return language.matches(item.tmdbKey.flatMap { languages[$0] })
-      }
       return true
     }
   }
@@ -80,7 +52,6 @@ struct PhoneSearchView: View {
           .foregroundStyle(Astra.Color.ink)
         field
         scopes
-        filters
         if query.trimmingCharacters(in: .whitespaces).count < 2 {
           idle
         } else {
@@ -146,23 +117,6 @@ struct PhoneSearchView: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(scope == item ? .isSelected : [])
       }
-    }
-  }
-
-  private var filters: some View {
-    HStack(spacing: 8) {
-      Menu {
-        Picker("Language", selection: $language) {
-          ForEach(Language.allCases) { Text($0.title).tag($0) }
-        }
-      } label: {
-        HStack(spacing: 6) {
-          Text(language == .any ? "Language" : language.title)
-          Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))
-        }
-        .searchChip(selected: language != .any)
-      }
-      Spacer(minLength: 0)
     }
   }
 
@@ -247,7 +201,7 @@ struct PhoneSearchView: View {
         .foregroundStyle(Astra.Color.muted)
       VStack(spacing: 10) {
         ForEach(titles) { item in
-          ResultRow(library: library, item: item, language: item.tmdbKey.flatMap { languages[$0] }) {
+          ResultRow(library: library, item: item) {
             remember(query)
             openItem(item)
           } play: {
@@ -298,7 +252,8 @@ struct PhoneSearchView: View {
     guard !Task.isCancelled else { return }
     let tmdbClient = library.tmdb
     async let tmdb = tmdbClient?.searchMulti(text)
-    let found = (try? await library.search(text)) ?? []
+    // Astra (KP): people come from TMDB only; the People tab never asks the server.
+    let found = scope == .people ? [] : ((try? await library.search(text)) ?? [])
     guard !Task.isCancelled else { return }
     withAnimation(Astra.Motion.base) {
       results = LibraryStore.merged(local, found)
@@ -308,9 +263,6 @@ struct PhoneSearchView: View {
     guard !Task.isCancelled else { return }
     withAnimation(Astra.Motion.base) {
       people = Array((catalog?.people ?? []).filter { $0.profilePath != nil }.prefix(8))
-      for item in catalog?.items ?? [] {
-        if let code = item.language { languages[item.id] = code }
-      }
     }
   }
 
@@ -336,12 +288,11 @@ extension View {
   }
 }
 
-/// A search result: poster, title, "Movie · 2023 · 3h 0m", quality and
-/// language badges, genres, and a round play button.
+/// A search result: poster, title, "Movie · 2023 · 3h 0m", quality badges,
+/// genres, and a round play button.
 private struct ResultRow: View {
   var library: LibraryStore
   var item: PlexMetadata
-  var language: String?
   var open: () -> Void
   var play: () -> Void
 
@@ -359,7 +310,6 @@ private struct ResultRow: View {
     var list: [String] = []
     if tiers.contains(where: { $0 >= 2160 }) { list.append("4K") }
     if tiers.contains(where: { $0 >= 720 && $0 < 2160 }) { list.append("HD") }
-    if let language, let name = Locale.current.localizedString(forLanguageCode: language) { list.append(name) }
     return list
   }
 
@@ -462,13 +412,13 @@ struct PersonView: View {
             Text(person.role).font(.system(size: 15)).foregroundStyle(Astra.Color.muted)
           }
         }
-        Text("On Your Server").font(.system(size: 19, weight: .bold)).foregroundStyle(Astra.Color.ink)
+        Text("Movies & Shows").font(.system(size: 19, weight: .bold)).foregroundStyle(Astra.Color.ink)
         if !loaded {
           ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
         } else if items.isEmpty {
           EmptyState(
             symbol: "person.crop.rectangle", title: "Nothing here",
-            message: "None of \(person.name)'s movies or shows are on your server.")
+            message: "TMDB has no movies or shows for \(person.name).")
         } else {
           LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 14) {
             ForEach(items) { PosterCard(library: library, item: $0, width: 108) }
@@ -490,7 +440,9 @@ struct PersonView: View {
         return
       }
       let credits = (try? await tmdb.credits(of: person.id)) ?? []
-      items = await library.onServer(credits)
+      // Astra (KP): the actor's whole filmography from TMDB; titles on the
+      // server play, the rest open with Play greyed out.
+      items = await library.withServer(credits)
       loaded = true
     }
   }

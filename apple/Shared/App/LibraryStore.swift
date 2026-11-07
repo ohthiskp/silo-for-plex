@@ -494,6 +494,16 @@ final class LibraryStore {
     return shown(items.compactMap { index[$0.id] }.filter { seen.insert($0.ratingKey).inserted })
   }
 
+  /// Every TMDB title, as this server's item where it has it, else as a
+  /// catalog title (Play greyed out); in TMDB's order, each once.
+  func withServer(_ items: [TMDBItem]) async -> [PlexMetadata] {
+    let index = (try? await loadLibraryIndex()) ?? [:]
+    var seen = Set<String>()
+    return items.filter { seen.insert($0.id).inserted }.map { item in
+      index[item.id] ?? item.asMetadata
+    }
+  }
+
   /// Watchlist items (from Plex's catalog) as this server's items where it has
   /// them, else as catalog titles that open with Play greyed out.
   func matchWatchlist(_ items: [PlexMetadata]) async -> [PlexMetadata] {
