@@ -20,6 +20,8 @@ final class LibraryStore {
   private(set) var hero: [PlexMetadata] = []
   private(set) var sections: [PlexLibrarySection] = []
   private(set) var isLoadingHome = false
+  /// True while the For You hero's trending titles are being matched to the server.
+  private(set) var isLoadingHero = false
   private(set) var homeError: String?
 
   private var detailCache: [String: PlexMetadata] = [:]
@@ -44,6 +46,8 @@ final class LibraryStore {
   @ObservationIgnored private var libraryIndex: [String: PlexMetadata]?
   /// The read in progress; every service waiting for the index shares it.
   @ObservationIgnored private var indexTask: Task<[String: PlexMetadata], Error>?
+  /// TMDB's trending titles (today, then this week), fetched once per session.
+  @ObservationIgnored private var trendingTask: Task<[TMDBItem], Never>?
   /// Poster and backdrop paths that came with TMDB's lists, so cards need no extra lookup.
   @ObservationIgnored private var seededArt: [String: TMDBArtwork] = [:]
 
@@ -207,10 +211,54 @@ final class LibraryStore {
       PlexHub(hubIdentifier: "\(service.id).movies", title: "Movies on \(service.label)", items: dedup.filter(movies)),
       PlexHub(hubIdentifier: "\(service.id).top", title: "Top Rated on \(service.label)", items: dedup.filter(top)),
     ].filter { !$0.items.isEmpty }
-    // The hero shows the most popular ones, loaded in full (in parallel) for their versions.
-    let hero = await loadInFull(Array(popular.prefix(6)))
+    // The hero: this service's titles that are trending now, else its recent
+    // popular ones; loaded in full (in parallel) for their versions.
+    let trending = await loadTrending()
+    let heroPicks = TrendingHero.pick(trending: trending, service: popular, currentYear: Self.currentYear)
+    let hero = await loadInFull(heroPicks)
     guard !Task.isCancelled, !isClosed else { return }
     serviceContent[service.id] = (hero, rows)
+  }
+
+  static var currentYear: Int { Calendar.current.component(.year, from: Date()) }
+
+  /// What's trending on TMDB, today first, then this week; each title once.
+  private func loadTrending() async -> [TMDBItem] {
+    guard let tmdb else { return [] }
+    if let trendingTask { return await trendingTask.value }
+    let task = Task { () -> [TMDBItem] in
+      let requests: [(TMDBClient.TrendingWindow, Int)] = [(.day, 1), (.day, 2), (.week, 1), (.week, 2), (.week, 3), (.week, 4), (.week, 5)]
+      let pages = await withTaskGroup(of: (Int, [TMDBItem]).self) { group in
+        for (i, request) in requests.enumerated() {
+          group.addTask { (i, (try? await tmdb.trending(request.0, page: request.1)) ?? []) }
+        }
+        var byIndex: [Int: [TMDBItem]] = [:]
+        for await (i, items) in group { byIndex[i] = items }
+        return requests.indices.flatMap { byIndex[$0] ?? [] }
+      }
+      var seen = Set<String>()
+      return pages.filter { seen.insert($0.id).inserted }
+    }
+    trendingTask = task
+    let result = await task.value
+    // A failed fetch isn't kept, so the next load tries again.
+    if result.isEmpty { trendingTask = nil }
+    return result
+  }
+
+  /// The For You hero: trending titles that are on the server. Without TMDB,
+  /// or when none match, recent additions released in the last two years.
+  private func loadHero(fallback hubs: [PlexHub], isCurrent: @escaping () -> Bool) async {
+    isLoadingHero = hero.isEmpty
+    defer { if isCurrent() { isLoadingHero = false } }
+    var picks: [PlexMetadata] = []
+    if tmdb != nil, let index = try? await loadLibraryIndex() {
+      picks = await loadInFull(TrendingHero.pick(trending: await loadTrending(), index: index))
+        .filter { $0.backdrop != nil || $0.tmdbKey != nil }
+    }
+    if picks.isEmpty { picks = await pickHero(from: hubs) }
+    guard isCurrent() else { return }
+    if !picks.isEmpty || hero.isEmpty { hero = picks }
   }
 
   /// The library index, read once. Concurrent callers share one read; a
@@ -378,9 +426,7 @@ final class LibraryStore {
       continueWatching = rows.continueWatching
       hubs = rows.hubs
       isLoadingHome = false
-      let picked = await pickHero(from: rows.hubs)
-      guard isCurrent() else { return }
-      if !picked.isEmpty || hero.isEmpty { hero = picked }
+      await loadHero(fallback: rows.hubs, isCurrent: isCurrent)
     } catch {
       guard isCurrent() else { return }
       homeError = describe(error)
@@ -420,8 +466,8 @@ final class LibraryStore {
     return (keptContinue, keptHubs)
   }
 
-  /// Up to five recent movies or shows with backdrops, loaded in full so the
-  /// hero can show clear logos.
+  /// The fallback hero: up to five recently added movies or shows released in
+  /// the last two years, with backdrops, loaded in full for their logos.
   private func pickHero(from hubs: [PlexHub]) async -> [PlexMetadata] {
     let recent = hubs.filter { $0.hubIdentifier.contains("recentlyadded") || $0.hubIdentifier.contains("recentlyAdded") }
     let pool = (recent.isEmpty ? hubs : recent).flatMap(\.items)
@@ -429,10 +475,13 @@ final class LibraryStore {
     let candidates = pool.compactMap { item -> PlexMetadata? in
       // Show the show, not one of its episodes.
       if item.type == .episode || item.type == .season {
-        guard let key = item.grandparentRatingKey ?? item.parentRatingKey else { return nil }
+        guard let key = item.grandparentRatingKey ?? item.parentRatingKey,
+          let year = item.year, year >= Self.currentYear - 2
+        else { return nil }
         return seen.insert(key).inserted ? PlexMetadata(ratingKey: key, type: .show, title: item.displayTitle) : nil
       }
       guard item.type == .movie || item.type == .show else { return nil }
+      guard let year = item.year, year >= Self.currentYear - 2 else { return nil }
       return seen.insert(item.ratingKey).inserted ? item : nil
     }
     .prefix(5)

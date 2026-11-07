@@ -37,7 +37,9 @@ struct HomeView: View {
       // A plain VStack: a lazy one guesses row heights and makes the page jump while scrolling.
       VStack(alignment: .leading, spacing: Astra.Spacing.xl) {
         if library.homeHero.isEmpty {
-          Color.clear.frame(height: 120)
+          // Holds the hero's space while trending titles load, so the rows don't jump down later.
+          let heroComing = library.selectedService == nil ? library.isLoadingHero : library.isLoadingService
+          Color.clear.frame(height: heroComing ? heroHeight : 120)
         } else {
           HeroCarousel(library: library, items: library.homeHero, height: heroHeight)
             // A new set of titles (another service) starts a fresh carousel.

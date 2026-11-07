@@ -764,7 +764,7 @@ final class NetworkLogCancellationTests: XCTestCase {
 }
 
 final class TrendingHeroTests: XCTestCase {
-  private func plex(_ key: String, tmdb: Int, type: PlexMediaType = .movie, year: Int? = nil) throws -> PlexMetadata {
+  private func plex(_ key: String, tmdb: Int, type: PlexItemType = .movie, year: Int? = nil) throws -> PlexMetadata {
     let json = #"{"ratingKey":"\#(key)","type":"\#(type.rawValue)","title":"T\#(key)","year":\#(year.map(String.init) ?? "null"),"Guid":[{"id":"tmdb://\#(tmdb)"}]}"#
     return try JSONDecoder().decode(PlexMetadata.self, from: Data(json.utf8))
   }
