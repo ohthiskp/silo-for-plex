@@ -254,6 +254,17 @@ final class DownloadStore {
       let job = jobs[i]
       let request = PlaybackResolver.downloadRequest(partKey: job.partKey, client: client)
       let destination = fileURL(job.record)
+      // Astra: say so up front when the file can't fit, instead of failing late.
+      if let needed = job.record.bytes, let free = freeSpace(), needed > free {
+        let reason =
+          "Not enough space: it needs \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)), "
+          + "\(ByteCountFormatter.string(fromByteCount: free, countStyle: .file)) is free."
+        jobs.remove(at: i)
+        failed[job.id] = (job, reason)
+        lastError = "\(job.record.displayTitle) didn't download: \(reason)"
+        saveQueue()
+        continue
+      }
       let resume = resumeData.removeValue(forKey: job.id)
       Task {
         do {
@@ -268,6 +279,17 @@ final class DownloadStore {
         }
       }
     }
+  }
+
+  /// Free space on the downloads volume, as the system counts it for files the person asked for.
+  private func freeSpace() -> Int64? {
+    #if os(iOS)
+      let values = try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+      return values?.volumeAvailableCapacityForImportantUsage
+    #else
+      let values = try? folder.resourceValues(forKeys: [.volumeAvailableCapacityKey])
+      return values?.volumeAvailableCapacity.map(Int64.init)
+    #endif
   }
 
   private func setFraction(_ fraction: Double, for id: String) {
@@ -332,6 +354,8 @@ final class DownloadStore {
 /// A URLSession download with progress, moved into place when complete.
 final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
   private struct Pending {
+    var request: URLRequest
+    var started: Date
     var destination: URL
     var expectedBytes: Int64?
     var progress: @Sendable (Double) -> Void
@@ -343,13 +367,40 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
   private var pending: [Int: Pending] = [:]
   private var taskIDs: [String: Int] = [:]
   private var tasks: [Int: URLSessionDownloadTask] = [:]
+  /// iPhone: the system finishes background-session downloads after the app is closed.
+  static let backgroundIdentifier = "com.ohthiskp.astra.downloads"
+  /// Handed over by the app delegate when iOS wakes Astra for finished downloads.
+  nonisolated(unsafe) static var backgroundCompletion: (() -> Void)?
+
   private lazy var session: URLSession = {
-    let config = URLSessionConfiguration.default
+    #if os(iOS)
+      // Astra: a background session, so a download keeps going when the phone
+      // locks or Astra is in the background (a normal session stops then).
+      let config = URLSessionConfiguration.background(withIdentifier: Self.backgroundIdentifier)
+      config.sessionSendsLaunchEvents = true
+      config.isDiscretionary = false
+    #else
+      let config = URLSessionConfiguration.default
+    #endif
     config.timeoutIntervalForRequest = 60
     config.timeoutIntervalForResource = 60 * 60 * 24
     config.allowsCellularAccess = true
-    return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    // Transfers left from an earlier launch have nobody waiting for them; the
+    // saved queue starts them again, so stop the leftovers.
+    session.getAllTasks { [weak self] tasks in
+      guard let self else { return }
+      for task in tasks where self.lock.withLock({ self.pending[task.taskIdentifier] == nil }) { task.cancel() }
+    }
+    return session
   }()
+
+  func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+    DispatchQueue.main.async {
+      Self.backgroundCompletion?()
+      Self.backgroundCompletion = nil
+    }
+  }
 
   func download(
     _ request: URLRequest, id: String, to destination: URL, expectedBytes: Int64?, resumeData: Data?,
@@ -360,7 +411,7 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
       let task = resumeData.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: request)
       lock.withLock {
         pending[task.taskIdentifier] = Pending(
-          destination: destination, expectedBytes: expectedBytes, progress: progress, continuation: continuation)
+          request: request, started: Date(), destination: destination, expectedBytes: expectedBytes, progress: progress, continuation: continuation)
         taskIDs[id] = task.taskIdentifier
         tasks[task.taskIdentifier] = task
       }
@@ -388,6 +439,8 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     // The temporary file is deleted when this returns, so move it now.
     guard let entry = lock.withLock({ pending[downloadTask.taskIdentifier] }) else { return }
     let response = downloadTask.response as? HTTPURLResponse
+    // Settings → Network shows the download's answer too.
+    NetworkLog.shared.record(entry.request, status: response?.statusCode, started: entry.started, error: nil)
     let size = (try? FileManager.default.attributesOfItem(atPath: location.path)[.size] as? NSNumber)?.int64Value ?? 0
     do {
       // The right status, a video rather than an error page, and every byte.
@@ -412,6 +465,10 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
       return entry
     }
     guard let entry else { return }
+    if let error {
+      NetworkLog.shared.record(
+        entry.request, status: (task.response as? HTTPURLResponse)?.statusCode, started: entry.started, error: error)
+    }
     if let error = error ?? entry.moveError {
       entry.continuation.resume(throwing: error)
     } else {

@@ -29,6 +29,16 @@ final class AstraAppDelegate: NSObject, UIApplicationDelegate {
   ) -> UIInterfaceOrientationMask {
     OrientationLock.mask
   }
+
+  /// iOS woke Astra because background downloads finished; the download session
+  /// calls this back once it has handled them.
+  func application(
+    _ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+    completionHandler: @escaping () -> Void
+  ) {
+    guard identifier == DownloadSession.backgroundIdentifier else { return completionHandler() }
+    DownloadSession.backgroundCompletion = completionHandler
+  }
 }
 
 /// Turns the iPhone sideways for the player and back afterwards. iPad keeps every orientation.

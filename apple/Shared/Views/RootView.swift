@@ -27,7 +27,8 @@ struct RootView: View {
         }
       #endif
 
-      if let error = app.player.lastError {
+      // Astra: download failures show here too (they were silent before).
+      if let error = app.player.lastError ?? app.downloads.lastError {
         VStack {
           Spacer()
           HStack(spacing: 12) {
@@ -35,6 +36,7 @@ struct RootView: View {
             Text(error).font(.system(size: 13, weight: .medium)).foregroundStyle(Astra.Color.ink)
             Button {
               app.player.lastError = nil
+              app.downloads.lastError = nil
             } label: {
               Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
             }
@@ -49,7 +51,7 @@ struct RootView: View {
         .transition(.opacity.combined(with: .move(edge: .bottom)))
       }
     }
-    .animation(Astra.Motion.page, value: app.player.lastError)
+    .animation(Astra.Motion.page, value: app.player.lastError ?? app.downloads.lastError)
     .background { (app.player.isActive && !Self.playerHasOwnWindow ? Color.clear : Astra.Color.bg).ignoresSafeArea() }
     .background(WindowAccessor { app.player.window = $0 })
     #if os(macOS)
