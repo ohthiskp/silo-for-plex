@@ -1,0 +1,129 @@
+name: Astra SwiftUI
+run-name: SwiftUI Mac + iPhone build ${{ github.sha }}
+
+# Builds and tests the native SwiftUI app in apple/. Runs only when apple/ (or
+# the shared mpv core it compiles) changes, so the Flutter app's builds are unaffected.
+on:
+  pull_request:
+    paths:
+      - "apple/**"
+      - "shared/apple/MpvPlayer/MpvPlayerCoreBase.swift"
+      - "macos/Runner/MpvPlayer/MpvPlayerCore.swift"
+      - "ios/Runner/MpvPlayer/MpvPlayerCore.swift"
+      - "ios/Runner/MpvPlayer/ExternalDisplayManager.swift"
+      - "ios/Runner/MpvPlayer/MpvPipController.swift"
+      - ".github/workflows/astra-swiftui-macos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astra-swiftui-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Test AstraKit
+        working-directory: apple/AstraKit
+        run: swift test
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            apple/.build/SourcePackages
+          key: astra-swiftui-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apple/project.yml') }}
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build Astra.app
+        working-directory: apple
+        env:
+          # TMDB read token (artwork, streaming switcher); the same secret the Flutter build uses.
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Astra.xcodeproj \
+            -scheme AstraMac \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath .build \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION=$(date -u +%Y%m%d%H%M) \
+            TMDB_TOKEN="$TMDB_TOKEN" \
+            | tee build.log | grep -E "error:|warning: .*(AstraMac|AstraKit)|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+
+      - name: Build Astra for iPhone (unsigned, compile check)
+        working-directory: apple
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Astra.xcodeproj \
+            -scheme AstraiOS \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath .build \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            TMDB_TOKEN="$TMDB_TOKEN" \
+            | tee build-ios.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build-ios.log
+
+      - name: Check the TMDB token reached the app
+        working-directory: apple
+        run: |
+          # Prints only the length, never the token.
+          LEN=$(/usr/libexec/PlistBuddy -c "Print :AstraTMDBToken" .build/Build/Products/Release/Astra.app/Contents/Info.plist 2>/dev/null | tr -d '\n' | wc -c | tr -d ' ')
+          echo "AstraTMDBToken length: $LEN"
+          if [ "$LEN" -lt 20 ]; then echo "::warning::TMDB token missing from the Mac app; artwork and the streaming switcher will be off."; fi
+
+      - name: Sign to run locally (ad-hoc)
+        working-directory: apple
+        run: |
+          APP=".build/Build/Products/Release/Astra.app"
+          test -d "$APP"
+          find "$APP/Contents/Frameworks" \( -name "*.framework" -o -name "*.dylib" \) -print0 2>/dev/null \
+            | sort -zr | while IFS= read -r -d '' item; do codesign --force --sign - "$item"; done
+          codesign --force --sign - --options runtime --entitlements AstraMac/Resources/Astra.entitlements "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" ../Astra-SwiftUI.zip
+
+      - name: Upload build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: Astra-SwiftUI-macOS
+          path: Astra-SwiftUI.zip
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: build-log
+          path: |
+            apple/build.log
+            apple/build-ios.log

@@ -1,0 +1,324 @@
+import AstraKit
+import SwiftUI
+
+/// A page title in Didot, aligned to the page inset.
+struct AstraSectionHeader<Trailing: View>: View {
+  var title: String
+  @ViewBuilder var trailing: () -> Trailing
+
+  var body: some View {
+    // Wraps under the title when the window is too narrow for one line.
+    ViewThatFits(in: .horizontal) {
+      HStack(alignment: .firstTextBaseline, spacing: Astra.Spacing.l) {
+        titleText
+        Spacer(minLength: Astra.Spacing.l)
+        trailing()
+      }
+      VStack(alignment: .leading, spacing: Astra.Spacing.m) {
+        titleText
+        trailing()
+      }
+    }
+  }
+
+  private var titleText: some View {
+    Text(title).astraDisplay(Astra.Layout.pageTitleSize, tracking: 6).lineLimit(1)
+  }
+}
+
+extension AstraSectionHeader where Trailing == EmptyView {
+  init(title: String) {
+    self.init(title: title) { EmptyView() }
+  }
+}
+
+/// A scrolling page that respects the safe area (title bar, status bar) and
+/// aligns to the sidebar-aware page inset.
+struct AstraPage<Content: View>: View {
+  @ViewBuilder var content: () -> Content
+  @Environment(\.contentLeading) private var leading
+
+  var body: some View {
+    ScrollView(.vertical) {
+      VStack(alignment: .leading, spacing: Astra.Spacing.l) {
+        content()
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.leading, leading)
+      .padding(.trailing, Astra.Spacing.pageTrailing)
+      .padding(.top, Astra.Spacing.pageTop)
+      .padding(.bottom, 60)
+    }
+    .scrollIndicators(.never)
+    .astraScrollEdges()
+    .background(Astra.Color.bg.ignoresSafeArea())
+  }
+}
+
+/// A quiet centred message for empty and unavailable states.
+struct EmptyState: View {
+  var symbol: String
+  var title: String
+  var message: String
+  /// An optional button under the message, such as Try Again.
+  var action: (title: String, run: () -> Void)? = nil
+
+  var body: some View {
+    VStack(spacing: Astra.Spacing.s) {
+      Image(systemName: symbol).font(.system(size: 34, weight: .light)).foregroundStyle(Astra.Color.muted)
+      Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Astra.Color.ink)
+      Text(message).font(Astra.Font.meta).foregroundStyle(Astra.Color.muted).multilineTextAlignment(.center)
+        .frame(maxWidth: 380)
+      if let action {
+        Button(action.title, action: action.run)
+          .astraSecondaryButton()
+          .padding(.top, Astra.Spacing.s)
+      }
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 80)
+  }
+}
+
+private let posterColumns = [
+  GridItem(
+    .adaptive(minimum: Astra.Layout.posterMinWidth, maximum: Astra.Layout.posterMinWidth + 30), spacing: 18,
+    alignment: .top)
+]
+
+/// Movies or Shows: every library of that kind as one poster grid, loaded a
+/// page at a time. With several libraries a picker chooses between them.
+struct LibraryGridView: View {
+  var library: LibraryStore
+  var title: String
+  var sections: [PlexLibrarySection]
+
+  @State private var sectionKey: String?
+  @State private var items: [PlexMetadata] = []
+  @State private var reachedEnd = false
+  @State private var loading = false
+  @State private var sort = "addedAt:desc"
+
+  private var section: PlexLibrarySection? {
+    sections.first { $0.key == sectionKey } ?? sections.first
+  }
+
+  var body: some View {
+    AstraPage {
+      AstraSectionHeader(title: title) {
+        HStack(spacing: Astra.Spacing.s) {
+          if sections.count > 1 {
+            Picker("Library", selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 })) {
+              ForEach(sections) { Text($0.title).tag($0.key) }
+            }
+            .labelsHidden()
+            .fixedSize()
+          }
+          Picker("Sort", selection: $sort) {
+            Text("Recently Added").tag("addedAt:desc")
+            Text("Title").tag("titleSort")
+            Text("Release Date").tag("originallyAvailableAt:desc")
+            Text("Rating").tag("audienceRating:desc")
+          }
+          .labelsHidden()
+          .fixedSize()
+        }
+      }
+
+      if sections.isEmpty {
+        EmptyState(
+          symbol: title == "Shows" ? "tv" : "film", title: "No \(title.lowercased()) library",
+          message: "This Plex server has no \(title.lowercased()) library.")
+      } else if items.isEmpty && reachedEnd {
+        EmptyState(symbol: "square.stack", title: "Nothing here yet", message: "This library is empty.")
+      } else {
+        LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
+          ForEach(items) { item in
+            PosterCard(library: library, item: item)
+              .onAppear {
+                if item.id == items.last?.id { Task { await loadMore() } }
+              }
+          }
+        }
+      }
+      if loading { ProgressView().frame(maxWidth: .infinity) }
+    }
+    .task(id: "\(section?.key ?? "")|\(sort)") {
+      items = []
+      reachedEnd = false
+      await loadMore()
+    }
+  }
+
+  private func loadMore() async {
+    guard let section, !loading, !reachedEnd else { return }
+    loading = true
+    defer { loading = false }
+    let page = (try? await library.client.libraryItems(sectionKey: section.key, sort: sort, start: items.count)) ?? []
+    reachedEnd = page.isEmpty
+    items += page.filter { new in !items.contains { $0.id == new.id } }
+  }
+}
+
+struct SearchView: View {
+  var library: LibraryStore
+
+  @State private var query = ""
+  @State private var results: [PlexMetadata] = []
+  @State private var searched = false
+  @FocusState private var focused: Bool
+
+  var body: some View {
+    AstraPage {
+      HStack(spacing: 12) {
+        Image(systemName: "magnifyingglass").foregroundStyle(Astra.Color.muted)
+        TextField("Movies, shows and episodes", text: $query)
+          .textFieldStyle(.plain)
+          .font(.system(size: 18))
+          .focused($focused)
+          .submitLabel(.search)
+        if !query.isEmpty {
+          Button {
+            query = ""
+          } label: {
+            Image(systemName: "xmark.circle.fill").foregroundStyle(Astra.Color.muted)
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Clear Search")
+        }
+      }
+      .padding(.horizontal, 20)
+      .frame(height: 52)
+      .frame(maxWidth: 620)
+      .astraGlass(in: Capsule())
+
+      if searched && results.isEmpty {
+        EmptyState(symbol: "magnifyingglass", title: "No results", message: "Nothing on this server matches “\(query)”.")
+      }
+      LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
+        ForEach(results) { PosterCard(library: library, item: $0) }
+      }
+      .animation(Astra.Motion.base, value: results.map(\.id))
+    }
+    .onAppear { focused = true }
+    .task(id: query) {
+      let text = query.trimmingCharacters(in: .whitespaces)
+      guard text.count >= 2 else {
+        results = []
+        searched = false
+        return
+      }
+      // Debounce typing.
+      try? await Task.pause(0.25)
+      guard !Task.isCancelled else { return }
+      results = (try? await library.client.search(text)) ?? []
+      searched = true
+    }
+  }
+}
+
+/// Settings inside the main window (the Mac sidebar's Settings item). The
+/// form scrolls itself, so it isn't wrapped in another scroll view.
+struct SettingsPage: View {
+  @Environment(\.contentLeading) private var leading
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: Astra.Spacing.m) {
+      AstraSectionHeader(title: "Settings")
+        .padding(.leading, leading)
+      SettingsView()
+        .frame(maxWidth: 600, alignment: .leading)
+        // The form's own inset is ~20 pt; line its rows up with the title.
+        .padding(.leading, max(0, leading - 20))
+    }
+    .padding(.top, Astra.Spacing.pageTop)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .background(Astra.Color.bg.ignoresSafeArea())
+  }
+}
+
+struct SettingsView: View {
+  @Environment(AppModel.self) private var app
+  @Environment(\.checkForUpdates) private var checkForUpdates
+  @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
+
+  var body: some View {
+    Form {
+      Section {
+        Picker("Preferred Quality", selection: $quality) {
+          ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+      } header: {
+        Text("Playback")
+      } footer: {
+        Text("Astra always plays the original file. When a title has several versions, this picks which one.")
+      }
+      Section("Plex") {
+        LabeledContent("Server", value: app.server?.serverName ?? "Not connected")
+        LabeledContent("Address", value: app.server?.baseURL.host() ?? "—")
+        Button("Change Server…") { Task { await app.chooseServer() } }
+        Button("Sign Out", role: .destructive) { app.signOut() }
+      }
+      Section {
+        NetworkDiagnosticsView()
+      } header: {
+        Text("Network")
+      } footer: {
+        Text("The last requests Astra made, newest first. Tokens are never shown or saved.")
+      }
+      Section("About") {
+        LabeledContent("Version", value: Self.versionText)
+        if let checkForUpdates {
+          Button("Check for Updates…", action: checkForUpdates)
+        }
+      }
+    }
+    .formStyle(.grouped)
+    .scrollContentBackground(.hidden)
+  }
+
+  /// "0.1.0 (202611070245)": the marketing version and the build that updates compare.
+  static var versionText: String {
+    let info = Bundle.main.infoDictionary ?? [:]
+    let short = info["CFBundleShortVersionString"] as? String ?? ""
+    let build = info["CFBundleVersion"] as? String ?? ""
+    return build.isEmpty ? short : "\(short) (\(build))"
+  }
+}
+
+/// Settings → Network: recent requests with their status and time, to see
+/// why something is slow or failing. Refreshes every two seconds while open.
+struct NetworkDiagnosticsView: View {
+  @State private var expanded = false
+
+  var body: some View {
+    DisclosureGroup("Recent Requests", isExpanded: $expanded) {
+      if expanded {
+        TimelineView(.periodic(from: .now, by: 2)) { _ in
+          let events = Array(NetworkLog.shared.recent.suffix(60).reversed())
+          if events.isEmpty {
+            Text("No requests yet.").font(Astra.Font.meta).foregroundStyle(Astra.Color.muted)
+          }
+          ForEach(events) { event in
+            VStack(alignment: .leading, spacing: 2) {
+              HStack(spacing: 8) {
+                Image(systemName: event.succeeded ? "checkmark.circle" : "exclamationmark.triangle")
+                  .foregroundStyle(event.succeeded ? Astra.Color.muted : Astra.Color.ink)
+                Text(event.status.map(String.init) ?? "—").monospacedDigit()
+                Text("\(event.milliseconds) ms").monospacedDigit().foregroundStyle(Astra.Color.muted)
+                Text(event.host).foregroundStyle(Astra.Color.muted).lineLimit(1)
+              }
+              Text(event.path).lineLimit(1).truncationMode(.middle).foregroundStyle(Astra.Color.muted)
+              if let failure = event.failure {
+                Text(failure).foregroundStyle(Astra.Color.ink)
+              }
+            }
+            .font(.system(size: 11))
+            .textSelection(.enabled)
+          }
+        }
+      }
+    }
+  }
+}

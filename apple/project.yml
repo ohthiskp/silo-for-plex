@@ -1,0 +1,178 @@
+# XcodeGen spec for the native Astra apps. Generate the Xcode project with:
+#   brew install xcodegen && cd apple && xcodegen generate
+# The generated Astra.xcodeproj is not committed.
+name: Astra
+options:
+  bundleIdPrefix: app.astra
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "18.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEAD_CODE_STRIPPING: YES
+
+packages:
+  AstraKit:
+    path: AstraKit
+  # The same libmpv build, at the same revision, as the Flutter app's Runner.
+  MPVKit:
+    url: https://github.com/edde746/mpv-build
+    revision: 43324582df6c1413c8ea2094563f5e3517317eef
+  # In-app updates on Mac (MIT).
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    majorVersion: 2.6.4
+
+targets:
+  AstraMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: AstraMac
+      - path: Shared
+      # The mpv core is shared with the Flutter app and used unchanged (read-only here):
+      # MpvPlayerCoreBase is the cross-platform core, MpvPlayerCore its macOS layer host.
+      - path: ../shared/apple/MpvPlayer/MpvPlayerCoreBase.swift
+        group: MpvShared
+      - path: ../macos/Runner/MpvPlayer/MpvPlayerCore.swift
+        group: MpvShared
+      - path: ../macos/plezy.icon
+        group: Resources
+        buildPhase: resources
+    dependencies:
+      - package: AstraKit
+      - package: MPVKit
+        product: MPVKit
+      - package: Sparkle
+    info:
+      path: AstraMac/Resources/Info.plist
+      properties:
+        CFBundleName: Astra
+        CFBundleDisplayName: Astra
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.entertainment
+        # In-app updates (Sparkle). Its own feed branch: the Flutter release rewrites `appcast`.
+        SUFeedURL: https://raw.githubusercontent.com/ohthiskp/silo-for-plex/appcast-swiftui/appcast.xml
+        # Its own key pair; the private half is the SPARKLE_SWIFTUI_ED_SEED repository secret.
+        SUPublicEDKey: ooLzXvfDw0Un7+ccTSv1qbTlrIFPvPrRkhsA7qgcfFs=
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 3600
+        # TMDB read token for artwork and the streaming switcher, from the
+        # TMDB_TOKEN build setting / environment (GitHub secret in CI). Empty: Plex artwork only.
+        AstraTMDBToken: $(TMDB_TOKEN)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: Astra is licensed under GPL-3.0.
+        NSAppTransportSecurity:
+          # Plex servers on the LAN are plain http on 32400.
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
+    entitlements:
+      path: AstraMac/Resources/Astra.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.network.client: true
+        com.apple.security.cs.allow-jit: true
+        com.apple.security.cs.allow-unsigned-executable-memory: true
+        # Ad-hoc builds: frameworks (mpv, Sparkle) carry no team ID to match.
+        com.apple.security.cs.disable-library-validation: true
+    settings:
+      base:
+        PRODUCT_NAME: Astra
+        PRODUCT_BUNDLE_IDENTIFIER: app.astra.swiftui.mac
+        ASSETCATALOG_COMPILER_APPICON_NAME: plezy
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        COMBINE_HIDPI_IMAGES: YES
+
+  AstraiOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: AstraiOS
+      - path: Shared
+      # The iPhone mpv core from the Flutter app, used unchanged (read-only here).
+      - path: ../shared/apple/MpvPlayer/MpvPlayerCoreBase.swift
+        group: MpvShared
+      - path: ../ios/Runner/MpvPlayer/MpvPlayerCore.swift
+        group: MpvShared
+      - path: ../ios/Runner/MpvPlayer/ExternalDisplayManager.swift
+        group: MpvShared
+      - path: ../ios/Runner/MpvPlayer/MpvPipController.swift
+        group: MpvShared
+      - path: ../ios/plezy.icon
+        group: Resources
+        buildPhase: resources
+    dependencies:
+      - package: AstraKit
+      - package: MPVKit
+        product: MPVKit
+    info:
+      path: AstraiOS/Resources/Info.plist
+      properties:
+        CFBundleName: Astra
+        CFBundleDisplayName: Astra
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIImageRespectsSafeAreaInsets: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIBackgroundModes: [audio]
+        UIRequiresFullScreen: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
+        NSBonjourServices: [_plexmediasvr._tcp]
+        ITSAppUsesNonExemptEncryption: false
+        AstraTMDBToken: $(TMDB_TOKEN)
+    settings:
+      base:
+        PRODUCT_NAME: Astra
+        PRODUCT_BUNDLE_IDENTIFIER: app.astra.swiftui.ios
+        ASSETCATALOG_COMPILER_APPICON_NAME: plezy
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # Astra: above the Flutter app's 3.0.0 in the same TestFlight app, so
+        # TestFlight shows this build as the newest instead of filing it under
+        # "Previous builds".
+        MARKETING_VERSION: "3.1.0"
+        CODE_SIGN_STYLE: Automatic
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+
+schemes:
+  AstraiOS:
+    build:
+      targets:
+        AstraiOS: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  AstraMac:
+    build:
+      targets:
+        AstraMac: all
+    run:
+      config: Debug
+    archive:
+      config: Release

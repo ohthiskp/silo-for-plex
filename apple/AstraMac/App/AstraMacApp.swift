@@ -1,0 +1,54 @@
+import AstraKit
+import SwiftUI
+
+@main
+struct AstraMacApp: App {
+  @State private var app = AppModel()
+  private let updater = AppUpdater.shared
+
+  var body: some Scene {
+    WindowGroup("Astra") {
+      RootView()
+        .environment(app)
+        .frame(minWidth: 960, minHeight: 600)
+        .preferredColorScheme(.dark)
+        // White, never the system accent colour (which can be purple).
+        .tint(.white)
+        .environment(\.checkForUpdates) { [updater] in updater.checkForUpdates() }
+        .task { await app.start() }
+    }
+    .windowStyle(.hiddenTitleBar)
+    .windowToolbarStyle(.unified(showsTitle: false))
+    .defaultSize(width: 1440, height: 900)
+    .commands {
+      CommandGroup(replacing: .newItem) {}
+      CommandGroup(after: .appInfo) {
+        Button("Check for Updates…") { updater.checkForUpdates() }
+      }
+      CommandMenu("Playback") {
+        Button("Play/Pause") { app.player.togglePause() }
+          .keyboardShortcut(.space, modifiers: [])
+          .disabled(!app.player.isActive)
+        Button("Back 10 Seconds") { app.player.seek(by: -10) }
+          .keyboardShortcut(.leftArrow, modifiers: [])
+          .disabled(!app.player.isActive)
+        Button("Forward 10 Seconds") { app.player.seek(by: 10) }
+          .keyboardShortcut(.rightArrow, modifiers: [])
+          .disabled(!app.player.isActive)
+        Divider()
+        Button("Close Player") { app.player.close() }
+          .keyboardShortcut(.escape, modifiers: [])
+          .disabled(!app.player.isActive)
+      }
+    }
+
+    Settings {
+      SettingsView()
+        .tint(.white)
+        .frame(width: 480, height: 420)
+        .environment(app)
+        .environment(\.checkForUpdates) { [updater] in updater.checkForUpdates() }
+        .preferredColorScheme(.dark)
+    }
+  }
+}

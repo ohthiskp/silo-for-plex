@@ -1,0 +1,160 @@
+import Foundation
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
+/// A connection to one server that has been checked end to end: an address
+/// answered, and the server accepted the token by listing its libraries.
+///
+/// `generation` is the session's identity. Every switch makes a new one, so
+/// work started for an older session can tell it is stale and drop its result.
+public struct ServerSession: Sendable {
+  public let generation: Int
+  public let serverID: String
+  public let client: PlexServerClient
+  public let sections: [PlexLibrarySection]
+}
+
+/// Opens and validates server sessions. Nothing is committed here: the caller
+/// swaps to the new session only when `connect` returns, so a failed switch
+/// leaves the current server working.
+public struct ServerConnector: Sendable {
+  let info: PlexClientInfo
+  let transport: HTTPTransport
+  let probeTimeout: TimeInterval
+
+  public init(info: PlexClientInfo, transport: HTTPTransport = URLSessionTransport(), probeTimeout: TimeInterval = 4) {
+    self.info = info
+    self.transport = transport
+    self.probeTimeout = probeTimeout
+  }
+
+  public func connect(
+    to resource: PlexServerResource, accountToken: String, generation: Int
+  ) async throws -> ServerSession {
+    let picker = ConnectionPicker(info: info, transport: transport, probeTimeout: probeTimeout)
+    let url = try await picker.pick(for: resource, accountToken: accountToken)
+    try Task.checkCancellation()
+    let client = PlexServerClient(
+      baseURL: url, token: resource.accessToken ?? accountToken, serverName: resource.name, info: info,
+      transport: transport)
+    // /identity answers without a valid token; listing libraries proves the token works.
+    let sections = try await client.librarySections()
+    try Task.checkCancellation()
+    return ServerSession(
+      generation: generation, serverID: resource.clientIdentifier, client: client, sections: sections)
+  }
+}
+
+/// Hands out increasing tokens and says whether one is still the latest.
+/// Used to drop responses that arrive after a newer request replaced them.
+public struct Generation: Sendable, Equatable {
+  public private(set) var current = 0
+
+  public init() {}
+
+  /// Starts a new request; every earlier token is stale from now on.
+  public mutating func next() -> Int {
+    current += 1
+    return current
+  }
+
+  public func isCurrent(_ token: Int) -> Bool { token == current }
+}
+
+/// Every movie and show on a server by TMDB key ("movie:603"), for matching
+/// TMDB's streaming lists to the library.
+public enum LibraryIndexer {
+  /// Reads every movie and show section in pages (a single 20,000-item
+  /// request times out on slow servers), up to `parallel` pages at once. Throws when any page fails, so a partial or
+  /// empty index is never mistaken for the real one and saved.
+  public static func build(
+    client: PlexServerClient, sections: [PlexLibrarySection], pageSize: Int = 1000, parallel: Int = 4
+  ) async throws -> [String: PlexMetadata] {
+    let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
+    // One section at a time, so at most `parallel` requests are ever in flight
+    // (URLSession queues the rest, and queued requests time out on slow servers).
+    var perSection: [[PlexMetadata]] = []
+    for section in wanted {
+      perSection.append(try await items(in: section, client: client, pageSize: pageSize, parallel: parallel))
+    }
+    var index: [String: PlexMetadata] = [:]
+    for item in perSection.joined() {
+      if let key = item.tmdbKey, index[key] == nil { index[key] = item.slimmed }
+    }
+    return index
+  }
+
+  /// One section's items in order, `parallel` pages per round, until a short page.
+  static func items(
+    in section: PlexLibrarySection, client: PlexServerClient, pageSize: Int, parallel: Int
+  ) async throws -> [PlexMetadata] {
+    var all: [PlexMetadata] = []
+    var start = 0
+    while true {
+      try Task.checkCancellation()
+      let round = try await withThrowingTaskGroup(of: (Int, [PlexMetadata]).self) { group in
+        for i in 0..<max(1, parallel) {
+          let offset = start + i * pageSize
+          group.addTask {
+            (i, try await client.libraryItems(sectionKey: section.key, sort: "titleSort", start: offset, size: pageSize))
+          }
+        }
+        var pages = [[PlexMetadata]](repeating: [], count: max(1, parallel))
+        for try await (i, page) in group { pages[i] = page }
+        return pages
+      }
+      for page in round {
+        all += page
+        if page.count < pageSize { return all }
+      }
+      start += round.count * pageSize
+    }
+  }
+}
+
+extension PlexMetadata {
+  /// The fields a card and a TMDB match need; cast, crew and images are
+  /// fetched with the details. Keeps the saved index small.
+  var slimmed: PlexMetadata {
+    var item = self
+    item.roles = []
+    item.directors = []
+    item.images = []
+    return item
+  }
+}
+
+/// The library index saved on disk per server, so streaming tabs open at once
+/// after the first time; it is refreshed in the background.
+public struct LibraryIndexSnapshot: Codable, Sendable {
+  public var savedAt: Date
+  public var items: [String: PlexMetadata]
+
+  public init(savedAt: Date, items: [String: PlexMetadata]) {
+    self.savedAt = savedAt
+    self.items = items
+  }
+
+  /// `…/Astra/LibraryIndex/<server>.json`.
+  public static func url(serverID: String, in folder: URL) -> URL {
+    let safe = serverID.filter { $0.isLetter || $0.isNumber || $0 == "-" }
+    return folder.appendingPathComponent("\(safe.isEmpty ? "server" : safe).json")
+  }
+
+  public static func load(from url: URL) -> LibraryIndexSnapshot? {
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(LibraryIndexSnapshot.self, from: data)
+  }
+
+  public func save(to url: URL) throws {
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try JSONEncoder().encode(self).write(to: url, options: .atomic)
+  }
+
+  /// Older than this, the saved index is used but read again in the background.
+  public static let freshFor: TimeInterval = 6 * 3600
+
+  public func isFresh(now: Date = Date()) -> Bool { now.timeIntervalSince(savedAt) < Self.freshFor }
+}

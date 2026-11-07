@@ -1,0 +1,26 @@
+name: Astra TMDB trending probe
+run-name: Trending source probe
+
+on:
+  push:
+    branches: [claude/project-thread-otuzui]
+    paths: [".github/workflows/astra-tmdb-probe.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-26
+    steps:
+      - name: Cineby page structure
+        run: |
+          curl -sSL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" -o page.html -w "HTTP %{http_code} %{size_download} bytes %{url_effective}\n" https://cineby.tech/
+          echo "--- ld+json"
+          python3 - <<'PY'
+          import re
+          h=open("page.html").read()
+          for m in re.findall(r'<script type="application/ld\+json">(.*?)</script>', h, re.S): print(m[:1500])
+          i=h.find('/movie/'); print("--- first item markup"); print(h[max(0,i-900):i+900])
+          print("--- api hints"); print(sorted(set(re.findall(r'https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9_./-]*)?', h)))[:60])
+          PY
