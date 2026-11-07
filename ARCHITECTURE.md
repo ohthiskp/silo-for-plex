@@ -1,56 +1,61 @@
 # Astra — architecture
 
-Astra is a Flutter app forked from an open-source Plex/Jellyfin client. The inherited app does the heavy
-lifting (server clients, playback, downloads); Astra adds a visual layer and TMDB discovery on top.
+Two apps live in this repository:
 
-## Layers
+- **SwiftUI app (`apple/`)** — the app being built. Native SwiftUI for Mac and iPhone, Plex only.
+- **Flutter app (root)** — the legacy app, forked from an open-source Plex client. Still ships; maintenance only.
+
+Both play video through the same Swift mpv core.
+
+## SwiftUI app
+
 ```
-┌──────────────────────────── Flutter (Dart) ────────────────────────────┐
-│ Astra UI  lib/astra/        home_view · detail_screen · settings_dashboard│
-│                             sidebar · tab_bar · astra_style · service_pill│
-│ Screens   lib/screens/      main_screen (shell) · discover_screen (home)  │
-│                             video_player_screen · search · libraries …    │
-│ Widgets   lib/widgets/      video_controls/ (Astra player controls)       │
-│ State     lib/providers/    Provider-based app state                      │
-│ Services  lib/services/     plex_client · catalog · downloads · settings  │
-│ Discovery lib/astra/tmdb_client.dart · streaming_services.dart            │
-│ Data      lib/database/     Drift (SQLite) · SharedPreferences settings   │
-│ Player    lib/mpv/          Dart API over platform channels               │
-└───────────────┬────────────────────────────────────────────────────────┘
-                │ MethodChannels (com.plezy/*)
-┌───────────────┴──────────── Native (Swift) ────────────────────────────┐
-│ shared/apple/MpvPlayer   mpv core shared by macOS / iOS / tvOS          │
-│ macos/Runner             window, display modes, Sparkle updates         │
-│ ios/Runner               PiP, app delegate                              │
-│ tvos/Runner              custom Flutter engine host, Top Shelf          │
-└────────────────────────────────────────────────────────────────────────┘
+AstraMac / AstraiOS  (app shells: scenes, sidebar or tab bar, Sparkle updater on Mac)
+        │
+Shared/App      AppModel (sign-in, server session, settings) · LibraryStore (home rows, hero,
+                streaming tabs, quality filtering) · DownloadStore
+Shared/Views    Home, Detail, Library, Search, Downloads, Settings, Cards, Navigation, Loading, SignIn
+Shared/Design   Theme tokens, Liquid Glass helpers, RemoteImage, logo
+Shared/Player   PlayerController → mpv core · PlayerOverlay (controls) · PlayerWindow · PiP · seek previews
+        │
+AstraKit (Swift package, no UI, tested with `swift test`)
+  Plex/        PlexAccount (PIN sign-in, servers) · ConnectionPicker · ServerSession · PlexServerClient
+               (hubs, metadata, search, progress) · ForYou · LibraryQuality · Playback (version choice,
+               direct-play URL) · PlayerGeometry · SeekThumbnails (BIF)
+  TMDB/        TMDBClient (trending, provider lists, images) · CinebyTrending (hero/Top 10 order)
+  Models/      Plex containers and metadata, lenient decoding
+  Networking/  HTTPTransport (mockable) · NetworkLog · PlexClientInfo · Task.pause
+  Storage/     TokenStore (Keychain)
+  Downloads/   Download tasks for original files
+        │
+shared/apple/MpvPlayer/MpvPlayerCoreBase.swift + macos|ios/Runner/MpvPlayer/*  (libmpv via MPVKit)
 ```
 
-## How the Astra layer plugs in
-| Hook | File | Behavior |
-|---|---|---|
-| Home | `lib/screens/discover_screen.dart` `_buildContent` | Returns `AstraHomeView` on phone/tablet/Mac; TV still uses `_buildTvContent` |
-| Details | `lib/utils/media_navigation_helper.dart`, `catalog_navigation_helper.dart` | Movies/shows open `AstraDetailScreen`; episodes and TV use the inherited page |
-| Navigation | `lib/screens/main_screen.dart` | `AstraSidebar` (Mac/iPad), `AstraTabBar` (iPhone) |
-| Settings | `lib/screens/settings/settings_screen.dart` | `AstraSettingsDashboard` unless `classic: true` or TV |
-| Player | `lib/widgets/video_controls/desktop_video_controls.dart`, `mobile_video_controls.dart` | Astra control layout |
+### Key flows
+- **Sign-in:** plex.tv PIN → token in Keychain → server list → `ConnectionPicker` tests connections →
+  `ServerSession`. Switching servers validates the new one before dropping the old.
+- **Home:** `LibraryStore` loads Plex hubs and Continue Watching, TMDB/cineby trending for the hero and
+  Top 10, matches titles to the library, applies library quality, and dedupes by type + TMDB id.
+- **Playback:** Details → `Playback` picks an existing version (never a transcode) → `PlayerController`
+  opens the direct file URL in mpv and reports the timeline to Plex.
+- **Downloads:** `DownloadStore` queues original files, persists `queue.json`/`index.json`, and the player
+  uses the local file when offline.
 
-## External services
-| Service | Used for | Config |
-|---|---|---|
-| Plex (plex.tv + user servers) | Auth, libraries, playback, progress | User sign-in |
-| TMDB API v3 | Discovery rows, art, logos, providers | `--dart-define=TMDB_TOKEN` |
-| GitHub Releases + `appcast` branch | Mac updates (Sparkle) | `SPARKLE_ED_SEED` secret |
-| App Store Connect | iOS/tvOS TestFlight | `ASC_*`, `APPLE_TEAM_ID` secrets |
+### Build and ship
+- XcodeGen `apple/project.yml` → `Astra.xcodeproj` (not committed). Packages: MPVKit (pinned revision), Sparkle 2.6.4.
+- `astra-swiftui-macos.yml`: AstraKit tests, ad-hoc Mac build, unsigned iPhone compile on PRs touching `apple/` or mpv files.
+- `astra-swiftui-release.yml`: Mac prerelease + Sparkle feed on branch `appcast-swiftui`.
+- `astra-swiftui-ios.yml`: TestFlight upload (`com.ohthiskp.astra`, temporary signing via `tool/astra/asc_tv_signing.py`).
+- Crash tooling: `astra-testflight-crashes.yml`, `astra-ios-symbolicate.yml`.
 
-Upstream-hosted services (`ice.plezy.app`, `bugs.plezy.app`, Discord) are disabled and must stay so.
+## Legacy Flutter app
 
-## Build and release
-- `astra-check`: `flutter analyze` on Linux.
-- `astra-macos`: builds `Astra.app`, `Astra.dmg`, `Astra.zip`, publishes a release, updates the appcast.
-- `astra-ios`, `astra-tvos`: archive and upload to TestFlight.
-All run on demand (`workflow_dispatch`).
+`lib/main.dart` → Astra layer `lib/astra/` (home, details, settings, sidebar, glass, TMDB) on top of the
+inherited `lib/screens/`, `lib/widgets/`, `lib/services/` (Plex/Jellyfin clients, downloads, settings),
+Drift database `lib/database/`, Dart player API `lib/mpv/` over the same Swift mpv core. Native
+runners in `macos/ ios/ tvos/` (Apple TV uses a custom tvOS Flutter engine). CI: `astra-check`,
+`astra-macos`, `astra-ios`, `astra-tvos`.
 
-## Upstream merges
-`git fetch upstream && git merge upstream/main`. Internal identifiers are kept so merges stay clean;
-Astra edits in inherited files are marked `// Astra:`.
+## Boundaries
+- Changes to the shared mpv files affect both apps (owner `astra-playback`).
+- The two apps share no storage; the SwiftUI Mac app has its own bundle ID and update feed.
