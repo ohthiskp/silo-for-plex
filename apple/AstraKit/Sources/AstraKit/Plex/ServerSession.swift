@@ -172,3 +172,57 @@ public struct LibraryIndexSnapshot: Codable, Sendable {
 
   public func isFresh(now: Date = Date()) -> Bool { now.timeIntervalSince(savedAt) < Self.freshFor }
 }
+
+/// Astra (KP, 2026-11-07: "why does it take so long to connect each time,
+/// when Plex or Infuse open immediately"): the last server that worked,
+/// saved so the next launch opens straight onto it while plex.tv and the
+/// address are re-checked behind. The server's token is not in here: it
+/// stays in the Keychain.
+public struct SavedConnection: Codable, Sendable, Equatable {
+  public var serverID: String
+  public var serverName: String
+  public var baseURL: URL
+  public var sections: [PlexLibrarySection]
+
+  public init(serverID: String, serverName: String, baseURL: URL, sections: [PlexLibrarySection]) {
+    self.serverID = serverID
+    self.serverName = serverName
+    self.baseURL = baseURL
+    self.sections = sections
+  }
+
+  public init(_ session: ServerSession) {
+    self.init(
+      serverID: session.serverID, serverName: session.client.serverName, baseURL: session.client.baseURL,
+      sections: session.sections)
+  }
+
+  public static let defaultsKey = "astra.plex.savedConnection"
+
+  public static func load(from defaults: UserDefaults = .standard) -> SavedConnection? {
+    defaults.data(forKey: defaultsKey).flatMap { try? JSONDecoder().decode(SavedConnection.self, from: $0) }
+  }
+
+  public func save(to defaults: UserDefaults = .standard) {
+    if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.defaultsKey) }
+  }
+
+  public static func clear(from defaults: UserDefaults = .standard) {
+    defaults.removeObject(forKey: defaultsKey)
+  }
+}
+
+extension ServerConnector {
+  /// A session on the saved server with no network request: used at launch
+  /// so Home opens at once. The caller checks it right after (`isReachable`).
+  public func resume(_ saved: SavedConnection, token: String, generation: Int) -> ServerSession {
+    let client = PlexServerClient(
+      baseURL: saved.baseURL, token: token, serverName: saved.serverName, info: info, transport: transport)
+    return ServerSession(generation: generation, serverID: saved.serverID, client: client, sections: saved.sections)
+  }
+
+  /// Whether the saved address still answers with this token (its libraries list).
+  public func check(_ session: ServerSession) async -> [PlexLibrarySection]? {
+    try? await session.client.librarySections()
+  }
+}

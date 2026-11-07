@@ -66,6 +66,8 @@ struct MainView: View {
         // Instant: the page swaps without animation; only the sidebar's pill slides.
         selection = item
         withAnimation(Self.cardMotion) { path.removeAll() }
+        // Astra (KP, 2026-11-07): clicking Home always goes back to For You.
+        if item == .home, library.selectedService != nil { library.select(nil) }
       }
       .padding(.leading, Astra.Sidebar.margin)
     }

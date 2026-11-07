@@ -260,14 +260,35 @@ public struct TMDBClient: Sendable {
     return try JSONDecoder().decode(Raw.self, from: data).item(forcedKind: kind)
   }
 
-  /// Poster, backdrop and title logo for one title (English or text-free logo).
+  /// Poster, backdrop and title logo for one title.
   public func artwork(id: Int, kind: TMDBItem.Kind) async throws -> TMDBArtwork {
     let data = try await get(
-      "/\(kind.rawValue)/\(id)", ["append_to_response": "images", "include_image_language": "en,null"])
+      "/\(kind.rawValue)/\(id)",
+      ["append_to_response": "images", "include_image_language": "en,null,ja,ko,fr,es,de,it,pt,hi,zh,da,sv,no"])
     let raw = try JSONDecoder().decode(ArtworkRaw.self, from: data)
-    // Prefer PNG logos (transparent) over SVG, which the image pipeline can't decode.
-    let logo = raw.images?.logos?.first { $0.file_path?.hasSuffix(".png") == true }?.file_path
-    return TMDBArtwork(posterPath: raw.poster_path, backdropPath: raw.backdrop_path, logoPath: logo)
+    return TMDBArtwork(
+      posterPath: raw.poster_path, backdropPath: raw.backdrop_path,
+      logoPath: Self.bestLogo(raw.images?.logos ?? [], original: raw.original_language))
+  }
+
+  /// Astra (KP, 2026-11-07: "a lot of them don't have the logo"): the best
+  /// title logo, like the streaming sites show. PNG only (the image pipeline
+  /// can't decode SVG); English first, then the title's own language, then
+  /// text-free, then any; the best voted within each.
+  static func bestLogo(_ logos: [ArtworkRaw.Images.Image], original: String?) -> String? {
+    let png = logos.filter { $0.file_path?.hasSuffix(".png") == true }
+    func rank(_ logo: ArtworkRaw.Images.Image) -> Int {
+      switch logo.iso_639_1 {
+      case "en": 0
+      case let code? where code == original: 1
+      case nil: 2
+      default: 3
+      }
+    }
+    return png.enumerated()
+      .min { a, b in
+        (rank(a.element), -(a.element.vote_average ?? 0), a.offset) < (rank(b.element), -(b.element.vote_average ?? 0), b.offset)
+      }?.element.file_path
   }
 
   func get(_ path: String, _ query: [String: String]) async throws -> Data {
@@ -285,11 +306,16 @@ public struct TMDBClient: Sendable {
 
   struct ArtworkRaw: Decodable {
     struct Images: Decodable {
-      struct Image: Decodable { var file_path: String? }
+      struct Image: Decodable {
+        var file_path: String?
+        var iso_639_1: String?
+        var vote_average: Double?
+      }
       var logos: [Image]?
     }
     var poster_path: String?
     var backdrop_path: String?
+    var original_language: String?
     var images: Images?
   }
 

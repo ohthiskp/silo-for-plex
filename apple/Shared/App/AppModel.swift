@@ -48,12 +48,17 @@ final class AppModel {
   /// Each connection attempt's identity; a slower, older attempt never wins.
   private var connectGeneration = Generation()
   private let tokens: TokenStore
+  /// The last server's own access token, for opening it at launch with no wait.
+  private let serverTokens: TokenStore
   private var accountToken: String?
   private var signInTask: Task<Void, Never>?
 
   private static let serverKey = "astra.plex.serverIdentifier"
 
-  init(tokens: TokenStore = KeychainTokenStore()) {
+  init(
+    tokens: TokenStore = KeychainTokenStore(),
+    serverTokens: TokenStore = KeychainTokenStore(account: "server-token")
+  ) {
     let bundle = Bundle.main
     let os = ProcessInfo.processInfo.operatingSystemVersion
     #if os(macOS)
@@ -76,6 +81,7 @@ final class AppModel {
     account = PlexAccountClient(info: info)
     connector = ServerConnector(info: info)
     self.tokens = tokens
+    self.serverTokens = serverTokens
   }
 
   // MARK: - Launch
@@ -97,7 +103,43 @@ final class AppModel {
       return
     }
     accountToken = token
+    // Astra (KP: "Plex and Infuse open immediately"): the last server that
+    // worked opens at once, with Home from its saved copies; plex.tv and the
+    // address are checked behind it, and only a failure reconnects.
+    if let saved = SavedConnection.load(),
+      saved.serverID == UserDefaults.standard.string(forKey: Self.serverKey),
+      let serverToken = serverTokens.load()
+    {
+      let attempt = connectGeneration.next()
+      commit(connector.resume(saved, token: serverToken, generation: attempt))
+      Task { await verifyResumed(attempt, accountToken: token) }
+      return
+    }
     await loadServers(token: token, autoSelect: true)
+  }
+
+  /// Checks the session opened from the saved connection. If its address no
+  /// longer answers (another network, a new IP), the server is looked up on
+  /// plex.tv and connected again; if plex.tv says the sign-in ended, signs out.
+  /// Offline, the saved session stays (downloads keep working).
+  private func verifyResumed(_ attempt: Int, accountToken token: String) async {
+    guard let session, connectGeneration.isCurrent(attempt) else { return }
+    async let valid = try? account.validate(token: token)
+    let reachable = await connector.check(session) != nil
+    if await valid == false {
+      guard connectGeneration.isCurrent(attempt) else { return }
+      return signOut()
+    }
+    guard !reachable, connectGeneration.isCurrent(attempt) else { return }
+    guard let servers = try? await account.servers(token: token),
+      let match = servers.first(where: { $0.clientIdentifier == session.serverID }),
+      connectGeneration.isCurrent(attempt)
+    else { return }
+    let retry = connectGeneration.next()
+    guard let fresh = try? await connector.connect(to: match, accountToken: token, generation: retry),
+      connectGeneration.isCurrent(retry), phase == .ready
+    else { return }
+    commit(fresh)
   }
 
   // MARK: - Sign-in
@@ -144,6 +186,8 @@ final class AppModel {
     library?.close()
     downloads.attach(nil, serverID: nil)
     tokens.clear()
+    serverTokens.clear()
+    SavedConnection.clear()
     UserDefaults.standard.removeObject(forKey: Self.serverKey)
     accountToken = nil
     server = nil
@@ -252,6 +296,10 @@ final class AppModel {
     let old = library
     let store = LibraryStore(session: session)
     UserDefaults.standard.set(session.serverID, forKey: Self.serverKey)
+    if !Demo.isOn {
+      SavedConnection(session).save()
+      serverTokens.save(session.client.token)
+    }
     server = session.client
     serverID = session.serverID
     library = store

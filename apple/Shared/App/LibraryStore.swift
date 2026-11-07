@@ -84,9 +84,8 @@ final class LibraryStore {
     // Movies and Shows work straight away, whatever happens to the Home rows.
     allSections = session.sections
     tmdb = tmdbToken.flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : TMDBClient(token: $0) }
-    if tmdb != nil { selectedService = StreamingService.byID(UserDefaults.standard.string(forKey: Self.serviceKey)) }
-    // A saved service starts loading now, so Home never flashes "Nothing from…" first.
-    startService(force: false)
+    // Astra (KP, 2026-11-07): Home always opens on For You, never the last service.
+    UserDefaults.standard.removeObject(forKey: Self.serviceKey)
   }
 
   /// Stops everything this store started. Called when another server replaces it.
@@ -297,8 +296,10 @@ final class LibraryStore {
     return result
   }
 
-  /// The For You hero: trending titles that are on the server. Without TMDB,
-  /// or when none match, recent additions released in the last two years.
+  /// The For You hero: cineby's trending titles in cineby's order (KP,
+  /// 2026-11-07: "it should match Cineby specifically"), whether or not
+  /// they're on the server; titles not on it get a greyed-out Play. Without
+  /// TMDB, recent additions released in the last two years.
   private func loadHero(fallback hubs: [PlexHub], isCurrent: @escaping () -> Bool) async {
     isLoadingHero = hero.isEmpty
     // Cleared whatever happens: a newer load that fails never reaches here.
@@ -314,14 +315,14 @@ final class LibraryStore {
     }
     let trending = tmdb == nil ? [] : await loadWeekTrending()
     func picks(_ index: [String: PlexMetadata]) async -> [PlexMetadata] {
-      await loadInFull(TrendingHero.pick(trending: trending, index: index, limit: 5)).filter { $0.backdrop != nil }
+      await loadInFull(TrendingHero.today(trending: trending, index: index, limit: 5)).filter { $0.backdrop != nil }
     }
     var shown = await picks(libraryIndex ?? [:])
     if shown.isEmpty { shown = await pickHero(from: hubs) }
     guard isCurrent() else { return }
     if !shown.isEmpty || hero.isEmpty { hero = shown }
     topTen = TrendingHero.topTen(trending: trending, index: libraryIndex ?? [:])
-    topTenAll = TrendingHero.pick(trending: trending, index: libraryIndex ?? [:], limit: 10)
+    topTenAll = TrendingHero.today(trending: trending, index: libraryIndex ?? [:], limit: 10)
     isLoadingHero = false
     // Once the library index is ready, the titles on the server become playable.
     guard !trending.isEmpty, libraryIndex == nil, let index = try? await loadLibraryIndex(), !index.isEmpty
@@ -330,7 +331,7 @@ final class LibraryStore {
     guard isCurrent(), !matched.isEmpty else { return }
     hero = matched
     topTen = TrendingHero.topTen(trending: trending, index: index)
-    topTenAll = TrendingHero.pick(trending: trending, index: index, limit: 10)
+    topTenAll = TrendingHero.today(trending: trending, index: index, limit: 10)
   }
 
   @ObservationIgnored private var weekTrendingTask: Task<[TMDBItem], Never>?
@@ -378,11 +379,11 @@ final class LibraryStore {
   /// Rebuilds the hero and the Top 10 from a new trending list.
   private func showTrending(_ trending: [TMDBItem]) async {
     let index = libraryIndex ?? [:]
-    let shown = await loadInFull(TrendingHero.pick(trending: trending, index: index, limit: 5)).filter { $0.backdrop != nil }
+    let shown = await loadInFull(TrendingHero.today(trending: trending, index: index, limit: 5)).filter { $0.backdrop != nil }
     guard !isClosed else { return }
     if !shown.isEmpty { hero = shown }
     topTen = TrendingHero.topTen(trending: trending, index: index)
-    topTenAll = TrendingHero.pick(trending: trending, index: index, limit: 10)
+    topTenAll = TrendingHero.today(trending: trending, index: index, limit: 10)
   }
 
   /// Reads cineby's page and TMDB's trending in parallel, looks up only the
@@ -734,6 +735,22 @@ final class LibraryStore {
     spawn { [weak self] in
       guard let self else { return }
       await prefetchArtwork(hero + continueWatching + hubs.flatMap(\.items))
+    }
+    // Astra (KP: "all the content should be instantaneous"): every streaming
+    // tab is built in the background, one at a time, so switching is instant.
+    spawn { [weak self] in await self?.preloadServices() }
+  }
+
+  /// Builds each service's rows that aren't built yet, without touching the
+  /// selected tab's loading state.
+  private func preloadServices() async {
+    guard tmdb != nil else { return }
+    for service in StreamingService.all {
+      guard !isClosed, !Task.isCancelled else { return }
+      guard serviceContent[service.id] == nil, loadingServiceID != service.id else { continue }
+      // -1 is never the current generation, so the selected tab's spinner is left alone.
+      await loadService(service, token: -1)
+      if serviceErrors[service.id] != nil, selectedService != service { serviceErrors[service.id] = nil }
     }
   }
 

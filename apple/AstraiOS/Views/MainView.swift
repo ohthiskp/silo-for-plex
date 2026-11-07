@@ -44,6 +44,8 @@ struct MainView: View {
     // Pages leave room at their bottom for it.
     .overlay(alignment: .bottom) {
       WideTabBar(selection: tab, downloads: app.downloads.jobs.count) { picked in
+        // Astra (KP, 2026-11-07): tapping Home always lands on For You.
+        if picked == .home, library.selectedService != nil { library.select(nil) }
         if picked == tab {
           // Tapping the open tab again goes back to its first page.
           switch picked {

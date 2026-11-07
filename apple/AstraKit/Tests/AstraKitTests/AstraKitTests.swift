@@ -631,6 +631,23 @@ final class TMDBTests: XCTestCase {
     XCTAssertNil(TMDBArtwork.url(nil, size: "w500"))
   }
 
+  func testArtworkPicksBestLogoAndFallsBackToOtherLanguages() async throws {
+    func art(_ json: String) async throws -> TMDBArtwork {
+      try await TMDBClient(token: "t", transport: FakeTransport { _ in (200, Data(json.utf8)) })
+        .artwork(id: 1, kind: .movie)
+    }
+    // English, best voted, wins over text-free.
+    let english = try await art(
+      #"{"images":{"logos":[{"file_path":"/n.png"},{"file_path":"/e1.png","iso_639_1":"en","vote_average":3},{"file_path":"/e2.png","iso_639_1":"en","vote_average":5.5}]}}"#)
+    XCTAssertEqual(english.logoPath, "/e2.png")
+    // No English logo: the film's own language before any other.
+    let japanese = try await art(
+      #"{"original_language":"ja","images":{"logos":[{"file_path":"/f.png","iso_639_1":"fr"},{"file_path":"/j.png","iso_639_1":"ja"}]}}"#)
+    XCTAssertEqual(japanese.logoPath, "/j.png")
+    let other = try await art(#"{"images":{"logos":[{"file_path":"/f.svg","iso_639_1":"fr"},{"file_path":"/k.png","iso_639_1":"ko"}]}}"#)
+    XCTAssertEqual(other.logoPath, "/k.png")
+  }
+
   func testTmdbKeyFromPlexGuids() throws {
     let movie = try JSONDecoder().decode(
       PlexMetadata.self,
@@ -673,6 +690,29 @@ final class ServerSessionTests: XCTestCase {
     XCTAssertEqual(session.client.token, "server-token")
     // Movies and Shows only: the Shows page can never come up empty because sections were missing.
     XCTAssertEqual(session.sections.map(\.title), ["Movies", "TV Shows"])
+  }
+
+  func testSavedConnectionOpensWithoutNetworkAndIsCheckedAfter() async throws {
+    let transport = FakeTransport { [sectionsJSON] request in
+      request.url!.path == "/library/sections" ? (200, Data(sectionsJSON.utf8)) : (404, Data())
+    }
+    let connector = ServerConnector(info: testInfo, transport: transport)
+    let first = try await connector.connect(to: resource(), accountToken: "account", generation: 1)
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: "astra.tests.saved"))
+    defaults.removeObject(forKey: SavedConnection.defaultsKey)
+    SavedConnection(first).save(to: defaults)
+    let saved = try XCTUnwrap(SavedConnection.load(from: defaults))
+    XCTAssertEqual(saved, SavedConnection(first))
+    let before = transport.requests.count
+    let resumed = connector.resume(saved, token: "server-token", generation: 2)
+    // Opening the saved server sends nothing.
+    XCTAssertEqual(transport.requests.count, before)
+    XCTAssertEqual(resumed.client.baseURL, first.client.baseURL)
+    XCTAssertEqual(resumed.sections.map(\.title), ["Movies", "TV Shows"])
+    let checked = await connector.check(resumed)
+    XCTAssertEqual(checked?.count, 2)
+    SavedConnection.clear(from: defaults)
+    XCTAssertNil(SavedConnection.load(from: defaults))
   }
 
   /// The bug from the recording: a server that answers /identity but refuses

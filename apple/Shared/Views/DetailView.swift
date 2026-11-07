@@ -17,6 +17,8 @@ struct DetailView: View {
   @State private var notOnServer = false
   /// The visible height of the page; the header's backdrop is at least a share of it.
   @State private var viewport: CGFloat = 800
+  /// How far the page has scrolled; the backdrop holds still against it.
+  @State private var scrolled: CGFloat = 0
 
   @Environment(\.playItem) private var playItem
   @Environment(\.contentLeading) private var leading
@@ -38,21 +40,28 @@ struct DetailView: View {
       // A plain VStack: a lazy one guesses row heights and makes the page jump while scrolling.
       VStack(alignment: .leading, spacing: Astra.Spacing.xl - 4) {
         header
-        if shown.type == .show || shown.type == .season, !seasons.isEmpty || !episodes.isEmpty {
-          episodesSection
-        }
-        if !shown.roles.isEmpty {
-          castRow
-        }
-        ForEach(related) { hub in
-          ContentRow(title: hub.title) {
-            ForEach(hub.items) { ArtCard(library: library, item: $0) }
+        // Astra (KP, 2026-11-07): the backdrop stays still while the page
+        // scrolls, so everything below the header covers it as it rises.
+        VStack(alignment: .leading, spacing: Astra.Spacing.xl - 4) {
+          if shown.type == .show || shown.type == .season, !seasons.isEmpty || !episodes.isEmpty {
+            episodesSection
+          }
+          if !shown.roles.isEmpty {
+            castRow
+          }
+          ForEach(related) { hub in
+            ContentRow(title: hub.title) {
+              ForEach(hub.items) { ArtCard(library: library, item: $0) }
+            }
           }
         }
+        .padding(.bottom, 110)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Astra.Color.bg)
       }
-      .padding(.bottom, 110)
     }
     .scrollIndicators(.never)
+    .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { scrolled = $1 }
     .astraScrollEdges()
     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewport = $0 }
     // The backdrop runs under the title bar; the back button below stays inside the safe area.
@@ -159,8 +168,12 @@ struct DetailView: View {
         ArtworkImage(library: library, item: shown, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .clipped()
+          // Darkens a little as the page rises over it.
+          .overlay(Astra.Color.bg.opacity(min(0.55, max(0, scrolled) / 700)))
         HeroScrim()
       }
+      // Held in place: only the logo, text and buttons move with the scroll.
+      .offset(y: max(0, scrolled))
     }
   }
 
