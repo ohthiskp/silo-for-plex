@@ -369,15 +369,18 @@ struct PlayerOverlay: View {
             .astraGlassEdge(Capsule(), strength: 0.6)
           }
           .padding(.bottom, 12)
-          HStack(spacing: 12) {
-            PlayerClock(player: player, scrubbing: scrubbing, remaining: false)
-              .frame(minWidth: 44, alignment: .leading)
-            timeline
-            PlayerClock(player: player, scrubbing: scrubbing, remaining: true)
-              .frame(minWidth: 48, alignment: .trailing)
+          // Astra: Infuse's bar (KP's screenshot, 2026-11-07): a thin full-width
+          // white bar with no knob, elapsed and "-remaining" in grey underneath.
+          VStack(spacing: 2) {
+            PlayerTimeline(player: player, scrubbing: $scrubbing, poke: poke, knob: 0, height: 5)
+            HStack {
+              PlayerClock(player: player, scrubbing: scrubbing, remaining: false)
+              Spacer()
+              PlayerClock(player: player, scrubbing: scrubbing, remaining: true)
+            }
+            .font(.system(size: 13, weight: .regular).monospacedDigit())
+            .foregroundStyle(.white.opacity(0.6))
           }
-          .font(.system(size: 12, weight: .medium).monospacedDigit())
-          .foregroundStyle(.white.opacity(0.8))
         }
         phoneTransport
       }
@@ -666,11 +669,14 @@ struct PlayerTimeline: View {
   let player: PlayerController
   @Binding var scrubbing: Double?
   var poke: () -> Void
+  /// 0 hides the knob (iPhone, Infuse-style).
+  var knob: CGFloat = 12
+  var height: CGFloat = 3
 
   var body: some View {
     let shown = scrubbing ?? player.position
     ScrubBar(
-      fraction: player.duration > 0 ? shown / player.duration : 0, knob: 12, height: 3,
+      fraction: player.duration > 0 ? shown / player.duration : 0, knob: knob, height: height,
       onChange: { fraction in
         scrubbing = fraction * player.duration
         poke()
@@ -710,14 +716,18 @@ struct ScrubBar: View {
     GeometryReader { geo in
       let f = min(1, max(0, fraction.isFinite ? fraction : 0))
       let width = geo.size.width
+      // Without a knob the bar itself thickens while dragging.
+      let bar = knob == 0 && dragging ? height * 1.8 : height
       ZStack(alignment: .leading) {
-        Capsule().fill(.white.opacity(0.3)).frame(height: height)
-        Capsule().fill(.white).frame(width: max(height, width * f), height: height)
-        Circle().fill(.white)
-          .frame(width: knob, height: knob)
-          .shadow(color: .black.opacity(0.35), radius: 4)
-          .scaleEffect(dragging ? 1.2 : 1)
-          .offset(x: width * f - knob / 2)
+        Capsule().fill(.white.opacity(0.3)).frame(height: bar)
+        Capsule().fill(.white).frame(width: max(bar, width * f), height: bar)
+        if knob > 0 {
+          Circle().fill(.white)
+            .frame(width: knob, height: knob)
+            .shadow(color: .black.opacity(0.35), radius: 4)
+            .scaleEffect(dragging ? 1.2 : 1)
+            .offset(x: width * f - knob / 2)
+        }
       }
       .frame(maxHeight: .infinity)
       .contentShape(Rectangle())
