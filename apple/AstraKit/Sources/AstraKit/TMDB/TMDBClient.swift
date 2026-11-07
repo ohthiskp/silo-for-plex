@@ -29,7 +29,6 @@ public struct StreamingService: Sendable, Hashable, Identifiable {
     .init(id: "hulu", label: "Hulu", logo: "provider-hulu", providerIds: [15], logoHeight: 15),
     .init(id: "paramount", label: "Paramount+", logo: "provider-paramount", providerIds: [531, 2303], logoHeight: 18),
     .init(id: "peacock", label: "Peacock", logo: "provider-peacock", providerIds: [386, 387], logoHeight: 17),
-    .init(id: "crunchyroll", label: "Crunchyroll", logo: "provider-crunchyroll", providerIds: [283], logoHeight: 14),
   ]
 
   public static func byID(_ id: String?) -> StreamingService? {
