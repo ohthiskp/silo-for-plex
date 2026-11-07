@@ -24,6 +24,10 @@ packages:
   MPVKit:
     url: https://github.com/edde746/mpv-build
     revision: 43324582df6c1413c8ea2094563f5e3517317eef
+  # In-app updates on Mac (MIT). Same EdDSA key as the Flutter Mac app.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    majorVersion: 2.6.4
 
 targets:
   AstraMac:
@@ -45,6 +49,7 @@ targets:
       - package: AstraKit
       - package: MPVKit
         product: MPVKit
+      - package: Sparkle
     info:
       path: AstraMac/Resources/Info.plist
       properties:
@@ -53,6 +58,11 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.entertainment
+        # In-app updates (Sparkle). Its own feed branch: the Flutter release rewrites `appcast`.
+        SUFeedURL: https://raw.githubusercontent.com/ohthiskp/silo-for-plex/appcast-swiftui/appcast.xml
+        SUPublicEDKey: wU6pypWh34GlWbHDy2ns9vpn8AtykWvvFIfLSWrEG7I=
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 3600
         # TMDB read token for artwork and the streaming switcher, from the
         # TMDB_TOKEN build setting / environment (GitHub secret in CI). Empty: Plex artwork only.
         AstraTMDBToken: $(TMDB_TOKEN)

@@ -125,6 +125,13 @@ public struct TMDBClient: Sendable {
     try await list("/trending/all/week", [:], kind: nil)
   }
 
+  /// What's trending on TMDB today or this week, movies and shows together. 20 per page.
+  public func trending(_ window: TrendingWindow, page: Int = 1) async throws -> [TMDBItem] {
+    try await list("/trending/all/\(window.rawValue)", ["page": String(page)], kind: nil)
+  }
+
+  public enum TrendingWindow: String, Sendable { case day, week }
+
   public func popular(_ kind: TMDBItem.Kind) async throws -> [TMDBItem] {
     try await list("/discover/\(kind.rawValue)", ["sort_by": "popularity.desc", "watch_region": Self.region], kind: kind)
   }
@@ -213,5 +220,39 @@ public struct TMDBClient: Sendable {
         tmdbID: id, kind: kind, title: title, year: date.flatMap { Int($0.prefix(4)) }, overview: overview,
         rating: (vote_average ?? 0) > 0 ? vote_average : nil, posterPath: poster_path, backdropPath: backdrop_path)
     }
+  }
+}
+
+/// Picks the hero: what's trending right now, but only titles on the Plex server.
+public enum TrendingHero {
+  /// `trending` in TMDB's order (most trending first) mapped to the server's
+  /// items through `index` ("movie:603" → item), each title once.
+  public static func pick(
+    trending: [TMDBItem], index: [String: PlexMetadata], limit: Int = 6
+  ) -> [PlexMetadata] {
+    var seen = Set<String>()
+    var out: [PlexMetadata] = []
+    for item in trending where out.count < limit {
+      guard let match = index[item.id], seen.insert(item.id).inserted else { continue }
+      out.append(match)
+    }
+    return out
+  }
+
+  /// For a streaming service: its titles that are trending, in trending
+  /// order; then, if that's too few, its popular titles from the last two
+  /// years. Never an old catalogue title.
+  public static func pick(
+    trending: [TMDBItem], service popular: [PlexMetadata], limit: Int = 6, currentYear: Int
+  ) -> [PlexMetadata] {
+    let byKey = Dictionary(popular.compactMap { item in item.tmdbKey.map { ($0, item) } }, uniquingKeysWith: { a, _ in a })
+    var out = pick(trending: trending, index: byKey, limit: limit)
+    var seen = Set(out.compactMap(\.tmdbKey))
+    for item in popular where out.count < limit {
+      guard let year = item.year, year >= currentYear - 2, let key = item.tmdbKey, seen.insert(key).inserted
+      else { continue }
+      out.append(item)
+    }
+    return out
   }
 }

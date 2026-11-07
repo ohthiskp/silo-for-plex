@@ -11,6 +11,10 @@ private struct OpenItemKey: EnvironmentKey {
   static let defaultValue: (PlexMetadata) -> Void = { _ in }
 }
 
+private struct CheckForUpdatesKey: EnvironmentKey {
+  static let defaultValue: (() -> Void)? = nil
+}
+
 private struct PlayItemKey: EnvironmentKey {
   static let defaultValue: (PlexMetadata) -> Void = { _ in }
 }
@@ -20,6 +24,12 @@ extension EnvironmentValues {
   var openItem: (PlexMetadata) -> Void {
     get { self[OpenItemKey.self] }
     set { self[OpenItemKey.self] = newValue }
+  }
+
+  /// Checks for an app update (Sparkle, Mac only); nil where updates come from elsewhere.
+  var checkForUpdates: (() -> Void)? {
+    get { self[CheckForUpdatesKey.self] }
+    set { self[CheckForUpdatesKey.self] = newValue }
   }
 
   /// Plays an item (a show or season plays its next episode).

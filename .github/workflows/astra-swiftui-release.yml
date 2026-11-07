@@ -1,0 +1,118 @@
+name: Astra SwiftUI release
+run-name: SwiftUI Mac release ${{ github.sha }}
+
+# Builds the SwiftUI Mac app, publishes it as a GitHub release and updates the
+# in-app update feed (branch appcast-swiftui, read by Sparkle in the app).
+# Runs on every push to the SwiftUI branch that touches the app (only after the
+# tests and build pass), so each fix reaches the installed app as an update.
+# Can also be run by hand from the Actions tab.
+on:
+  push:
+    branches: [claude/project-thread-otuzui]
+    paths:
+      - "apple/**"
+      - "shared/apple/MpvPlayer/MpvPlayerCoreBase.swift"
+      - "macos/Runner/MpvPlayer/MpvPlayerCore.swift"
+      - ".github/workflows/astra-swiftui-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: astra-swiftui-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Test AstraKit
+        working-directory: apple/AstraKit
+        run: swift test
+
+      - name: Version
+        id: ver
+        run: |
+          # The build number Sparkle compares: always increasing, whichever workflow built it.
+          echo "build=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
+          echo "name=$(grep -E '^\s+MARKETING_VERSION:' apple/project.yml | head -1 | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build Astra.app
+        working-directory: apple
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Astra.xcodeproj \
+            -scheme AstraMac \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath .build \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION=${{ steps.ver.outputs.build }} \
+            TMDB_TOKEN="$TMDB_TOKEN" \
+            | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+
+      - name: Sign (ad-hoc, inside-out)
+        working-directory: apple
+        run: |
+          APP=".build/Build/Products/Release/Astra.app"
+          test -d "$APP/Contents/Frameworks/Sparkle.framework"
+          # Sparkle's helpers (Autoupdate, Updater.app, XPC services), frameworks and dylibs first, then the app.
+          find "$APP/Contents/Frameworks" \( -name "*.xpc" -o -name "*.app" -o -name "*.framework" -o -name "*.dylib" \) -print0 \
+            | sort -zr | while IFS= read -r -d '' item; do codesign --force --sign - "$item"; done
+          find "$APP/Contents/Frameworks" -type f -perm +111 ! -name "*.dylib" ! -path "*/Headers/*" ! -path "*/Modules/*" -print0 \
+            | while IFS= read -r -d '' exe; do codesign --force --sign - "$exe" 2>/dev/null || true; done
+          codesign --force --sign - --options runtime --entitlements AstraMac/Resources/Astra.entitlements "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" -c "Print :SUFeedURL" "$APP/Contents/Info.plist"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" ../Astra-SwiftUI.zip
+          shasum -a 256 ../Astra-SwiftUI.zip
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="swiftui-v${{ steps.ver.outputs.name }}-build.${{ steps.ver.outputs.build }}"
+          gh release create "$TAG" Astra-SwiftUI.zip \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Astra SwiftUI ${{ steps.ver.outputs.name }} (build ${{ steps.ver.outputs.build }})" \
+            --notes "Download **Astra-SwiftUI.zip**, unzip it and move Astra into Applications. Already have a build with updates? It updates itself from inside the app (Astra → Check for Updates…)."
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Update in-app update feed
+        env:
+          SPARKLE_ED_SEED: ${{ secrets.SPARKLE_ED_SEED }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$SPARKLE_ED_SEED" ]; then
+            echo "::error::SPARKLE_ED_SEED secret is not set, so the in-app update feed was not updated."
+            exit 1
+          fi
+          python3 -m pip install --quiet --break-system-packages cryptography 2>/dev/null || python3 -m pip install --quiet cryptography
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Astra-SwiftUI.zip"
+          RELEASE_NOTES_URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" \
+            python3 tool/astra/appcast.py Astra-SwiftUI.zip "${{ steps.ver.outputs.name }}" "${{ steps.ver.outputs.build }}" "$URL" feed
+          cd feed
+          git init -q -b appcast-swiftui
+          git config user.name "astra-release-bot"
+          git config user.email "astra-release-bot@users.noreply.github.com"
+          git add appcast.xml
+          git commit -qm "SwiftUI update feed: build ${{ steps.ver.outputs.build }}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" appcast-swiftui

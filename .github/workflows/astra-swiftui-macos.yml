@@ -70,7 +70,7 @@ jobs:
             -clonedSourcePackagesDirPath .build/SourcePackages \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CURRENT_PROJECT_VERSION=$(date -u +%Y%m%d%H%M) \
             TMDB_TOKEN="$TMDB_TOKEN" \
             | tee build.log | grep -E "error:|warning: .*(AstraMac|AstraKit)|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build.log

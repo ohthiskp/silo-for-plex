@@ -762,3 +762,27 @@ final class NetworkLogCancellationTests: XCTestCase {
     XCTAssertTrue(log.recent.isEmpty)
   }
 }
+
+final class TrendingHeroTests: XCTestCase {
+  private func plex(_ key: String, tmdb: Int, type: PlexMediaType = .movie, year: Int? = nil) throws -> PlexMetadata {
+    let json = #"{"ratingKey":"\#(key)","type":"\#(type.rawValue)","title":"T\#(key)","year":\#(year.map(String.init) ?? "null"),"Guid":[{"id":"tmdb://\#(tmdb)"}]}"#
+    return try JSONDecoder().decode(PlexMetadata.self, from: Data(json.utf8))
+  }
+
+  private func tmdb(_ id: Int, _ kind: TMDBItem.Kind = .movie) -> TMDBItem {
+    TMDBItem(tmdbID: id, kind: kind, title: "x", year: 2026, overview: nil, rating: nil, posterPath: "/p", backdropPath: "/b")
+  }
+
+  func testHeroIsTrendingOrderAndOnlyTitlesOnTheServer() throws {
+    let index = ["movie:1": try plex("a", tmdb: 1), "movie:3": try plex("c", tmdb: 3), "tv:2": try plex("b", tmdb: 2, type: .show)]
+    let picked = TrendingHero.pick(trending: [tmdb(9), tmdb(3), tmdb(2, .tv), tmdb(1), tmdb(3)], index: index)
+    XCTAssertEqual(picked.map(\.ratingKey), ["c", "b", "a"])
+  }
+
+  func testServiceHeroNeverFallsBackToOldTitles() throws {
+    let popular = [try plex("old", tmdb: 10, year: 1994), try plex("new", tmdb: 11, year: 2026), try plex("hot", tmdb: 12, year: 2019)]
+    let picked = TrendingHero.pick(trending: [tmdb(12)], service: popular, currentYear: 2026)
+    // Trending first (whatever its year), then only recent popular titles.
+    XCTAssertEqual(picked.map(\.ratingKey), ["hot", "new"])
+  }
+}

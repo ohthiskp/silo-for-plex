@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct AstraMacApp: App {
   @State private var app = AppModel()
+  private let updater = AppUpdater.shared
 
   var body: some Scene {
     WindowGroup("Astra") {
@@ -13,6 +14,7 @@ struct AstraMacApp: App {
         .preferredColorScheme(.dark)
         // White, never the system accent colour (which can be purple).
         .tint(.white)
+        .environment(\.checkForUpdates) { [updater] in updater.checkForUpdates() }
         .task { await app.start() }
     }
     .windowStyle(.hiddenTitleBar)
@@ -20,6 +22,9 @@ struct AstraMacApp: App {
     .defaultSize(width: 1440, height: 900)
     .commands {
       CommandGroup(replacing: .newItem) {}
+      CommandGroup(after: .appInfo) {
+        Button("Check for Updates…") { updater.checkForUpdates() }
+      }
       CommandMenu("Playback") {
         Button("Play/Pause") { app.player.togglePause() }
           .keyboardShortcut(.space, modifiers: [])
@@ -42,6 +47,7 @@ struct AstraMacApp: App {
         .tint(.white)
         .frame(width: 480, height: 420)
         .environment(app)
+        .environment(\.checkForUpdates) { [updater] in updater.checkForUpdates() }
         .preferredColorScheme(.dark)
     }
   }

@@ -239,6 +239,7 @@ struct SettingsPage: View {
 
 struct SettingsView: View {
   @Environment(AppModel.self) private var app
+  @Environment(\.checkForUpdates) private var checkForUpdates
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
 
   var body: some View {
@@ -267,12 +268,22 @@ struct SettingsView: View {
         Text("The last requests Astra made, newest first. Tokens are never shown or saved.")
       }
       Section("About") {
-        LabeledContent(
-          "Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+        LabeledContent("Version", value: Self.versionText)
+        if let checkForUpdates {
+          Button("Check for Updates…", action: checkForUpdates)
+        }
       }
     }
     .formStyle(.grouped)
     .scrollContentBackground(.hidden)
+  }
+
+  /// "0.1.0 (202611070245)": the marketing version and the build that updates compare.
+  static var versionText: String {
+    let info = Bundle.main.infoDictionary ?? [:]
+    let short = info["CFBundleShortVersionString"] as? String ?? ""
+    let build = info["CFBundleVersion"] as? String ?? ""
+    return build.isEmpty ? short : "\(short) (\(build))"
   }
 }
 
