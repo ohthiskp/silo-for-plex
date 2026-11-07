@@ -101,6 +101,13 @@ jobs:
           shot details-movie -AstraDemoOpen 101
           shot details-show -AstraDemoOpen 205
           ls -la "$RUNNER_TEMP/shots"
+          # Small JPEGs printed into the log, for reviewers who can read logs but not artifacts.
+          for f in "$RUNNER_TEMP"/shots/*.png; do
+            sips -s format jpeg -s formatOptions 55 -Z 1000 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "ASTRA-SHOT-BEGIN $(basename "${f%.png}")"
+            base64 -i "${f%.png}.jpg" | fold -w 4000
+            echo "ASTRA-SHOT-END"
+          done
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
