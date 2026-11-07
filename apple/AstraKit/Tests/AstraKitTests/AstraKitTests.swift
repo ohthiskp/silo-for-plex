@@ -1047,6 +1047,31 @@ final class CinebyTrendingTests: XCTestCase {
     } catch {}
   }
 
+  func testParsesTitlesAndPostersFromTheCards() {
+    let html = """
+      <a href="https://cineby.tech/movie/1226863/watch" style="display:block">
+                    <img src="https://image.tmdb.org/t/p/w185/eJGWx219ZcEMVQJhAgMiqo8tYY.jpg" alt="The Super Mario Galaxy Movie" width="185">
+                    <span>The Super Mario Galaxy Movie</span></a><a href="https://cineby.tech/tv/76479/watch" style="x"><img src="https://image.tmdb.org/t/p/w185/b.jpg" alt="Tom &amp; Jerry&#39;s" ></a>
+      """
+    let entries = CinebyTrending.parse(html)
+    XCTAssertEqual(entries.map(\.id), ["movie:1226863", "tv:76479"])
+    XCTAssertEqual(entries[0].title, "The Super Mario Galaxy Movie")
+    XCTAssertEqual(entries[0].posterPath, "/eJGWx219ZcEMVQJhAgMiqo8tYY.jpg")
+    XCTAssertEqual(entries[1].title, "Tom & Jerry's")
+    XCTAssertEqual(entries[1].item?.asMetadata.thumb, "https://image.tmdb.org/t/p/w342/b.jpg")
+  }
+
+  func testTrendingSnapshotRoundTrips() throws {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let url = TrendingSnapshot.url(in: folder)
+    let item = TMDBItem(tmdbID: 7, kind: .tv, title: "T", year: 2026, overview: "o", rating: 7.5, posterPath: "/p", backdropPath: "/b")
+    try TrendingSnapshot(savedAt: Date(), items: [item], details: [item.id: item]).save(to: url)
+    let loaded = try XCTUnwrap(TrendingSnapshot.load(from: url))
+    XCTAssertEqual(loaded.items, [item])
+    XCTAssertTrue(loaded.isFresh())
+    XCTAssertFalse(loaded.isFresh(now: Date().addingTimeInterval(7200)))
+  }
+
   func testMergeKeepsCinebyFirstAndFillsFromTMDB() {
     func item(_ id: Int, _ kind: TMDBItem.Kind = .movie) -> TMDBItem {
       TMDBItem(tmdbID: id, kind: kind, title: "x", year: nil, overview: nil, rating: nil, posterPath: "/p", backdropPath: nil)

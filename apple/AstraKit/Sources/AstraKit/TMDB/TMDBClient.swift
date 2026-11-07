@@ -37,8 +37,8 @@ public struct StreamingService: Sendable, Hashable, Identifiable {
 }
 
 /// One TMDB search/discover result.
-public struct TMDBItem: Sendable, Hashable, Identifiable {
-  public enum Kind: String, Sendable { case movie, tv }
+public struct TMDBItem: Sendable, Hashable, Identifiable, Codable {
+  public enum Kind: String, Sendable, Codable { case movie, tv }
 
   public var tmdbID: Int
   public var kind: Kind

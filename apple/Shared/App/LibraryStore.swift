@@ -82,6 +82,7 @@ final class LibraryStore {
     indexTask?.cancel()
     refreshTask?.cancel()
     indexBuild?.cancel()
+    trendingRefresh?.cancel()
     background.values.forEach { $0.cancel() }
     background.removeAll()
     loadingServiceID = nil
@@ -276,11 +277,15 @@ final class LibraryStore {
     isLoadingHero = hero.isEmpty
     // Cleared whatever happens: a newer load that fails never reaches here.
     defer { isLoadingHero = false }
-    // Astra: today's trending titles straight from TMDB (KP: like cineby's
-    // "Top content today"), shown at once without waiting for the library
-    // index; titles not on the server get a greyed-out Play.
+    // Astra: titles not on the server get a greyed-out Play.
     // Cineby's trending list first (KP's choice), filled out with TMDB's
     // trending this week; TMDB alone when cineby can't be read.
+    // The saved library index is a quick disk read: use it so playable titles are marked at once.
+    if libraryIndex == nil,
+      FileManager.default.fileExists(atPath: LibraryIndexSnapshot.url(serverID: serverID, in: Self.indexFolder).path)
+    {
+      _ = try? await loadLibraryIndex()
+    }
     let trending = tmdb == nil ? [] : await loadWeekTrending()
     func picks(_ index: [String: PlexMetadata]) async -> [PlexMetadata] {
       await loadInFull(TrendingHero.today(trending: trending, index: index)).filter { $0.backdrop != nil }
@@ -301,47 +306,89 @@ final class LibraryStore {
   }
 
   @ObservationIgnored private var weekTrendingTask: Task<[TMDBItem], Never>?
-
-  /// Cineby's trending titles, in its order, with TMDB's details. Empty when
-  /// the page can't be read.
-  private nonisolated static func cinebyItems(tmdb: TMDBClient) async -> [TMDBItem] {
-    guard let entries = try? await CinebyTrending.fetch(), !entries.isEmpty else { return [] }
-    let picked = Array(entries.prefix(30))
-    return await withTaskGroup(of: (Int, TMDBItem?).self) { group in
-      for (i, entry) in picked.enumerated() {
-        group.addTask { (i, try? await tmdb.item(id: entry.tmdbID, kind: entry.kind)) }
-      }
-      var byIndex: [Int: TMDBItem] = [:]
-      for await (i, item) in group { byIndex[i] = item }
-      return picked.indices.compactMap { byIndex[$0] }
-    }
-  }
   @ObservationIgnored private var weekTrendingFetched = Date.distantPast
+  @ObservationIgnored private var trendingRefresh: Task<Void, Never>?
 
-  /// TMDB's trending this week, movies and shows, pages 1–3 in order, each title once.
+  nonisolated static var trendingURL: URL { TrendingSnapshot.url(in: indexFolder.deletingLastPathComponent()) }
+
+  /// For You's trending list: cineby's titles first, then TMDB's trending this
+  /// week. Astra (KP: "load instantly"): the copy saved on disk is returned at
+  /// once and refreshed in the background; Home updates when the new one lands.
   private func loadWeekTrending() async -> [TMDBItem] {
     guard let tmdb else { return [] }
-    // Kept for an hour, so a reload later in the day picks up TMDB's changes.
-    if let weekTrendingTask, Date().timeIntervalSince(weekTrendingFetched) < 3600 {
+    if let weekTrendingTask, Date().timeIntervalSince(weekTrendingFetched) < TrendingSnapshot.freshFor {
       return await weekTrendingTask.value
     }
     weekTrendingFetched = Date()
-    let task = Task { () -> [TMDBItem] in
-      let cinebyTask = Task { await Self.cinebyItems(tmdb: tmdb) }
-      let pages = await withTaskGroup(of: (Int, [TMDBItem]).self) { group in
-        for page in 1...3 {
-          group.addTask { (page, (try? await tmdb.trending(.week, page: page)) ?? []) }
-        }
-        var byPage: [Int: [TMDBItem]] = [:]
-        for await (page, items) in group { byPage[page] = items }
-        return (1...3).flatMap { byPage[$0] ?? [] }
-      }
-      return CinebyTrending.merge(await cinebyTask.value, fill: pages)
+    let url = Self.trendingURL
+    let saved = await Task.detached(priority: .userInitiated) { TrendingSnapshot.load(from: url) }.value
+    if let saved, !saved.items.isEmpty {
+      weekTrendingTask = Task { saved.items }
+      if !saved.isFresh() { refreshTrending(tmdb: tmdb, saved: saved) }
+      return saved.items
     }
+    let task = Task.detached(priority: .userInitiated) { await Self.fetchTrending(tmdb: tmdb, saved: nil).items }
     weekTrendingTask = task
     let result = await task.value
     if result.isEmpty { weekTrendingTask = nil }
     return result
+  }
+
+  /// Fetches a new list behind the saved one and shows it when it's ready.
+  private func refreshTrending(tmdb: TMDBClient, saved: TrendingSnapshot) {
+    guard trendingRefresh == nil else { return }
+    trendingRefresh = Task { [weak self] in
+      let fresh = await Task.detached(priority: .utility) { await Self.fetchTrending(tmdb: tmdb, saved: saved) }.value
+      guard let self, !self.isClosed else { return }
+      self.trendingRefresh = nil
+      guard !fresh.items.isEmpty, fresh.items.map(\.id) != saved.items.map(\.id) else { return }
+      self.weekTrendingTask = Task { fresh.items }
+      await self.showTrending(fresh.items)
+    }
+  }
+
+  /// Rebuilds the hero and the Top 10 from a new trending list.
+  private func showTrending(_ trending: [TMDBItem]) async {
+    let index = libraryIndex ?? [:]
+    let shown = await loadInFull(TrendingHero.today(trending: trending, index: index)).filter { $0.backdrop != nil }
+    guard !isClosed else { return }
+    if !shown.isEmpty { hero = shown }
+    topTen = TrendingHero.topTen(trending: trending, index: index)
+  }
+
+  /// Reads cineby's page and TMDB's trending in parallel, looks up only the
+  /// cineby titles not seen before, and saves the result.
+  private nonisolated static func fetchTrending(tmdb: TMDBClient, saved: TrendingSnapshot?) async -> TrendingSnapshot {
+    var details = saved?.details ?? [:]
+    let entriesTask = Task { (try? await CinebyTrending.fetch()) ?? [] }
+    let pages = await withTaskGroup(of: (Int, [TMDBItem]).self) { group in
+      for page in 1...3 {
+        group.addTask { (page, (try? await tmdb.trending(.week, page: page)) ?? []) }
+      }
+      var byPage: [Int: [TMDBItem]] = [:]
+      for await (page, items) in group { byPage[page] = items }
+      return (1...3).flatMap { byPage[$0] ?? [] }
+    }
+    let entries = Array(await entriesTask.value.prefix(30))
+    // TMDB's own trending results already carry full details.
+    for item in pages where details[item.id] == nil { details[item.id] = item }
+    let missing = entries.filter { details[$0.id]?.backdropPath == nil }
+    let looked = await withTaskGroup(of: (String, TMDBItem?).self) { group in
+      for entry in missing {
+        group.addTask { (entry.id, try? await tmdb.item(id: entry.tmdbID, kind: entry.kind)) }
+      }
+      var out: [String: TMDBItem] = [:]
+      for await (id, item) in group { if let item { out[id] = item } }
+      return out
+    }
+    details.merge(looked) { _, new in new }
+    // A title TMDB didn't answer for still shows with the page's own title and poster.
+    let cineby = entries.compactMap { details[$0.id] ?? $0.item }
+    let items = CinebyTrending.merge(cineby, fill: pages)
+    let snapshot = TrendingSnapshot(
+      savedAt: Date(), items: items, details: TrendingSnapshot.trimmed(details, keeping: items.map(\.id)))
+    if !items.isEmpty { try? snapshot.save(to: trendingURL) }
+    return snapshot
   }
 
   /// The library index, read once. Concurrent callers share one read; a
@@ -409,7 +456,7 @@ final class LibraryStore {
   }
 
   /// Application Support/Astra/LibraryIndex.
-  static var indexFolder: URL {
+  nonisolated static var indexFolder: URL {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
       ?? FileManager.default.temporaryDirectory
     return base.appendingPathComponent("Astra/LibraryIndex", isDirectory: true)
@@ -545,6 +592,16 @@ final class LibraryStore {
     // A saved streaming service loads alongside, not after, the For You rows.
     if let service = selectedService, serviceContent[service.id] == nil, loadingServiceID == nil {
       startService(force: false)
+    }
+    // Astra: the saved hero and Top 10 show before Plex has even answered.
+    if hero.isEmpty, tmdb != nil {
+      spawn { [weak self] in
+        guard let self else { return }
+        let url = Self.trendingURL
+        let saved = await Task.detached(priority: .userInitiated) { TrendingSnapshot.load(from: url) }.value
+        guard let saved, !saved.items.isEmpty, self.hero.isEmpty else { return }
+        await self.showTrending(saved.items)
+      }
     }
     async let continueTask = client.continueWatching()
     async let hubsTask = client.homeHubs()
