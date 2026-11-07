@@ -86,61 +86,119 @@ struct MainView: View {
   }
 }
 
-/// The bottom bar: a wide Liquid Glass capsule nearly the screen's width,
-/// three equal buttons with large icons and labels, and a glass pill behind
-/// the open tab that slides between them.
+/// The bottom bar: a wide Liquid Glass capsule nearly the screen's width with
+/// three equal tabs. The open tab sits under a Liquid Glass lens that slides
+/// between tabs; press and drag along the bar and the lens lifts and follows
+/// the finger, then settles on the tab it is let go over (like Apple's own
+/// tab bar on iOS 26).
 struct WideTabBar: View {
   var selection: MainView.TabID
   /// Running and waiting downloads, shown on Libraries (where Downloads lives).
   var downloads = 0
   var select: (MainView.TabID) -> Void
 
-  @Namespace private var pill
+  /// The finger's x while pressing the bar; nil when not touching.
+  @State private var dragX: CGFloat?
+  @State private var dragged = false
 
   private let items: [(MainView.TabID, String, String)] = [
     (.home, "Home", "house.fill"),
     (.search, "Search", "magnifyingglass"),
     (.libraries, "Libraries", "square.stack.fill"),
   ]
+  private static let inset: CGFloat = 6
+  private static let height: CGFloat = 58
 
   var body: some View {
-    HStack(spacing: 4) {
-      ForEach(items, id: \.0) { item in
-        let (id, title, symbol) = item
-        let selected = id == selection
-        Button {
-          select(id)
-        } label: {
-          VStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 22, weight: .semibold))
-              .overlay(alignment: .topTrailing) {
-                if id == .libraries, downloads > 0 {
-                  CountBadge(count: downloads).offset(x: 12, y: -8)
+    GeometryReader { geo in
+      let inner = geo.size.width - Self.inset * 2
+      let tabWidth = inner / CGFloat(items.count)
+      let selectedIndex = items.firstIndex { $0.0 == selection } ?? 0
+      // Under the finger while dragging, else on the open tab.
+      let lensX: CGFloat = {
+        if let dragX, dragged { return min(max(dragX - Self.inset - tabWidth / 2, 0), inner - tabWidth) }
+        return CGFloat(selectedIndex) * tabWidth
+      }()
+      let hovered = dragX.map { index(at: $0, tabWidth: tabWidth) }
+
+      ZStack(alignment: .leading) {
+        lens
+          .frame(width: tabWidth, height: Self.height)
+          .scaleEffect(dragX != nil ? 1.12 : 1)
+          .offset(x: lensX)
+          .animation(dragged ? .interactiveSpring(response: 0.25, dampingFraction: 0.8) : .snappy(duration: 0.32), value: lensX)
+          .animation(.spring(response: 0.3, dampingFraction: 0.7), value: dragX != nil)
+
+        HStack(spacing: 0) {
+          ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+            let (id, title, symbol) = item
+            let lit = dragged ? hovered == i : id == selection
+            VStack(spacing: 4) {
+              Image(systemName: symbol).font(.system(size: 22, weight: .semibold))
+                .overlay(alignment: .topTrailing) {
+                  if id == .libraries, downloads > 0 {
+                    CountBadge(count: downloads).offset(x: 12, y: -8)
+                  }
                 }
-              }
-            Text(title).font(.system(size: 12, weight: .semibold))
-          }
-          .foregroundStyle(selected ? Astra.Color.ink : Astra.Color.muted)
-          .frame(maxWidth: .infinity, minHeight: 58)
-          .background {
-            if selected {
-              Capsule().fill(.white.opacity(0.16))
-                .matchedGeometryEffect(id: "tab", in: pill)
+              Text(title).font(.system(size: 12, weight: .semibold))
             }
+            .foregroundStyle(lit ? Astra.Color.ink : Astra.Color.muted)
+            .scaleEffect(lit && dragX != nil ? 1.08 : 1)
+            .frame(width: tabWidth, height: Self.height)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(id == selection ? [.isSelected, .isButton] : .isButton)
+            .accessibilityAction { select(id) }
           }
-          .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .animation(.snappy(duration: 0.2), value: hovered)
       }
+      .padding(Self.inset)
+      .frame(width: geo.size.width, height: Self.height + Self.inset * 2)
+      .background { barGlass }
+      .contentShape(Capsule())
+      .gesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { drag in
+            if dragX == nil { dragged = false }
+            dragX = drag.location.x
+            if abs(drag.translation.width) > 8 { dragged = true }
+          }
+          .onEnded { drag in
+            let i = index(at: drag.location.x, tabWidth: tabWidth)
+            dragX = nil
+            dragged = false
+            select(items[i].0)
+          })
     }
-    .padding(6)
-    .astraGlass(in: Capsule(), interactive: true)
-    .animation(.snappy(duration: 0.25), value: selection)
+    .frame(height: Self.height + Self.inset * 2)
     .padding(.horizontal, 16)
     .padding(.bottom, 2)
     // Stays at the bottom when the keyboard opens (Search).
     .ignoresSafeArea(.keyboard)
+    .sensoryFeedback(.selection, trigger: selection)
+  }
+
+  private func index(at x: CGFloat, tabWidth: CGFloat) -> Int {
+    min(max(Int((x - Self.inset) / max(tabWidth, 1)), 0), items.count - 1)
+  }
+
+  /// The bar itself: regular Liquid Glass.
+  @ViewBuilder private var barGlass: some View {
+    if #available(iOS 26.0, *) {
+      Capsule().fill(.clear).glassEffect(.regular, in: Capsule())
+    } else {
+      Capsule().fill(.regularMaterial).overlay(Capsule().stroke(Astra.Color.hairline))
+    }
+  }
+
+  /// The selection lens: interactive clear glass that shimmers as it moves.
+  @ViewBuilder private var lens: some View {
+    if #available(iOS 26.0, *) {
+      Capsule().fill(.white.opacity(0.08)).glassEffect(.clear.interactive(), in: Capsule())
+    } else {
+      Capsule().fill(.white.opacity(0.16))
+    }
   }
 }
