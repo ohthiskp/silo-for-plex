@@ -48,6 +48,12 @@ final class LibraryStore {
   @ObservationIgnored private var libraryIndex: [String: PlexMetadata]?
   /// The read in progress; every service waiting for the index shares it.
   @ObservationIgnored private var indexTask: Task<[String: PlexMetadata], Error>?
+  /// The first read of the index; cancelled by `close()`.
+  @ObservationIgnored private var indexBuild: Task<(items: [String: PlexMetadata], stale: Bool), Error>?
+  /// The background re-read of a stale saved index; cancelled by `close()`.
+  @ObservationIgnored private var refreshTask: Task<[String: PlexMetadata], Error>?
+  /// Each built service's TMDB lists, kept so they can be matched again when the index changes.
+  @ObservationIgnored private var serviceLists: [String: [(ServiceCatalog.Row, [TMDBItem])]] = [:]
   /// TMDB's trending titles (today, then this week), fetched once per session.
   @ObservationIgnored private var trendingTask: Task<[TMDBItem], Never>?
   /// Poster and backdrop paths that came with TMDB's lists, so cards need no extra lookup.
@@ -72,6 +78,8 @@ final class LibraryStore {
     isClosed = true
     serviceTask?.cancel()
     indexTask?.cancel()
+    refreshTask?.cancel()
+    indexBuild?.cancel()
     background.values.forEach { $0.cancel() }
     background.removeAll()
     loadingServiceID = nil
@@ -159,7 +167,8 @@ final class LibraryStore {
     }
     guard let tmdb else { return }
     // The index is read alongside TMDB, never before it.
-    let matching = Task { try? await self.loadLibraryIndex() }
+    // Starts reading the index alongside TMDB (shared with every other caller).
+    spawn { [weak self] in _ = try? await self?.loadLibraryIndex() }
     let specs = ServiceCatalog.rows(for: service)
     let requests = specs.flatMap(\.requests)
     let fetched = await Self.fetch(requests, on: service, tmdb: tmdb)
@@ -177,19 +186,19 @@ final class LibraryStore {
       }
     }
     let trending = await loadTrending()
-    // Shown now with whatever index is already in memory (often the saved one)…
-    let first = libraryIndex
-    await publishService(service, lists: lists, index: first ?? [:], trending: trending)
-    // …and again once the index is read, so playable titles become playable.
-    if let index = await matching.value, index.count != first?.count, !Task.isCancelled, !isClosed {
-      await publishService(service, lists: lists, index: index, trending: trending)
-    }
+    serviceLists[service.id] = lists
+    // Shown now with whatever index is in memory (often the saved one); when
+    // the index arrives or changes, setLibraryIndex matches the rows again,
+    // even if this tab was left in the meantime.
+    await publishService(service, lists: lists, index: libraryIndex ?? [:], trending: trending)
   }
 
   private func publishService(
     _ service: StreamingService, lists: [(ServiceCatalog.Row, [TMDBItem])], index: [String: PlexMetadata],
     trending: [TMDBItem]
   ) async {
+    // Which index these rows are matched with (-1: none yet).
+    let usedVersion = !index.isEmpty && index.count == libraryIndex?.count ? indexVersion : -1
     func shown(_ item: TMDBItem) -> PlexMetadata { index[item.id] ?? item.asMetadata }
     // Each title once across the service's rows, in row order.
     var dedup = HomeDeduplicator()
@@ -203,8 +212,16 @@ final class LibraryStore {
     let playable = picks.filter { !$0.isCatalogOnly }
     let heroPicks = playable.count >= 3 ? playable : Array((playable + picks.filter(\.isCatalogOnly)).prefix(8))
     let hero = await loadInFull(heroPicks)
-    guard !Task.isCancelled, !isClosed else { return }
+    guard !isClosed else { return }
     serviceContent[service.id] = (hero, rows)
+    serviceIndexVersion[service.id] = usedVersion
+    // The index arrived while these rows were being built: match them again.
+    if usedVersion != indexVersion, let current = libraryIndex, !current.isEmpty {
+      spawn { [weak self] in
+        guard let self else { return }
+        await self.publishService(service, lists: lists, index: current, trending: trending)
+      }
+    }
   }
 
   /// Every discover page, 10 at a time (TMDB rate-limits bursts). A failed page is empty.
@@ -272,39 +289,62 @@ final class LibraryStore {
   private func loadLibraryIndex() async throws -> [String: PlexMetadata] {
     if let libraryIndex { return libraryIndex }
     if let indexTask { return try await indexTask.value }
+    // Set before any await, so every caller shares this one read.
     let client = client
     let sections = sections
     let url = LibraryIndexSnapshot.url(serverID: serverID, in: Self.indexFolder)
-    // The saved copy first (read off the main thread): tabs open at once.
-    let saved = await Task.detached(priority: .userInitiated) { LibraryIndexSnapshot.load(from: url) }.value
-    if let saved, !saved.items.isEmpty {
-      if !isClosed { libraryIndex = saved.items }
-      if !saved.isFresh() { refreshLibraryIndex(client: client, sections: sections, url: url) }
-      return saved.items
+    let task = Task.detached(priority: .userInitiated) { () throws -> (items: [String: PlexMetadata], stale: Bool) in
+      // The saved copy first: tabs open at once.
+      if let saved = LibraryIndexSnapshot.load(from: url), !saved.items.isEmpty {
+        return (saved.items, !saved.isFresh())
+      }
+      let items = try await LibraryIndexer.build(client: client, sections: sections)
+      try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
+      return (items, false)
     }
-    let task = Task.detached(priority: .userInitiated) {
+    indexBuild = task
+    let shared = Task { try await task.value.items }
+    indexTask = shared
+    defer { indexTask = nil }
+    // Not cancelled with the caller: other tabs may be waiting on the same read.
+    let result = try await task.value
+    guard !isClosed else { return result.items }
+    setLibraryIndex(result.items)
+    if result.stale { refreshLibraryIndex(client: client, sections: sections, url: url) }
+    return result.items
+  }
+
+  /// Bumped whenever the index changes; a service built with an older one is rebuilt.
+  @ObservationIgnored private var indexVersion = 0
+  /// The index version each service's rows were matched with.
+  @ObservationIgnored private var serviceIndexVersion: [String: Int] = [:]
+
+  private func setLibraryIndex(_ index: [String: PlexMetadata]) {
+    libraryIndex = index
+    indexVersion += 1
+    // Tabs already built with an older (or no) index get matched again.
+    for (id, version) in serviceIndexVersion where version != indexVersion {
+      guard let service = StreamingService.byID(id), let lists = serviceLists[id] else { continue }
+      let trending = trendingTask
+      spawn { [weak self] in
+        guard let self else { return }
+        await self.publishService(service, lists: lists, index: index, trending: await trending?.value ?? [])
+      }
+    }
+  }
+
+  /// Reads the library again in the background and saves it; open tabs are
+  /// matched again with it. A failure keeps the saved one.
+  private func refreshLibraryIndex(client: PlexServerClient, sections: [PlexLibrarySection], url: URL) {
+    let task = Task.detached(priority: .utility) {
       let items = try await LibraryIndexer.build(client: client, sections: sections)
       try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
       return items
     }
-    indexTask = task
-    defer { indexTask = nil }
-    let index = try await task.value
-    if !isClosed { libraryIndex = index }
-    return index
-  }
-
-  /// Reads the library again in the background and saves it; the next service
-  /// opened uses the new copy. A failure keeps the saved one.
-  private func refreshLibraryIndex(client: PlexServerClient, sections: [PlexLibrarySection], url: URL) {
+    refreshTask = task
     spawn { [weak self] in
-      let fresh = try? await Task.detached(priority: .utility) {
-        let items = try await LibraryIndexer.build(client: client, sections: sections)
-        try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
-        return items
-      }.value
-      guard let self, let fresh, !self.isClosed else { return }
-      self.libraryIndex = fresh
+      guard let fresh = try? await task.value, let self, !self.isClosed else { return }
+      self.setLibraryIndex(fresh)
     }
   }
 

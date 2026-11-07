@@ -879,6 +879,11 @@ final class PlayerGeometryTests: XCTestCase {
     XCTAssertEqual(up.height, 12 - 440)
   }
 
+  func testPanelStaysPutBeforeItIsMeasured() {
+    XCTAssertEqual(PlayerGeometry.panelOffset(CGSize(width: 30, height: 30), panel: .zero, in: .zero), .zero)
+    XCTAssertEqual(PlayerGeometry.panelOffset(CGSize(width: 30, height: 30), panel: panel, in: .zero), .zero)
+  }
+
   func testPanelWiderThanThePlayerStaysCentred() {
     let wide = CGRect(x: -50, y: 440, width: 1100, height: 140)
     let moved = PlayerGeometry.panelOffset(CGSize(width: 300, height: 0), panel: wide, in: player, margin: 12)

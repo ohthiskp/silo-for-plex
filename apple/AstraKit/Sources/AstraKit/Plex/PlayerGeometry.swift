@@ -45,6 +45,9 @@ public enum PlayerGeometry {
   /// `offset` limited so the panel (`panel`, its resting frame) stays inside
   /// `bounds` with `margin` to spare on every side.
   public static func panelOffset(_ offset: CGSize, panel: CGRect, in bounds: CGRect, margin: CGFloat = 12) -> CGSize {
+    // Not measured yet (or a tiny window): stay put. An inset empty rect is
+    // CGRect.null, whose edges are infinite.
+    guard !panel.isEmpty, bounds.width > 2 * margin, bounds.height > 2 * margin else { return .zero }
     let area = bounds.insetBy(dx: margin, dy: margin)
     func limit(_ value: CGFloat, low: CGFloat, high: CGFloat) -> CGFloat {
       low > high ? (low + high) / 2 : min(high, max(low, value))

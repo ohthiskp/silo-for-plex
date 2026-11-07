@@ -15,6 +15,8 @@ struct PlayerOverlay: View {
     @AppStorage("player.panelX") private var panelX = 0.0
     @AppStorage("player.panelY") private var panelY = 0.0
     @State private var panelDragStart: CGSize?
+    /// The panel's offset while it is being dragged; saved when the drag ends.
+    @State private var panelLive: CGSize?
     @State private var panelRest: CGRect = .zero
     @State private var playerBounds: CGRect = .zero
   #endif
@@ -26,7 +28,7 @@ struct PlayerOverlay: View {
       // Clear, but hit-testable. Mac: click pauses, double-click goes full screen.
       // iPhone: tap shows or hides the controls.
       #if os(macOS)
-        // Drag anywhere on the video to move the window.
+        // Click pauses, double-click goes full screen; the title strip (and the mini window) drag the window.
         WindowDragArea(
           onClick: { player.togglePause() }, onDoubleClick: { player.toggleFullScreen() }
         )
@@ -218,7 +220,8 @@ struct PlayerOverlay: View {
 
     /// Where the panel is, kept inside the player even after the window shrinks.
     private var panelOffset: CGSize {
-      PlayerGeometry.panelOffset(CGSize(width: panelX, height: panelY), panel: panelRest, in: playerBounds)
+      PlayerGeometry.panelOffset(
+        panelLive ?? CGSize(width: panelX, height: panelY), panel: panelRest, in: playerBounds)
     }
 
     private var panelDrag: some Gesture {
@@ -226,11 +229,15 @@ struct PlayerOverlay: View {
         .onChanged { drag in
           let start = panelDragStart ?? panelOffset
           panelDragStart = start
-          setPanelOffset(
-            CGSize(width: start.width + drag.translation.width, height: start.height + drag.translation.height))
+          panelLive = CGSize(
+            width: start.width + drag.translation.width, height: start.height + drag.translation.height)
           poke()
         }
-        .onEnded { _ in panelDragStart = nil }
+        .onEnded { _ in
+          if let panelLive { setPanelOffset(panelLive) }
+          panelLive = nil
+          panelDragStart = nil
+        }
     }
 
     private func setPanelOffset(_ offset: CGSize) {

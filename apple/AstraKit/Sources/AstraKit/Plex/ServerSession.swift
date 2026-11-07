@@ -67,22 +67,17 @@ public struct Generation: Sendable, Equatable {
 /// TMDB's streaming lists to the library.
 public enum LibraryIndexer {
   /// Reads every movie and show section in pages (a single 20,000-item
-  /// request times out on slow servers), sections side by side and up to
-  /// `parallel` pages at once. Throws when any page fails, so a partial or
+  /// request times out on slow servers), up to `parallel` pages at once. Throws when any page fails, so a partial or
   /// empty index is never mistaken for the real one and saved.
   public static func build(
     client: PlexServerClient, sections: [PlexLibrarySection], pageSize: Int = 1000, parallel: Int = 4
   ) async throws -> [String: PlexMetadata] {
     let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
-    let perSection = try await withThrowingTaskGroup(of: (Int, [PlexMetadata]).self) { group in
-      for (order, section) in wanted.enumerated() {
-        group.addTask {
-          (order, try await items(in: section, client: client, pageSize: pageSize, parallel: parallel))
-        }
-      }
-      var out = [[PlexMetadata]](repeating: [], count: wanted.count)
-      for try await (order, items) in group { out[order] = items }
-      return out
+    // One section at a time, so at most `parallel` requests are ever in flight
+    // (URLSession queues the rest, and queued requests time out on slow servers).
+    var perSection: [[PlexMetadata]] = []
+    for section in wanted {
+      perSection.append(try await items(in: section, client: client, pageSize: pageSize, parallel: parallel))
     }
     var index: [String: PlexMetadata] = [:]
     for item in perSection.joined() {

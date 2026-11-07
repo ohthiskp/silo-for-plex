@@ -95,9 +95,13 @@ struct MainView: View {
           .onTapGesture { closeTopCard() }
           .transition(.opacity)
       }
+      // Keyed by position and title, so a new card never reuses a closing one's state.
       ForEach(Array(path.enumerated()), id: \.offset) { depth, route in
         let isTop = depth == path.count - 1
         card(for: route)
+          .id("\(depth)|\(route.hashValue)")
+          // Only the top card answers Return (Play) and Esc (Close).
+          .environment(\.isPageActive, isTop)
           .padding(.leading, Astra.Sidebar.contentInset + 24 + CGFloat(depth) * Self.cardStep)
           .padding(.trailing, 14)
           .padding(.vertical, 14)

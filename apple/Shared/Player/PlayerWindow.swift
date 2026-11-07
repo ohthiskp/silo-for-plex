@@ -192,6 +192,16 @@
       override var mouseDownCanMoveWindow: Bool { false }
 
       override func mouseDown(with event: NSEvent) {
+        // The window still moves from its title strip, and the small floating
+        // window moves from anywhere (it has nothing else to grab).
+        if let window, !window.styleMask.contains(.fullScreen), event.clickCount == 1 {
+          let point = convert(event.locationInWindow, from: nil)
+          let fromTop = isFlipped ? point.y : bounds.height - point.y
+          if fromTop < 32 || window.level != .normal {
+            window.performDrag(with: event)
+            return
+          }
+        }
         if event.clickCount >= 2 {
           pendingClick?.cancel()
           pendingClick = nil

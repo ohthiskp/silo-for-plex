@@ -21,6 +21,8 @@ struct DetailView: View {
   @Environment(\.playItem) private var playItem
   @Environment(\.contentLeading) private var leading
   @Environment(\.closeCard) private var closeCard
+  /// False for a card under the top one: its keyboard shortcuts are off.
+  @Environment(\.isPageActive) private var isActive
 
   private var shown: PlexMetadata { item ?? seed }
 
@@ -58,7 +60,7 @@ struct DetailView: View {
           Image(systemName: "xmark")
         }
         .astraIconButton(size: 36, variant: .clear)
-        .keyboardShortcut(.cancelAction)
+        .keyboardShortcut(isActive ? .cancelAction : nil)
         .help("Close (Esc)")
         .accessibilityLabel("Close")
         .padding(.trailing, 18)
@@ -101,9 +103,8 @@ struct DetailView: View {
           Label(playLabel, systemImage: "play.fill")
         }
         .astraPrimaryButton()
-        .keyboardShortcut(.defaultAction)
+        .keyboardShortcut(isActive ? .defaultAction : nil)
         .disabled(shown.isCatalogOnly)
-        .opacity(shown.isCatalogOnly ? 0.4 : 1)
 
         if shown.type != .collection, !shown.isCatalogOnly {
           DownloadButton(item: shown)
@@ -242,14 +243,16 @@ struct DetailView: View {
 
   private func load(refresh: Bool = false) async {
     do {
-      var key = item?.ratingKey ?? seed.ratingKey
+      // A refresh reloads the title already shown; otherwise start from the seed.
+      var key = refresh ? (item?.ratingKey ?? seed.ratingKey) : seed.ratingKey
       if key.hasPrefix("tmdb:") {
         // A title from a streaming tab: find it on the server, else show TMDB's details.
-        guard let match = try? await library.resolve(seed) else {
+        do {
+          key = try await library.resolve(seed).ratingKey
+        } catch LibraryStore.CatalogError.notOnServer {
           notOnServer = true
           return
         }
-        key = match.ratingKey
       }
       let full = try await library.details(key, refresh: refresh)
       withAnimation(Astra.Motion.base) { item = full }

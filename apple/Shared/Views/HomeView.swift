@@ -333,7 +333,6 @@ struct HeroInfo: View {
         .astraPrimaryButton()
         // On the service but not on the Plex server: nothing to play.
         .disabled(item.isCatalogOnly)
-        .opacity(item.isCatalogOnly ? 0.4 : 1)
         .help(item.isCatalogOnly ? "Not on your Plex server" : "")
         Button {
           openItem(item)
