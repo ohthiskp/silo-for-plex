@@ -100,12 +100,16 @@ struct HomeView: View {
         }
 
         if library.selectedService == nil, let error = library.homeError {
-          if library.hubs.isEmpty && library.continueWatching.isEmpty {
+          // Only a page with nothing at all gets the big message; otherwise a
+          // quiet line (it retries by itself).
+          if library.hubs.isEmpty && library.continueWatching.isEmpty && library.homeHero.isEmpty
+            && library.homeTopTen.isEmpty
+          {
             EmptyState(
               symbol: "exclamationmark.triangle", title: "Home didn't load", message: error,
               action: ("Try Again", { Task { await library.loadHome() } }))
           } else {
-            Text(error)
+            Text("Some rows didn't load. Trying again shortly. (\(error))")
               .font(Astra.Font.meta)
               .foregroundStyle(Astra.Color.muted)
               .padding(.leading, leading)

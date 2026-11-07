@@ -751,7 +751,26 @@ final class LibraryStore {
     // Movies and Shows keep working even when the Home rows fail.
     if !loadedSections.isEmpty { allSections = loadedSections }
     do {
-      let loadedHubs = try await hubsTask
+      // Astra (KP, 2026-11-07, "Home didn't load … took too long"): a big
+      // server can be slow to build its home rows. Ask once more for fewer
+      // rows before giving up; if that fails too, the page still shows
+      // Continue Watching, the hero, Top 10 and For You, and tries again later.
+      let loadedHubs: [PlexHub]
+      var hubsFailed = false
+      do {
+        loadedHubs = try await hubsTask
+      } catch {
+        guard isCurrent() else { return }
+        do {
+          loadedHubs = try await client.homeHubs(count: 8)
+        } catch {
+          guard isCurrent() else { return }
+          loadedHubs = []
+          hubsFailed = true
+          homeError = describe(error)
+          retryHomeLater()
+        }
+      }
       // Astra: Library Quality first (HD drops 4K libraries; 4K keeps one copy, the 4K one).
       let filter = self.filter
       let twins = libraryIndex ?? [:]
@@ -769,14 +788,11 @@ final class LibraryStore {
         })
       guard isCurrent() else { return }
       continueWatching = rows.continueWatching
-      hubs = rows.hubs
+      // A failed reload keeps the rows already on screen.
+      if !hubsFailed || hubs.isEmpty { hubs = rows.hubs }
       isLoadingHome = false
       await loadHero(fallback: rows.hubs, isCurrent: isCurrent)
       await buildForYou(isCurrent: isCurrent)
-    } catch {
-      guard isCurrent() else { return }
-      isLoadingHero = false
-      homeError = describe(error)
     }
     isLoadingHome = false
     spawn { [weak self] in
@@ -786,6 +802,20 @@ final class LibraryStore {
     // Astra (KP: "all the content should be instantaneous"): every streaming
     // tab is built in the background, one at a time, so switching is instant.
     spawn { [weak self] in await self?.preloadServices() }
+  }
+
+  /// After a slow or failed Home load: one quiet retry 20 s later (a newer
+  /// load, or one already scheduled, makes it a no-op).
+  @ObservationIgnored private var homeRetryScheduled = false
+  private func retryHomeLater() {
+    guard !homeRetryScheduled else { return }
+    homeRetryScheduled = true
+    spawn { [weak self] in
+      try? await Task.pause(20)
+      guard let self, !self.isClosed else { return }
+      self.homeRetryScheduled = false
+      if self.homeError != nil { await self.loadHome() }
+    }
   }
 
   /// Builds each service's rows that aren't built yet, without touching the
