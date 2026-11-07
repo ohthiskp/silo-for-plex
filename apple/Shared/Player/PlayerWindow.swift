@@ -37,7 +37,8 @@
         styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
         backing: .buffered, defer: false)
       window.setFrame(frame, display: false)
-      // Drag it by the title-bar strip as well as by the video (WindowDragArea).
+      // Astra: the window moves by its title-bar strip only; dragging over the
+      // video moves the control panel instead (KP, 2026-11-07).
       window.isMovable = true
       window.title = "Astra"
       window.titleVisibility = .hidden
@@ -159,8 +160,9 @@
     }
   }
 
-  /// The empty part of the player (under the controls): drag moves the
-  /// window, a click pauses, a double-click goes full screen.
+  /// The empty part of the player (under the controls): a click pauses, a
+  /// double-click goes full screen. Dragging here does nothing; the window
+  /// stays where it is.
   struct WindowDragArea: NSViewRepresentable {
     var onClick: () -> Void
     var onDoubleClick: () -> Void
@@ -187,6 +189,8 @@
       private var dragStart: (mouse: NSPoint, origin: NSPoint)?
       private var dragged = false
 
+      override var mouseDownCanMoveWindow: Bool { false }
+
       override func mouseDown(with event: NSEvent) {
         if event.clickCount >= 2 {
           pendingClick?.cancel()
@@ -200,13 +204,10 @@
       }
 
       override func mouseDragged(with event: NSEvent) {
-        guard let window, let dragStart, !window.styleMask.contains(.fullScreen) else { return }
+        // A drag isn't a click, but it no longer moves the window.
+        guard let dragStart else { return }
         let now = NSEvent.mouseLocation
-        let dx = now.x - dragStart.mouse.x
-        let dy = now.y - dragStart.mouse.y
-        if !dragged, abs(dx) + abs(dy) < 3 { return }
-        dragged = true
-        window.setFrameOrigin(NSPoint(x: dragStart.origin.x + dx, y: dragStart.origin.y + dy))
+        if abs(now.x - dragStart.mouse.x) + abs(now.y - dragStart.mouse.y) >= 3 { dragged = true }
       }
 
       override func mouseUp(with event: NSEvent) {

@@ -40,4 +40,17 @@ public enum PlayerGeometry {
     f.origin.y = min(max(f.origin.y, visible.minY + 20), visible.maxY - f.height - 20)
     return f
   }
+
+  /// How far the player's control panel may be dragged from where it rests:
+  /// `offset` limited so the panel (`panel`, its resting frame) stays inside
+  /// `bounds` with `margin` to spare on every side.
+  public static func panelOffset(_ offset: CGSize, panel: CGRect, in bounds: CGRect, margin: CGFloat = 12) -> CGSize {
+    let area = bounds.insetBy(dx: margin, dy: margin)
+    func limit(_ value: CGFloat, low: CGFloat, high: CGFloat) -> CGFloat {
+      low > high ? (low + high) / 2 : min(high, max(low, value))
+    }
+    return CGSize(
+      width: limit(offset.width, low: area.minX - panel.minX, high: area.maxX - panel.maxX),
+      height: limit(offset.height, low: area.minY - panel.minY, high: area.maxY - panel.maxY))
+  }
 }

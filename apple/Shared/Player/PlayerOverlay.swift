@@ -9,6 +9,15 @@ struct PlayerOverlay: View {
   @State private var visible = true
   @State private var hideTask: Task<Void, Never>?
   @State private var scrubbing: Double?
+  @State private var lastPoke = Date.distantPast
+  #if os(macOS)
+    // Astra: the control panel can be dragged anywhere over the video (KP, 2026-11-07).
+    @AppStorage("player.panelX") private var panelX = 0.0
+    @AppStorage("player.panelY") private var panelY = 0.0
+    @State private var panelDragStart: CGSize?
+    @State private var panelRest: CGRect = .zero
+    @State private var playerBounds: CGRect = .zero
+  #endif
 
   private var player: PlayerController { app.player }
 
@@ -54,9 +63,16 @@ struct PlayerOverlay: View {
     .animation(Astra.Motion.base, value: player.hasFirstFrame)
     #if os(macOS)
       .onContinuousHover { phase in
-        if case .active = phase { poke() }
+        // Every mouse move reaches here; restart the hide timer at most a few times a second.
+        if case .active = phase, !visible || Date().timeIntervalSince(lastPoke) > 0.25 { poke() }
       }
     #endif
+    .coordinateSpace(.named(Self.space))
+    .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .local) }) { bounds in
+      #if os(macOS)
+        playerBounds = bounds
+      #endif
+    }
     .onAppear { poke() }
     .onChange(of: player.paused) { _, paused in
       if paused { visible = true } else { poke() }
@@ -69,13 +85,17 @@ struct PlayerOverlay: View {
     #endif
   }
 
+  static let space = "player"
+
   private var chrome: some View {
     ZStack {
       // Scrims so white text reads over any frame.
       VStack(spacing: 0) {
         LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 160)
         Spacer()
-        LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom).frame(height: 200)
+        // Light at the bottom: the Mac panel is clear glass and carries its own contrast.
+        LinearGradient(colors: [.clear, .black.opacity(Self.bottomScrim)], startPoint: .top, endPoint: .bottom)
+          .frame(height: 200)
       }
       .ignoresSafeArea()
       .allowsHitTesting(false)
@@ -87,6 +107,12 @@ struct PlayerOverlay: View {
       #endif
     }
   }
+
+  #if os(macOS)
+    private static let bottomScrim = 0.3
+  #else
+    private static let bottomScrim = 0.7
+  #endif
 
   // MARK: Mac (docs/design/desktop-player.png)
 
@@ -130,12 +156,12 @@ struct PlayerOverlay: View {
     private var macPanel: some View {
       VStack(spacing: 14) {
         HStack(spacing: 18) {
-          Text(Self.clock(shownPosition)).frame(minWidth: 64, alignment: .leading)
+          PlayerClock(player: player, scrubbing: scrubbing, remaining: false).frame(minWidth: 64, alignment: .leading)
           timeline
-          Text("-" + Self.clock(max(0, player.duration - shownPosition))).frame(minWidth: 64, alignment: .trailing)
+          PlayerClock(player: player, scrubbing: scrubbing, remaining: true).frame(minWidth: 64, alignment: .trailing)
         }
-        .font(.system(size: 14, weight: .medium).monospacedDigit())
-        .foregroundStyle(.white.opacity(0.85))
+        .font(.system(size: 15, weight: .semibold).monospacedDigit())
+        .foregroundStyle(.white)
 
         ZStack {
           HStack(spacing: 12) {
@@ -169,9 +195,58 @@ struct PlayerOverlay: View {
         }
       }
       .padding(.horizontal, 30)
-      .padding(.vertical, 20)
+      .padding(.top, 24)
+      .padding(.bottom, 20)
+      .shadow(color: .black.opacity(0.45), radius: 6)  // keeps white glyphs crisp on clear glass
+      .overlay(alignment: .top) {
+        // The grip: drag here, or anywhere on the panel that isn't a control.
+        Capsule().fill(.white.opacity(0.55)).frame(width: 40, height: 4).padding(.top, 9)
+          .allowsHitTesting(false)
+      }
+      .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
       .astraGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous), variant: .clear)
+      .overlay {
+        // A thin light edge, brightest top-left, like light catching the glass.
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
+          .strokeBorder(
+            LinearGradient(
+              colors: [.white.opacity(0.6), .white.opacity(0.08), .white.opacity(0.2)],
+              startPoint: .topLeading, endPoint: .bottomTrailing),
+            lineWidth: 1
+          )
+          .allowsHitTesting(false)
+      }
+      .shadow(color: .black.opacity(0.2), radius: 24, y: 6)
       .frame(maxWidth: 1500)
+      .offset(panelOffset)
+      .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .named(Self.space)) }) { panelRest = $0 }
+      .gesture(panelDrag)
+      .onTapGesture(count: 2) { setPanelOffset(.zero) }
+      .help("Drag to move the controls; double-click to put them back")
+      .animation(panelDragStart == nil ? Astra.Motion.base : nil, value: panelOffset)
+    }
+
+    /// Where the panel is, kept inside the player even after the window shrinks.
+    private var panelOffset: CGSize {
+      PlayerGeometry.panelOffset(CGSize(width: panelX, height: panelY), panel: panelRest, in: playerBounds)
+    }
+
+    private var panelDrag: some Gesture {
+      DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.space))
+        .onChanged { drag in
+          let start = panelDragStart ?? panelOffset
+          panelDragStart = start
+          setPanelOffset(
+            CGSize(width: start.width + drag.translation.width, height: start.height + drag.translation.height))
+          poke()
+        }
+        .onEnded { _ in panelDragStart = nil }
+    }
+
+    private func setPanelOffset(_ offset: CGSize) {
+      let clamped = PlayerGeometry.panelOffset(offset, panel: panelRest, in: playerBounds)
+      panelX = clamped.width
+      panelY = clamped.height
     }
 
     /// The small floating window: play/pause and a button back to full size.
@@ -265,9 +340,9 @@ struct PlayerOverlay: View {
             }
             timeline
             HStack {
-              Text(Self.clock(shownPosition))
+              PlayerClock(player: player, scrubbing: scrubbing, remaining: false)
               Spacer()
-              Text("-" + Self.clock(max(0, player.duration - shownPosition)))
+              PlayerClock(player: player, scrubbing: scrubbing, remaining: true)
             }
             .font(.system(size: 13, weight: .medium).monospacedDigit())
             .foregroundStyle(.white.opacity(0.7))
@@ -283,26 +358,10 @@ struct PlayerOverlay: View {
 
   // MARK: Shared pieces
 
-  private var shownPosition: Double { scrubbing ?? player.position }
-
+  /// The timeline is its own view so the ~4 position updates a second
+  /// redraw only the bar, not the whole player chrome.
   private var timeline: some View {
-    ScrubBar(
-      fraction: player.duration > 0 ? shownPosition / player.duration : 0, knob: 18, height: 5,
-      onChange: { fraction in
-        scrubbing = fraction * player.duration
-        poke()
-      },
-      onCommit: { fraction in
-        player.seek(to: fraction * player.duration)
-        scrubbing = nil
-      },
-      preview: { fraction in
-        let seconds = fraction * player.duration
-        return (image: player.thumbnail(at: seconds), label: Self.clock(seconds))
-      }
-    )
-    .accessibilityLabel("Playback Position")
-    .accessibilityValue(Self.clock(shownPosition))
+    PlayerTimeline(player: player, scrubbing: $scrubbing, poke: poke)
   }
 
   /// Back 10 s, play/pause, forward 10 s: bold white glyphs.
@@ -441,6 +500,7 @@ struct PlayerOverlay: View {
 
   /// Shows the chrome and schedules it to hide again.
   private func poke() {
+    lastPoke = Date()
     visible = true
     hideTask?.cancel()
     hideTask = Task {
@@ -463,6 +523,46 @@ struct PlayerOverlay: View {
     let m = (total % 3600) / 60
     let s = total % 60
     return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
+  }
+}
+
+/// Elapsed or remaining time. Reads the position itself, so only this text redraws as it ticks.
+struct PlayerClock: View {
+  let player: PlayerController
+  var scrubbing: Double?
+  var remaining: Bool
+
+  var body: some View {
+    let position = scrubbing ?? player.position
+    Text(remaining ? "-" + PlayerOverlay.clock(max(0, player.duration - position)) : PlayerOverlay.clock(position))
+  }
+}
+
+/// The playback timeline with seek previews.
+struct PlayerTimeline: View {
+  let player: PlayerController
+  @Binding var scrubbing: Double?
+  var poke: () -> Void
+
+  var body: some View {
+    let shown = scrubbing ?? player.position
+    ScrubBar(
+      fraction: player.duration > 0 ? shown / player.duration : 0, knob: 18, height: 5,
+      onChange: { fraction in
+        scrubbing = fraction * player.duration
+        poke()
+      },
+      onCommit: { fraction in
+        player.seek(to: fraction * player.duration)
+        scrubbing = nil
+      },
+      preview: { fraction in
+        let seconds = fraction * player.duration
+        return (image: player.thumbnail(at: seconds), label: PlayerOverlay.clock(seconds))
+      }
+    )
+    .accessibilityLabel("Playback Position")
+    .accessibilityValue(PlayerOverlay.clock(shown))
   }
 }
 

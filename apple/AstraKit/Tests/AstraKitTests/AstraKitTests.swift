@@ -790,6 +790,30 @@ final class TrendingHeroTests: XCTestCase {
 final class PlayerGeometryTests: XCTestCase {
   let screen = CGRect(x: 0, y: 0, width: 1728, height: 1080)
 
+  // The control panel rests at the bottom of a 1000×600 player.
+  let player = CGRect(x: 0, y: 0, width: 1000, height: 600)
+  let panel = CGRect(x: 100, y: 440, width: 800, height: 140)
+
+  func testPanelMovesFreelyInsideThePlayer() {
+    let moved = PlayerGeometry.panelOffset(CGSize(width: -50, height: -200), panel: panel, in: player)
+    XCTAssertEqual(moved, CGSize(width: -50, height: -200))
+  }
+
+  func testPanelStopsAtTheEdges() {
+    let far = PlayerGeometry.panelOffset(CGSize(width: 900, height: 400), panel: panel, in: player, margin: 12)
+    XCTAssertEqual(far.width, 1000 - 12 - 900)  // right edge at 988
+    XCTAssertEqual(far.height, 600 - 12 - 580)  // bottom edge at 588
+    let up = PlayerGeometry.panelOffset(CGSize(width: -900, height: -900), panel: panel, in: player, margin: 12)
+    XCTAssertEqual(up.width, 12 - 100)
+    XCTAssertEqual(up.height, 12 - 440)
+  }
+
+  func testPanelWiderThanThePlayerStaysCentred() {
+    let wide = CGRect(x: -50, y: 440, width: 1100, height: 140)
+    let moved = PlayerGeometry.panelOffset(CGSize(width: 300, height: 0), panel: wide, in: player, margin: 12)
+    XCTAssertEqual(moved.width, 0)
+  }
+
   func testOpensSmallerThanTheAppWindowAndCentredOnIt() {
     let main = CGRect(x: 100, y: 50, width: 1440, height: 900)
     let frame = PlayerGeometry.initialFrame(over: main, visible: screen)
