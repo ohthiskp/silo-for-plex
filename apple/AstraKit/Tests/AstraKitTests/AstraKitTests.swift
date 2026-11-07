@@ -694,7 +694,7 @@ final class ServerSessionTests: XCTestCase {
 
   func testSavedConnectionOpensWithoutNetworkAndIsCheckedAfter() async throws {
     let transport = FakeTransport { [sectionsJSON] request in
-      request.url!.path == "/library/sections" ? (200, Data(sectionsJSON.utf8)) : (404, Data())
+      request.url!.path == "/library/sections" ? (200, Data(sectionsJSON.utf8)) : (200, Data())
     }
     let connector = ServerConnector(info: testInfo, transport: transport)
     let first = try await connector.connect(to: resource(), accountToken: "account", generation: 1)
