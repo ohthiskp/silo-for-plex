@@ -3,6 +3,22 @@
 Severity: **P0** core flow broken (no new features until fixed) · **P1** wrong behavior · **P2** polish.
 The orchestrator keeps this file current. Newest first within each severity.
 
+## SwiftUI app (`apple/`), 2026-11-07
+Tracked in the stabilization plan (ROADMAP "S" milestones). Verified = CI build + `swift test`; nothing below
+has been clicked through on a Mac by Claude (no Swift or screen access here).
+
+| Sev | Issue | State |
+|---|---|---|
+| P0 | Change Server breaks Home/Shows (spinner, "No shows library") | **Fixed in code** (S1, e11f36f): validate before commit, old session kept on failure, generation tokens. Unit-tested; not yet tried by KP |
+| P0 | Streaming-service switching slow, times out, endless spinner | **Fixed in code** (S1): paged shared library index, cancellable loads, errors with Try Again. Not yet tried by KP |
+| P1 | Downloads stuck at 0%, second click cancels silently | Open (S3) |
+| P1 | Player black ~8 s before first frame | Open (S2) |
+| P1 | Mac player window too big, not draggable; mini window keeps mini controls when enlarged | Open (S2) |
+| P1 | Sidebar shows two selections / icons vanish mid-switch | Open (S4) |
+| P2 | Streaming switcher overlaps hero title when scrolled | Open (S4) |
+| P2 | Blue system accent | Fixed in 2f1d436, not yet confirmed by KP |
+| P2 | No seek thumbnails; loading screen still the old one | Open (S5) |
+
 ## Test baseline (2026-11-06)
 Full `flutter test` on Linux, Flutter 3.47.1, branch `astra-rename`: **8,287 passed, 8 skipped, 116 failed**
 (the same suite on `main` has 118 failures; the rename fixed 2 and added none). A change may not add failures.
