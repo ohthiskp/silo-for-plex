@@ -175,13 +175,13 @@ struct PhoneSearchView: View {
   @ViewBuilder private var resultsList: some View {
     let titles = shownResults
     let people = shownPeople
-    let done = scope == .people ? peopleSearched : (searched && peopleSearched)
-    if done && titles.isEmpty && people.isEmpty {
+    let done = searched && peopleSearched
+    if !done && titles.isEmpty && people.isEmpty {
+      ProgressView().controlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 40)
+    } else if titles.isEmpty && people.isEmpty {
       EmptyState(
         symbol: "magnifyingglass", title: "No results",
         message: scope == .people ? "No one matches “\(query)”." : "Nothing matches “\(query)”.")
-    } else if titles.isEmpty && people.isEmpty {
-      ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
     } else {
       Text("Results (\(titles.count + people.count))")
         .font(.system(size: 15, weight: .semibold))
@@ -217,6 +217,11 @@ struct PhoneSearchView: View {
 
   // MARK: Searching
 
+  /// Astra (KP, 2026-11-07: "just use TMDB… don't load anything from
+  /// Plex"): one TMDB search for titles and people, ranked exact match and
+  /// most popular first (`SearchRank`). Titles on the server are matched with
+  /// the library index on the device and play; the rest open with Play
+  /// greyed out. A spinner shows until TMDB answers, never "No results".
   private func runSearch() async {
     let text = query.trimmingCharacters(in: .whitespaces)
     guard text.count >= 2 else {
@@ -226,44 +231,31 @@ struct PhoneSearchView: View {
       peopleSearched = false
       return
     }
-    // Astra (KP: "make the search faster"): titles from the library index on
-    // the phone show at once, as you type; the server's answer (episodes and
-    // anything the index lacks) and TMDB's people are added as each arrives,
-    // neither waiting for the other.
-    let local = library.localSearch(text)
-    withAnimation(Astra.Motion.fast) {
-      results = local
-      searched = !local.isEmpty
-      peopleSearched = false
+    if let hit = SearchCache.shared[text] {
+      results = library.withServerNow(hit.items)
+      people = hit.people
+      searched = true
+      peopleSearched = true
+      return
     }
+    searched = false
+    peopleSearched = false
     // A short pause so each keystroke doesn't send a request.
-    try? await Task.pause(0.2)
+    try? await Task.pause(0.15)
+    guard !Task.isCancelled, let tmdb = library.tmdb else {
+      searched = true
+      peopleSearched = true
+      return
+    }
+    let found = try? await tmdb.searchMulti(text)
     guard !Task.isCancelled else { return }
-    let tmdbClient = library.tmdb
-    let peopleOnly = scope == .people
-    enum Answer { case titles([PlexMetadata]), people([TMDBPerson]) }
-    await withTaskGroup(of: Answer.self) { group in
-      // Astra (KP): people come from TMDB only; the server is never asked about them.
-      group.addTask {
-        let found = (try? await tmdbClient?.searchMulti(text))?.people ?? []
-        return .people(Array(found.filter { $0.profilePath != nil }.prefix(8)))
-      }
-      if !peopleOnly {
-        group.addTask { [library] in .titles((try? await library.search(text)) ?? []) }
-      }
-      for await answer in group {
-        guard !Task.isCancelled else { return }
-        withAnimation(Astra.Motion.base) {
-          switch answer {
-          case .titles(let found):
-            results = LibraryStore.merged(local, found)
-            searched = true
-          case .people(let found):
-            people = found
-            peopleSearched = true
-          }
-        }
-      }
+    let shownPeople = Array((found?.people ?? []).filter { $0.profilePath != nil }.prefix(12))
+    if let found { SearchCache.shared[text] = (found.items, shownPeople) }
+    withAnimation(Astra.Motion.base) {
+      results = library.withServerNow(found?.items ?? [])
+      people = shownPeople
+      searched = true
+      peopleSearched = true
     }
   }
 
@@ -360,6 +352,9 @@ private struct ResultRow: View {
         Image(systemName: "play.fill")
       }
       .astraIconButton(size: 40, variant: .clear)
+      // Not on the server: Play greyed out (KP).
+      .disabled(item.isCatalogOnly)
+      .opacity(item.isCatalogOnly ? 0.35 : 1)
       .accessibilityLabel("Play \(item.displayTitle)")
     }
     .padding(10)

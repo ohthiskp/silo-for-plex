@@ -191,20 +191,23 @@ public struct TMDBClient: Sendable {
     try await list("/discover/\(request.kind.rawValue)", request.query(service: service), kind: request.kind)
   }
 
-  /// Search: titles (with their languages) and people for `text`, best matches first.
+  /// Search: titles and people for `text`, best matches first (see `SearchRank`).
   public func searchMulti(_ text: String) async throws -> (items: [TMDBItem], people: [TMDBPerson]) {
     let data = try await get("/search/multi", ["query": text, "include_adult": "false"])
     let page = try JSONDecoder().decode(MultiPage.self, from: data)
-    var items: [TMDBItem] = []
-    var people: [TMDBPerson] = []
+    var items: [(TMDBItem, Double)] = []
+    var people: [(TMDBPerson, Double)] = []
     for result in page.results {
       if result.media_type == "person" {
-        if let person = result.person { people.append(person) }
+        if let person = result.person { people.append((person, result.popularity ?? 0)) }
       } else if let item = result.raw.item(forcedKind: nil) {
-        items.append(item)
+        items.append((item, result.popularity ?? 0))
       }
     }
-    return (items, people)
+    return (
+      SearchRank.titles(items, text: text),
+      people.enumerated().sorted { ($0.element.1, -$0.offset) > ($1.element.1, -$1.offset) }.map(\.element.0)
+    )
   }
 
   /// Everything a person acted in or made, most popular first, each title once.
@@ -575,5 +578,38 @@ public enum ServiceCatalog {
       }
     }
     return out
+  }
+}
+
+/// Astra (KP, 2026-11-07: "if you type The Odyssey it should show the Nolan
+/// one first"): search results ordered like the streaming apps. Titles that
+/// match what was typed exactly come first, then ones starting with it, then
+/// ones containing it, then the rest; within each, the most popular first.
+public enum SearchRank {
+  public static func titles(_ items: [(TMDBItem, Double)], text: String) -> [TMDBItem] {
+    let needle = fold(text)
+    func tier(_ item: TMDBItem) -> Int {
+      let title = fold(item.title)
+      if title == needle { return 0 }
+      if title.hasPrefix(needle) { return 1 }
+      if title.contains(needle) { return 2 }
+      return 3
+    }
+    var seen = Set<String>()
+    return items.enumerated()
+      .filter { seen.insert($0.element.0.id).inserted }
+      .sorted { a, b in
+        let ta = tier(a.element.0), tb = tier(b.element.0)
+        if ta != tb { return ta < tb }
+        if a.element.1 != b.element.1 { return a.element.1 > b.element.1 }
+        return a.offset < b.offset
+      }
+      .map(\.element.0)
+  }
+
+  static func fold(_ text: String) -> String {
+    text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+      .replacingOccurrences(of: ":", with: "")
+      .trimmingCharacters(in: .whitespaces)
   }
 }

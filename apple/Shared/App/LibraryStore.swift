@@ -506,6 +506,15 @@ final class LibraryStore {
 
   /// Every TMDB title, as this server's item where it has it, else as a
   /// catalog title (Play greyed out); in TMDB's order, each once.
+  /// The same without waiting: matched with the index already in memory
+  /// (search can't wait for a library read). The index starts loading if it isn't.
+  func withServerNow(_ items: [TMDBItem]) -> [PlexMetadata] {
+    if libraryIndex == nil { spawn { [weak self] in _ = try? await self?.loadLibraryIndex() } }
+    let index = libraryIndex ?? [:]
+    var seen = Set<String>()
+    return items.filter { seen.insert($0.id).inserted }.map { index[$0.id] ?? $0.asMetadata }
+  }
+
   func withServer(_ items: [TMDBItem]) async -> [PlexMetadata] {
     let index = (try? await loadLibraryIndex()) ?? [:]
     var seen = Set<String>()
@@ -953,5 +962,25 @@ final class LibraryStore {
       return nil
     }
     return client.imageURL(path, width: size.width, height: size.height)
+  }
+}
+
+/// Astra: TMDB search answers kept for the session, so typing back to an
+/// earlier query (or reopening Search) shows its results at once.
+@MainActor
+final class SearchCache {
+  static let shared = SearchCache()
+  private var entries: [String: (items: [TMDBItem], people: [TMDBPerson])] = [:]
+  private var order: [String] = []
+
+  subscript(query: String) -> (items: [TMDBItem], people: [TMDBPerson])? {
+    get { entries[query.lowercased()] }
+    set {
+      let key = query.lowercased()
+      entries[key] = newValue
+      order.removeAll { $0 == key }
+      order.append(key)
+      if order.count > 60 { entries[order.removeFirst()] = nil }
+    }
   }
 }

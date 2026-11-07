@@ -699,6 +699,21 @@ final class TMDBTests: XCTestCase {
     XCTAssertNil(try plex("Not Rated").officialRating)
   }
 
+  func testSearchPutsTheMostPopularExactMatchFirst() {
+    func item(_ id: Int, _ title: String, _ year: Int) -> TMDBItem {
+      TMDBItem(tmdbID: id, kind: .movie, title: title, year: year, overview: nil, rating: nil, posterPath: "/p", backdropPath: nil)
+    }
+    let ranked = SearchRank.titles(
+      [
+        (item(1, "The Odyssey", 1997), 12),
+        (item(2, "Odyssey 5", 2002), 40),
+        (item(3, "The Odyssey", 2026), 310),
+        (item(4, "The Odyssey of Flight 33", 1961), 2),
+        (item(3, "The Odyssey", 2026), 310),
+      ], text: "the odyssey")
+    XCTAssertEqual(ranked.map(\.year), [2026, 1997, 1961, 2002])
+  }
+
   func testTmdbKeyFromPlexGuids() throws {
     let movie = try JSONDecoder().decode(
       PlexMetadata.self,
