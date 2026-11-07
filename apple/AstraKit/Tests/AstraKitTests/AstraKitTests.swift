@@ -162,6 +162,24 @@ final class AccountTests: XCTestCase {
     XCTAssertEqual(transport.requests.first?.value(forHTTPHeaderField: "X-Plex-Product"), "Astra")
   }
 
+  func testWatchlistAddUsesTheCatalogIdFromThePlexGuid() async throws {
+    let transport = FakeTransport { _ in (200, Data()) }
+    let client = PlexAccountClient(info: testInfo, transport: transport)
+    let item = try JSONDecoder().decode(
+      PlexMetadata.self,
+      from: Data(#"{"ratingKey":"7","type":"movie","title":"M","guid":"plex://movie/5d776825880197001ec967c8"}"#.utf8))
+    let key = try await client.catalogKey(for: item, token: "tok")
+    XCTAssertEqual(key, "5d776825880197001ec967c8")
+    XCTAssertTrue(transport.requests.isEmpty)
+    try await client.addToWatchlist(catalogKey: try XCTUnwrap(key), token: "tok")
+    let request = try XCTUnwrap(transport.requests.first)
+    XCTAssertEqual(request.httpMethod, "PUT")
+    XCTAssertEqual(request.url?.host(), "discover.provider.plex.tv")
+    XCTAssertEqual(request.url?.path(), "/actions/addToWatchlist")
+    XCTAssertTrue(request.url?.query()?.contains("ratingKey=5d776825880197001ec967c8") == true)
+    XCTAssertEqual(request.value(forHTTPHeaderField: "X-Plex-Token"), "tok")
+  }
+
   func testAuthURLCarriesClientAndCode() {
     let client = PlexAccountClient(info: testInfo, transport: FakeTransport { _ in (200, Data()) })
     let url = client.authURL(for: PlexPin(id: 1, code: "ABCD"))

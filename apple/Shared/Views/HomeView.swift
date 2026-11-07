@@ -277,8 +277,14 @@ struct TopTenRow: View {
   var library: LibraryStore
   @Environment(\.contentLeading) private var leading
   @State private var showAll = false
+  /// Astra (KP, 2026-11-07): Movies / Series, on For You and every service.
+  @AppStorage("astra.home.topTenSeries") private var series = false
+  @Namespace private var kindPill
 
-  private var items: [PlexMetadata] { Array(library.homeTopTen.prefix(10)) }
+  private var items: [PlexMetadata] {
+    let split = library.homeTopTenSplit
+    return Array((series ? split.shows : split.movies).prefix(10))
+  }
   private var title: String {
     library.selectedService.map { "Top 10 on \($0.label)" } ?? "Top 10 This Week"
   }
@@ -291,6 +297,7 @@ struct TopTenRow: View {
           .foregroundStyle(Astra.Color.ink)
           .lineLimit(1)
         Spacer(minLength: 8)
+        kindSwitch
         Button {
           showAll = true
         } label: {
@@ -321,6 +328,31 @@ struct TopTenRow: View {
     .navigationDestination(isPresented: $showAll) {
       TopTenList(library: library, items: items, title: title)
     }
+  }
+
+  /// A small glass capsule: Movies | Series, the chosen one white.
+  private var kindSwitch: some View {
+    HStack(spacing: 0) {
+      ForEach([false, true], id: \.self) { isSeries in
+        Button {
+          withAnimation(Astra.Motion.fast) { series = isSeries }
+        } label: {
+          Text(isSeries ? "Series" : "Movies")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(series == isSeries ? Color.black : Astra.Color.ink)
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .background {
+              if series == isSeries { Capsule().fill(.white).matchedGeometryEffect(id: "kind", in: kindPill) }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(series == isSeries ? .isSelected : [])
+      }
+    }
+    .padding(3)
+    .astraGlass(in: Capsule(), variant: .clear)
   }
 }
 
@@ -562,13 +594,22 @@ struct HeroInfo: View {
   #endif
   @Environment(\.openItem) private var openItem
   @Environment(\.playItem) private var playItem
+  @Environment(AppModel.self) private var app
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       // Fixed boxes for the title and summary: every title takes the same
       // height, so the buttons and pager never move when the hero switches.
-      HeroTitle(library: library, item: item, maxHeight: Self.titleBox)
-        .frame(height: Self.titleBox, alignment: .bottomLeading)
+      // Tapping the logo opens Details (the Details button became +, KP 2026-11-07).
+      Button {
+        openItem(item)
+      } label: {
+        HeroTitle(library: library, item: item, maxHeight: Self.titleBox)
+          .frame(height: Self.titleBox, alignment: .bottomLeading)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("\(item.displayTitle), Details")
       MetaRow(item: item, library: library)
       Text(item.summary ?? "")
         .font(.system(size: 14.5))
@@ -577,24 +618,22 @@ struct HeroInfo: View {
         .lineLimit(3)
         .frame(maxWidth: 560, alignment: .leading)
         .frame(height: 66, alignment: .topLeading)
-      HStack(spacing: 14) {
+      // Astra (KP, 2026-11-07): a white Play like the Apple TV app, and a
+      // round grey Liquid Glass + that adds the title to the Plex Watchlist.
+      HStack(spacing: 12) {
         Button {
           playItem(item)
         } label: {
           Label(item.progress != nil ? "Resume" : "Play", systemImage: "play.fill")
+            .padding(.horizontal, 14)
         }
-        .astraPrimaryButton()
+        .buttonStyle(SolidCapsuleButtonStyle())
         // On the service but not on the Plex server: nothing to play.
         .disabled(item.isCatalogOnly)
         .help(item.isCatalogOnly ? "Not on your Plex server" : "")
-        Button {
-          openItem(item)
-        } label: {
-          Label("Details", systemImage: "info.circle")
-        }
-        .astraSecondaryButton()
+        WatchlistButton(item: item)
       }
-      .astraGlassGroup(spacing: 14)
+      .astraGlassGroup(spacing: 12)
       .padding(.top, 6)
     }
   }
@@ -742,5 +781,30 @@ struct RatingBadge: View {
       fetched = await library.tmdbArtwork(for: item)?.certification
     }
     .accessibilityLabel(rating.map { "Rated \($0)" } ?? "")
+  }
+}
+
+/// A round grey Liquid Glass button: + adds the title to the Plex Watchlist,
+/// ✓ (when it's already there) takes it off.
+struct WatchlistButton: View {
+  var item: PlexMetadata
+  var size: CGFloat = 50
+
+  @Environment(AppModel.self) private var app
+
+  var body: some View {
+    let on = app.isOnWatchlist(item)
+    Button {
+      Task { await app.toggleWatchlist(item) }
+    } label: {
+      Image(systemName: on ? "checkmark" : "plus")
+        .font(.system(size: 19, weight: .semibold))
+        .contentTransition(.symbolEffect(.replace))
+    }
+    .astraIconButton(size: size, variant: .regular)
+    .sensoryFeedback(.success, trigger: on)
+    .help(on ? "Remove from Watchlist" : "Add to Watchlist")
+    .accessibilityLabel(on ? "Remove from Watchlist" : "Add to Watchlist")
+    .task { await app.loadWatchlistIfNeeded() }
   }
 }

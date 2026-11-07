@@ -55,3 +55,46 @@ struct WatchlistView: View {
     loaded = true
   }
 }
+
+/// The Watchlist grid inside the Library tab (no page of its own).
+struct WatchlistContent: View {
+  var library: LibraryStore
+
+  @Environment(AppModel.self) private var app
+  @State private var items: [PlexMetadata] = []
+  @State private var loaded = false
+  @State private var error: String?
+
+  var body: some View {
+    Group {
+      if !loaded {
+        ProgressView().controlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 60)
+      } else if let error {
+        EmptyState(
+          symbol: "exclamationmark.triangle", title: "Couldn't load your Watchlist", message: error,
+          action: ("Try Again", { Task { await load() } }))
+      } else if items.isEmpty {
+        EmptyState(
+          symbol: "bookmark", title: "Your Watchlist is empty",
+          message: "Tap + on any title to add it to your Plex Watchlist.")
+      } else {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 14) {
+          ForEach(items) { PosterCard(library: library, item: $0, width: 108) }
+        }
+      }
+    }
+    // Added or removed with + elsewhere: read it again.
+    .task(id: app.watchlistKeys) { await load() }
+  }
+
+  private func load() async {
+    do {
+      let list = try await app.watchlist()
+      items = await library.matchWatchlist(list)
+      error = nil
+    } catch {
+      self.error = PlexError.describe(error)
+    }
+    loaded = true
+  }
+}

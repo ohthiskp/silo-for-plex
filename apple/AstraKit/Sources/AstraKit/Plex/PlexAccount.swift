@@ -158,6 +158,46 @@ public struct PlexAccountClient: Sendable {
     return try await decode(MediaContainerEnvelope<MetadataBody>.self, request).MediaContainer.Metadata ?? []
   }
 
+  public static let metadataBase = URL(string: "https://metadata.provider.plex.tv")!
+
+  /// Astra (KP, 2026-11-07: the + button adds to the Plex Watchlist): the
+  /// title's id in Plex's own catalog. A server item carries it in its
+  /// `plex://movie/<id>` guid; a TMDB-only title is looked up by its TMDB id.
+  public func catalogKey(for item: PlexMetadata, token: String) async throws -> String? {
+    if let guid = item.guid, guid.hasPrefix("plex://"), let id = guid.split(separator: "/").last {
+      return String(id)
+    }
+    guard let tmdb = item.tmdbKey?.split(separator: ":"), tmdb.count == 2 else { return nil }
+    let type = tmdb[0] == "tv" ? "2" : "1"
+    let url = Self.metadataBase.appending(
+      plexPath: "/library/metadata/matches",
+      query: [.init(name: "type", value: type), .init(name: "guid", value: "tmdb://\(tmdb[1])")])
+    var request = URLRequest(url: url)
+    request.apply(headers: info.headers(token: token))
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    let found = try await decode(MediaContainerEnvelope<MetadataBody>.self, request).MediaContainer.Metadata ?? []
+    return found.first.flatMap { $0.guid?.split(separator: "/").last.map(String.init) ?? $0.ratingKey }
+  }
+
+  /// Adds a title (by its catalog id) to the account's Plex Watchlist.
+  public func addToWatchlist(catalogKey: String, token: String) async throws {
+    try await watchlistAction("addToWatchlist", catalogKey: catalogKey, token: token)
+  }
+
+  /// Takes a title (by its catalog id) off the account's Plex Watchlist.
+  public func removeFromWatchlist(catalogKey: String, token: String) async throws {
+    try await watchlistAction("removeFromWatchlist", catalogKey: catalogKey, token: token)
+  }
+
+  private func watchlistAction(_ action: String, catalogKey: String, token: String) async throws {
+    let url = Self.discoverBase.appending(
+      plexPath: "/actions/\(action)", query: [.init(name: "ratingKey", value: catalogKey)])
+    var request = URLRequest(url: url)
+    request.httpMethod = "PUT"
+    request.apply(headers: info.headers(token: token))
+    _ = try await send(request)
+  }
+
   private func send(_ request: URLRequest) async throws -> Data {
     let (data, response) = try await transport.send(request)
     switch response.statusCode {

@@ -57,7 +57,7 @@ final class LibraryStore {
   /// The service whose rows are loading right now.
   private(set) var loadingServiceID: String?
   private(set) var serviceErrors: [String: String] = [:]
-  private var serviceContent: [String: (hero: [PlexMetadata], topTen: [PlexMetadata], hubs: [PlexHub])] = [:]
+  private var serviceContent: [String: (hero: [PlexMetadata], topTen: (movies: [PlexMetadata], shows: [PlexMetadata]), hubs: [PlexHub])] = [:]
   @ObservationIgnored private var serviceGeneration = Generation()
   @ObservationIgnored private var serviceTask: Task<Void, Never>?
   /// Every movie and show on the server by TMDB key ("movie:603"), built once, on first use.
@@ -131,8 +131,15 @@ final class LibraryStore {
   /// The numbered Top 10 for the current tab: For You ranks trending titles
   /// on the server; a service tab ranks what's trending on that service.
   var homeTopTen: [PlexMetadata] {
-    guard let selectedService else { return topTenAll }
-    return serviceContent[selectedService.id]?.topTen ?? []
+    let split = homeTopTenSplit
+    return split.movies.isEmpty ? split.shows : split.movies
+  }
+
+  /// The Top 10 as Movies and Series (KP, 2026-11-07: the Movies / Series
+  /// switch on every tab, For You and each service).
+  var homeTopTenSplit: (movies: [PlexMetadata], shows: [PlexMetadata]) {
+    guard let selectedService else { return topTen }
+    return serviceContent[selectedService.id]?.topTen ?? ([], [])
   }
 
   /// The same on every tab (KP, 2026-11-07).
@@ -228,9 +235,16 @@ final class LibraryStore {
     func shown(_ item: TMDBItem) -> PlexMetadata { index[item.id] ?? item.asMetadata }
     // The Top 10 first, then each title once across the service's rows, in row order.
     let popular = lists.first.map { $0.1.map(shown) } ?? []
-    let topTen = TrendingHero.serviceTopTen(trending: trending, service: popular)
+    // Every list's titles, in row order, so both Movies and Series fill to 10.
+    let pool = lists.flatMap { $0.1.map(shown) }
+    let topTen = (
+      movies: TrendingHero.serviceTopTen(
+        trending: trending.filter { $0.kind == .movie }, service: pool.filter { $0.type == .movie }),
+      shows: TrendingHero.serviceTopTen(
+        trending: trending.filter { $0.kind == .tv }, service: pool.filter { $0.type == .show })
+    )
     var dedup = HomeDeduplicator()
-    _ = dedup.filter(topTen)
+    _ = dedup.filter(topTen.movies + topTen.shows)
     let rows = lists.map { spec, items in
       PlexHub(hubIdentifier: spec.id, title: spec.title, items: Array(dedup.filter(items.map(shown)).prefix(30)))
     }
@@ -815,7 +829,7 @@ final class LibraryStore {
     guard let index = try? await loadLibraryIndex(), !index.isEmpty, isCurrent() else { return }
     let library = Array(index.values)
     let popular = Set(tmdb == nil ? [] : await loadWeekTrending().map(\.id))
-    var exclude = Set((hero + continueWatching + topTenAll).flatMap(ForYou.keys))
+    var exclude = Set((hero + continueWatching + topTen.movies + topTen.shows).flatMap(ForYou.keys))
     var rows: [PlexHub] = []
     func add(_ id: String, _ title: String, _ items: [PlexMetadata]) {
       guard items.count >= 3 else { return }

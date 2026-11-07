@@ -34,7 +34,7 @@ struct MainView: View {
         stack($searchPath) { PhoneSearchView(library: library) }
           .toolbar(.hidden, for: .tabBar)
       }
-      Tab("Libraries", systemImage: "square.stack.fill", value: TabID.libraries) {
+      Tab("Library", systemImage: "square.stack.fill", value: TabID.libraries) {
         stack($librariesPath) { LibrariesView(library: library) }
           .toolbar(.hidden, for: .tabBar)
       }
@@ -106,7 +106,7 @@ struct WideTabBar: View {
   private let items: [(MainView.TabID, String, String)] = [
     (.home, "Home", "house.fill"),
     (.search, "Search", "magnifyingglass"),
-    (.libraries, "Libraries", "square.stack.fill"),
+    (.libraries, "Library", "square.stack.fill"),
   ]
   private static let inset: CGFloat = 5
   private static let height: CGFloat = 52

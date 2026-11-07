@@ -1,33 +1,42 @@
 import AstraKit
 import SwiftUI
 
-/// Astra: the iPhone Libraries tab (KP's mockups, 2026-11-07). A large title,
-/// Settings at the top right, a Movies / Shows / Downloads switch, then the
-/// chosen library with its filters, sort sheet and grid or list.
+/// Astra: the iPhone Library tab (KP, 2026-11-07). A large title, Settings
+/// at the top right, a Libraries / Watchlist / Downloads switch; Libraries
+/// has a smaller Movies / Shows switch above the chosen library with its
+/// filters, sort sheet and grid or list.
 struct LibrariesView: View {
   var library: LibraryStore
 
   enum Segment: String, CaseIterable, Identifiable {
-    case movies, shows, downloads
+    case libraries, watchlist, downloads
     var id: String { rawValue }
     var title: String {
       switch self {
-      case .movies: "Movies"
-      case .shows: "Shows"
+      case .libraries: "Libraries"
+      case .watchlist: "Watchlist"
       case .downloads: "Downloads"
       }
     }
     var symbol: String {
       switch self {
-      case .movies: "film"
-      case .shows: "tv"
+      case .libraries: "square.stack"
+      case .watchlist: "bookmark"
       case .downloads: "arrow.down.circle"
       }
     }
   }
 
+  enum Kind: String, CaseIterable, Identifiable {
+    case movie, show
+    var id: String { rawValue }
+    var title: String { self == .movie ? "Movies" : "Shows" }
+  }
+
   @Environment(AppModel.self) private var app
-  @AppStorage("astra.libraries.segment") private var segment: Segment = .movies
+  @AppStorage("astra.library.segment") private var segment: Segment = .libraries
+  @AppStorage("astra.library.kind") private var kind: Kind = .movie
+  @Namespace private var kindPill
   @State private var showSettings = false
   @Namespace private var pill
 
@@ -35,7 +44,7 @@ struct LibrariesView: View {
     ScrollView(.vertical) {
       VStack(alignment: .leading, spacing: 16) {
         HStack(alignment: .center) {
-          Text(segment.title)
+          Text("Library")
             .font(.system(size: 34, weight: .bold))
             .foregroundStyle(Astra.Color.ink)
             .contentTransition(.opacity)
@@ -50,10 +59,11 @@ struct LibrariesView: View {
         }
         segmentPill
         switch segment {
-        case .movies:
-          LibraryBrowser(library: library, kind: "movie").id("movie")
-        case .shows:
-          LibraryBrowser(library: library, kind: "show").id("show")
+        case .libraries:
+          kindSwitch
+          LibraryBrowser(library: library, kind: kind.rawValue).id(kind.rawValue)
+        case .watchlist:
+          WatchlistContent(library: library)
         case .downloads:
           DownloadsContent()
         }
@@ -76,7 +86,31 @@ struct LibrariesView: View {
     }
   }
 
-  /// Movies · Shows · Downloads in one glass capsule; the chosen one is lit.
+  /// The smaller Movies | Shows switch inside Libraries.
+  private var kindSwitch: some View {
+    HStack(spacing: 6) {
+      ForEach(Kind.allCases) { item in
+        Button {
+          withAnimation(Astra.Motion.fast) { kind = item }
+        } label: {
+          Text(item.title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(kind == item ? Color.black : Astra.Color.ink)
+            .padding(.horizontal, 16)
+            .frame(height: 30)
+            .background {
+              if kind == item { Capsule().fill(.white).matchedGeometryEffect(id: "kind", in: kindPill) }
+            }
+            .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(kind == item ? .isSelected : [])
+      }
+    }
+  }
+
+  /// Libraries · Watchlist · Downloads in one glass capsule; the chosen one is lit.
   private var segmentPill: some View {
     HStack(spacing: 0) {
       ForEach(Segment.allCases) { item in

@@ -363,7 +363,46 @@ final class AppModel {
   /// The account's Plex Watchlist (Home's bookmark button).
   func watchlist() async throws -> [PlexMetadata] {
     guard let accountToken else { throw PlexError.notSignedIn }
-    return try await account.watchlist(token: accountToken)
+    let list = try await account.watchlist(token: accountToken)
+    watchlistKeys = Set(list.compactMap(\.tmdbKey))
+    watchlistLoaded = true
+    return list
+  }
+
+  /// TMDB keys of the titles on the Plex Watchlist, for the + / ✓ buttons.
+  private(set) var watchlistKeys: Set<String> = []
+  @ObservationIgnored private var watchlistLoaded = false
+
+  func isOnWatchlist(_ item: PlexMetadata) -> Bool {
+    item.tmdbKey.map(watchlistKeys.contains) ?? false
+  }
+
+  /// Reads the Watchlist once so the + buttons know what's already on it.
+  func loadWatchlistIfNeeded() async {
+    guard !watchlistLoaded else { return }
+    watchlistLoaded = true
+    _ = try? await watchlist()
+  }
+
+  /// Astra (KP, 2026-11-07): the + adds to the Plex Watchlist, ✓ takes it
+  /// off. The button flips at once; on failure it flips back.
+  func toggleWatchlist(_ item: PlexMetadata) async {
+    guard let accountToken, let key = item.tmdbKey else { return }
+    let adding = !watchlistKeys.contains(key)
+    if adding { watchlistKeys.insert(key) } else { watchlistKeys.remove(key) }
+    do {
+      guard let catalog = try await account.catalogKey(for: item, token: accountToken) else {
+        throw PlexError.invalidResponse
+      }
+      if adding {
+        try await account.addToWatchlist(catalogKey: catalog, token: accountToken)
+      } else {
+        try await account.removeFromWatchlist(catalogKey: catalog, token: accountToken)
+      }
+    } catch {
+      if adding { watchlistKeys.remove(key) } else { watchlistKeys.insert(key) }
+      player.lastError = "Couldn't update your Watchlist: \(PlexError.describe(error))"
+    }
   }
 
   func retry() async {
