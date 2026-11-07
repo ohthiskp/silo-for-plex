@@ -43,6 +43,14 @@ final class LibraryStore {
   private(set) var homeError: String?
 
   private var detailCache: [String: PlexMetadata] = [:]
+  /// Astra (KP, 2026-11-07): what a Details card needs besides the item,
+  /// read ahead for the hero and Top 10 so their Details open at once.
+  /// Cleared whenever watched state changes.
+  @ObservationIgnored private var childrenCache: [String: [PlexMetadata]] = [:]
+  @ObservationIgnored private var relatedCache: [String: [PlexHub]] = [:]
+  /// A streaming title's server ratingKey, or nil when it isn't on the server.
+  @ObservationIgnored private var resolveCache: [String: String?] = [:]
+  @ObservationIgnored private var prewarmed: Set<String> = []
   /// The newest Home load; an older one that finishes late is ignored.
   @ObservationIgnored private var homeGeneration = Generation()
   @ObservationIgnored private var background: [Int: Task<Void, Never>] = [:]
@@ -673,6 +681,22 @@ final class LibraryStore {
   /// Finds a TMDB title on the Plex server: TMDB id first, then title and year.
   func resolve(_ item: PlexMetadata) async throws -> PlexMetadata {
     guard item.isCatalogOnly else { return item }
+    if let cached = resolveCache[item.ratingKey] {
+      guard let key = cached else { throw CatalogError.notOnServer(item.title) }
+      if let full = detailCache[key] { return full }
+      return try await details(key)
+    }
+    do {
+      let match = try await resolveUncached(item)
+      resolveCache[item.ratingKey] = .some(match.ratingKey)
+      return match
+    } catch CatalogError.notOnServer(let title) {
+      resolveCache[item.ratingKey] = .some(nil)
+      throw CatalogError.notOnServer(title)
+    }
+  }
+
+  private func resolveUncached(_ item: PlexMetadata) async throws -> PlexMetadata {
     let tmdbID = item.guids.first?.id
     let results = ((try? await search(item.title)) ?? []).filter { $0.type == item.type }
     let title = item.title.lowercased()
@@ -882,15 +906,53 @@ final class LibraryStore {
   }
 
   func children(of ratingKey: String) async throws -> [PlexMetadata] {
-    try await client.children(ratingKey: ratingKey)
+    if let cached = childrenCache[ratingKey] { return cached }
+    let items = try await client.children(ratingKey: ratingKey)
+    childrenCache[ratingKey] = items
+    return items
   }
 
   func related(_ ratingKey: String) async -> [PlexHub] {
-    ((try? await client.relatedHubs(ratingKey: ratingKey)) ?? []).compactMap { hub in
+    if let cached = relatedCache[ratingKey] { return cached }
+    let hubs = ((try? await client.relatedHubs(ratingKey: ratingKey)) ?? []).compactMap { hub in
       var hub = hub
       hub.items = shown(hub.items)
       return hub.items.isEmpty ? nil : hub
     }
+    if !hubs.isEmpty { relatedCache[ratingKey] = hubs }
+    return hubs
+  }
+
+  /// Astra (KP, 2026-11-07): reads ahead everything the Details card for
+  /// these titles shows (server match, item, seasons and first episodes,
+  /// related rows, rating, backdrop and logo), so a tap opens it filled in.
+  /// One title at a time in the background; each title only once.
+  func prewarmDetails(_ items: [PlexMetadata]) async {
+    for item in items {
+      guard !isClosed, !Task.isCancelled else { return }
+      guard prewarmed.insert(item.id).inserted else { continue }
+      _ = await tmdbArtwork(for: item)
+      for kind in [ArtKind.heroBackdrop, .logo] {
+        if let url = await artworkURL(for: item, kind, width: 1920, height: 1080) {
+          _ = await ImagePipeline.shared.image(for: url)
+        }
+      }
+      guard let resolved = try? await resolve(item), let full = try? await details(resolved.ratingKey) else {
+        continue
+      }
+      if full.type == .show, let seasons = try? await children(of: full.ratingKey) {
+        let list = seasons.filter { $0.type == .season }
+        if let start = list.first(where: { !$0.isWatched && ($0.index ?? 0) > 0 }) ?? list.first {
+          _ = try? await children(of: start.ratingKey)
+        }
+      }
+      _ = await related(full.ratingKey)
+    }
+  }
+
+  /// Seasons and episodes change when something is watched.
+  private func forgetChildren() {
+    childrenCache = [:]
   }
 
   /// The item Play should start: the movie or episode itself, or for a show
@@ -941,6 +1003,7 @@ final class LibraryStore {
       detailCache[item.ratingKey] = nil
       if let parent = item.parentRatingKey { detailCache[parent] = nil }
       if let show = item.grandparentRatingKey { detailCache[show] = nil }
+      forgetChildren()
       spawn { [weak self] in await self?.loadHome() }
     } catch {
       watchedOverrides[item.ratingKey] = before
@@ -964,6 +1027,7 @@ final class LibraryStore {
   /// Called when the player closes, so Continue Watching shows the new position.
   func playbackEnded(ratingKey: String) {
     detailCache[ratingKey] = nil
+    forgetChildren()
     spawn { [weak self] in await self?.loadHome() }
   }
 

@@ -123,7 +123,18 @@ struct HomeView: View {
       }
     }
     .refreshable { await library.loadHome() }
+    // Astra (KP, 2026-11-07): the hero and Top 10 Details are read ahead,
+    // so tapping one opens it filled in. Restarts when the titles change.
+    .task(id: prewarmKey) {
+      let split = library.homeTopTenSplit
+      await library.prewarmDetails(library.homeHero + split.movies + split.shows)
+    }
     .ignoresSafeArea(edges: .top)
+  }
+
+  private var prewarmKey: String {
+    let split = library.homeTopTenSplit
+    return (library.homeHero + split.movies + split.shows).map(\.id).joined(separator: ",")
   }
 
   private var topBar: some View {
