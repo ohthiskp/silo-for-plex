@@ -1,5 +1,6 @@
 import AstraKit
 import SwiftUI
+import Observation
 #if os(iOS)
   import UIKit
 #endif
@@ -18,8 +19,9 @@ struct PlayerOverlay: View {
     @State private var skip: (forward: Bool, seconds: Int)?
     @State private var skipShownAt = Date.distantPast
     /// The brightness or volume being swiped, 0…1, while the HUD shows.
-    @State private var level: (volume: Bool, value: Double)?
-    @State private var levelStart = 0.0
+    /// The brightness or volume being swiped. Its own observable object, so a
+    /// swipe redraws only the level pill, not the whole player.
+    @State private var level = LevelState()
     /// Where the visible controls are (window coordinates); taps there belong to them.
     @State private var controlFrames: [String: CGRect] = [:]
   #endif
@@ -58,10 +60,10 @@ struct PlayerOverlay: View {
         )
         .ignoresSafeArea()
 
-        if let level {
+        if level.shown {
           HStack {
             if level.volume { Spacer() }
-            LevelHUD(volume: level.volume, value: level.value)
+            LevelHUD(level: level)
             if !level.volume { Spacer() }
           }
           .padding(.horizontal, 48)
@@ -370,7 +372,17 @@ struct PlayerOverlay: View {
                 if let subtitle = player.subtitle {
                   Text(subtitle).font(.system(size: 13, weight: .semibold)).opacity(0.9).lineLimit(1)
                 }
-                Text(player.title).font(.system(size: 22, weight: .bold)).lineLimit(1)
+                HStack(spacing: 8) {
+                  Text(player.title).font(.system(size: 22, weight: .bold)).lineLimit(1)
+                  // Astra (KP, 2026-11-07): the version playing, beside the title.
+                  if shortBadge != "—" {
+                    Text(shortBadge)
+                      .font(.system(size: 11, weight: .heavy))
+                      .padding(.horizontal, 6)
+                      .padding(.vertical, 2)
+                      .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white.opacity(0.8), lineWidth: 1.2))
+                  }
+                }
               }
               .foregroundStyle(.white)
               .contentShape(Rectangle())
@@ -458,27 +470,29 @@ struct PlayerOverlay: View {
     /// Swipe on the right: mpv's volume; on the left: the screen's brightness.
     private func swipeLevel(right: Bool, delta: Double?) {
       guard let delta else {
+        let ended = level.generation
         Task { @MainActor in
           // The UI tests (demo mode) need longer to read it.
-          try? await Task.pause(Demo.isOn ? 4 : 0.6)
-          withAnimation(Astra.Motion.base) { level = nil }
+          try? await Task.pause(Demo.isOn ? 4 : 0.5)
+          if level.generation == ended { withAnimation(Astra.Motion.base) { level.shown = false } }
         }
         return
       }
       if delta == 0 {
-        levelStart = right ? (player.muted ? 0 : player.volume / 100) : Double(UIScreen.main.brightness)
+        level.generation += 1
+        level.volume = right
+        level.start = right ? (player.muted ? 0 : player.volume / 100) : Double(UIScreen.main.brightness)
+        level.value = level.start
+        if !level.shown { withAnimation(.easeOut(duration: 0.12)) { level.shown = true } }
+        return
       }
-      let value = min(1, max(0, levelStart + delta))
+      let value = min(1, max(0, level.start + delta))
+      level.value = value
       if right {
         if player.muted, value > 0 { player.setMuted(false) }
         player.setVolume(value * 100)
       } else {
         UIScreen.main.brightness = CGFloat(value)
-      }
-      if level == nil {
-        withAnimation(Astra.Motion.fast) { level = (right, value) }
-      } else {
-        level = (right, value)
       }
     }
 
@@ -498,41 +512,8 @@ struct PlayerOverlay: View {
     }
 
     /// "40%", a short slider and the speaker glyph (mpv's volume; tap the glyph to mute).
-    private var phoneVolume: some View {
-      HStack(spacing: 10) {
-        Text("\(Int((player.muted ? 0 : player.volume).rounded()))%")
-          .font(.system(size: 15, weight: .medium).monospacedDigit())
-          .frame(minWidth: 42, alignment: .leading)
-        ScrubBar(
-          fraction: player.muted ? 0 : player.volume / 100, knob: 12, height: 3,
-          onChange: { player.setVolume($0 * 100); poke() },
-          onCommit: { player.setVolume($0 * 100) }
-        )
-        .frame(width: 110)
-        Button {
-          player.setMuted(!player.muted)
-          poke()
-        } label: {
-          Image(systemName: phoneVolumeSymbol).font(.system(size: 15, weight: .semibold))
-            .frame(width: 26, height: 26)
-            .contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(player.muted ? "Unmute" : "Mute")
-      }
-      .foregroundStyle(.white)
-      .padding(.horizontal, 14)
-      .frame(height: 40)
-      .astraGlass(in: Capsule(), variant: .clear)
-      .astraGlassEdge(Capsule(), strength: 0.6)
-      .accessibilityElement(children: .contain)
-      .accessibilityLabel("Volume")
-    }
-
-    private var phoneVolumeSymbol: String {
-      if player.muted || player.volume == 0 { return "speaker.slash.fill" }
-      return player.volume < 34 ? "speaker.wave.1.fill" : player.volume < 67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
-    }
+    /// Its own view, so volume changes (a swipe) redraw only this capsule.
+    private var phoneVolume: some View { PhoneVolume(player: player, poke: poke) }
   #endif
 
   // MARK: Shared pieces
@@ -633,12 +614,22 @@ struct PlayerOverlay: View {
   /// original versions, nothing is ever transcoded.
   private var versionChip: some View {
     Menu {
-      ForEach(PlaybackQuality.allCases) { quality in
-        Button {
-          player.setQuality(quality)
-        } label: {
-          checked(quality.title, player.quality == quality)
+      // Astra (KP, 2026-11-07): the real files of this title, HD and 4K
+      // (including the copy in a 4K library); picking one switches to it.
+      if player.versions.count > 1 {
+        ForEach(player.versions) { version in
+          Button {
+            player.playVersion(version)
+          } label: {
+            if version.media.id == player.currentMediaID {
+              Label("\(version.badge)  \(version.detail)", systemImage: "checkmark")
+            } else {
+              Text("\(version.badge)  \(version.detail)")
+            }
+          }
         }
+      } else {
+        Text(player.versions.isEmpty ? "Looking for other versions…" : "Only one version on your server")
       }
     } label: {
       HStack(spacing: 6) {
@@ -912,10 +903,61 @@ extension View {
     }
   }
 
+  /// "40%", a short slider and the speaker glyph (mpv's volume; tap the glyph to mute).
+  struct PhoneVolume: View {
+    var player: PlayerController
+    var poke: () -> Void
+
+    var body: some View {
+      HStack(spacing: 10) {
+        Text("\(Int((player.muted ? 0 : player.volume).rounded()))%")
+          .font(.system(size: 15, weight: .medium).monospacedDigit())
+          .frame(minWidth: 42, alignment: .leading)
+        ScrubBar(
+          fraction: player.muted ? 0 : player.volume / 100, knob: 12, height: 3,
+          onChange: { player.setVolume($0 * 100); poke() },
+          onCommit: { player.setVolume($0 * 100) }
+        )
+        .frame(width: 110)
+        Button {
+          player.setMuted(!player.muted)
+          poke()
+        } label: {
+          Image(systemName: symbol).font(.system(size: 15, weight: .semibold))
+            .frame(width: 26, height: 26)
+            .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(player.muted ? "Unmute" : "Mute")
+      }
+      .foregroundStyle(.white)
+      .padding(.horizontal, 14)
+      .frame(height: 40)
+      .astraGlass(in: Capsule(), variant: .clear)
+      .astraGlassEdge(Capsule(), strength: 0.6)
+      .accessibilityElement(children: .contain)
+      .accessibilityLabel("Volume")
+    }
+
+    private var symbol: String {
+      if player.muted || player.volume == 0 { return "speaker.slash.fill" }
+      return player.volume < 34 ? "speaker.wave.1.fill" : player.volume < 67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
+    }
+  }
+
   /// The brightness or volume level while swiping: a tall glass pill that fills from the bottom.
+  @Observable final class LevelState {
+    var shown = false
+    var volume = false
+    var value = 0.0
+    var start = 0.0
+    var generation = 0
+  }
+
   struct LevelHUD: View {
-    var volume: Bool
-    var value: Double
+    var level: LevelState
+    private var volume: Bool { level.volume }
+    private var value: Double { level.value }
 
     var body: some View {
       VStack(spacing: 10) {
@@ -1038,8 +1080,8 @@ extension View {
           swipeRight = pan.location(in: view).x >= view.bounds.width / 2
           onSwipe(swipeRight, 0)
         case .changed:
-          // A full-height swipe moves the level by 120%, so a short swipe goes a long way.
-          let delta = -pan.translation(in: view).y / max(view.bounds.height, 1) * 1.2
+          // A swipe of 60% of the screen's height covers the whole range.
+          let delta = -pan.translation(in: view).y / max(view.bounds.height, 1) * 1.7
           onSwipe(swipeRight, delta)
         default:
           onSwipe(swipeRight, nil)

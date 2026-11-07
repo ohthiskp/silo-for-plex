@@ -92,6 +92,56 @@ final class PlayerController {
   @ObservationIgnored private var item: PlexMetadata?
   private(set) var currentMediaID: Int?
 
+  /// One original file the player can switch to (another version of the same
+  /// title, in this library or another one). Never a transcode.
+  struct Version: Identifiable, Equatable {
+    var item: PlexMetadata
+    var media: PlexMedia
+    var id: String { "\(item.ratingKey)-\(media.id)" }
+
+    /// "4K", "HD" or "SD".
+    var badge: String {
+      let badge = VideoTier.badge(for: media.tier) ?? "SD"
+      return badge == "4K UHD" ? "4K" : badge
+    }
+
+    /// "HEVC · 58.2 GB".
+    var detail: String {
+      [
+        media.videoCodec?.uppercased(),
+        media.parts.first?.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) },
+      ].compactMap { $0 }.joined(separator: " · ")
+    }
+  }
+
+  /// Every version of what is playing, best first (loaded after playback starts).
+  private(set) var versions: [Version] = []
+  @ObservationIgnored private var versionsGUID: String?
+
+  /// Switches to another original file, continuing from the same position.
+  func playVersion(_ version: Version) {
+    guard let library, version.media.id != currentMediaID else { return }
+    var item = version.item
+    item.media = [version.media]
+    item.viewOffset = Int(position * 1000)
+    do { try play(item, library: library) } catch { lastError = error.localizedDescription }
+  }
+
+  private func loadVersions(of item: PlexMetadata, library: LibraryStore) {
+    guard item.guid != versionsGUID || versions.isEmpty else { return }
+    versionsGUID = item.guid
+    versions = []
+    Task { [weak self] in
+      let copies = await library.versions(of: item)
+      let found = copies.flatMap { copy in
+        copy.media.filter { $0.parts.first?.key != nil }.map { Version(item: copy, media: $0) }
+      }
+      .sorted { ($0.media.tier ?? 0, $0.media.bitrate ?? 0) > ($1.media.tier ?? 0, $1.media.bitrate ?? 0) }
+      guard let self, self.versionsGUID == item.guid else { return }
+      self.versions = found
+    }
+  }
+
   /// Plays `item`: from `local` (a downloaded file) when given, else the
   /// original file on the server.
   func play(_ item: PlexMetadata, library: LibraryStore, local: PlaybackSource? = nil) throws {
@@ -108,6 +158,7 @@ final class PlayerController {
     if isActive { close() }
     self.item = item
     currentMediaID = local == nil ? source.media.id : nil
+    if local == nil { loadVersions(of: item, library: library) } else { versions = []; versionsGUID = nil }
     quality = .stored()
 
     let core = MpvPlayerCore()

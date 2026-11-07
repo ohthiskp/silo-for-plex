@@ -732,6 +732,23 @@ final class LibraryStore {
     return (keptContinue, keptHubs)
   }
 
+  /// Every copy of a movie or episode on the server: its own versions plus
+  /// the same title in other libraries (a "Movies 4K" library), found by its
+  /// Plex guid. All libraries are searched, whatever Library Quality hides.
+  func versions(of item: PlexMetadata) async -> [PlexMetadata] {
+    guard let guid = item.guid, item.type == .movie || item.type == .episode else { return [item] }
+    let kind = item.type == .movie ? "movie" : "show"
+    var filters = [URLQueryItem(name: "guid", value: guid)]
+    if item.type == .episode { filters.append(URLQueryItem(name: "type", value: "4")) }
+    var out = [item]
+    for section in allSections where section.type == kind && Int(section.key) != item.librarySectionID {
+      let found = (try? await client.libraryItems(sectionKey: section.key, size: 5, filters: filters)) ?? []
+      // Only the same title (a server that ignores the filter returns the whole library).
+      out += found.filter { $0.guid == guid && $0.ratingKey != item.ratingKey }
+    }
+    return out
+  }
+
   /// Recommended For You, Because You Watched… and Hidden Gems from the
   /// library index. Titles already in the hero, Continue Watching or the Top
   /// 10 are left out, and each title shows in one row only.
