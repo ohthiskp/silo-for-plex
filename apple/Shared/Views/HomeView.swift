@@ -696,7 +696,7 @@ struct MetaRow: View {
       if let badge = item.resolutionBadge(for: pick) { Badge(text: badge).fixedSize() }
       // Astra (KP, 2026-11-07): Dolby Vision / HDR of that file, when Plex says.
       if let range = item.dynamicRange(for: pick) {
-        Badge(text: range == .dolbyVision ? "Dolby Vision" : range.rawValue).fixedSize()
+        Badge(text: range == .dolbyVision ? "Dolby Vision" : "HDR").fixedSize()
       }
     }
   }

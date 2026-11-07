@@ -192,7 +192,8 @@ struct PlayerOverlay: View {
               Text(player.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
               // Astra (KP, 2026-11-07): the version and its HDR format beside the title, as on iPhone.
               if shortBadge != "—" { TitleTag(text: shortBadge) }
-              if let range = player.dynamicRange { TitleTag(text: range == .dolbyVision ? "DOLBY VISION" : range.badge) }
+              if let range = player.dynamicRange { PlayerFormatTag(range: range) }
+                  if player.hasAtmos { PlayerAtmosTag() }
             }
             .foregroundStyle(.white)
             if let subtitle = player.subtitle {
@@ -382,7 +383,8 @@ struct PlayerOverlay: View {
                   Text(player.title).font(.system(size: 22, weight: .bold)).lineLimit(1)
                   // Astra (KP, 2026-11-07): the version playing, beside the title.
                   if shortBadge != "—" { TitleTag(text: shortBadge) }
-                  if let range = player.dynamicRange { TitleTag(text: range == .dolbyVision ? "DOLBY VISION" : range.badge) }
+                  if let range = player.dynamicRange { PlayerFormatTag(range: range) }
+                  if player.hasAtmos { PlayerAtmosTag() }
                 }
               }
               .foregroundStyle(.white)
@@ -1121,5 +1123,27 @@ private struct TitleTag: View {
       .padding(.vertical, 2)
       .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white.opacity(0.8), lineWidth: 1.2))
       .fixedSize()
+  }
+}
+
+/// Dolby Vision as KP's official logo; HDR10, HDR10+ and HLG as one "HDR" tag.
+private struct PlayerFormatTag: View {
+  var range: DynamicRange
+
+  var body: some View {
+    if range == .dolbyVision {
+      Image("format-dolby-vision").renderingMode(.template).resizable().scaledToFit()
+        .frame(height: 16).foregroundStyle(.white).accessibilityLabel("Dolby Vision")
+    } else {
+      TitleTag(text: "HDR")
+    }
+  }
+}
+
+/// The official Dolby Atmos logo beside the title.
+private struct PlayerAtmosTag: View {
+  var body: some View {
+    Image("format-dolby-atmos").renderingMode(.template).resizable().scaledToFit()
+      .frame(height: 13).foregroundStyle(.white).accessibilityLabel("Dolby Atmos")
   }
 }

@@ -96,6 +96,13 @@ final class PlayerController {
     return item.dynamicRange()
   }
 
+  /// Whether the file playing has a Dolby Atmos track (from Plex's metadata).
+  var hasAtmos: Bool {
+    guard let item else { return false }
+    if let currentMediaID, let media = item.media.first(where: { $0.id == currentMediaID }) { return media.hasAtmos }
+    return item.hasAtmos()
+  }
+
   // MARK: - Open and close
 
   /// The item playing, for switching between its versions.

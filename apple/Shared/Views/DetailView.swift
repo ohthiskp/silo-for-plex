@@ -465,8 +465,9 @@ struct DetailMetaLine: View {
 }
 
 /// The format badges under the meta line: resolution, HDR format, Dolby
-/// Atmos, then the official rating, each in a small grey pill. Dolby Vision,
-/// HDR10, HDR10+ and Atmos use KP's official logos (Formats.xcassets).
+/// Atmos, then the official rating, each in a small grey pill. Dolby Vision
+/// and Dolby Atmos use KP's official logos (Formats.xcassets); HDR10, HDR10+
+/// and HLG share a plain "HDR".
 struct FormatBadges: View {
   var item: PlexMetadata
   var library: LibraryStore
@@ -484,9 +485,8 @@ struct FormatBadges: View {
       }
       switch item.dynamicRange(for: pick) {
       case .dolbyVision?: FormatPill { logo("format-dolby-vision", height: 15) }.accessibilityLabel("Dolby Vision")
-      case .hdr10Plus?: FormatPill { logo("format-hdr10plus", height: 11, template: false) }.accessibilityLabel("HDR10+")
-      case .hdr10?: FormatPill { Text("HDR") }.accessibilityLabel("HDR10")
-      case .hlg?: FormatPill { Text("HLG") }
+      // KP: one general HDR badge for HDR10, HDR10+ and HLG.
+      case .hdr10Plus?, .hdr10?, .hlg?: FormatPill { Text("HDR") }
       case nil: EmptyView()
       }
       if item.hasAtmos(for: pick) {
@@ -501,9 +501,9 @@ struct FormatBadges: View {
     }
   }
 
-  private func logo(_ name: String, height: CGFloat, template: Bool = true) -> some View {
+  private func logo(_ name: String, height: CGFloat) -> some View {
     Image(name)
-      .renderingMode(template ? .template : .original)
+      .renderingMode(.template)
       .resizable()
       .scaledToFit()
       .frame(height: height)
