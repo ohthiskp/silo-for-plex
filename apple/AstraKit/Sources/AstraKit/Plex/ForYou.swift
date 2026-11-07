@@ -118,3 +118,36 @@ public enum ForYou {
     return out
   }
 }
+
+/// Astra: instant title search over the library index on the device.
+public enum LocalSearch {
+  /// Titles matching `text` (case- and accent-insensitive): those starting
+  /// with it first, then those with a word starting with it, then any that
+  /// contain it; ties by title.
+  public static func rank(_ items: [PlexMetadata], text: String, limit: Int = 30) -> [PlexMetadata] {
+    let needle = fold(text)
+    guard !needle.isEmpty else { return [] }
+    var scored: [(Int, PlexMetadata)] = []
+    for item in items {
+      let title = fold(item.title)
+      let score: Int
+      if title.hasPrefix(needle) {
+        score = 0
+      } else if title.contains(" " + needle) {
+        score = 1
+      } else if title.contains(needle) {
+        score = 2
+      } else {
+        continue
+      }
+      scored.append((score, item))
+    }
+    return scored.sorted { ($0.0, $0.1.title) < ($1.0, $1.1.title) }.prefix(limit).map(\.1)
+  }
+
+  static func fold(_ text: String) -> String {
+    text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+      .replacingOccurrences(of: ":", with: "")
+      .trimmingCharacters(in: .whitespaces)
+  }
+}

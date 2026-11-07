@@ -2,7 +2,7 @@ import AstraKit
 import SwiftUI
 
 /// Astra: the iPhone Search tab (KP's mockup, 2026-11-07). A glass search
-/// field, All / Movies / Shows / People, quality and language filters, then
+/// field, All / Movies / Shows / People, a language filter, then
 /// rich result rows and people. With nothing typed: Explore, recent searches
 /// and what's popular.
 struct PhoneSearchView: View {
@@ -14,7 +14,6 @@ struct PhoneSearchView: View {
     var title: String { rawValue.capitalized }
   }
 
-  enum Quality: String { case uhd, hd }
 
   /// Original-language groups (TMDB's language of each title).
   enum Language: String, CaseIterable, Identifiable {
@@ -44,7 +43,6 @@ struct PhoneSearchView: View {
   @AppStorage("astra.search.recent") private var recentStore = ""
   @State private var query = Demo.query ?? ""
   @State private var scope: Scope = .all
-  @State private var quality: Quality?
   @State private var language: Language = .any
   @State private var results: [PlexMetadata] = []
   @State private var people: [TMDBPerson] = []
@@ -64,13 +62,6 @@ struct PhoneSearchView: View {
       case .shows: guard item.type == .show || item.type == .episode else { return false }
       case .people: return false
       case .all: break
-      }
-      if let quality, !item.media.isEmpty {
-        let tiers = item.media.compactMap(\.tier)
-        switch quality {
-        case .uhd: guard tiers.contains(where: { $0 >= 2160 }) else { return false }
-        case .hd: guard tiers.contains(where: { $0 >= 720 && $0 < 2160 }) else { return false }
-        }
       }
       if language != .any {
         return language.matches(item.tmdbKey.flatMap { languages[$0] })
@@ -160,9 +151,6 @@ struct PhoneSearchView: View {
 
   private var filters: some View {
     HStack(spacing: 8) {
-      qualityChip("4K", .uhd)
-      qualityChip("HD", .hd)
-      Rectangle().fill(Astra.Color.hairline).frame(width: 1, height: 22).padding(.horizontal, 2)
       Menu {
         Picker("Language", selection: $language) {
           ForEach(Language.allCases) { Text($0.title).tag($0) }
@@ -176,19 +164,6 @@ struct PhoneSearchView: View {
       }
       Spacer(minLength: 0)
     }
-  }
-
-  private func qualityChip(_ label: String, _ value: Quality) -> some View {
-    Button {
-      withAnimation(Astra.Motion.fast) { quality = quality == value ? nil : value }
-    } label: {
-      HStack(spacing: 4) {
-        Text(label)
-        if quality == value { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)) }
-      }
-      .searchChip(selected: quality == value)
-    }
-    .buttonStyle(.plain)
   }
 
   // MARK: Nothing typed
@@ -309,22 +284,33 @@ struct PhoneSearchView: View {
       searched = false
       return
     }
-    // Debounce typing.
-    try? await Task.pause(0.25)
+    // Astra (KP: "make the search faster"): titles from the library index on
+    // the phone show at once, as you type; the server's answer (episodes and
+    // anything the index lacks) and TMDB's people are added as each arrives,
+    // neither waiting for the other.
+    let local = library.localSearch(text)
+    withAnimation(Astra.Motion.fast) {
+      results = local
+      searched = !local.isEmpty
+    }
+    // A short pause so each keystroke doesn't send a request.
+    try? await Task.pause(0.2)
     guard !Task.isCancelled else { return }
     let tmdbClient = library.tmdb
-    async let plex = library.search(text)
     async let tmdb = tmdbClient?.searchMulti(text)
-    let found = (try? await plex) ?? []
+    let found = (try? await library.search(text)) ?? []
+    guard !Task.isCancelled else { return }
+    withAnimation(Astra.Motion.base) {
+      results = LibraryStore.merged(local, found)
+      searched = true
+    }
     let catalog = try? await tmdb
     guard !Task.isCancelled else { return }
     withAnimation(Astra.Motion.base) {
-      results = found
       people = Array((catalog?.people ?? []).filter { $0.profilePath != nil }.prefix(8))
       for item in catalog?.items ?? [] {
         if let code = item.language { languages[item.id] = code }
       }
-      searched = true
     }
   }
 

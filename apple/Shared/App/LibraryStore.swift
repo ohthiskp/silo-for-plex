@@ -512,6 +512,20 @@ final class LibraryStore {
     shown(try await client.search(text))
   }
 
+  /// Movies and shows from the library index whose title matches, with no
+  /// network: titles starting with the text first, then a word starting with
+  /// it, then containing it. Empty until the index has loaded.
+  func localSearch(_ text: String, limit: Int = 30) -> [PlexMetadata] {
+    guard let libraryIndex else { return [] }
+    return LocalSearch.rank(Array(libraryIndex.values), text: text, limit: limit)
+  }
+
+  /// `first` then whatever `more` adds, each title once (by TMDB id, else rating key).
+  static func merged(_ first: [PlexMetadata], _ more: [PlexMetadata]) -> [PlexMetadata] {
+    var seen = Set<String>()
+    return (first + more).filter { seen.insert($0.tmdbKey ?? $0.ratingKey).inserted }
+  }
+
   /// Application Support/Astra/LibraryIndex.
   nonisolated static var indexFolder: URL {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first

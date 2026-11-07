@@ -1207,3 +1207,15 @@ final class DownloadSegmentsTests: XCTestCase {
     XCTAssertEqual(DownloadSegments.ranges(total: 0, count: 4), [])
   }
 }
+
+final class LocalSearchTests: XCTestCase {
+  func testRanksPrefixThenWordThenContains() {
+    let items = ["The Dark Knight", "Darkest Hour", "Dune: Part Two", "Underdark", "Amélie"].enumerated().map {
+      PlexMetadata(ratingKey: "\($0.offset)", type: .movie, title: $0.element)
+    }
+    XCTAssertEqual(LocalSearch.rank(items, text: "dark").map(\.title), ["Darkest Hour", "The Dark Knight", "Underdark"])
+    XCTAssertEqual(LocalSearch.rank(items, text: "amelie").map(\.title), ["Amélie"])
+    XCTAssertEqual(LocalSearch.rank(items, text: "dune part").map(\.title), ["Dune: Part Two"])
+    XCTAssertEqual(LocalSearch.rank(items, text: " "), [])
+  }
+}
