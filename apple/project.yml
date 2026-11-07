@@ -152,6 +152,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.astra.swiftui.ios
         ASSETCATALOG_COMPILER_APPICON_NAME: plezy
         TARGETED_DEVICE_FAMILY: "1,2"
+        # Astra: above the Flutter app's 3.0.0 in the same TestFlight app, so
+        # TestFlight shows this build as the newest instead of filing it under
+        # "Previous builds".
+        MARKETING_VERSION: "3.1.0"
         CODE_SIGN_STYLE: Automatic
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
 
