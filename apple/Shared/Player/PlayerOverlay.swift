@@ -1,5 +1,8 @@
 import AstraKit
 import SwiftUI
+#if os(iOS)
+  import UIKit
+#endif
 
 /// The minimal player chrome over the video: close and title at the top,
 /// big 10 s / pause / 10 s transport in the middle, a white timeline and
@@ -10,6 +13,12 @@ struct PlayerOverlay: View {
   @State private var hideTask: Task<Void, Never>?
   @State private var scrubbing: Double?
   @State private var lastPoke = Date.distantPast
+  #if os(iOS)
+    /// The swipe in progress: which side, and the level when it started.
+    @State private var swipe: (brightness: Bool, start: Double)?
+    /// Shown on the left while brightness is being changed.
+    @State private var brightnessLevel: Double?
+  #endif
   #if os(macOS)
     // Astra: the control panel can be dragged anywhere over the video (KP, 2026-11-07).
     @AppStorage("player.panelX") private var panelX = 0.0
@@ -34,9 +43,29 @@ struct PlayerOverlay: View {
         )
         .ignoresSafeArea()
       #else
-        Color.black.opacity(0.001)
-          .ignoresSafeArea()
-          .onTapGesture { visible ? hide() : poke() }
+        // Astra: tap shows/hides the controls; swiping up or down on the left
+        // half sets the screen brightness, on the right half the volume (KP).
+        GeometryReader { geo in
+          Color.black.opacity(0.001)
+            .contentShape(Rectangle())
+            .onTapGesture { visible ? hide() : poke() }
+            .gesture(
+              DragGesture(minimumDistance: 14)
+                .onChanged { drag in swipeAdjust(drag, height: geo.size.height, width: geo.size.width) }
+                .onEnded { _ in endSwipeAdjust() }
+            )
+        }
+        .ignoresSafeArea()
+
+        if let level = brightnessLevel {
+          HStack {
+            LevelPill(symbol: "sun.max.fill", level: level)
+            Spacer()
+          }
+          .padding(.leading, 24)
+          .allowsHitTesting(false)
+          .transition(.opacity)
+        }
       #endif
 
       chrome
@@ -403,6 +432,38 @@ struct PlayerOverlay: View {
         .accessibilityLabel("Forward 10 Seconds")
       }
       .shadow(color: .black.opacity(0.35), radius: 8)
+    }
+
+    private var screen: UIScreen? {
+      UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
+    }
+
+    /// A vertical swipe: a full screen height is the whole range.
+    private func swipeAdjust(_ drag: DragGesture.Value, height: CGFloat, width: CGFloat) {
+      // Only mostly-vertical swipes.
+      guard abs(drag.translation.height) > abs(drag.translation.width) || swipe != nil, height > 0 else { return }
+      if swipe == nil {
+        let left = drag.startLocation.x < width / 2
+        swipe = (left, left ? Double(screen?.brightness ?? 0.5) : (player.muted ? 0 : player.volume / 100))
+      }
+      guard let swipe else { return }
+      let value = min(1, max(0, swipe.start - Double(drag.translation.height / (height * 0.8))))
+      if swipe.brightness {
+        screen?.brightness = CGFloat(value)
+        withAnimation(Astra.Motion.fast) { brightnessLevel = value }
+      } else {
+        player.setVolume(value * 100)
+        // The volume capsule at the top right shows the level.
+        if !visible { poke() }
+      }
+    }
+
+    private func endSwipeAdjust() {
+      swipe = nil
+      Task { @MainActor in
+        try? await Task.pause(0.8)
+        if swipe == nil { withAnimation(Astra.Motion.base) { brightnessLevel = nil } }
+      }
     }
 
     /// "40%", a short slider and the speaker glyph (mpv's volume; tap the glyph to mute).
@@ -804,3 +865,33 @@ struct PlayerRingSpinner: View {
       .onAppear { turning = true }
   }
 }
+
+#if os(iOS)
+  /// The tall glass pill on the left that shows brightness while swiping.
+  struct LevelPill: View {
+    var symbol: String
+    var level: Double
+
+    var body: some View {
+      VStack(spacing: 10) {
+        Text("\(Int((level * 100).rounded()))%")
+          .font(.system(size: 13, weight: .semibold).monospacedDigit())
+        GeometryReader { geo in
+          ZStack(alignment: .bottom) {
+            Capsule().fill(.white.opacity(0.25))
+            Capsule().fill(.white).frame(height: max(6, geo.size.height * level))
+          }
+        }
+        .frame(width: 6)
+        Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
+      }
+      .foregroundStyle(.white)
+      .padding(.vertical, 14)
+      .frame(width: 52, height: 220)
+      .astraGlass(in: Capsule(), variant: .clear)
+      .astraGlassEdge(Capsule(), strength: 0.6)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("Brightness \(Int((level * 100).rounded())) percent")
+    }
+  }
+#endif
