@@ -6,6 +6,8 @@ struct DownloadButton: View {
   var item: PlexMetadata
   /// Icon only, for episode cards.
   var compact = false
+  /// A round glass icon, for the iPhone details actions.
+  var round = false
 
   @Environment(AppModel.self) private var app
   @State private var confirmDelete = false
@@ -26,6 +28,9 @@ struct DownloadButton: View {
           .foregroundStyle(Astra.Color.ink)
           .frame(width: 30, height: 30)
           .contentShape(Rectangle())
+      } else if round {
+        Button(action: tap) { icon }
+          .modifier(ActionButtonShape(round: true))
       } else {
         Button(action: tap) { Label { Text(title) } icon: { icon } }
           .astraSecondaryButton()

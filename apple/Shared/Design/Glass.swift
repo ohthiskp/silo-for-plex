@@ -223,6 +223,9 @@ struct ClearGlassButtonStyle: ButtonStyle {
       .font(.system(size: 15, weight: .semibold))
       .foregroundStyle(.white)
       .labelStyle(.titleAndIcon)
+      // A label never wraps onto two lines.
+      .lineLimit(1)
+      .fixedSize(horizontal: false, vertical: true)
       .padding(.horizontal, 22)
       .frame(height: 46)
       .contentShape(Capsule())

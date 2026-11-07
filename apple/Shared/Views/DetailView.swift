@@ -23,6 +23,13 @@ struct DetailView: View {
   @Environment(\.closeCard) private var closeCard
   /// False for a card under the top one: its keyboard shortcuts are off.
   @Environment(\.isPageActive) private var isActive
+  #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// iPhone: a wide Play and round icon buttons, so no label ever wraps.
+    private var narrow: Bool { sizeClass == .compact }
+  #else
+    private var narrow: Bool { false }
+  #endif
 
   private var shown: PlexMetadata { item ?? seed }
 
@@ -101,13 +108,14 @@ struct DetailView: View {
           playItem(shown)
         } label: {
           Label(playLabel, systemImage: "play.fill")
+            .frame(maxWidth: narrow ? .infinity : nil)
         }
         .astraPrimaryButton()
         .keyboardShortcut(isActive ? .defaultAction : nil)
         .disabled(shown.isCatalogOnly)
 
         if shown.type != .collection, !shown.isCatalogOnly {
-          DownloadButton(item: shown)
+          DownloadButton(item: shown, round: narrow)
         }
 
         if !shown.isCatalogOnly {
@@ -118,8 +126,10 @@ struct DetailView: View {
           }
         } label: {
           Label(shown.isWatched ? "Watched" : "Mark Watched", systemImage: shown.isWatched ? "checkmark" : "eye")
+            .labelStyle(WatchedLabelStyle(iconOnly: narrow))
         }
-        .astraSecondaryButton()
+        .accessibilityLabel(shown.isWatched ? "Watched" : "Mark Watched")
+        .modifier(ActionButtonShape(round: narrow))
         }
       }
       .astraGlassGroup(spacing: 14)
@@ -333,6 +343,29 @@ struct EpisodeCard: View {
     .overlay(alignment: .topTrailing) {
       DownloadButton(item: item, compact: true)
         .offset(x: 4, y: height + 1)
+    }
+  }
+}
+
+/// Astra: on iPhone the secondary actions are round glass icons beside a wide Play.
+struct ActionButtonShape: ViewModifier {
+  var round: Bool
+  func body(content: Content) -> some View {
+    if round {
+      content.astraIconButton(size: 46, variant: .clear)
+    } else {
+      content.astraSecondaryButton()
+    }
+  }
+}
+
+private struct WatchedLabelStyle: LabelStyle {
+  var iconOnly: Bool
+  func makeBody(configuration: Configuration) -> some View {
+    if iconOnly {
+      configuration.icon
+    } else {
+      Label(configuration)
     }
   }
 }
