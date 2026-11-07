@@ -17,6 +17,8 @@ struct PlayerOverlay: View {
     /// The double-tap skip being shown: which side and the seconds so far.
     @State private var skip: (forward: Bool, seconds: Int)?
     @State private var skipShownAt = Date.distantPast
+    /// Where the visible controls are (window coordinates); taps there belong to them.
+    @State private var controlFrames: [String: CGRect] = [:]
   #endif
   #if os(macOS)
     // Astra: the control panel can be dragged anywhere over the video (KP, 2026-11-07).
@@ -46,6 +48,7 @@ struct PlayerOverlay: View {
         // half skips forward 10 s, on the left half back 10 s (KP, 2026-11-07).
         // UIKit recognizers, so the single tap reliably waits for a double.
         PlayerTapSurface(
+          blocked: visible ? Array(controlFrames.values) : [],
           onTap: { visible ? hide() : poke() },
           onDoubleTap: { forward in doubleTapSkip(forward: forward) }
         )
@@ -342,6 +345,7 @@ struct PlayerOverlay: View {
             phoneVolume
           }
           .astraGlassGroup(spacing: 12)
+          .reportFrame("top", into: $controlFrames)
           Spacer()
           HStack(alignment: .bottom, spacing: 16) {
             Button {
@@ -369,6 +373,7 @@ struct PlayerOverlay: View {
             .astraGlassEdge(Capsule(), strength: 0.6)
           }
           .padding(.bottom, 12)
+          .reportFrame("title", into: $controlFrames)
           // Astra: Infuse's bar (KP's screenshot, 2026-11-07): a thin full-width
           // white bar with no knob, elapsed and "-remaining" in grey underneath.
           VStack(spacing: 2) {
@@ -381,8 +386,10 @@ struct PlayerOverlay: View {
             .font(.system(size: 13, weight: .regular).monospacedDigit())
             .foregroundStyle(.white.opacity(0.6))
           }
+          .reportFrame("timeline", into: $controlFrames)
         }
         phoneTransport
+          .reportFrame("transport", into: $controlFrames)
       }
       // Inside the safe area: clear of the notch / Dynamic Island and the home indicator.
       .padding(.horizontal, 20)
@@ -860,41 +867,92 @@ extension View {
     }
   }
 
-  /// A clear full-screen view with UIKit tap recognizers: one tap, or a double
-  /// tap reporting which half of the screen it landed on.
+  /// One tap / double tap anywhere on the player, read by UIKit recognizers on
+  /// the window itself, so nothing SwiftUI draws can swallow them. Taps inside
+  /// `blocked` (the visible controls) are left to the controls.
   struct PlayerTapSurface: UIViewRepresentable {
+    var blocked: [CGRect]
     var onTap: () -> Void
     var onDoubleTap: (_ forward: Bool) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeUIView(context: Context) -> UIView {
-      let view = UIView()
-      view.backgroundColor = .clear
-      let double = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.double(_:)))
-      double.numberOfTapsRequired = 2
-      let single = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.single(_:)))
-      single.require(toFail: double)
-      view.addGestureRecognizer(double)
-      view.addGestureRecognizer(single)
+    func makeUIView(context: Context) -> Anchor {
+      let view = Anchor()
+      view.coordinator = context.coordinator
+      view.isUserInteractionEnabled = false
       return view
     }
 
-    func updateUIView(_ view: UIView, context: Context) {
+    func updateUIView(_ view: Anchor, context: Context) {
+      context.coordinator.blocked = blocked
       context.coordinator.onTap = onTap
       context.coordinator.onDoubleTap = onDoubleTap
     }
 
-    @MainActor final class Coordinator: NSObject {
+    static func dismantleUIView(_ view: Anchor, coordinator: Coordinator) {
+      coordinator.detach()
+    }
+
+    /// Installs the recognizers on whichever window it lands in.
+    final class Anchor: UIView {
+      weak var coordinator: Coordinator?
+      override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if let window { coordinator?.attach(to: window) } else { coordinator?.detach() }
+      }
+    }
+
+    @MainActor final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+      var blocked: [CGRect] = []
       var onTap: () -> Void = {}
       var onDoubleTap: (Bool) -> Void = { _ in }
+      private var recognizers: [UIGestureRecognizer] = []
 
-      @objc func single(_ recognizer: UITapGestureRecognizer) { onTap() }
+      func attach(to window: UIWindow) {
+        detach()
+        let double = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+        double.numberOfTapsRequired = 2
+        let single = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        single.require(toFail: double)
+        for recognizer in [double, single] {
+          // Let SwiftUI see every touch too (buttons, the timeline).
+          recognizer.cancelsTouchesInView = false
+          recognizer.delaysTouchesEnded = false
+          recognizer.delegate = self
+          window.addGestureRecognizer(recognizer)
+        }
+        recognizers = [double, single]
+      }
 
-      @objc func double(_ recognizer: UITapGestureRecognizer) {
+      func detach() {
+        for recognizer in recognizers { recognizer.view?.removeGestureRecognizer(recognizer) }
+        recognizers = []
+      }
+
+      func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let window = recognizer.view else { return false }
+        let point = touch.location(in: window)
+        return !blocked.contains { $0.insetBy(dx: -8, dy: -8).contains(point) }
+      }
+
+      func gestureRecognizer(
+        _ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+      ) -> Bool { true }
+
+      @objc func tapped(_ recognizer: UITapGestureRecognizer) { onTap() }
+
+      @objc func doubleTapped(_ recognizer: UITapGestureRecognizer) {
         guard let view = recognizer.view else { return }
         onDoubleTap(recognizer.location(in: view).x >= view.bounds.width / 2)
       }
+    }
+  }
+
+  extension View {
+    /// Reports this view's frame in window coordinates under `key`.
+    func reportFrame(_ key: String, into frames: Binding<[String: CGRect]>) -> some View {
+      onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { frames.wrappedValue[key] = $0 }
     }
   }
 #endif
