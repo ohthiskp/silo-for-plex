@@ -793,7 +793,8 @@ final class LibraryIndexerTests: XCTestCase {
     let transport = FakeTransport { [self] _ in (200, page(start: 0, count: 3)) }
     _ = try await LibraryIndexer.build(
       client: client(transport), sections: [try section("1", "artist"), try section("2", "show")])
-    XCTAssertEqual(transport.requests.map { $0.url!.path }, ["/library/sections/2/all"])
+    // Only the show library is read (in one round of parallel pages).
+    XCTAssertEqual(Set(transport.requests.map { $0.url!.path }), ["/library/sections/2/all"])
   }
 }
 
