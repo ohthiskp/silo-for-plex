@@ -669,6 +669,15 @@ final class TMDBTests: XCTestCase {
     XCTAssertEqual(try movie(#"{"id":1,"streamType":1,"codec":"hevc","colorTrc":"smpte2084"}"#).dynamicRange(), .hdr10)
     XCTAssertEqual(try movie(#"{"id":1,"streamType":1,"codec":"hevc","colorTrc":"arib-std-b67"}"#).dynamicRange()?.badge, "HLG")
     XCTAssertNil(try movie(#"{"id":1,"streamType":1,"codec":"h264","colorTrc":"bt709"}"#).dynamicRange())
+    XCTAssertEqual(
+      try movie(#"{"id":1,"streamType":1,"codec":"hevc","colorTrc":"smpte2084","extendedDisplayTitle":"4K HDR10+ (HEVC Main 10)"}"#)
+        .dynamicRange(), .hdr10Plus)
+    XCTAssertEqual(
+      try movie(#"{"id":1,"streamType":1,"codec":"hevc","extendedDisplayTitle":"4K DoVi/HDR10 (HEVC Main 10)"}"#).dynamicRange(),
+      .dolbyVision)
+    XCTAssertFalse(try movie(#"{"id":1,"streamType":1,"codec":"hevc"}"#).hasAtmos())
+    let atmos = try movie(#"{"id":3,"streamType":2,"codec":"truehd","extendedDisplayTitle":"English (TrueHD 7.1 Atmos)"}"#)
+    XCTAssertTrue(atmos.hasAtmos())
   }
 
   func testOfficialRatingFromTMDBAndPlex() async throws {

@@ -116,6 +116,7 @@ public struct PlexPart: Codable, Sendable, Hashable, Identifiable {
 /// stream: Dolby Vision when Plex sees a DV layer, HDR10 for PQ, HLG.
 public enum DynamicRange: String, Sendable, Hashable {
   case dolbyVision = "Dolby Vision"
+  case hdr10Plus = "HDR10+"
   case hdr10 = "HDR10"
   case hlg = "HLG"
 
@@ -123,14 +124,18 @@ public enum DynamicRange: String, Sendable, Hashable {
   public var badge: String {
     switch self {
     case .dolbyVision: "DV"
+    case .hdr10Plus: "HDR10+"
     case .hdr10: "HDR"
     case .hlg: "HLG"
     }
   }
 
   public init?(stream: PlexStream) {
-    if stream.DOVIPresent == true {
+    let names = [stream.displayTitle, stream.extendedDisplayTitle].compactMap { $0?.lowercased() }
+    if stream.DOVIPresent == true || names.contains(where: { $0.contains("dovi") || $0.contains("dolby vision") }) {
       self = .dolbyVision
+    } else if names.contains(where: { $0.contains("hdr10+") }) {
+      self = .hdr10Plus
     } else {
       switch stream.colorTrc?.lowercased() {
       case "smpte2084": self = .hdr10
@@ -369,6 +374,11 @@ extension PlexMetadata {
     PlaybackResolver.preferredMedia(media, quality: quality)?.dynamicRange
   }
 
+  /// Whether the version this device would play has a Dolby Atmos track.
+  public func hasAtmos(for quality: PlaybackQuality = .auto) -> Bool {
+    PlaybackResolver.preferredMedia(media, quality: quality)?.hasAtmos ?? false
+  }
+
   /// Plex's age rating as shown on the rating badge: "PG-13", "R", "TV-MA".
   /// Plex can prefix a country ("gb/15"), which is dropped; "Not Rated" and
   /// empty values give nil.
@@ -449,5 +459,13 @@ extension PlexMedia {
   /// The dynamic range of this version's video stream, nil for SDR or unknown.
   public var dynamicRange: DynamicRange? {
     parts.lazy.flatMap(\.streams).first { $0.streamType == 1 }.flatMap(DynamicRange.init(stream:))
+  }
+
+  /// Whether any audio track is Dolby Atmos (Plex names it in the track's title).
+  public var hasAtmos: Bool {
+    parts.flatMap(\.streams).contains { stream in
+      stream.streamType == 2
+        && [stream.displayTitle, stream.extendedDisplayTitle].contains { $0?.localizedCaseInsensitiveContains("atmos") == true }
+    }
   }
 }

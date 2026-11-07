@@ -96,35 +96,40 @@ struct DetailView: View {
   /// frame, so the title, summary and buttons can never spill over the back
   /// button or the seasons below. The backdrop fills whatever height that is.
   private var header: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      HeroTitle(library: library, item: shown)
-      MetaRow(item: shown, library: library)
+    // Astra (KP's mockup, 2026-11-07): logo to the left over the artwork,
+    // the meta line, a row of format badges (4K, HDR, Dolby Atmos, PG-13),
+    // the tagline, the summary with More, then Resume and Download side by
+    // side and the progress bar with the time left.
+    VStack(alignment: .leading, spacing: 12) {
+      HeroTitle(library: library, item: shown, maxWidth: narrow ? 250 : 380, maxHeight: narrow ? 92 : 120)
+        .padding(.bottom, 4)
+      DetailMetaLine(item: shown)
+      FormatBadges(item: shown, library: library)
       if let tagline = shown.tagline, !tagline.isEmpty {
-        Text(tagline).font(.system(size: 15, weight: .medium)).italic().foregroundStyle(Astra.Color.muted)
-          .lineLimit(1)
+        Text(tagline)
+          .font(.system(size: 15, weight: .semibold))
+          .italic()
+          .foregroundStyle(Astra.Color.ink.opacity(0.9))
+          .lineLimit(2)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.top, 4)
       }
       if let summary = shown.summary, !summary.isEmpty {
-        Text(summary)
-          .font(.system(size: 14.5))
-          .lineSpacing(4)
-          .foregroundStyle(Astra.Color.ink.opacity(0.85))
-          .lineLimit(4)
-          .frame(maxWidth: 620, alignment: .leading)
-          .fixedSize(horizontal: false, vertical: true)
+        ExpandableSummary(text: summary)
       }
-      HStack(spacing: 14) {
+      HStack(spacing: 12) {
         Button {
           playItem(shown)
         } label: {
           Label(playLabel, systemImage: "play.fill")
-            .frame(maxWidth: narrow ? .infinity : nil)
+            .frame(maxWidth: .infinity)
         }
-        .astraPrimaryButton()
+        .buttonStyle(SolidCapsuleButtonStyle())
         .keyboardShortcut(isActive ? .defaultAction : nil)
         .disabled(shown.isCatalogOnly)
 
         if shown.type != .collection, !shown.isCatalogOnly {
-          DownloadButton(item: shown, round: narrow)
+          DownloadButton(item: shown, wide: true)
         }
 
         if !shown.isCatalogOnly {
@@ -137,15 +142,29 @@ struct DetailView: View {
         } label: {
           let watched = library.isWatched(shown)
           Label(watched ? "Watched" : "Mark Watched", systemImage: watched ? "checkmark" : "eye")
-            .labelStyle(WatchedLabelStyle(iconOnly: narrow))
+            .labelStyle(WatchedLabelStyle(iconOnly: true))
             .contentTransition(.symbolEffect(.replace))
         }
         .accessibilityLabel(library.isWatched(shown) ? "Watched" : "Mark Watched")
-        .modifier(ActionButtonShape(round: narrow))
+        .help(library.isWatched(shown) ? "Watched" : "Mark Watched")
+        .modifier(ActionButtonShape(round: true))
         }
       }
-      .astraGlassGroup(spacing: 14)
-      .padding(.top, 4)
+      .frame(maxWidth: narrow ? .infinity : 560)
+      .astraGlassGroup(spacing: 12)
+      .padding(.top, 6)
+      if let left = timeLeft, let progress = resumeProgress {
+        VStack(alignment: .trailing, spacing: 6) {
+          ProgressView(value: progress)
+            .progressViewStyle(.linear)
+            .tint(Astra.Color.ink)
+          Text(left)
+            .font(.system(size: 12, weight: .medium))
+            .monospacedDigit()
+            .foregroundStyle(Astra.Color.muted)
+        }
+        .frame(maxWidth: narrow ? .infinity : 560)
+      }
       if !shown.directors.isEmpty {
         Text("Directed by \(shown.directors.map(\.tag).joined(separator: ", "))")
           .font(.system(size: 13)).foregroundStyle(Astra.Color.muted).lineLimit(1)
@@ -175,6 +194,29 @@ struct DetailView: View {
       // Held in place: only the logo, text and buttons move with the scroll.
       .offset(y: max(0, scrolled))
     }
+  }
+
+  /// How far into the movie or the next episode, for the bar under the buttons.
+  private var resumeTarget: PlexMetadata? {
+    if shown.type == .movie || shown.type == .episode { return shown }
+    return episodes.first { ($0.viewOffset ?? 0) > 0 }
+  }
+
+  private var resumeProgress: Double? {
+    guard let target = resumeTarget, let offset = target.viewOffset, offset > 0, let duration = target.duration,
+      duration > 0
+    else { return nil }
+    return min(1, Double(offset) / Double(duration))
+  }
+
+  /// "1h 12m left".
+  private var timeLeft: String? {
+    guard let target = resumeTarget, let offset = target.viewOffset, offset > 0, let duration = target.duration,
+      duration > offset
+    else { return nil }
+    let minutes = max(1, (duration - offset) / 60_000)
+    let label = minutes >= 60 ? "\(minutes / 60)h \(minutes % 60)m" : "\(minutes)m"
+    return "\(label) left"
   }
 
   private var playLabel: String {
@@ -400,5 +442,136 @@ private struct ScrollOffsetReader: ViewModifier {
     } else {
       content
     }
+  }
+}
+
+// MARK: - Details header pieces (KP's mockup, 2026-11-07)
+
+/// "2014 • 2h 49m • Sci-Fi, Adventure"; a show gives its seasons instead of a length.
+struct DetailMetaLine: View {
+  var item: PlexMetadata
+
+  var body: some View {
+    let parts = [
+      item.year.map(String.init),
+      item.type == .show ? item.childCount.map { "\($0) Season\($0 == 1 ? "" : "s")" } : item.durationLabel,
+      item.genres.prefix(2).map(\.tag).joined(separator: ", ").nilIfEmpty,
+    ].compactMap { $0 }
+    Text(parts.joined(separator: "  •  "))
+      .font(.system(size: 15, weight: .medium))
+      .foregroundStyle(Astra.Color.ink.opacity(0.9))
+      .lineLimit(1)
+  }
+}
+
+/// The format badges under the meta line: resolution, HDR format, Dolby
+/// Atmos, then the official rating, each in a small grey pill. Dolby Vision,
+/// HDR10, HDR10+ and Atmos use KP's official logos (Formats.xcassets).
+struct FormatBadges: View {
+  var item: PlexMetadata
+  var library: LibraryStore
+
+  @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
+  @State private var fetchedRating: String?
+
+  private var pick: PlaybackQuality { quality == .auto ? .current() : quality }
+  private var rating: String? { item.officialRating ?? fetchedRating }
+
+  var body: some View {
+    HStack(spacing: 8) {
+      if let badge = item.resolutionBadge(for: pick) {
+        FormatPill { Text(badge == "4K UHD" ? "4K" : badge) }
+      }
+      switch item.dynamicRange(for: pick) {
+      case .dolbyVision?: FormatPill { logo("format-dolby-vision", height: 15) }.accessibilityLabel("Dolby Vision")
+      case .hdr10Plus?: FormatPill { logo("format-hdr10plus", height: 11, template: false) }.accessibilityLabel("HDR10+")
+      case .hdr10?: FormatPill { Text("HDR") }.accessibilityLabel("HDR10")
+      case .hlg?: FormatPill { Text("HLG") }
+      case nil: EmptyView()
+      }
+      if item.hasAtmos(for: pick) {
+        FormatPill { logo("format-dolby-atmos", height: 12) }.accessibilityLabel("Dolby Atmos")
+      }
+      if let rating { FormatPill { Text(rating) }.accessibilityLabel("Rated \(rating)") }
+    }
+    .task(id: item.id) {
+      fetchedRating = nil
+      guard item.officialRating == nil, item.type == .movie || item.type == .show else { return }
+      fetchedRating = await library.tmdbArtwork(for: item)?.certification
+    }
+  }
+
+  private func logo(_ name: String, height: CGFloat, template: Bool = true) -> some View {
+    Image(name)
+      .renderingMode(template ? .template : .original)
+      .resizable()
+      .scaledToFit()
+      .frame(height: height)
+  }
+}
+
+/// One grey pill in the format row.
+struct FormatPill<Content: View>: View {
+  @ViewBuilder var content: Content
+
+  var body: some View {
+    content
+      .font(.system(size: 12, weight: .bold))
+      .foregroundStyle(Astra.Color.ink)
+      .padding(.horizontal, 9)
+      .frame(height: 26)
+      .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Astra.Color.ink.opacity(0.14)))
+      .fixedSize()
+  }
+}
+
+/// The summary, four lines with "More ⌄" to open the rest.
+struct ExpandableSummary: View {
+  var text: String
+  @State private var expanded = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text(text)
+        .font(.system(size: 14.5))
+        .lineSpacing(4)
+        .foregroundStyle(Astra.Color.ink.opacity(0.85))
+        .lineLimit(expanded ? nil : 4)
+        .frame(maxWidth: 620, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+      if text.count > 160 {
+        Button {
+          withAnimation(Astra.Motion.base) { expanded.toggle() }
+        } label: {
+          HStack(spacing: 4) {
+            Text(expanded ? "Less" : "More")
+            Image(systemName: "chevron.down")
+              .font(.system(size: 10, weight: .bold))
+              .rotationEffect(.degrees(expanded ? 180 : 0))
+          }
+          .font(.system(size: 14, weight: .semibold))
+          .foregroundStyle(Astra.Color.ink)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+      }
+    }
+  }
+}
+
+/// Resume / Play on Details: a solid white capsule with black text (KP's mockup).
+struct SolidCapsuleButtonStyle: ButtonStyle {
+  @Environment(\.isEnabled) private var isEnabled
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.system(size: 16, weight: .semibold))
+      .foregroundStyle(Color.black)
+      .padding(.horizontal, 22)
+      .frame(height: 50)
+      .background(Capsule().fill(Astra.Color.ink.opacity(isEnabled ? 1 : 0.35)))
+      .scaleEffect(configuration.isPressed ? 0.97 : 1)
+      .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+      .contentShape(Capsule())
   }
 }

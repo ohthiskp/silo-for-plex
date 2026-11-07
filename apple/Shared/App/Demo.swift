@@ -125,7 +125,9 @@ enum Demo {
           // 4K demo files are Dolby Vision, so the badges show in screenshots.
           "Stream": [
             ["id": id * 10, "streamType": 1, "codec": "hevc", "colorTrc": resolution == "4k" ? "smpte2084" : "bt709",
-             "DOVIPresent": resolution == "4k"]
+             "DOVIPresent": resolution == "4k"],
+            ["id": id * 10 + 1, "streamType": 2, "codec": resolution == "4k" ? "truehd" : "eac3",
+             "extendedDisplayTitle": resolution == "4k" ? "English (TrueHD 7.1 Atmos)" : "English (EAC3 5.1)"],
           ],
         ]
       ],

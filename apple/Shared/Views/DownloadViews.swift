@@ -8,6 +8,8 @@ struct DownloadButton: View {
   var compact = false
   /// A round glass icon, for the iPhone details actions.
   var round = false
+  /// A capsule as wide as it's allowed, beside Resume on Details (KP's mockup).
+  var wide = false
 
   @Environment(AppModel.self) private var app
   @State private var confirmDelete = false
@@ -28,6 +30,12 @@ struct DownloadButton: View {
           .foregroundStyle(Astra.Color.ink)
           .frame(width: 30, height: 30)
           .contentShape(Rectangle())
+      } else if wide {
+        Button(action: tap) {
+          Label { Text(title).lineLimit(1) } icon: { icon }
+            .frame(maxWidth: .infinity)
+        }
+        .astraSecondaryButton()
       } else if round {
         Button(action: tap) { icon }
           .modifier(ActionButtonShape(round: true))
