@@ -159,13 +159,33 @@ targets:
         CODE_SIGN_STYLE: Automatic
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
 
+  # Astra: UI tests for the iPhone player's gestures (run by the launch-check workflow).
+  AstraiOSUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: AstraiOSUITests
+    dependencies:
+      - target: AstraiOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.astra.swiftui.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: AstraiOS
+        CODE_SIGN_STYLE: Automatic
+
 schemes:
   AstraiOS:
     build:
       targets:
         AstraiOS: all
+        AstraiOSUITests: [test]
     run:
       config: Debug
+    test:
+      config: Release
+      targets:
+        - AstraiOSUITests
     archive:
       config: Release
   AstraMac:

@@ -864,6 +864,7 @@ extension View {
       .astraGlassEdge(Circle(), strength: 0.6)
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(forward ? "Forward \(seconds) seconds" : "Back \(seconds) seconds")
+      .accessibilityIdentifier(forward ? "astra.skip.forward" : "astra.skip.back")
     }
   }
 
@@ -923,6 +924,7 @@ extension View {
           window.addGestureRecognizer(recognizer)
         }
         recognizers = [double, single]
+        NSLog("Astra gesture: recognizers attached to window %@", String(describing: window))
       }
 
       func detach() {
@@ -933,17 +935,23 @@ extension View {
       func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard let window = recognizer.view else { return false }
         let point = touch.location(in: window)
-        return !blocked.contains { $0.insetBy(dx: -8, dy: -8).contains(point) }
+        let allowed = !blocked.contains { $0.insetBy(dx: -8, dy: -8).contains(point) }
+        NSLog("Astra gesture: touch at %@ allowed=%d blocked=%@", NSCoder.string(for: point), allowed ? 1 : 0, blocked.description)
+        return allowed
       }
 
       func gestureRecognizer(
         _ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
       ) -> Bool { true }
 
-      @objc func tapped(_ recognizer: UITapGestureRecognizer) { onTap() }
+      @objc func tapped(_ recognizer: UITapGestureRecognizer) {
+        NSLog("Astra gesture: single tap")
+        onTap()
+      }
 
       @objc func doubleTapped(_ recognizer: UITapGestureRecognizer) {
         guard let view = recognizer.view else { return }
+        NSLog("Astra gesture: double tap at x=%f of %f", recognizer.location(in: view).x, view.bounds.width)
         onDoubleTap(recognizer.location(in: view).x >= view.bounds.width / 2)
       }
     }

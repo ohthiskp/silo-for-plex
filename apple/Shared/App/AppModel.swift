@@ -83,7 +83,15 @@ final class AppModel {
   func start() async {
     guard phase == .launching else { return }
     // Astra: CI screenshots run against a fake server (Demo.swift).
-    if Demo.isOn { return commit(Demo.session(info: info)) }
+    if Demo.isOn {
+      commit(Demo.session(info: info))
+      if let demo = Demo.playback() {
+        // UI tests: straight into the player with a local file.
+        try? await Task.pause(2)
+        if let library { try? player.play(demo.0, library: library, local: demo.1) }
+      }
+      return
+    }
     guard let token = tokens.load() else {
       phase = .signedOut
       return

@@ -40,7 +40,8 @@ jobs:
           set -o pipefail
           brew install xcodegen
           xcodegen generate
-          xcodebuild build \
+          # build-for-testing: the app plus its UI tests (player gestures).
+          xcodebuild build-for-testing \
             -project Astra.xcodeproj -scheme AstraiOS -configuration Release \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/dd" \
@@ -108,6 +109,38 @@ jobs:
             base64 -i "${f%.png}.jpg" | fold -w 4000
             echo "ASTRA-SHOT-END"
           done
+
+      - name: Player gesture UI tests
+        if: always() && env.APP != ''
+        working-directory: apple
+        run: |
+          # A two-minute test video (mpv plays it from the host path).
+          brew install ffmpeg > /dev/null 2>&1 || true
+          ffmpeg -loglevel error -f lavfi -i testsrc=duration=120:size=1280x720:rate=30 \
+            -c:v libx264 -pix_fmt yuv420p "$RUNNER_TEMP/demo.mp4"
+          UDID=$(xcrun simctl list devices booted -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];print(next(x["udid"] for v in d.values() for x in v))')
+          set +e
+          TEST_RUNNER_ASTRA_DEMO_VIDEO="$RUNNER_TEMP/demo.mp4" xcodebuild test-without-building \
+            -project Astra.xcodeproj -scheme AstraiOS -configuration Release \
+            -destination "id=$UDID" -derivedDataPath "$RUNNER_TEMP/dd" \
+            -resultBundlePath "$RUNNER_TEMP/ui.xcresult" 2>&1 | tee "$RUNNER_TEMP/ui.log" \
+            | grep -E "Test Case|error:|XCTAssert|TEST (SUCCEEDED|FAILED)|\*\* TEST"
+          STATUS=${PIPESTATUS[0]}
+          echo "--- gesture log"
+          xcrun simctl spawn "$UDID" log show --last 15m --style compact \
+            --predicate 'eventMessage CONTAINS "Astra gesture"' | tail -80
+          # Screenshots the tests took, printed small for log readers.
+          mkdir -p "$RUNNER_TEMP/uishots"
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/ui.xcresult" \
+            --output-path "$RUNNER_TEMP/uishots" > /dev/null 2>&1 || true
+          for f in "$RUNNER_TEMP"/uishots/*.png; do
+            [ -f "$f" ] || continue
+            sips -s format jpeg -s formatOptions 50 -Z 900 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "ASTRA-SHOT-BEGIN ui-$(basename "${f%.png}")"
+            base64 -i "${f%.png}.jpg" | fold -w 4000
+            echo "ASTRA-SHOT-END"
+          done
+          exit $STATUS
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()

@@ -16,6 +16,16 @@ enum Demo {
   static var tab: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoTab") : nil }
   static var query: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoQuery") : nil }
   static var openKey: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoOpen") : nil }
+  /// `-AstraDemoPlay <path>`: a local video file to open in the player at launch (UI tests).
+  static var videoPath: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlay") : nil }
+
+  /// The demo movie and a source that plays `videoPath` from disk.
+  static func playback() -> (PlexMetadata, PlaybackSource)? {
+    guard let path = videoPath, let item = item("101") else { return nil }
+    let json = #"{"ratingKey":"101","metadataKey":"/library/metadata/101","type":"movie","title":"Dune: Part Two","durationMs":60000,"fileName":"demo.mp4","addedAt":0}"#
+    guard let record = try? JSONDecoder().decode(DownloadRecord.self, from: Data(json.utf8)) else { return nil }
+    return (item, PlaybackResolver.local(record, fileURL: URL(fileURLWithPath: path), resumeMs: nil))
+  }
 
   /// A session on the fake server.
   static func session(info: PlexClientInfo) -> ServerSession {
