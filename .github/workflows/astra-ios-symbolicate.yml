@@ -1,0 +1,45 @@
+name: Astra iPhone crash symbolication
+run-name: Symbolicate iPhone crash
+
+# Rebuilds the iPhone app from the commit that crashed (same Xcode, Release,
+# arm64) and turns the crash report's offsets into function names.
+on:
+  push:
+    branches: [claude/project-thread-otuzui]
+    paths: [".github/workflows/astra-ios-symbolicate.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  symbolicate:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      CRASHED_SHA: 5084d15
+      UUID: 5ef1a69e-e7b0-34f6-99b2-df8e4dfb6555
+      OFFSETS: "954076 53285 56153 56149 60640"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Build the crashed commit
+        run: |
+          git checkout -q "$CRASHED_SHA"
+          cd apple
+          brew install xcodegen
+          sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER: app.astra.swiftui.ios/PRODUCT_BUNDLE_IDENTIFIER: com.ohthiskp.astra/" project.yml
+          xcodegen generate
+          xcodebuild archive -project Astra.xcodeproj -scheme AstraiOS -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/A.xcarchive" \
+            -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION=202611070514 \
+            | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)" || true
+      - name: Symbolicate
+        run: |
+          BIN="$RUNNER_TEMP/A.xcarchive/dSYMs/Astra.app.dSYM/Contents/Resources/DWARF/Astra"
+          [ -f "$BIN" ] || BIN="$RUNNER_TEMP/A.xcarchive/Products/Applications/Astra.app/Astra"
+          echo "Crash UUID: $UUID"; dwarfdump --uuid "$BIN"
+          for o in $OFFSETS; do
+            printf "%s: " "$o"; atos -arch arm64 -o "$BIN" -l 0x100000000 $(printf '0x%x' $((0x100000000 + o)))
+          done
