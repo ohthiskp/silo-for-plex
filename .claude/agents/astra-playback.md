@@ -33,7 +33,8 @@ so a change here affects both apps. Read the `astra-playback-rules` skill first.
 - Progress and watched state reach Plex: resume points survive seek, pause, background and crash.
 - HDR badges show what mpv actually outputs, never the file's claim alone. There is no Dolby Vision
   badge on Mac or iPhone (mpv shows DV files as HDR/SDR there; see `PlayerController.swift`).
-- iPhone player: landscape only, Infuse layout, double-tap right/left = ±10 s, no ring around Play.
+- iPhone player: landscape only, Infuse layout, double-tap right/left = ±10 s, left-side swipe =
+  brightness, right-side swipe = volume, no ring around Play.
 - Never block the main thread on mpv calls. No `Task.sleep(for:)`; use `Task.pause`.
 - Measure before and after any performance change (first-frame time, dropped frames).
 

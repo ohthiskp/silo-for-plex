@@ -48,7 +48,7 @@ transform, not layout. The goal is "very smooth": nothing should snap or flicker
 | Screen | Mockup | Implementation |
 |---|---|---|
 | Mac home + sidebar | `desktop-home.png` | `Shared/Views/HomeView.swift`, `AstraMac/Views/MainView.swift` |
-| iPhone home + tab bar | `iphone-home.png` | `HomeView.swift`, `AstraiOS/Views/MainView.swift` (tab bar waits for KP's mockup) |
+| iPhone home + tab bar | `iphone-home.png` | `HomeView.swift`, `AstraiOS/Views/MainView.swift` (Liquid Glass tab bar with a draggable lens) |
 | Apple TV home | `appletv-home.png` | Not in the SwiftUI app yet |
 | Mac player | `desktop-player.png` | `Shared/Player/PlayerOverlay.swift`, `PlayerWindow.swift` |
 | iPhone player | `iphone-player.png` | `PlayerOverlay.swift` (landscape, Infuse-style) |

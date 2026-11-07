@@ -82,7 +82,8 @@ Hard rules:
 - Mac sidebar = Home, Movies, Shows, Downloads, Search, Settings; icons only, click to expand.
 - One hero at a time; no duplicate titles across rows; streaming switcher is a top glass pill.
 - Details opens as a stacked card with an X. Long-press a title for Details/Play/Download/Mark/Go to.
-- iPhone player is landscape, Infuse-style, double-tap ±10 s. iPhone tab bar waits for KP's mockup.
+- iPhone player is landscape, Infuse-style, double-tap ±10 s, swipe left side = brightness and
+  right side = volume. iPhone tab bar is Liquid Glass with a draggable lens.
 - Details for each are in the skills; KP's latest message beats everything written here.
 
 ## Engineering standards

@@ -23,7 +23,8 @@ description: Rules for Astra playback in the SwiftUI app — original files only
 3. Subtitles and audio: honour the Plex stream selection and the user's language defaults; external
    and embedded subs both work; switching never restarts the file from the start.
 4. HDR: report what mpv actually outputs. No Dolby Vision badge on Mac/iPhone.
-5. iPhone: landscape only; Infuse-style controls; double-tap right/left = +/-10 s; no ring around Play.
+5. iPhone: landscape only; Infuse-style controls; double-tap right/left = +/-10 s; swipe
+   up/down on the left = brightness, right = volume; no ring around Play.
 6. Never block the main thread on mpv; observe properties instead of polling. No `Task.sleep(for:)`
    (use `Task.pause`).
 

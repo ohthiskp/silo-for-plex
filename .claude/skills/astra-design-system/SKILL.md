@@ -34,7 +34,8 @@ Source of truth, in order: KP's latest instruction → the mockups in `docs/desi
 - **Long-press a title:** Details, Play, Download, Mark watched/unwatched, Go to season/show.
 - **Loading screen:** the logo only, no text.
 - **iPhone player:** landscape only, Infuse layout (incl. progress bar), double-tap ±10 s, no ring
-  around Play. iPhone tab bar: wait for KP's mockup before changing it.
+  around Play; swipe up/down on the left = brightness, right = volume, with a glass level bar.
+- **iPhone tab bar:** Liquid Glass with a lens you can drag between tabs, like Apple's (KP, 2026-11-07).
 - **Library quality:** HD/4K setting lives in Settings > Content; lists show one version per title.
 
 ## Checking your work
