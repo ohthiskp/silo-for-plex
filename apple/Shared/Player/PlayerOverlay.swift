@@ -40,12 +40,14 @@ struct PlayerOverlay: View {
 
   var body: some View {
     ZStack {
-      // Clear, but hit-testable. Mac: click pauses, double-click goes full screen.
+      // Clear, but hit-testable. Mac: click shows or hides the controls, double-click goes full screen.
       // iPhone: tap shows or hides the controls.
       #if os(macOS)
-        // Click pauses, double-click goes full screen; the title strip (and the mini window) drag the window.
+        // Astra (KP, 2026-11-07): a click on the picture never plays or pauses
+        // (only the controls and Space do); it shows or hides the controls.
+        // Double-click goes full screen; the title strip (and the mini window) drag the window.
         WindowDragArea(
-          onClick: { player.togglePause() }, onDoubleClick: { player.toggleFullScreen() }
+          onClick: { visible ? hide() : poke() }, onDoubleClick: { player.toggleFullScreen() }
         )
         .ignoresSafeArea()
       #else
