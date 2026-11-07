@@ -100,23 +100,38 @@ struct MainView: View {
 
 // MARK: - Sidebar
 
-/// Icon-only Liquid Glass sidebar.
+/// Icon-only Liquid Glass sidebar with one white selection pill that slides
+/// between items. The pill is a single view under all the icons, so there is
+/// never more than one, and each icon's colour follows the same selection
+/// with the same animation, so an icon is never black on the dark glass.
 struct Sidebar: View {
   @Binding var selection: SidebarItem
   var choose: (SidebarItem) -> Void
-  @Namespace private var selectionSpace
+
+  private static let itemSize: CGFloat = 44
+  private static let spacing: CGFloat = Astra.Spacing.xs
+  private static let motion = Animation.snappy(duration: 0.24)
+
+  private var selectedIndex: Int { SidebarItem.allCases.firstIndex(of: selection) ?? 0 }
 
   var body: some View {
-    VStack(spacing: Astra.Spacing.xs) {
+    VStack(spacing: Self.spacing) {
       ForEach(SidebarItem.allCases) { item in
-        SidebarButton(symbol: item.symbol, title: item.title, selected: selection == item, namespace: selectionSpace) {
+        SidebarButton(symbol: item.symbol, title: item.title, selected: selection == item) {
           choose(item)
         }
         .keyboardShortcut(item.shortcut, modifiers: .command)
       }
     }
-    // Only the white selection pill moves, quickly.
-    .animation(.snappy(duration: 0.22), value: selection)
+    .background(alignment: .top) {
+      // A white fill, not glass: it sits on the sidebar's glass.
+      Capsule()
+        .fill(Astra.Color.accent)
+        .frame(width: Self.itemSize, height: Self.itemSize)
+        .offset(y: CGFloat(selectedIndex) * (Self.itemSize + Self.spacing))
+        .allowsHitTesting(false)
+    }
+    .animation(Self.motion, value: selection)
     .padding(9)
     .frame(width: Astra.Sidebar.collapsedWidth)
     .astraGlass(in: Capsule())
@@ -124,12 +139,11 @@ struct Sidebar: View {
   }
 }
 
-/// One sidebar button: a 44 pt icon with a tooltip.
+/// One sidebar button: a 44 pt icon. Its colour comes only from `selected`.
 struct SidebarButton: View {
   var symbol: String
   var title: String
   var selected: Bool
-  var namespace: Namespace.ID
   var action: () -> Void
 
   var body: some View {
@@ -137,20 +151,20 @@ struct SidebarButton: View {
       Image(systemName: symbol)
         .font(.system(size: 17, weight: .semibold))
         .frame(width: 44, height: 44)
-      .foregroundStyle(selected ? Color.black : Astra.Color.muted)
-      .background {
-        // A white fill, not glass: it sits on the sidebar's glass. It slides
-        // from the old item to the new one instead of blinking.
-        if selected {
-          Capsule().fill(Astra.Color.accent)
-            .matchedGeometryEffect(id: "selection", in: namespace)
-        }
-      }
-      .contentShape(Capsule())
+        .foregroundStyle(selected ? Color.black : Astra.Color.muted)
+        .contentShape(Capsule())
     }
-    .buttonStyle(.plain)
-    .help(title)
+    .buttonStyle(SidebarButtonStyle())
     .accessibilityLabel(title)
     .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+}
+
+/// No dimming on press (that read as a flicker); a slight scale instead.
+private struct SidebarButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .scaleEffect(configuration.isPressed ? 0.92 : 1)
+      .animation(.snappy(duration: 0.12), value: configuration.isPressed)
   }
 }

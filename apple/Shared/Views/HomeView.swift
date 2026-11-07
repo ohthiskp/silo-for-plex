@@ -7,6 +7,9 @@ struct HomeView: View {
   /// The visible height of the page, measured once per resize; the hero is a share of it.
   @State private var viewport: CGFloat = 800
   @State private var showSettings = false
+  /// The switcher shows only near the top of the page, so the hero's title
+  /// never slides under it. Changes only when crossing the line, not every frame.
+  @State private var showsTopBar = true
 
   private var heroHeight: CGFloat {
     min(Astra.Layout.heroHeight, max(380, viewport * Astra.Layout.heroShare))
@@ -17,6 +20,10 @@ struct HomeView: View {
     ZStack(alignment: .top) {
       page
       topBar
+        .opacity(showsTopBar ? 1 : 0)
+        .offset(y: showsTopBar ? 0 : -12)
+        .allowsHitTesting(showsTopBar)
+        .animation(Astra.Motion.base, value: showsTopBar)
     }
     .background(Astra.Color.bg.ignoresSafeArea())
     #if os(iOS)
@@ -90,6 +97,7 @@ struct HomeView: View {
         }
       }
       .padding(.bottom, 80)
+      .onGeometryChange(for: Bool.self, of: { $0.frame(in: .scrollView).minY > -60 }) { showsTopBar = $0 }
     }
     .scrollIndicators(.never)
     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewport = $0 }
