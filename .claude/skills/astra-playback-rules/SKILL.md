@@ -1,34 +1,34 @@
 ---
 name: astra-playback-rules
-description: Rules for changing Astra playback — mpv integration, native Apple players, direct play, subtitles, audio, HDR/Dolby Vision, display modes, progress reporting and performance checks. Use before touching player code.
+description: Rules for Astra playback in the SwiftUI app — original files only, libmpv core shared with the Flutter app, version choice by library quality, progress sync, HDR, PiP, iPhone player gestures and performance checks. Load before touching apple/Shared/Player, the mpv files, or AstraKit Playback.
 ---
 # Astra playback rules
 
-## Where things live
-- Dart API: `lib/mpv/` (player interface, channels `com.plezy/mpv_player`)
-- Shared Apple core: `shared/apple/MpvPlayer/MpvPlayerCoreBase.swift`, `MpvPlayerPluginShared.swift`
-- Platform cores: `macos/Runner/MpvPlayer/` (incl. `DisplayModeManager.swift`), `ios/Runner/MpvPlayer/` (incl. PiP), `tvos/Runner/`
-- Player screen: `lib/screens/video_player_screen.dart` + `lib/screens/video_player/parts/`
-- Controls (visual, owned by design): `lib/widgets/video_controls/`
-- mpv build pin: `mpv-build.lock.json` (changing it needs security review)
+## Architecture
+- `apple/Shared/Player/PlayerController.swift` drives one mpv instance through the shared core:
+  `shared/apple/MpvPlayer/MpvPlayerCoreBase.swift` + `macos/Runner/MpvPlayer/MpvPlayerCore.swift`
+  (Mac) or `ios/Runner/MpvPlayer/MpvPlayerCore.swift`, `ExternalDisplayManager.swift`,
+  `MpvPipController.swift` (iPhone). The Flutter app compiles the same files: keep them free of Flutter
+  types, and check both apps build after a change.
+- MPVKit is pinned in `apple/project.yml` (edde746/mpv-build revision). Changing it needs `astra-security`.
+- `PlayerWindow.swift` (Mac window, default size, drag, mini window), `PipCoordinator.swift`,
+  `SeekPreviewGenerator.swift` + AstraKit `SeekThumbnails.swift` (Plex BIF first), `PlayerGeometry.swift`.
 
-## Non-negotiables
-1. **Direct play first.** Prefer direct play/stream for anything mpv decodes (HEVC, AV1, VP9, DV, HDR10/10+,
-   DTS, TrueHD, ASS/PGS). Transcode only when the file can't play.
-2. **Progress reporting.** Timeline updates and stopped/watched state reach Plex; resume points are correct
-   after seek, pause, background and crash.
-3. **Display mode.** Frame-rate/HDR switching restores the user's display mode on exit, error and crash.
-4. **HDR.** Pass through on HDR displays; tone-map on SDR. Never wash out SDR content.
-5. **Subtitles.** ASS/SSA render with libass styles intact; PGS as bitmaps; text subs follow user size/colour
-   settings. Track selection persists per show where the setting says so.
-6. **Audio.** Pass-through only where the output supports it; otherwise decode. Remember the user's language choice.
-7. **Never block the UI thread** on mpv calls; long work goes to the player queue.
+## Hard rules
+1. **Always play the original file.** No transcoding, no downscaling, no Plex "universal" decision
+   that re-encodes. Quality only picks between versions Plex already has (`Playback.swift`,
+   `LibraryQuality.swift`; see `docs/playback-quality.md`).
+2. Resume and progress: report timeline to Plex while playing, on pause, seek, stop, background and
+   app quit. Mark watched at Plex's threshold. Never lose a resume point.
+3. Subtitles and audio: honour the Plex stream selection and the user's language defaults; external
+   and embedded subs both work; switching never restarts the file from the start.
+4. HDR: report what mpv actually outputs. No Dolby Vision badge on Mac/iPhone.
+5. iPhone: landscape only; Infuse-style controls; double-tap right/left = +/-10 s; no ring around Play.
+6. Never block the main thread on mpv; observe properties instead of polling. No `Task.sleep(for:)`
+   (use `Task.pause`).
 
-## Performance checks
-- Startup to first frame, seek latency, dropped frames during playback and while controls animate.
-- Record numbers before and after (mpv stats overlay / `performance_stats.dart`); report both.
-
-## Testing
-- Dart: `flutter test test/mpv/ test/screens/video_player/`
-- Native: can't build on Linux — list the device checks (Mac, iPhone, Apple TV) and the media types to try.
-- Mark anything not run as "not tested".
+## Before calling it done
+- AstraKit tests pass in `astra-swiftui-macos` CI; `PlayerGestureTests` pass if gestures changed.
+- Shared mpv file touched → the Flutter Mac build (`astra-macos`) still compiles.
+- Measure first-frame time and dropped frames before/after for performance work.
+- List formats not tried (DV profiles, PGS subs, 4K HEVC 10-bit, Atmos passthrough) as untested.

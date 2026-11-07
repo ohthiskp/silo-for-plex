@@ -1,56 +1,42 @@
 ---
 name: astra-design-system
-description: Astra's visual rules — palette, glass materials, typography, spacing, motion tokens, menus and sheets, and how to check UI against the approved mockups in docs/design. Use before any UI change in Astra.
+description: Astra's visual rules for the SwiftUI app — tokens in Theme.swift, Apple Liquid Glass usage, typography, motion, layout per platform, KP's standing UI rules (no purple, one hero, no duplicates, sidebar, streaming switcher, long-press menu). Load before any UI work in apple/.
 ---
-# Astra design system
+# Astra design system (SwiftUI)
 
-Astra is a cinematic media player: dark, image-led, calm. References: Disney+ and Netflix for layout and
-rows, Apple liquid glass for materials. The approved mockups in `docs/design/` win over this file.
+Source of truth, in order: KP's latest instruction → the mockups in `docs/design/` → this skill →
+`DESIGN_SYSTEM.md`. When they conflict, stop and ask; don't redesign approved screens.
 
-## Before you change UI
-1. Open the mockup for the screen (see `docs/design/README.md`). No mockup → ask the orchestrator; do not invent one.
-2. Find the existing Astra widget in `lib/astra/` and reuse its tokens.
-3. Never redesign an approved screen without KP's written approval.
+## Tokens (`apple/Shared/Design/Theme.swift`)
+- Colour: `Astra.Color.bg` #0A0A0B, `surface` #161618, `surface2` #1E1E21, `ink` #F5F5F7, `muted` (ink 62%),
+  `accent` = white, `hairline` = white 9%. Colour on screen comes from artwork, not from the chrome.
+- **No purple or violet anywhere** (selection, progress, timeline, buttons, focus). Grep before finishing.
+- Type: `Astra.Font` — system font, bold display weights. No Didot or decorative faces.
+- Motion: `Astra.Motion` fast 150 ms, base 250, page 380, hero 600. Animate opacity/transform only;
+  honour Reduce Motion. Everything should feel smooth and calm, never Plezy-like snaps.
+- Layout/spacing: `Astra.Layout` (per platform, see `Platform.swift`) and `Astra.Spacing`. Add tokens, not literals.
 
-## Tokens (source: `lib/astra/astra_style.dart`)
-| Token | Value | Use |
-|---|---|---|
-| `AstraColors.bg` | `#07060B` | App background |
-| `AstraColors.surface` / `surface2` | `#15131D` / `#1C1A26` | Cards, sheets |
-| `AstraColors.ink` / `muted` | `#F2F0F7` / 66% ink | Text |
-| `AstraColors.purple` / `purpleLight` | `#7C4DFF` / `#9B74FF` | Accent, focus, progress |
-| `AstraColors.hairline` | 9% white | Dividers, glass borders |
+## Liquid Glass
+- Only Apple's APIs: `.glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass/.glassProminent)`,
+  helpers in `Glass.swift`. No blur+gradient imitations.
+- Glass lives on the floating layer (sidebar, tab bar, streaming switcher, player controls, menus);
+  never on artwork, rows or the hero image.
 
-- Display titles: `AstraTitleText` — Didot (fallback Bodoni 72, Georgia), wide letter spacing, soft shadow.
-- Body: system font, weights 500–700 for labels.
-- Pills and glass buttons: fully rounded (`radius = height / 2`); badges 4 px radius.
+## Screens and KP's rules
+- **Mac sidebar:** exactly Home, Movies, Shows, Downloads, Search, Settings. Icons only, click to expand
+  (no hover expand), one sliding selection indicator.
+- **Streaming switcher:** centered glass pill along the top; must not overlap the hero title.
+- **Home:** one hero at a time (cineby trending), never glitchy; Continue Watching, then numbered Top 10
+  with a Movies/Series pill; no title appears twice across rows (dedupe by type + TMDB id).
+  Continue Watching is the same on every tab; tapping a card opens Details (only Play plays).
+- **Streaming tabs:** full TMDB lists; titles on Plex are marked; others show a greyed-out Play.
+- **Details:** opens as a card stacked over the page, with an X to close.
+- **Long-press a title:** Details, Play, Download, Mark watched/unwatched, Go to season/show.
+- **Loading screen:** the logo only, no text.
+- **iPhone player:** landscape only, Infuse layout (incl. progress bar), double-tap ±10 s, no ring
+  around Play. iPhone tab bar: wait for KP's mockup before changing it.
+- **Library quality:** HD/4K setting lives in Settings > Content; lists show one version per title.
 
-## Glass
-- `AstraGlass` (blur 24, white 15→5% gradient, 9% hairline) for floating bars and panels.
-- `AstraGlassButton` (blur 18) for secondary actions; `AstraPlayButton` (white or violet gradient) for primary.
-- Blur only over still content (hero, player). Over scrolling lists use a solid translucent fill instead:
-  `BackdropFilter` re-renders every frame and is the main cause of dropped frames.
-
-## Motion
-Use one set of tokens everywhere (define them in `astra_style.dart` as `AstraMotion` if missing):
-| Token | Duration | Curve | Use |
-|---|---|---|---|
-| `fast` | 150 ms | `easeOutCubic` | Press feedback, focus ring |
-| `base` | 250 ms | `easeOutCubic` | Hover, chips, small reveals |
-| `page` | 380 ms | `easeInOutCubic` | Page and sheet transitions |
-| `hero` | 600 ms | `easeInOutCubic` | Hero crossfade, poster → details |
-- Respect `MediaQuery.disableAnimations` (reduced motion): drop to fades of `fast`.
-- Animate transform and opacity only; never animate layout size in scrolling lists.
-
-## Menus, sheets, dialogs
-Use Astra versions (glass surface, `surface2` fill, 16 px radius, `page` motion) instead of stock
-`showMenu`, `PopupMenuButton`, `showModalBottomSheet`, `showDialog`. Keep every action and keyboard/remote path.
-
-## Platform notes
-- Mac/iPad: floating glass sidebar; content runs full width beneath it.
-- iPhone: floating liquid-glass tab bar (Home, Search, Downloads + Settings); respect safe areas.
-- Apple TV: 10-foot sizes, clear focus scale (1.06–1.1) with violet glow; every element reachable by remote.
-
-## Verify
-Screenshot the screen at the mockup's size, compare side by side, and list differences. A golden test
-(`matchesGoldenFile`) for stable widgets.
+## Checking your work
+- Compare with the matching image in `docs/design/` and list differences.
+- Screenshots come from CI or the UI tests (`Demo.swift` flags drive a demo state); KP judges feel on device.

@@ -1,6 +1,6 @@
 ---
 name: astra-media
-description: Use for Astra metadata and discovery — the Plex client, TMDB client, streaming-provider switcher, catalog sources, media models, SQLite/Drift schema and migrations, caching. Not for UI layout or playback.
+description: Use for Astra's Plex and discovery data in the SwiftUI app — AstraKit's Plex client, account/PIN sign-in, server sessions and connection picking, hubs, For You, library quality, TMDB and cineby trending, streaming-service rows, downloads, caching and local persistence. Not for UI layout or playback.
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch
 model: inherit
 skills:
@@ -9,30 +9,35 @@ maxTurns: 40
 ---
 # Astra Media
 
-You own where Astra's titles, artwork and discovery rows come from and how they are stored. Read the
-`astra-metadata-rules` skill and `DATABASE.md` first.
+You own where Astra's titles, artwork, rows and downloads come from and how they are stored. Plex only:
+KP doesn't use Jellyfin, Emby or other servers. Read the `astra-metadata-rules` skill and `DATABASE.md` first.
 
 ## Scope — files you may edit
-- `lib/astra/tmdb_client.dart`, `lib/astra/streaming_services.dart`
-- `lib/services/plex_client*`, `lib/services/plex_client/`, `lib/services/catalog/`, `lib/services/api_cache.dart`
-- `lib/media/`, `lib/models/`, `lib/database/` (schema, migrations, generated `app_database.g.dart`)
-- `DATABASE.md`, tests under the matching `test/` paths
+- `apple/AstraKit/Sources/AstraKit/Plex/` except `Playback.swift`, `PlayerGeometry.swift`, `SeekThumbnails.swift`
+- `apple/AstraKit/Sources/AstraKit/Models/`, `TMDB/`, `Downloads/`
+- `apple/Shared/App/LibraryStore.swift`, `apple/Shared/App/DownloadStore.swift`
+- `DATABASE.md`; tests in `apple/AstraKit/Tests/`
 
 ## Out of scope
-- How rows and cards look → `astra-design`. Player → `astra-playback`.
-- New external APIs or keys → `astra-security` review first.
+- How rows, cards and badges look → `astra-design`. Player → `astra-playback`.
+- New external API, scraping target or key → `astra-security` review first.
 
 ## Rules
-- Plex is the source of truth for what KP owns and watch state; TMDB only enriches and powers discovery.
-- TMDB token only via `--dart-define=TMDB_TOKEN`; never in code or logs. Respect TMDB rate limits and attribution.
-- A schema change bumps `schemaVersion`, adds a migration step, regenerates code (`dart run build_runner build`)
-  and adds a migration test. Never drop user data (downloads, profiles, progress) in a migration.
-- Cache network results; degrade gracefully when TMDB is unavailable (`tmdbAvailable == false`).
+- Plex is the source of truth for what KP owns, versions and watch state; TMDB and cineby only enrich.
+- Library quality (per device, Settings > Content): HD hides 4K libraries (name contains 4K/UHD/2160);
+  4K shows one copy per title, the 4K one when it exists. Never show duplicate versions in lists or search.
+- Hero and Top 10 follow cineby trending (parsed from its /movie|tv/<tmdb id> links), filled from TMDB
+  trending week, cached on device. It can break if cineby changes: fail soft to TMDB.
+- Streaming tabs show full TMDB lists; playable-on-Plex titles are marked, others get a greyed-out Play.
+- Watched state updates instantly in every row after Mark Watched/Unwatched.
+- TMDB token only from the `AstraTMDBToken` Info.plist value ($(TMDB_TOKEN)); app works with none.
+- Downloads keep the original file, show real progress and failure reasons, never cancel silently, and survive relaunch.
+- Tests mock HTTP (`HTTPTransport`); never call live Plex, TMDB or cineby in tests.
 
 ## Done when
-1. Tests for touched services/models pass; migration tests pass for schema changes.
-2. `flutter analyze` clean in touched files; generated files are regenerated, not hand-edited.
-3. `DATABASE.md` updated for any schema change.
+1. AstraKit tests for touched code pass in `astra-swiftui-macos` CI (cite the run).
+2. Persisted formats stay readable by the previous build, or a migration is written and tested.
+3. `DATABASE.md` updated when storage changes.
 
 ## Report
-Return: files changed, endpoints touched, schema version before/after, tests run, and anything unverified.
+Files changed, endpoints touched, storage changes, CI run, anything unverified.

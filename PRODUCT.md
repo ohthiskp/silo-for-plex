@@ -1,30 +1,35 @@
 # Astra — product
 
-Astra is KP's personal cinematic media player for a Plex server. It should feel like Disney+ or Netflix,
-with Apple's liquid-glass materials, while playing almost any file directly through mpv.
+Astra is KP's personal cinematic player for a Plex server. It should feel like Disney+ or Netflix, built
+with Apple's own Liquid Glass, and play almost any file directly through mpv.
 
 ## Who it's for
-One user: KP, on Mac, iPhone and Apple TV. Not distributed to others; no accounts beyond Plex.
+One user: KP. Not distributed; the only account is Plex.
 
 ## Platforms
-| Platform | Minimum | Status |
+| Platform | App | Status |
 |---|---|---|
-| macOS | 14 Sonoma | Shipping: DMG + in-app updates |
-| iPhone / iPad | iOS 15.5 | TestFlight pipeline |
-| Apple TV | tvOS 15 | TestFlight pipeline (custom tvOS Flutter engine) |
+| macOS 26 | SwiftUI (`apple/AstraMac`) | Prerelease builds with Sparkle in-app updates |
+| iPhone (iOS 26) | SwiftUI (`apple/AstraiOS`) | TestFlight, internal testing, version 3.1.x |
+| Apple TV | Flutter (legacy) | Out of scope for the SwiftUI app for now |
+| Mac/iPhone legacy | Flutter (root) | Still works; maintenance only until replaced |
 
 ## Core experience
-1. **Home:** full-bleed hero, streaming-service switcher, Continue Watching, rows from Plex and TMDB.
-2. **Details:** art, logo, badges, Play/Resume, Watchlist, Overview / Cast / Trailers / Related, episodes.
-3. **Player:** minimal glass controls (close, 10 s back / pause / 10 s forward, title and track chips over a
-   violet timeline); direct play for HEVC, AV1, Dolby Vision, HDR10+, DTS, TrueHD, ASS/PGS.
-4. **Search, Downloads, Settings** (card dashboard).
+1. **Home:** one trending hero (cineby order), top glass streaming switcher, Continue Watching,
+   numbered Top 10, Plex and TMDB rows with no duplicate titles.
+2. **Streaming tabs:** full TMDB provider lists; Plex titles marked, others greyed-out Play.
+3. **Details:** stacked card with an X; art, logo, badges, Play/Resume, seasons/episodes, cast, related.
+4. **Player:** minimal glass controls, white timeline, seek thumbnails; iPhone is landscape, Infuse-style.
+5. **Movies, Shows, Downloads, Search, Settings** (Library quality HD/4K in Settings > Content).
+6. **Long-press any title:** Details, Play, Download, Mark watched/unwatched, Go to season/show.
 
 ## Principles
-- Image first, chrome last. Content runs edge to edge; controls float in glass.
-- Smooth over flashy: one motion system, no stutter on scroll, instant back navigation.
-- Plays anything: the server should almost never transcode.
-- Approved mockups (`docs/design/`) are the spec; changes to them need KP's approval.
+- Image first, chrome last; colour comes from artwork. No purple.
+- Very smooth: one motion system, no stutter, nothing that feels like the old Plezy UI.
+- Original files only: never transcode or downscale.
+- Approved mockups (`docs/design/`) are the spec; changing them needs KP's approval.
+- Stability before features (ROADMAP S1–S5).
 
 ## Out of scope (for now)
-Social features, third-party tracker sign-in, Discord presence, crash-reporting services, Android/Windows/Linux releases.
+Other server types, Apple TV and AirPlay in SwiftUI, social features, trackers, Discord, crash-reporting
+services, Android/Windows/Linux.

@@ -1,33 +1,39 @@
 ---
 name: astra-metadata-rules
-description: Rules for Astra metadata and discovery — Plex as source of truth, TMDB usage and token handling, streaming-provider rows, caching, and SQLite/Drift schema changes. Use before touching metadata, discovery or the database.
+description: Rules for Astra's data in the SwiftUI app — Plex-only sources, sign-in and connection picking, hubs and For You, library quality and deduplication, TMDB and cineby trending, streaming-service lists, downloads and on-device storage. Load before touching AstraKit Plex/TMDB/Models/Downloads or LibraryStore/DownloadStore.
 ---
 # Astra metadata rules
 
 ## Sources
-- **Plex** (`lib/services/plex_client*`): what KP owns, libraries, hubs, Continue Watching, watch state,
-  playback decisions. Always authoritative for "can I play this" and progress.
-- **TMDB** (`lib/astra/tmdb_client.dart`): discovery rows, hero art, logos, provider lists. Enrichment only.
-- **Streaming providers** (`lib/astra/streaming_services.dart`): the switcher's services and their TMDB
-  watch-provider IDs. Region defaults to the user's locale.
+- **Plex only** (plex.tv account via PIN sign-in, then a server). No Jellyfin, Emby or others.
+- Plex is the truth for ownership, versions, progress and watched state. TMDB enriches (logos, backdrops,
+  trending, streaming lists). Cineby trending (scraped `/movie|tv/<tmdb id>` links) orders the hero and
+  Top 10; it can break at any time, so fall back to TMDB trending week silently.
+- TMDB token: Info.plist `AstraTMDBToken` = `$(TMDB_TOKEN)` from CI. The app must work with no token.
 
-## TMDB
-- Token only via `--dart-define=TMDB_TOKEN` (GitHub secret `TMDB_TOKEN`). Never log it or embed it in code.
-- Guard every call with `tmdbAvailable`; the app must work with no token (Plex-only rows).
-- Use the client's cache (30 min TTL) and in-flight de-duplication; don't add parallel fetch loops.
-- Images through `image.tmdb.org/t/p/<size>` with the smallest size that fits the card.
-- Show TMDB attribution in Settings/About.
+## Connections (`ConnectionPicker.swift`, `ServerSession.swift`, `AppModel.swift`)
+- Test candidate connections and pick the fastest working one; prefer local, then remote, then relay.
+- Switching server: validate the new one first, keep the old session until it succeeds, and drop results
+  from stale requests (generation token).
+- Log requests to `NetworkLog` without tokens.
 
-## Matching TMDB to Plex
-- Match by GUID (`tmdb://`, `imdb://`, `tvdb://`) from Plex `includeGuids=1`; never by title alone.
-- A TMDB title KP doesn't own opens the request/details flow, never a broken Play button.
+## Lists
+- Library quality per device (`LibraryQuality.swift`, Settings > Content): iPhone defaults HD,
+  Apple TV 4K. HD hides 4K libraries (name has 4K/UHD/2160). 4K shows one entry per title, using
+  the 4K version when present; titles without one show as HD.
+- Never show a title twice in a row, in search, or across Home rows (dedupe by type + TMDB id,
+  falling back to Plex GUID).
+- Streaming tabs: full TMDB provider lists; mark what's on Plex; others get a greyed-out Play.
+- Mark watched/unwatched updates every row immediately (optimistic, then confirm with Plex).
 
-## Database (Drift/SQLite)
-- Schema in `lib/database/tables.dart`, version in `app_database.dart` (`schemaVersion`, currently 25).
-- Every schema change: bump the version, add an `if (from < N)` migration step, run
-  `dart run build_runner build --delete-conflicting-outputs`, add a migration test, update `DATABASE.md`.
-- Never drop or rewrite user data (downloads, profiles, connections, offline progress) in a migration.
-- Don't rename the DB file (`plezy_downloads.db`); existing installs depend on it.
+## Storage (see `DATABASE.md`)
+- Plex token: Keychain (`KeychainTokenStore`). Settings: UserDefaults/`@AppStorage` with `astra.*` keys.
+- JSON in Application Support: server session cache (`<server>.json`), `Trending.json`,
+  downloads `index.json` + `queue.json`. Keep old files readable or migrate them, with a test.
 
-## Testing
-`flutter test test/services/ test/database/ test/models/` for touched areas; mock HTTP, never call live TMDB in tests.
+## Downloads
+- Download the original file; real progress; visible failure reasons; no silent cancel; queue and
+  finished items survive relaunch; offline playback uses the local file.
+
+## Tests
+- Mock HTTP through `HTTPTransport`; never hit live Plex, TMDB or cineby in tests.

@@ -1,23 +1,18 @@
-# Claude tools for Astra
+# Astra Claude setup
 
-Agents and skills that Claude Code loads when it works in this repo, locally and in cloud sessions. They
-only help Claude build Astra; none of this ships in the app. The main session is the orchestrator — see
-`CLAUDE.md` for the workflow and file ownership.
+The main session is the orchestrator: it plans, briefs one specialist per area, runs `astra-qa` on the
+result, and reports. Ownership and the workflow are in `../CLAUDE.md`.
 
-| Agent | Role | Edits |
+| Agent | Area | Edits? |
 |---|---|---|
-| `astra-engineer` | Flutter/Dart architecture, navigation, native runners, CI | Yes |
-| `astra-design` | UI to the approved mockups, glass, motion, menus | Yes |
-| `astra-playback` | mpv, native Apple players, subtitles, HDR, performance | Yes |
-| `astra-media` | Plex/TMDB metadata, discovery, SQLite | Yes |
-| `astra-qa` | Independent testing and UI verification | No (read-only) |
-| `astra-security` | Dependencies, credentials, permissions, licensing | No (read-only) |
+| `astra-engineer` | App shells, AppModel, AstraKit networking/storage, project.yml, CI, release tooling, legacy Flutter | Yes |
+| `astra-design` | Views, Theme/Glass, motion, mockup fidelity | Yes |
+| `astra-playback` | mpv core (shared with Flutter), player, PiP, seek thumbnails, HDR | Yes |
+| `astra-media` | Plex client, TMDB/cineby, library quality, downloads, storage formats | Yes |
+| `astra-qa` | Independent review via diff, CI runs and KP's rules | No |
+| `astra-security` | Packages, entitlements, ATS, secrets, signing, Sparkle | No |
 
-| Skill | Use |
-|---|---|
-| `astra-design-system` | Before any UI change |
-| `astra-playback-rules` | Before touching player code |
-| `astra-metadata-rules` | Before metadata, discovery or database changes |
-| `astra-release-checklist` | When shipping a build |
+Skills: `astra-design-system`, `astra-playback-rules`, `astra-metadata-rules`, `astra-release-checklist`.
 
-All of these were written for Astra; no third-party skills are bundled.
+Swift can't be built in the Linux cloud container: builds and tests run in GitHub Actions
+(`astra-swiftui-macos`) or on KP's Mac (`~/Developer/silo-for-plex`, `cd apple && xcodegen && open Astra.xcodeproj`).
