@@ -53,9 +53,17 @@ struct HomeView: View {
           let heroComing = library.selectedService == nil ? library.isLoadingHero : library.isLoadingService
           Color.clear.frame(height: heroComing ? heroHeight : 120)
         } else {
-          HeroCarousel(library: library, items: library.homeHero, height: heroHeight)
-            // A new set of titles (another service) starts a fresh carousel.
-            .id(library.selectedService?.id ?? "for-you")
+          Group {
+            #if os(iOS)
+              // Astra (KP, 2026-11-07): the hero follows the finger and snaps
+              // to the next title; a stretching dot shows where you are.
+              SwipeHero(library: library, items: library.homeHero, height: heroHeight)
+            #else
+              HeroCarousel(library: library, items: library.homeHero, height: heroHeight)
+            #endif
+          }
+          // A new set of titles (another service) starts a fresh carousel.
+          .id(library.selectedService?.id ?? "for-you")
         }
 
         if !library.homeContinueWatching.isEmpty {
@@ -813,3 +821,95 @@ struct WatchlistButton: View {
     .task { await app.loadWatchlistIfNeeded() }
   }
 }
+
+#if os(iOS)
+  /// The iPhone hero: titles side by side in a paging scroll view, so a drag
+  /// moves the artwork with the finger and lets go onto the next title. No
+  /// arrows; the dots below stretch toward the title you're dragging to.
+  struct SwipeHero: View {
+    var library: LibraryStore
+    var items: [PlexMetadata]
+    var height: CGFloat
+
+    @State private var position: Int?
+    /// Pages scrolled, fractional while dragging (1.5 = halfway to the third).
+    @State private var progress: CGFloat = 0
+    @Environment(\.contentLeading) private var leading
+    @Environment(\.openItem) private var openItem
+
+    var body: some View {
+      ScrollView(.horizontal) {
+        LazyHStack(spacing: 0) {
+          ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
+            page(item)
+              .containerRelativeFrame(.horizontal)
+              .id(i)
+          }
+        }
+        .scrollTargetLayout()
+      }
+      .scrollTargetBehavior(.paging)
+      .scrollPosition(id: $position)
+      .scrollIndicators(.never)
+      .onScrollGeometryChange(for: CGFloat.self, of: { geo in
+        geo.containerSize.width > 0 ? geo.contentOffset.x / geo.containerSize.width : 0
+      }) { _, value in
+        progress = value
+      }
+      .overlay(alignment: .bottom) {
+        if items.count > 1 {
+          StretchDots(count: items.count, progress: progress)
+            .padding(.bottom, 6)
+            .allowsHitTesting(false)
+        }
+      }
+      .sensoryFeedback(.selection, trigger: position)
+    }
+
+    private func page(_ item: PlexMetadata) -> some View {
+      VStack(alignment: .leading, spacing: 0) {
+        HeroInfo(library: library, item: item)
+      }
+      .padding(.leading, leading)
+      .padding(.trailing, Astra.Spacing.pageTrailing)
+      // Room above the text for the artwork and the streaming switcher; below it for the dots.
+      .padding(.top, 110)
+      .padding(.bottom, 30)
+      .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
+      .background {
+        ZStack {
+          ArtworkImage(
+            library: library, item: item, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear
+          )
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .clipped()
+          HeroScrim()
+        }
+      }
+      .clipped()
+      // A tap anywhere opens Details; Play and + keep their own action.
+      .contentShape(Rectangle())
+      .onTapGesture { openItem(item) }
+    }
+  }
+
+  /// Page dots where the current one is a long capsule; while dragging, it
+  /// shrinks back to a dot as the next one grows into the capsule.
+  struct StretchDots: View {
+    var count: Int
+    var progress: CGFloat
+
+    var body: some View {
+      HStack(spacing: 6) {
+        ForEach(0..<count, id: \.self) { i in
+          let near = max(0, 1 - abs(progress - CGFloat(i)))
+          Capsule()
+            .fill(Astra.Color.ink.opacity(0.35 + 0.65 * near))
+            .frame(width: 7 + 17 * near, height: 7)
+        }
+      }
+      .accessibilityElement()
+      .accessibilityLabel("Title \(Int(progress.rounded()) + 1) of \(count)")
+    }
+  }
+#endif
