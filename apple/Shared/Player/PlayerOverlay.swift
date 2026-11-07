@@ -127,20 +127,20 @@ struct PlayerOverlay: View {
           } label: {
             Image(systemName: "chevron.left")
           }
-          .astraIconButton(size: 44, variant: .clear)
+          .astraIconButton(size: 32, variant: .clear)
           .keyboardShortcut(.cancelAction)
           .help("Back (Esc)")
           .accessibilityLabel("Close Player")
           VStack(alignment: .leading, spacing: 2) {
-            Text(player.title).font(.system(size: 22, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+            Text(player.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
             if let subtitle = player.subtitle {
-              Text(subtitle).font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.75))
+              Text(subtitle).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.75))
                 .lineLimit(1)
             }
           }
           Spacer(minLength: 16)
           HStack(spacing: 12) {
-            pipButton(size: 44)
+            pipButton(size: 32)
             moreMenu
           }
           .astraGlassGroup(spacing: 12)
@@ -150,66 +150,55 @@ struct PlayerOverlay: View {
         Spacer()
         macPanel
       }
-      .padding(.horizontal, 40)
-      .padding(.bottom, 28)
+      .padding(.horizontal, 24)
+      .padding(.bottom, 20)
     }
 
     /// The glass control panel along the bottom.
     private var macPanel: some View {
-      VStack(spacing: 14) {
-        HStack(spacing: 18) {
-          PlayerClock(player: player, scrubbing: scrubbing, remaining: false).frame(minWidth: 64, alignment: .leading)
-          timeline
-          PlayerClock(player: player, scrubbing: scrubbing, remaining: true).frame(minWidth: 64, alignment: .trailing)
+      // Astra: one slim row, Infuse-style (KP, 2026-11-07: "wayyyy smaller").
+      HStack(spacing: 10) {
+        transport(small: 15, large: 18, gap: 4, framedPause: false)
+        PlayerClock(player: player, scrubbing: scrubbing, remaining: false)
+          .frame(minWidth: 44, alignment: .trailing)
+        timeline
+        PlayerClock(player: player, scrubbing: scrubbing, remaining: true)
+          .frame(minWidth: 48, alignment: .leading)
+        Button {
+          player.setMuted(!player.muted)
+        } label: {
+          Image(systemName: volumeSymbol).font(.system(size: 13, weight: .semibold))
         }
-        .font(.system(size: 15, weight: .semibold).monospacedDigit())
-        .foregroundStyle(.white)
-
-        ZStack {
-          HStack(spacing: 12) {
-            Button {
-              player.setMuted(!player.muted)
-            } label: {
-              Image(systemName: volumeSymbol)
-            }
-            .buttonStyle(PlayerGlyphButtonStyle(size: 44, filled: true))
-            .accessibilityLabel(player.muted ? "Unmute" : "Mute")
-            ScrubBar(
-              fraction: player.muted ? 0 : player.volume / 100, knob: 16, height: 4,
-              onChange: { player.setVolume($0 * 100) }, onCommit: { player.setVolume($0 * 100) }
-            )
-            .frame(width: 150)
-            .accessibilityLabel("Volume")
-            Spacer()
-            captionsChip
-            versionChip
-            Button {
-              player.toggleFullScreen()
-            } label: {
-              Image(systemName: "arrow.up.left.and.arrow.down.right")
-            }
-            .buttonStyle(PlayerGlyphButtonStyle(size: 44))
-            .keyboardShortcut("f", modifiers: [])
-            .help("Full Screen (F)")
-            .accessibilityLabel("Full Screen")
-          }
-          transport(small: 34, large: 34, gap: 40, framedPause: true)
+        .buttonStyle(PlayerGlyphButtonStyle(size: 26))
+        .accessibilityLabel(player.muted ? "Unmute" : "Mute")
+        ScrubBar(
+          fraction: player.muted ? 0 : player.volume / 100, knob: 10, height: 3,
+          onChange: { player.setVolume($0 * 100) }, onCommit: { player.setVolume($0 * 100) }
+        )
+        .frame(width: 64)
+        .accessibilityLabel("Volume")
+        captionsChip
+        versionChip
+        Button {
+          player.toggleFullScreen()
+        } label: {
+          Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 13, weight: .semibold))
         }
+        .buttonStyle(PlayerGlyphButtonStyle(size: 26))
+        .keyboardShortcut("f", modifiers: [])
+        .help("Full Screen (F)")
+        .accessibilityLabel("Full Screen")
       }
-      .padding(.horizontal, 30)
-      .padding(.top, 24)
-      .padding(.bottom, 20)
-      .shadow(color: .black.opacity(0.45), radius: 6)  // keeps white glyphs crisp on clear glass
-      .overlay(alignment: .top) {
-        // The grip: drag here, or anywhere on the panel that isn't a control.
-        Capsule().fill(.white.opacity(0.55)).frame(width: 40, height: 4).padding(.top, 9)
-          .allowsHitTesting(false)
-      }
-      .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-      .astraGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous), variant: .clear)
-      .astraGlassEdge(RoundedRectangle(cornerRadius: 28, style: .continuous))
-      .shadow(color: .black.opacity(0.2), radius: 24, y: 6)
-      .frame(maxWidth: 1500)
+      .font(.system(size: 12, weight: .medium).monospacedDigit())
+      .foregroundStyle(.white)
+      .padding(.horizontal, 14)
+      .frame(height: 46)
+      .shadow(color: .black.opacity(0.45), radius: 4)  // keeps white glyphs crisp on clear glass
+      .contentShape(Capsule())
+      .astraGlass(in: Capsule(), variant: .clear)
+      .astraGlassEdge(Capsule())
+      .shadow(color: .black.opacity(0.2), radius: 16, y: 4)
+      .frame(maxWidth: 820)
       .offset(panelOffset)
       .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .named(Self.space)) }) { panelRest = $0 }
       .gesture(panelDrag)
@@ -285,7 +274,7 @@ struct PlayerOverlay: View {
         Image(systemName: "ellipsis")
       }
       .menuStyle(.button)
-      .buttonStyle(GlassIconButtonStyle(size: 44, variant: .clear))
+      .buttonStyle(GlassIconButtonStyle(size: 32, variant: .clear))
       .menuIndicator(.hidden)
       .fixedSize()
       .help("More")
@@ -305,9 +294,9 @@ struct PlayerOverlay: View {
             } label: {
               Image(systemName: "xmark")
             }
-            .astraIconButton(size: 44, variant: .clear)
+            .astraIconButton(size: 34, variant: .clear)
             .accessibilityLabel("Close Player")
-            if PlayerController.supportsPictureInPicture { pipButton(size: 44) }
+            if PlayerController.supportsPictureInPicture { pipButton(size: 34) }
             Spacer()
           }
           .astraGlassGroup(spacing: 14)
@@ -319,12 +308,12 @@ struct PlayerOverlay: View {
               } label: {
                 HStack(spacing: 8) {
                   VStack(alignment: .leading, spacing: 2) {
-                    Text(player.title).font(.system(size: 20, weight: .semibold)).lineLimit(1)
+                    Text(player.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
                     if let subtitle = player.subtitle {
-                      Text(subtitle).font(.system(size: 13, weight: .medium)).opacity(0.75).lineLimit(1)
+                      Text(subtitle).font(.system(size: 11, weight: .medium)).opacity(0.75).lineLimit(1)
                     }
                   }
-                  Image(systemName: "chevron.right").font(.system(size: 15, weight: .semibold))
+                  Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
                 }
                 .foregroundStyle(.white)
                 .contentShape(Rectangle())
@@ -341,11 +330,11 @@ struct PlayerOverlay: View {
               Spacer()
               PlayerClock(player: player, scrubbing: scrubbing, remaining: true)
             }
-            .font(.system(size: 13, weight: .medium).monospacedDigit())
+            .font(.system(size: 11, weight: .medium).monospacedDigit())
             .foregroundStyle(.white.opacity(0.7))
           }
         }
-        transport(small: 30, large: 46, gap: 64, framedPause: false)
+        transport(small: 22, large: 30, gap: 48, framedPause: false)
       }
       // Inside the safe area: clear of the notch and the home indicator.
       .padding(.horizontal, 24)
@@ -433,10 +422,10 @@ struct PlayerOverlay: View {
       #endif
     } label: {
       Text("CC")
-        .font(.system(size: 12, weight: .heavy))
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
-        .overlay(RoundedRectangle(cornerRadius: 4).stroke(lineWidth: 1.6))
+        .font(.system(size: 10, weight: .heavy))
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
+        .overlay(RoundedRectangle(cornerRadius: 3).stroke(lineWidth: 1.3))
         .opacity(player.subtitleId == nil ? 0.85 : 1)
         .playerChip()
     }
@@ -462,8 +451,8 @@ struct PlayerOverlay: View {
       }
     } label: {
       HStack(spacing: 6) {
-        Text(shortBadge).font(.system(size: 15, weight: .semibold))
-        Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))
+        Text(shortBadge).font(.system(size: 12, weight: .semibold))
+        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
       }
       .playerChip()
     }
@@ -544,7 +533,7 @@ struct PlayerTimeline: View {
   var body: some View {
     let shown = scrubbing ?? player.position
     ScrubBar(
-      fraction: player.duration > 0 ? shown / player.duration : 0, knob: 18, height: 5,
+      fraction: player.duration > 0 ? shown / player.duration : 0, knob: 12, height: 3,
       onChange: { fraction in
         scrubbing = fraction * player.duration
         poke()
@@ -696,8 +685,8 @@ extension View {
   func playerChip() -> some View {
     self
       .foregroundStyle(.white)
-      .padding(.horizontal, 16)
-      .frame(height: 40)
+      .padding(.horizontal, 10)
+      .frame(height: 28)
       .contentShape(Capsule())
       .astraGlass(in: Capsule(), variant: .clear, interactive: true)
   }
