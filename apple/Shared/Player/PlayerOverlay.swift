@@ -43,7 +43,9 @@ struct PlayerOverlay: View {
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible)
 
-      if !player.hasFirstFrame {
+      if loaderInRing {
+        // iPhone with controls showing: the play button's ring shows loading.
+      } else if !player.hasFirstFrame {
         // Until the first frame: the title and a spinner, never a blank black window.
         VStack(spacing: 14) {
           ProgressView().controlSize(.large).tint(.white)
@@ -88,6 +90,15 @@ struct PlayerOverlay: View {
   }
 
   static let space = "player"
+
+  /// iPhone: while the controls show, loading is the ring around Play.
+  private var loaderInRing: Bool {
+    #if os(iOS)
+      visible
+    #else
+      false
+    #endif
+  }
 
   private var chrome: some View {
     ZStack {
@@ -285,60 +296,150 @@ struct PlayerOverlay: View {
   // MARK: iPhone (docs/design/iphone-player.png)
 
   #if os(iOS)
+    /// Astra: Infuse-style layout (KP's reference screenshot, 2026-11-07).
+    /// Top left close + PiP, top right a volume capsule; a plain back / play /
+    /// forward cluster in the middle; the episode line and the title bottom
+    /// left, captions and quality in one glass capsule bottom right; the
+    /// timeline with its times along the bottom. Always landscape.
     private var phoneChrome: some View {
       ZStack {
         VStack(spacing: 0) {
-          HStack(spacing: 14) {
+          HStack(alignment: .center, spacing: 12) {
             Button {
               player.close()
             } label: {
               Image(systemName: "xmark")
             }
-            .astraIconButton(size: 34, variant: .clear)
+            .astraIconButton(size: 40, variant: .clear)
             .accessibilityLabel("Close Player")
-            if PlayerController.supportsPictureInPicture { pipButton(size: 34) }
+            if PlayerController.supportsPictureInPicture { pipButton(size: 40) }
             Spacer()
+            phoneVolume
           }
-          .astraGlassGroup(spacing: 14)
+          .astraGlassGroup(spacing: 12)
           Spacer()
-          VStack(spacing: 10) {
-            HStack(spacing: 10) {
-              Button {
-                player.showDetails()
-              } label: {
-                HStack(spacing: 8) {
-                  VStack(alignment: .leading, spacing: 2) {
-                    Text(player.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                    if let subtitle = player.subtitle {
-                      Text(subtitle).font(.system(size: 11, weight: .medium)).opacity(0.75).lineLimit(1)
-                    }
-                  }
-                  Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+          HStack(alignment: .bottom, spacing: 16) {
+            Button {
+              player.showDetails()
+            } label: {
+              VStack(alignment: .leading, spacing: 4) {
+                if let subtitle = player.subtitle {
+                  Text(subtitle).font(.system(size: 13, weight: .semibold)).opacity(0.9).lineLimit(1)
                 }
-                .foregroundStyle(.white)
-                .contentShape(Rectangle())
+                Text(player.title).font(.system(size: 22, weight: .bold)).lineLimit(1)
               }
-              .buttonStyle(.plain)
-              .accessibilityLabel("\(player.title), Details")
-              Spacer(minLength: 12)
+              .foregroundStyle(.white)
+              .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(player.title), Details")
+            Spacer(minLength: 16)
+            HStack(spacing: 4) {
               captionsChip
               versionChip
             }
-            timeline
-            HStack {
-              PlayerClock(player: player, scrubbing: scrubbing, remaining: false)
-              Spacer()
-              PlayerClock(player: player, scrubbing: scrubbing, remaining: true)
-            }
-            .font(.system(size: 11, weight: .medium).monospacedDigit())
-            .foregroundStyle(.white.opacity(0.7))
+            .padding(.horizontal, 6)
+            .frame(height: 44)
+            .astraGlass(in: Capsule(), variant: .clear)
+            .astraGlassEdge(Capsule(), strength: 0.6)
           }
+          .padding(.bottom, 12)
+          HStack(spacing: 12) {
+            PlayerClock(player: player, scrubbing: scrubbing, remaining: false)
+              .frame(minWidth: 44, alignment: .leading)
+            timeline
+            PlayerClock(player: player, scrubbing: scrubbing, remaining: true)
+              .frame(minWidth: 48, alignment: .trailing)
+          }
+          .font(.system(size: 12, weight: .medium).monospacedDigit())
+          .foregroundStyle(.white.opacity(0.8))
         }
-        transport(small: 22, large: 30, gap: 48, framedPause: false)
+        phoneTransport
       }
-      // Inside the safe area: clear of the notch and the home indicator.
-      .padding(.horizontal, 24)
-      .padding(.vertical, 14)
+      // Inside the safe area: clear of the notch / Dynamic Island and the home indicator.
+      .padding(.horizontal, 20)
+      .padding(.top, 10)
+      .padding(.bottom, 6)
+    }
+
+    /// Back 10 s, a round play/pause whose ring shows loading, forward 10 s.
+    private var phoneTransport: some View {
+      HStack(spacing: 64) {
+        Button {
+          player.seek(by: -10)
+          poke()
+        } label: {
+          Image(systemName: "arrow.counterclockwise").font(.system(size: 26, weight: .medium))
+        }
+        .buttonStyle(PlayerGlyphButtonStyle(size: 52))
+        .accessibilityLabel("Back 10 Seconds")
+
+        Button {
+          player.togglePause()
+        } label: {
+          ZStack {
+            Circle().stroke(.white.opacity(0.35), lineWidth: 2)
+            if player.buffering || !player.hasFirstFrame {
+              PlayerRingSpinner()
+            }
+            Image(systemName: player.paused ? "play.fill" : "pause.fill")
+              .font(.system(size: 34, weight: .bold))
+              .offset(x: player.paused ? 3 : 0)
+              .contentTransition(.symbolEffect(.replace))
+          }
+          .frame(width: 84, height: 84)
+          .contentShape(Circle())
+        }
+        .buttonStyle(PlayerGlyphButtonStyle(size: 84))
+        .accessibilityLabel(player.paused ? "Play" : "Pause")
+
+        Button {
+          player.seek(by: 10)
+          poke()
+        } label: {
+          Image(systemName: "arrow.clockwise").font(.system(size: 26, weight: .medium))
+        }
+        .buttonStyle(PlayerGlyphButtonStyle(size: 52))
+        .accessibilityLabel("Forward 10 Seconds")
+      }
+      .shadow(color: .black.opacity(0.35), radius: 8)
+    }
+
+    /// "40%", a short slider and the speaker glyph (mpv's volume; tap the glyph to mute).
+    private var phoneVolume: some View {
+      HStack(spacing: 10) {
+        Text("\(Int((player.muted ? 0 : player.volume).rounded()))%")
+          .font(.system(size: 15, weight: .medium).monospacedDigit())
+          .frame(minWidth: 42, alignment: .leading)
+        ScrubBar(
+          fraction: player.muted ? 0 : player.volume / 100, knob: 12, height: 3,
+          onChange: { player.setVolume($0 * 100); poke() },
+          onCommit: { player.setVolume($0 * 100) }
+        )
+        .frame(width: 110)
+        Button {
+          player.setMuted(!player.muted)
+          poke()
+        } label: {
+          Image(systemName: phoneVolumeSymbol).font(.system(size: 15, weight: .semibold))
+            .frame(width: 26, height: 26)
+            .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(player.muted ? "Unmute" : "Mute")
+      }
+      .foregroundStyle(.white)
+      .padding(.horizontal, 14)
+      .frame(height: 40)
+      .astraGlass(in: Capsule(), variant: .clear)
+      .astraGlassEdge(Capsule(), strength: 0.6)
+      .accessibilityElement(children: .contain)
+      .accessibilityLabel("Volume")
+    }
+
+    private var phoneVolumeSymbol: String {
+      if player.muted || player.volume == 0 { return "speaker.slash.fill" }
+      return player.volume < 34 ? "speaker.wave.1.fill" : player.volume < 67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
     }
   #endif
 
@@ -421,12 +522,10 @@ struct PlayerOverlay: View {
         }
       #endif
     } label: {
-      Text("CC")
-        .font(.system(size: 10, weight: .heavy))
-        .padding(.horizontal, 4)
-        .padding(.vertical, 1)
-        .overlay(RoundedRectangle(cornerRadius: 3).stroke(lineWidth: 1.3))
-        .opacity(player.subtitleId == nil ? 0.85 : 1)
+      // Astra: a speech-bubble captions glyph (KP asked for a new icon); filled when subtitles are on.
+      Image(systemName: player.subtitleId == nil ? "captions.bubble" : "captions.bubble.fill")
+        .font(.system(size: 15, weight: .semibold))
+        .contentTransition(.symbolEffect(.replace))
         .playerChip()
     }
     .menuStyle(.button)
@@ -689,5 +788,19 @@ extension View {
       .frame(height: 28)
       .contentShape(Capsule())
       .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+  }
+}
+
+/// A white arc turning around the play button while the video loads.
+struct PlayerRingSpinner: View {
+  @State private var turning = false
+
+  var body: some View {
+    Circle()
+      .trim(from: 0, to: 0.22)
+      .stroke(.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+      .rotationEffect(.degrees(turning ? 360 : 0))
+      .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: turning)
+      .onAppear { turning = true }
   }
 }
