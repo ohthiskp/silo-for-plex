@@ -16,11 +16,11 @@ jobs:
       - name: Cineby page structure
         run: |
           curl -sSL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" -o page.html -w "HTTP %{http_code} %{size_download} bytes %{url_effective}\n" https://cineby.tech/
-          echo "--- links in order"
-          grep -oE '/(movie|tv)/[0-9]+' page.html | awk '!s[$0]++' | head -60
-          echo "--- headings"
-          grep -oE '>[^<>]{3,40}</h[1-3]>' page.html | head -20
-          echo "--- next data?"
-          grep -oE '__NEXT_DATA__|self\.__next_f|application/ld\+json' page.html | sort | uniq -c
-          echo "--- around Top / Trending"
-          grep -oE '.{0,120}(Top 10|Top content|Trending on)[^<]{0,80}' page.html | head -5
+          echo "--- ld+json"
+          python3 - <<'PY'
+          import re
+          h=open("page.html").read()
+          for m in re.findall(r'<script type="application/ld\+json">(.*?)</script>', h, re.S): print(m[:1500])
+          i=h.find('/movie/'); print("--- first item markup"); print(h[max(0,i-900):i+900])
+          print("--- api hints"); print(sorted(set(re.findall(r'https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9_./-]*)?', h)))[:60])
+          PY
