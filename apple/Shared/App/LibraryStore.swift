@@ -279,7 +279,8 @@ final class LibraryStore {
     // Astra: today's trending titles straight from TMDB (KP: like cineby's
     // "Top content today"), shown at once without waiting for the library
     // index; titles not on the server get a greyed-out Play.
-    // TMDB's trending this week (cineby's own list isn't on TMDB; week is the closest steady source).
+    // Cineby's trending list first (KP's choice), filled out with TMDB's
+    // trending this week; TMDB alone when cineby can't be read.
     let trending = tmdb == nil ? [] : await loadWeekTrending()
     func picks(_ index: [String: PlexMetadata]) async -> [PlexMetadata] {
       await loadInFull(TrendingHero.today(trending: trending, index: index)).filter { $0.backdrop != nil }
@@ -300,6 +301,21 @@ final class LibraryStore {
   }
 
   @ObservationIgnored private var weekTrendingTask: Task<[TMDBItem], Never>?
+
+  /// Cineby's trending titles, in its order, with TMDB's details. Empty when
+  /// the page can't be read.
+  private nonisolated static func cinebyItems(tmdb: TMDBClient) async -> [TMDBItem] {
+    guard let entries = try? await CinebyTrending.fetch(), !entries.isEmpty else { return [] }
+    let picked = Array(entries.prefix(30))
+    return await withTaskGroup(of: (Int, TMDBItem?).self) { group in
+      for (i, entry) in picked.enumerated() {
+        group.addTask { (i, try? await tmdb.item(id: entry.tmdbID, kind: entry.kind)) }
+      }
+      var byIndex: [Int: TMDBItem] = [:]
+      for await (i, item) in group { byIndex[i] = item }
+      return picked.indices.compactMap { byIndex[$0] }
+    }
+  }
   @ObservationIgnored private var weekTrendingFetched = Date.distantPast
 
   /// TMDB's trending this week, movies and shows, pages 1–3 in order, each title once.
@@ -311,6 +327,7 @@ final class LibraryStore {
     }
     weekTrendingFetched = Date()
     let task = Task { () -> [TMDBItem] in
+      let cinebyTask = Task { await Self.cinebyItems(tmdb: tmdb) }
       let pages = await withTaskGroup(of: (Int, [TMDBItem]).self) { group in
         for page in 1...3 {
           group.addTask { (page, (try? await tmdb.trending(.week, page: page)) ?? []) }
@@ -319,8 +336,7 @@ final class LibraryStore {
         for await (page, items) in group { byPage[page] = items }
         return (1...3).flatMap { byPage[$0] ?? [] }
       }
-      var seen = Set<String>()
-      return pages.filter { seen.insert($0.id).inserted }
+      return CinebyTrending.merge(await cinebyTask.value, fill: pages)
     }
     weekTrendingTask = task
     let result = await task.value

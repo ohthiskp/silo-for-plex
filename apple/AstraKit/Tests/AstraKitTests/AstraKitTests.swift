@@ -1026,3 +1026,32 @@ final class PauseTests: XCTestCase {
     } catch is CancellationError {}
   }
 }
+
+final class CinebyTrendingTests: XCTestCase {
+  func testParsesLinksInPageOrderOnce() {
+    let html = #"<a href="/movie/1226863/watch">a</a><a href="/tv/76479/watch">b</a><a href="/movie/1226863/watch">a</a><img src="/movie/12x"><a href='/movie/83533?x=1'>c</a>"#
+    let entries = CinebyTrending.parse(html)
+    XCTAssertEqual(entries.map(\.id), ["movie:1226863", "tv:76479", "movie:83533"])
+  }
+
+  func testFetchSendsABrowserAgentAndFailsOnBadStatus() async throws {
+    let ok = FakeTransport { _ in (200, Data(#"<a href="/tv/5/watch">"#.utf8)) }
+    let entries = try await CinebyTrending.fetch(transport: ok)
+    XCTAssertEqual(entries.map(\.id), ["tv:5"])
+    XCTAssertTrue(ok.requests.first?.value(forHTTPHeaderField: "User-Agent")?.contains("Mozilla") == true)
+
+    let blocked = FakeTransport { _ in (403, Data()) }
+    do {
+      _ = try await CinebyTrending.fetch(transport: blocked)
+      XCTFail("a blocked page should throw so TMDB is used instead")
+    } catch {}
+  }
+
+  func testMergeKeepsCinebyFirstAndFillsFromTMDB() {
+    func item(_ id: Int, _ kind: TMDBItem.Kind = .movie) -> TMDBItem {
+      TMDBItem(tmdbID: id, kind: kind, title: "x", year: nil, overview: nil, rating: nil, posterPath: "/p", backdropPath: nil)
+    }
+    let merged = CinebyTrending.merge([item(3), item(1, .tv)], fill: [item(1, .tv), item(9), item(3)])
+    XCTAssertEqual(merged.map(\.id), ["movie:3", "tv:1", "movie:9"])
+  }
+}

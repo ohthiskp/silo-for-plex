@@ -160,6 +160,12 @@ public struct TMDBClient: Sendable {
     try await list("/discover/\(request.kind.rawValue)", request.query(service: service), kind: request.kind)
   }
 
+  /// One title by its TMDB id, or nil when it has no title or artwork.
+  public func item(id: Int, kind: TMDBItem.Kind) async throws -> TMDBItem? {
+    let data = try await get("/\(kind.rawValue)/\(id)", [:])
+    return try JSONDecoder().decode(Raw.self, from: data).item(forcedKind: kind)
+  }
+
   /// Poster, backdrop and title logo for one title (English or text-free logo).
   public func artwork(id: Int, kind: TMDBItem.Kind) async throws -> TMDBArtwork {
     let data = try await get(
