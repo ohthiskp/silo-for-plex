@@ -1,7 +1,6 @@
 name: Astra TMDB trending probe
-run-name: TMDB trending probe
+run-name: Trending source probe
 
-# Prints TMDB's trending lists (titles only), to compare with a reference site.
 on:
   push:
     branches: [claude/project-thread-otuzui]
@@ -12,14 +11,16 @@ permissions:
 
 jobs:
   probe:
-    runs-on: ubuntu-latest
+    runs-on: macos-26
     steps:
-      - name: Trending lists
-        env:
-          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+      - name: Cineby page structure
         run: |
-          for path in "movie/popular?region=US" "tv/popular?page=1" "movie/now_playing?region=US" "discover/movie?sort_by=popularity.desc&watch_region=US&with_watch_monetization_types=flatrate|rent|buy" "discover/tv?sort_by=popularity.desc&watch_region=US&with_watch_monetization_types=flatrate&with_original_language=en"; do
-            echo "=== $path"
-            curl -sS -H "Authorization: Bearer $TMDB_TOKEN" "https://api.themoviedb.org/3/$path&language=en-US" \
-              | python3 -c 'import json,sys; [print(i+1, x.get("media_type"), x.get("title") or x.get("name")) for i,x in enumerate(json.load(sys.stdin).get("results",[])[:15])]'
-          done
+          curl -sSL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" -o page.html -w "HTTP %{http_code} %{size_download} bytes %{url_effective}\n" https://cineby.tech/
+          echo "--- links in order"
+          grep -oE '/(movie|tv)/[0-9]+' page.html | awk '!s[$0]++' | head -60
+          echo "--- headings"
+          grep -oE '>[^<>]{3,40}</h[1-3]>' page.html | head -20
+          echo "--- next data?"
+          grep -oE '__NEXT_DATA__|self\.__next_f|application/ld\+json' page.html | sort | uniq -c
+          echo "--- around Top / Trending"
+          grep -oE '.{0,120}(Top 10|Top content|Trending on)[^<]{0,80}' page.html | head -5
