@@ -61,6 +61,11 @@ struct HomeView: View {
           }
         }
 
+        // Astra: cineby-style numbered Top 10 with a Movies / Series pill (For You only).
+        if library.selectedService == nil, !library.topTen.movies.isEmpty || !library.topTen.shows.isEmpty {
+          TopTenRow(library: library)
+        }
+
         ForEach(library.homeRows) { hub in
           ContentRow(title: hub.title) {
             // Movies and shows as posters; episodes keep landscape stills.
@@ -193,6 +198,94 @@ struct ServicePill: View {
     .help(label)
     .accessibilityLabel(label)
     .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+}
+
+// MARK: - Top 10
+
+/// "Top 10 This Week": big numbers beside posters, and a glass pill that
+/// switches between movies and series. Titles not on the server open their
+/// details with Play greyed out.
+struct TopTenRow: View {
+  var library: LibraryStore
+  @Environment(\.contentLeading) private var leading
+  @State private var showSeries = false
+  @Namespace private var pill
+
+  private var items: [PlexMetadata] { showSeries ? library.topTen.shows : library.topTen.movies }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(spacing: Astra.Spacing.s) {
+        Text("Top 10 This Week")
+          .font(Astra.Font.rowTitle)
+          .foregroundStyle(Astra.Color.ink)
+          .lineLimit(1)
+        Spacer(minLength: 8)
+        HStack(spacing: 2) {
+          segment("Movies", selected: !showSeries) { showSeries = false }
+          segment("Series", selected: showSeries) { showSeries = true }
+        }
+        .padding(3)
+        .astraGlass(in: Capsule())
+        .animation(.snappy(duration: 0.22), value: showSeries)
+      }
+      .padding(.leading, leading)
+      .padding(.trailing, Astra.Spacing.pageTrailing)
+
+      ScrollView(.horizontal) {
+        LazyHStack(alignment: .bottom, spacing: 18) {
+          ForEach(Array(items.enumerated()), id: \.element.id) { rank, item in
+            HStack(alignment: .bottom, spacing: -12) {
+              RankNumber(rank: rank + 1)
+              PosterCard(library: library, item: item)
+            }
+          }
+        }
+        .padding(.horizontal, leading)
+      }
+      .scrollIndicators(.never)
+      .scrollClipDisabled()
+      // A new list starts at number 1.
+      .id(showSeries)
+      .transition(.opacity)
+    }
+  }
+
+  private func segment(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+      Text(title)
+        .font(.system(size: 13, weight: .bold))
+        .foregroundStyle(selected ? Color.black : Color.white.opacity(0.9))
+        .padding(.horizontal, 14)
+        .frame(height: 30)
+        .background {
+          if selected { Capsule().fill(.white).matchedGeometryEffect(id: "segment", in: pill) }
+        }
+        .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+}
+
+/// The big outlined rank number beside a Top 10 poster (white and grey only).
+struct RankNumber: View {
+  var rank: Int
+
+  var body: some View {
+    Text("\(rank)")
+      .font(.system(size: 112, weight: .black, design: .rounded))
+      .monospacedDigit()
+      .foregroundStyle(
+        LinearGradient(colors: [.white.opacity(0.95), .white.opacity(0.35)], startPoint: .top, endPoint: .bottom))
+      .shadow(color: .black.opacity(0.6), radius: 6, x: 2)
+      .lineLimit(1)
+      .fixedSize()
+      // Sits behind the poster's left edge and level with the title line.
+      .padding(.bottom, 36)
+      .zIndex(-1)
+      .accessibilityHidden(true)
   }
 }
 

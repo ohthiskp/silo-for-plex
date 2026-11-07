@@ -259,6 +259,17 @@ public enum TrendingHero {
     return out
   }
 
+  /// The numbered Top 10 rows under Continue Watching: trending movies and
+  /// trending shows, each in TMDB's order, each title once.
+  public static func topTen(
+    trending: [TMDBItem], index: [String: PlexMetadata], limit: Int = 10
+  ) -> (movies: [PlexMetadata], shows: [PlexMetadata]) {
+    func list(_ kind: TMDBItem.Kind) -> [PlexMetadata] {
+      today(trending: trending.filter { $0.kind == kind }, index: index, limit: limit)
+    }
+    return (list(.movie), list(.tv))
+  }
+
   /// For a streaming service: its titles that are trending, in trending
   /// order; then, if that's too few, its popular titles from the last two
   /// years. Never an old catalogue title.

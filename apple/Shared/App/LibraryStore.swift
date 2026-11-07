@@ -20,6 +20,8 @@ final class LibraryStore {
   private(set) var continueWatching: [PlexMetadata] = []
   private(set) var hubs: [PlexHub] = []
   private(set) var hero: [PlexMetadata] = []
+  /// For You's numbered Top 10 rows (TMDB trending this week), playable ones from the server.
+  private(set) var topTen: (movies: [PlexMetadata], shows: [PlexMetadata]) = ([], [])
   private(set) var sections: [PlexLibrarySection] = []
   private(set) var isLoadingHome = false
   /// True while the For You hero's trending titles are being matched to the server.
@@ -277,7 +279,8 @@ final class LibraryStore {
     // Astra: today's trending titles straight from TMDB (KP: like cineby's
     // "Top content today"), shown at once without waiting for the library
     // index; titles not on the server get a greyed-out Play.
-    let trending = tmdb == nil ? [] : await loadTrending()
+    // This week's trending (KP picked it over today's; it changes less often).
+    let trending = tmdb == nil ? [] : await loadWeekTrending()
     func picks(_ index: [String: PlexMetadata]) async -> [PlexMetadata] {
       await loadInFull(TrendingHero.today(trending: trending, index: index)).filter { $0.backdrop != nil }
     }
@@ -285,6 +288,7 @@ final class LibraryStore {
     if shown.isEmpty { shown = await pickHero(from: hubs) }
     guard isCurrent() else { return }
     if !shown.isEmpty || hero.isEmpty { hero = shown }
+    topTen = TrendingHero.topTen(trending: trending, index: libraryIndex ?? [:])
     isLoadingHero = false
     // Once the library index is ready, the titles on the server become playable.
     guard !trending.isEmpty, libraryIndex == nil, let index = try? await loadLibraryIndex(), !index.isEmpty
@@ -292,6 +296,36 @@ final class LibraryStore {
     let matched = await picks(index)
     guard isCurrent(), !matched.isEmpty else { return }
     hero = matched
+    topTen = TrendingHero.topTen(trending: trending, index: index)
+  }
+
+  @ObservationIgnored private var weekTrendingTask: Task<[TMDBItem], Never>?
+  @ObservationIgnored private var weekTrendingFetched = Date.distantPast
+
+  /// TMDB's trending this week, movies and shows, pages 1–3 in order, each title once.
+  private func loadWeekTrending() async -> [TMDBItem] {
+    guard let tmdb else { return [] }
+    // Kept for an hour, so a reload later in the day picks up TMDB's changes.
+    if let weekTrendingTask, Date().timeIntervalSince(weekTrendingFetched) < 3600 {
+      return await weekTrendingTask.value
+    }
+    weekTrendingFetched = Date()
+    let task = Task { () -> [TMDBItem] in
+      let pages = await withTaskGroup(of: (Int, [TMDBItem]).self) { group in
+        for page in 1...3 {
+          group.addTask { (page, (try? await tmdb.trending(.week, page: page)) ?? []) }
+        }
+        var byPage: [Int: [TMDBItem]] = [:]
+        for await (page, items) in group { byPage[page] = items }
+        return (1...3).flatMap { byPage[$0] ?? [] }
+      }
+      var seen = Set<String>()
+      return pages.filter { seen.insert($0.id).inserted }
+    }
+    weekTrendingTask = task
+    let result = await task.value
+    if result.isEmpty { weekTrendingTask = nil }
+    return result
   }
 
   /// The library index, read once. Concurrent callers share one read; a

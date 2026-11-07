@@ -862,6 +862,16 @@ final class TrendingHeroTests: XCTestCase {
     XCTAssertEqual(TrendingHero.today(trending: (1...20).map { tmdb($0) }, index: [:], limit: 10).count, 10)
   }
 
+  func testTopTenSplitsMoviesAndShowsInTrendingOrder() throws {
+    let index = ["tv:2": try plex("b", tmdb: 2, type: .show)]
+    let trending = [tmdb(1), tmdb(2, .tv), tmdb(3), tmdb(4, .tv), tmdb(1)] + (10...30).map { tmdb($0) }
+    let top = TrendingHero.topTen(trending: trending, index: index)
+    XCTAssertEqual(top.movies.count, 10)
+    XCTAssertEqual(top.movies.first?.ratingKey, TMDBItem(tmdbID: 1, kind: .movie, title: "x", year: 2026, overview: nil, rating: nil, posterPath: "/p", backdropPath: "/b").asMetadata.ratingKey)
+    XCTAssertEqual(top.shows.map(\.ratingKey).first, "b")
+    XCTAssertEqual(top.shows.count, 2)
+  }
+
   func testServiceHeroNeverFallsBackToOldTitles() throws {
     let popular = [try plex("old", tmdb: 10, year: 1994), try plex("new", tmdb: 11, year: 2026), try plex("hot", tmdb: 12, year: 2019)]
     let picked = TrendingHero.pick(trending: [tmdb(12)], service: popular, currentYear: 2026)
