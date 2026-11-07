@@ -227,9 +227,12 @@ final class PlayerController {
     core.setProperty("force-media-title", value: source.title)
     core.setProperty("start", value: source.startSeconds > 0 ? String(format: "%.3f", source.startSeconds) : "none")
     core.setProperty("pause", value: "no")
-    // Astra (KP, 2026-11-07): keep the audio device running while paused, so
-    // resuming doesn't wait for macOS/iOS to reopen it (the play/pause lag).
-    core.setProperty("audio-stream-silence", value: "yes")
+    #if os(macOS)
+      // Astra (KP, 2026-11-07): keep the audio device running while paused, so
+      // resuming doesn't wait for macOS to reopen it (the play/pause lag).
+      // Not on iPhone: there playback stayed on the spinner with it set.
+      core.setProperty("audio-stream-silence", value: "yes")
+    #endif
     core.command(["loadfile", source.url.absoluteString, "replace"])
     core.setVisible(true)
     #if os(macOS)
