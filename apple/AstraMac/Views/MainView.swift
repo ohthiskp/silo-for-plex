@@ -1,19 +1,18 @@
 import AstraKit
 import SwiftUI
 
-/// The sidebar destinations, in order.
+/// The sidebar destinations, in order. Astra (KP, 2026-11-07): like the
+/// iPhone tabs, Movies, Shows and Downloads live inside Library.
 enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
-  case home, movies, shows, downloads, search, settings
+  case home, search, library, settings
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
     case .home: "Home"
-    case .movies: "Movies"
-    case .shows: "Shows"
-    case .downloads: "Downloads"
     case .search: "Search"
+    case .library: "Library"
     case .settings: "Settings"
     }
   }
@@ -21,15 +20,13 @@ enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
   var symbol: String {
     switch self {
     case .home: "house.fill"
-    case .movies: "film"
-    case .shows: "tv"
-    case .downloads: "arrow.down.circle"
     case .search: "magnifyingglass"
+    case .library: "square.stack.fill"
     case .settings: "gearshape.fill"
     }
   }
 
-  /// ⌘1 to ⌘6.
+  /// ⌘1 to ⌘4.
   var shortcut: KeyEquivalent { KeyEquivalent(Character(String((Self.allCases.firstIndex(of: self) ?? 0) + 1))) }
 }
 
@@ -63,7 +60,7 @@ struct MainView: View {
 
       Sidebar(selection: $selection) { item in
         if !opened.contains(item) { opened.append(item) }
-        // Instant: the page swaps without animation; only the sidebar's pill slides.
+        // Instant: the page and the sidebar both switch without animation.
         selection = item
         withAnimation(Self.cardMotion) { path.removeAll() }
         // Astra (KP, 2026-11-07): clicking Home always goes back to For You.
@@ -143,12 +140,8 @@ struct MainView: View {
     switch item {
     case .home:
       HomeView(library: library)
-    case .movies:
-      LibraryGridView(library: library, title: "Movies", sections: library.sections.filter { $0.type == "movie" })
-    case .shows:
-      LibraryGridView(library: library, title: "Shows", sections: library.sections.filter { $0.type == "show" })
-    case .downloads:
-      DownloadsView()
+    case .library:
+      LibraryPage(library: library)
     case .search:
       SearchView(library: library)
     case .settings:
@@ -159,42 +152,28 @@ struct MainView: View {
 
 // MARK: - Sidebar
 
-/// Icon-only Liquid Glass sidebar with one white selection pill that slides
-/// between items. The pill is a single view under all the icons, so there is
-/// never more than one, and each icon's colour follows the same selection
-/// with the same animation, so an icon is never black on the dark glass.
+/// Icon-only Liquid Glass sidebar. Astra (KP, 2026-11-07): no sliding pill;
+/// a click lights the chosen icon at once, with no animation.
 struct Sidebar: View {
   @Binding var selection: SidebarItem
   var choose: (SidebarItem) -> Void
   @Environment(AppModel.self) private var app
 
-  private static let itemSize: CGFloat = 44
   private static let spacing: CGFloat = Astra.Spacing.xs
-  private static let motion = Animation.snappy(duration: 0.24)
-
-  private var selectedIndex: Int { SidebarItem.allCases.firstIndex(of: selection) ?? 0 }
 
   var body: some View {
     VStack(spacing: Self.spacing) {
       ForEach(SidebarItem.allCases) { item in
         SidebarButton(
           symbol: item.symbol, title: item.title, selected: selection == item,
-          count: item == .downloads ? app.downloads.jobs.count : 0
+          count: item == .library ? app.downloads.jobs.count : 0
         ) {
           choose(item)
         }
         .keyboardShortcut(item.shortcut, modifiers: .command)
       }
     }
-    .background(alignment: .top) {
-      // A white fill, not glass: it sits on the sidebar's glass.
-      Capsule()
-        .fill(Astra.Color.accent)
-        .frame(width: Self.itemSize, height: Self.itemSize)
-        .offset(y: CGFloat(selectedIndex) * (Self.itemSize + Self.spacing))
-        .allowsHitTesting(false)
-    }
-    .animation(Self.motion, value: selection)
+    .transaction { $0.animation = nil }
     .padding(9)
     .frame(width: Astra.Sidebar.collapsedWidth)
     // Clear glass with a light edge, like the player's panel (KP's reference card).
@@ -209,7 +188,7 @@ struct SidebarButton: View {
   var symbol: String
   var title: String
   var selected: Bool
-  /// Astra (KP, 2026-11-07): Downloads shows how many are running, like the iPhone tab.
+  /// Astra (KP, 2026-11-07): Library shows how many downloads are running, like the iPhone tab.
   var count = 0
   var action: () -> Void
 
@@ -219,6 +198,8 @@ struct SidebarButton: View {
         .font(.system(size: 17, weight: .semibold))
         .frame(width: 44, height: 44)
         .foregroundStyle(selected ? Color.black : Astra.Color.muted)
+        // A white fill, not glass: it sits on the sidebar's glass.
+        .background { if selected { Capsule().fill(Astra.Color.accent) } }
         .overlay(alignment: .topTrailing) {
           if count > 0 {
             Text("\(count)")

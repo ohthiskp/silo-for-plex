@@ -80,18 +80,19 @@ struct EmptyState: View {
   }
 }
 
-private let posterColumns = [
+let posterColumns = [
   GridItem(
     .adaptive(minimum: Astra.Layout.posterMinWidth, maximum: Astra.Layout.posterMinWidth + 30), spacing: 18,
     alignment: .top)
 ]
 
-/// Movies or Shows: every library of that kind as one poster grid, loaded a
-/// page at a time. With several libraries a picker chooses between them.
-struct LibraryGridView: View {
+/// Movies or Shows on the Mac Library page: every library of that kind as
+/// one poster grid, loaded a page at a time. With several libraries a picker
+/// chooses between them; a second picker sorts.
+struct LibraryGridContent: View {
   var library: LibraryStore
-  var title: String
-  var sections: [PlexLibrarySection]
+  /// "movie" or "show".
+  var kind: String
 
   @State private var sectionKey: String?
   @State private var items: [PlexMetadata] = []
@@ -99,38 +100,38 @@ struct LibraryGridView: View {
   /// Items read from the server so far (the next page starts here).
   @State private var loaded = 0
   @State private var loading = false
-  @State private var sort = "addedAt:desc"
+  @AppStorage("astra.libraries.macSort") private var sort = "addedAt:desc"
 
+  private var sections: [PlexLibrarySection] { library.sections.filter { $0.type == kind } }
   private var section: PlexLibrarySection? {
     sections.first { $0.key == sectionKey } ?? sections.first
   }
+  private var noun: String { kind == "show" ? "Shows" : "Movies" }
 
   var body: some View {
-    AstraPage {
-      AstraSectionHeader(title: title) {
-        HStack(spacing: Astra.Spacing.s) {
-          if sections.count > 1 {
-            Picker("Library", selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 })) {
-              ForEach(sections) { Text($0.title).tag($0.key) }
-            }
-            .labelsHidden()
-            .fixedSize()
-          }
-          Picker("Sort", selection: $sort) {
-            Text("Recently Added").tag("addedAt:desc")
-            Text("Title").tag("titleSort")
-            Text("Release Date").tag("originallyAvailableAt:desc")
-            Text("Rating").tag("audienceRating:desc")
+    VStack(alignment: .leading, spacing: Astra.Spacing.l) {
+      HStack(spacing: Astra.Spacing.s) {
+        if sections.count > 1 {
+          Picker("Library", selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 })) {
+            ForEach(sections) { Text($0.title).tag($0.key) }
           }
           .labelsHidden()
           .fixedSize()
         }
+        Picker("Sort", selection: $sort) {
+          Text("Recently Added").tag("addedAt:desc")
+          Text("Title").tag("titleSort")
+          Text("Release Date").tag("originallyAvailableAt:desc")
+          Text("Rating").tag("audienceRating:desc")
+        }
+        .labelsHidden()
+        .fixedSize()
       }
 
       if sections.isEmpty {
         EmptyState(
-          symbol: title == "Shows" ? "tv" : "film", title: "No \(title.lowercased()) library",
-          message: "This Plex server has no \(title.lowercased()) library.")
+          symbol: kind == "show" ? "tv" : "film", title: "No \(noun.lowercased()) library",
+          message: "This Plex server has no \(noun.lowercased()) library.")
       } else if items.isEmpty && reachedEnd {
         EmptyState(symbol: "square.stack", title: "Nothing here yet", message: "This library is empty.")
       } else {

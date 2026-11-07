@@ -8,37 +8,10 @@ import SwiftUI
 struct LibrariesView: View {
   var library: LibraryStore
 
-  enum Segment: String, CaseIterable, Identifiable {
-    case libraries, watchlist, downloads
-    var id: String { rawValue }
-    var title: String {
-      switch self {
-      case .libraries: "Libraries"
-      case .watchlist: "Watchlist"
-      case .downloads: "Downloads"
-      }
-    }
-    var symbol: String {
-      switch self {
-      case .libraries: "square.stack"
-      case .watchlist: "bookmark"
-      case .downloads: "arrow.down.circle"
-      }
-    }
-  }
-
-  enum Kind: String, CaseIterable, Identifiable {
-    case movie, show
-    var id: String { rawValue }
-    var title: String { self == .movie ? "Movies" : "Shows" }
-  }
-
   @Environment(AppModel.self) private var app
-  @AppStorage("astra.library.segment") private var segment: Segment = .libraries
-  @AppStorage("astra.library.kind") private var kind: Kind = .movie
-  @Namespace private var kindPill
+  @AppStorage("astra.library.segment") private var segment: LibrarySegment = .libraries
+  @AppStorage("astra.library.kind") private var kind: LibraryKind = .movie
   @State private var showSettings = false
-  @Namespace private var pill
 
   var body: some View {
     ScrollView(.vertical) {
@@ -57,10 +30,10 @@ struct LibrariesView: View {
           .astraIconButton(size: 40)
           .accessibilityLabel("Settings")
         }
-        segmentPill
+        LibrarySegmentPill(segment: $segment)
         switch segment {
         case .libraries:
-          kindSwitch
+          LibraryKindSwitch(kind: $kind)
           LibraryBrowser(library: library, kind: kind.rawValue).id(kind.rawValue)
         case .watchlist:
           WatchlistContent(library: library)
@@ -84,64 +57,6 @@ struct LibrariesView: View {
           }
       }
     }
-  }
-
-  /// The smaller Movies | Shows switch inside Libraries.
-  private var kindSwitch: some View {
-    HStack(spacing: 6) {
-      ForEach(Kind.allCases) { item in
-        Button {
-          withAnimation(Astra.Motion.fast) { kind = item }
-        } label: {
-          Text(item.title)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(kind == item ? Color.black : Astra.Color.ink)
-            .padding(.horizontal, 16)
-            .frame(height: 30)
-            .background {
-              if kind == item { Capsule().fill(.white).matchedGeometryEffect(id: "kind", in: kindPill) }
-            }
-            .astraGlass(in: Capsule(), variant: .clear, interactive: true)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(kind == item ? .isSelected : [])
-      }
-    }
-  }
-
-  /// Libraries · Watchlist · Downloads in one glass capsule; the chosen one is lit.
-  private var segmentPill: some View {
-    HStack(spacing: 0) {
-      ForEach(Segment.allCases) { item in
-        Button {
-          withAnimation(Astra.Motion.base) { segment = item }
-        } label: {
-          HStack(spacing: 6) {
-            Label(item.title, systemImage: item.symbol).labelStyle(.titleAndIcon)
-            // Astra: how many downloads are running or waiting.
-            if item == .downloads, !app.downloads.jobs.isEmpty {
-              CountBadge(count: app.downloads.jobs.count)
-            }
-          }
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(segment == item ? Astra.Color.ink : Astra.Color.muted)
-            .frame(maxWidth: .infinity)
-            .frame(height: 38)
-            .background {
-              if segment == item {
-                Capsule().fill(.white.opacity(0.16)).matchedGeometryEffect(id: "segment", in: pill)
-              }
-            }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(segment == item ? .isSelected : [])
-      }
-    }
-    .padding(4)
-    .astraGlass(in: Capsule(), variant: .clear)
-    .astraGlassEdge(Capsule(), strength: 0.6)
   }
 }
 
@@ -488,22 +403,5 @@ private struct SortSheet: View {
       .scrollIndicators(.never)
     }
     .padding(20)
-  }
-}
-
-/// A small white count, like the badge on an app icon (white and grey only).
-struct CountBadge: View {
-  var count: Int
-
-  var body: some View {
-    Text("\(count)")
-      .font(.system(size: 11, weight: .bold))
-      .monospacedDigit()
-      .foregroundStyle(.black)
-      .padding(.horizontal, 5)
-      .frame(minWidth: 18, minHeight: 18)
-      .background(Capsule().fill(.white))
-      .contentTransition(.numericText())
-      .accessibilityLabel("\(count) downloading")
   }
 }

@@ -53,15 +53,10 @@ struct HomeView: View {
           let heroComing = library.selectedService == nil ? library.isLoadingHero : library.isLoadingService
           Color.clear.frame(height: heroComing ? heroHeight : 120)
         } else {
-          Group {
-            #if os(iOS)
-              // Astra (KP, 2026-11-07): the hero follows the finger and snaps
-              // to the next title; a stretching dot shows where you are.
-              SwipeHero(library: library, items: library.homeHero, height: heroHeight)
-            #else
-              HeroCarousel(library: library, items: library.homeHero, height: heroHeight)
-            #endif
-          }
+          // Astra (KP, 2026-11-07): the hero follows the finger (or the
+          // trackpad) and snaps to the next title; a stretching dot shows
+          // where you are. No arrows, on iPhone and Mac.
+          SwipeHero(library: library, items: library.homeHero, height: heroHeight)
           // A new set of titles (another service) starts a fresh carousel.
           .id(library.selectedService?.id ?? "for-you")
         }
@@ -486,115 +481,6 @@ struct TopTenList: View {
 
 // MARK: - Hero
 
-/// One featured title at a time. The backdrop crossfades; the old title
-/// fades out before the new one fades in, so two titles never overlap. The
-/// next title's artwork is downloaded before the switch, so nothing blinks.
-struct HeroCarousel: View {
-  var library: LibraryStore
-  var items: [PlexMetadata]
-  var height: CGFloat
-
-  @State private var index = 0
-  /// Bumped by manual navigation so the next title is prefetched.
-  @State private var interaction = 0
-  @State private var switching = false
-
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @Environment(\.contentLeading) private var leading
-  @Environment(\.isPageActive) private var isPageActive
-  @Environment(\.openItem) private var openItem
-
-  private static let titleTransition = AnyTransition.asymmetric(
-    insertion: .opacity.animation(.easeOut(duration: 0.35).delay(0.3)),
-    removal: .opacity.animation(.easeIn(duration: 0.2)))
-
-  var body: some View {
-    let item = items[min(index, items.count - 1)]
-    // The text and pager are laid out in flow below the backdrop's top space,
-    // so they can never spill onto the rows below. HeroInfo has a fixed
-    // height for every title, so switching titles never resizes the hero.
-    VStack(alignment: .leading, spacing: 22) {
-      ZStack(alignment: .bottomLeading) {
-        HeroInfo(library: library, item: item)
-          .id(item.id)
-          .transition(Self.titleTransition)
-      }
-      if items.count > 1 {
-        HeroPager(count: items.count, index: index, previous: { step(-1) }, next: { step(1) })
-      }
-    }
-    .padding(.leading, leading)
-    .padding(.trailing, Astra.Spacing.pageTrailing)
-    // Room above the text for the artwork and the streaming switcher.
-    .padding(.top, 110)
-    .padding(.bottom, 8)
-    .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
-    .background {
-      ZStack {
-        ZStack {
-          ArtworkImage(
-            library: library, item: item, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear
-          )
-          .id(item.id)
-          .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0.2 : 0.6)))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-        HeroScrim()
-      }
-    }
-    // Astra (KP, 2026-11-07): a tap anywhere on the hero (artwork, logo,
-    // text) opens Details; Play, + and the pager keep their own action.
-    .contentShape(Rectangle())
-    .onTapGesture { openItem(item) }
-    #if os(iOS)
-      // Swipe the hero sideways to move between its titles.
-      .simultaneousGesture(
-        DragGesture(minimumDistance: 30).onEnded { drag in
-          let dx = drag.translation.width
-          guard abs(dx) > 50, abs(dx) > abs(drag.translation.height) * 1.5 else { return }
-          step(dx < 0 ? 1 : -1)
-        })
-    #endif
-    .task(id: "\(interaction)|\(isPageActive)") {
-      // Behind another page (Movies, Shows…): no downloads, no switching.
-      guard isPageActive else { return }
-      // Astra (KP, 2026-11-07): a manual carousel; the hero only changes when
-      // the user moves it. The next title's artwork is ready before then.
-      await prefetch((index + 1) % max(items.count, 1))
-    }
-  }
-
-  private func step(_ delta: Int) {
-    guard items.count > 1, !switching else { return }
-    let next = (index + delta + items.count) % items.count
-    Task { @MainActor in
-      await show(next)
-      interaction += 1
-    }
-  }
-
-  private func show(_ next: Int) async {
-    guard next != index, !switching else { return }
-    switching = true
-    await prefetch(next)
-    index = next
-    switching = false
-    await prefetch((next + 1) % items.count)
-  }
-
-  /// Downloads and decodes a title's backdrop and logo, so its switch-in is instant.
-  private func prefetch(_ i: Int) async {
-    guard items.indices.contains(i) else { return }
-    let item = items[i]
-    for kind in [LibraryStore.ArtKind.heroBackdrop, .logo] {
-      if let url = await library.artworkURL(for: item, kind, width: 1920, height: 1080) {
-        _ = await ImagePipeline.shared.image(for: url)
-      }
-    }
-  }
-}
-
 /// The hero's text and buttons.
 struct HeroInfo: View {
   var library: LibraryStore
@@ -648,26 +534,6 @@ struct HeroInfo: View {
       }
       .astraGlassGroup(spacing: 12)
       .padding(.top, 6)
-    }
-  }
-}
-
-/// Previous and next buttons around the page dots.
-struct HeroPager: View {
-  var count: Int
-  var index: Int
-  var previous: () -> Void
-  var next: () -> Void
-
-  var body: some View {
-    HStack(spacing: Astra.Spacing.m) {
-      Button(action: previous) { Image(systemName: "chevron.left") }
-        .astraIconButton(size: 32)
-        .accessibilityLabel("Previous Title")
-      PageDots(count: count, index: index)
-      Button(action: next) { Image(systemName: "chevron.right") }
-        .astraIconButton(size: 32)
-        .accessibilityLabel("Next Title")
     }
   }
 }
@@ -754,26 +620,6 @@ struct MetaRow: View {
   }
 }
 
-struct PageDots: View {
-  var count: Int
-  var index: Int
-
-  var body: some View {
-    HStack(spacing: 7) {
-      ForEach(0..<count, id: \.self) { i in
-        Circle()
-          .fill(Color.white.opacity(i == index ? 1 : 0.35))
-          .frame(width: 6, height: 6)
-      }
-    }
-    .animation(Astra.Motion.base, value: index)
-  }
-}
-
-extension String {
-  var nilIfEmpty: String? { isEmpty ? nil : self }
-}
-
 /// The official age rating of a movie or show: Plex's when it has one, else
 /// TMDB's US certification. Nothing when neither knows.
 struct RatingBadge: View {
@@ -822,8 +668,7 @@ struct WatchlistButton: View {
   }
 }
 
-#if os(iOS)
-  /// The iPhone hero: titles side by side in a paging scroll view, so a drag
+/// The hero: titles side by side in a paging scroll view, so a drag
   /// moves the artwork with the finger and lets go onto the next title. No
   /// arrows; the dots below stretch toward the title you're dragging to.
   struct SwipeHero: View {
@@ -851,16 +696,14 @@ struct WatchlistButton: View {
       .scrollTargetBehavior(.paging)
       .scrollPosition(id: $position)
       .scrollIndicators(.never)
-      .onScrollGeometryChange(for: CGFloat.self, of: { geo in
-        geo.containerSize.width > 0 ? geo.contentOffset.x / geo.containerSize.width : 0
-      }) { _, value in
-        progress = value
-      }
+      .modifier(PageProgressReader(progress: $progress, position: position))
       .overlay(alignment: .bottom) {
         if items.count > 1 {
-          StretchDots(count: items.count, progress: progress)
-            .padding(.bottom, 6)
-            .allowsHitTesting(false)
+          // On the Mac a click on a dot moves there too (a mouse can't swipe).
+          StretchDots(count: items.count, progress: progress) { i in
+            withAnimation(.snappy(duration: 0.4)) { position = i }
+          }
+          .padding(.bottom, 6)
         }
       }
       .sensoryFeedback(.selection, trigger: position)
@@ -898,6 +741,7 @@ struct WatchlistButton: View {
   struct StretchDots: View {
     var count: Int
     var progress: CGFloat
+    var select: (Int) -> Void = { _ in }
 
     var body: some View {
       HStack(spacing: 6) {
@@ -906,10 +750,38 @@ struct WatchlistButton: View {
           Capsule()
             .fill(Astra.Color.ink.opacity(0.35 + 0.65 * near))
             .frame(width: 7 + 17 * near, height: 7)
+            #if os(macOS)
+              .padding(.vertical, 6)
+              .contentShape(Rectangle())
+              .onTapGesture { select(i) }
+            #endif
         }
       }
+      #if os(iOS)
+        .allowsHitTesting(false)
+      #endif
       .accessibilityElement()
       .accessibilityLabel("Title \(Int(progress.rounded()) + 1) of \(count)")
     }
   }
-#endif
+
+/// How far the hero has paged, fractional while dragging. macOS 14 has no
+/// scroll geometry, so there it follows the page it settles on.
+private struct PageProgressReader: ViewModifier {
+  @Binding var progress: CGFloat
+  var position: Int?
+
+  func body(content: Content) -> some View {
+    if #available(macOS 15.0, iOS 18.0, *) {
+      content.onScrollGeometryChange(for: CGFloat.self, of: { geo in
+        geo.containerSize.width > 0 ? geo.contentOffset.x / geo.containerSize.width : 0
+      }) { _, value in
+        progress = value
+      }
+    } else {
+      content.onChange(of: position) { _, new in
+        withAnimation(.snappy(duration: 0.3)) { progress = CGFloat(new ?? 0) }
+      }
+    }
+  }
+}
