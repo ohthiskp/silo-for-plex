@@ -1,0 +1,39 @@
+name: Astra TestFlight crash reports
+run-name: TestFlight crash reports
+
+# Prints the newest crash reports testers sent from TestFlight (Send Beta Feedback).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  crashes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Read crash reports
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUNDLE_ID: com.ohthiskp.astra
+        run: |
+          python3 -m pip install --quiet pyjwt cryptography
+          mkdir -p "$RUNNER_TEMP/asc"
+          python3 - "$RUNNER_TEMP/asc/AuthKey.p8" <<'PY'
+          import base64, os, re, sys
+          raw = os.environ["ASC_KEY_P8"].replace("–", "-").replace("—", "-").replace("−", "-").replace("\r", "")
+          body = re.sub(r"-+\s*(BEGIN|END)[A-Z ]*PRIVATE KEY\s*-+", "", raw)
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", body)
+          lines = [body[i:i + 64] for i in range(0, len(body), 64)]
+          open(sys.argv[1], "w").write("-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n")
+          PY
+          export ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8"
+          export KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')
+          export ISSUER_ID=$(printf '%s' "$ASC_ISSUER_ID" | tr -d '[:space:]' | tr 'A-F' 'a-f')
+          python3 tool/astra/asc_crashes.py
+          rm -rf "$RUNNER_TEMP/asc"
