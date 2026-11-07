@@ -61,6 +61,13 @@ struct RootView: View {
     #endif
     .animation(Astra.Motion.page, value: app.player.isActive)
     .onChange(of: app.phase, initial: true) { _, phase in updateLoader(for: phase) }
+    .task(id: loader) {
+      // "Connected" stays up briefly, then the app fades in.
+      guard loader == .connected else { return }
+      try? await Task.sleep(for: .seconds(1.1))
+      guard !Task.isCancelled, loader == .connected else { return }
+      withAnimation(Astra.Motion.hero) { loader = .hidden }
+    }
     // Controls stay inside the safe area (clear of the Mac title bar and the
     // iPhone status bar); only artwork and backgrounds extend under it.
   }
@@ -76,11 +83,9 @@ struct RootView: View {
     case .launching, .connecting:
       loader = .loading
     case .ready where loader == .loading:
+      // Astra: hidden by the `.task(id: loader)` below. An unstructured
+      // Task here aborted the iPhone app in swift_task_dealloc (iOS 27).
       loader = .connected
-      Task {
-        try? await Task.sleep(for: .seconds(1.1))
-        withAnimation(Astra.Motion.hero) { loader = .hidden }
-      }
     case .ready:
       break
     default:

@@ -112,7 +112,7 @@ struct DetailView: View {
 
         if !shown.isCatalogOnly {
         Button {
-          Task {
+          Task { @MainActor in
             await library.setWatched(shown, watched: !shown.isWatched)
             await load(refresh: true)
           }

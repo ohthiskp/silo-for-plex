@@ -489,7 +489,7 @@ struct PlayerOverlay: View {
     lastPoke = Date()
     visible = true
     hideTask?.cancel()
-    hideTask = Task {
+    hideTask = Task { @MainActor in
       try? await Task.sleep(for: .seconds(3))
       guard !Task.isCancelled, !player.paused, scrubbing == nil else { return }
       hide()

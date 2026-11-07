@@ -270,7 +270,7 @@ struct HeroCarousel: View {
   private func step(_ delta: Int) {
     guard items.count > 1, !switching else { return }
     let next = (index + delta + items.count) % items.count
-    Task {
+    Task { @MainActor in
       await show(next)
       interaction += 1
     }
