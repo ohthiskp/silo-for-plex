@@ -21,7 +21,7 @@ struct MainView: View {
         stack($homePath) { HomeView(library: library) }
       }
       Tab("Search", systemImage: "magnifyingglass", value: TabID.search) {
-        stack($searchPath) { SearchView(library: library) }
+        stack($searchPath) { PhoneSearchView(library: library) }
       }
       Tab("Libraries", systemImage: "square.stack.fill", value: TabID.libraries) {
         stack($librariesPath) { LibrariesView(library: library) }

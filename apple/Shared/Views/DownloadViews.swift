@@ -125,6 +125,14 @@ struct DownloadsContent: View {
 
   private var downloads: DownloadStore { app.downloads }
 
+  /// "Connecting…", or "120 MB of 2.3 GB · 5%".
+  static func receivedText(_ job: DownloadStore.Job) -> String {
+    guard let received = job.received, received > 0 else { return "Connecting…" }
+    let got = ByteCountFormatter.string(fromByteCount: received, countStyle: .file)
+    guard let total = job.record.bytes, total > 0 else { return got }
+    return "\(got) of \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file)) · \(Int(job.fraction * 100))%"
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: Astra.Spacing.l) {
       if !downloads.hasAnything {
@@ -139,8 +147,11 @@ struct DownloadsContent: View {
             DownloadRow(record: job.record, image: nil) {
               HStack(spacing: Astra.Spacing.s) {
                 if job.running {
-                  ProgressView(value: job.fraction).tint(.white).frame(width: 120)
-                  Text("\(Int(job.fraction * 100))%").monospacedDigit()
+                  VStack(alignment: .trailing, spacing: 4) {
+                    ProgressView(value: job.fraction).tint(.white).frame(width: 120)
+                    // Astra: how much has arrived, so a stalled download is visible.
+                    Text(Self.receivedText(job)).monospacedDigit()
+                  }
                 } else {
                   Text("Waiting")
                 }

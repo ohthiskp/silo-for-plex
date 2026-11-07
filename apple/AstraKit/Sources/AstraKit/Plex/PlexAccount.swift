@@ -138,6 +138,26 @@ public struct PlexAccountClient: Sendable {
     return resources.filter(\.isServer).sorted { ($0.owned ?? false) && !($1.owned ?? false) }
   }
 
+  public static let discoverBase = URL(string: "https://discover.provider.plex.tv")!
+
+  /// The account's Plex Watchlist, newest first. Items come from Plex's own
+  /// catalog (not the server): their guids (TMDB, IMDb) match them to the
+  /// server, and `thumb` / `art` are full image URLs.
+  public func watchlist(token: String, size: Int = 100) async throws -> [PlexMetadata] {
+    let url = Self.discoverBase.appending(
+      plexPath: "/library/sections/watchlist/all",
+      query: [
+        .init(name: "includeGuids", value: "1"),
+        .init(name: "sort", value: "watchlistedAt:desc"),
+        .init(name: "X-Plex-Container-Start", value: "0"),
+        .init(name: "X-Plex-Container-Size", value: String(size)),
+      ])
+    var request = URLRequest(url: url)
+    request.apply(headers: info.headers(token: token))
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    return try await decode(MediaContainerEnvelope<MetadataBody>.self, request).MediaContainer.Metadata ?? []
+  }
+
   private func send(_ request: URLRequest) async throws -> Data {
     let (data, response) = try await transport.send(request)
     switch response.statusCode {

@@ -7,6 +7,7 @@ struct HomeView: View {
   /// The visible height of the page, measured once per resize; the hero is a share of it.
   @State private var viewport: CGFloat = 800
   @State private var showSettings = false
+  @State private var showWatchlist = false
   /// The switcher shows only near the top of the page, so the hero's title
   /// never slides under it. Changes only when crossing the line, not every frame.
   @State private var showsTopBar = true
@@ -30,6 +31,7 @@ struct HomeView: View {
     .environment(\.astraAccent, library.selectedService.flatMap { $0.id == "appletv" ? nil : Color(hex: $0.accent) })
     .animation(Astra.Motion.base, value: library.selectedService)
     #if os(iOS)
+      .navigationDestination(isPresented: $showWatchlist) { WatchlistView(library: library) }
       .sheet(isPresented: $showSettings) {
         NavigationStack {
           SettingsView()
@@ -125,7 +127,17 @@ struct HomeView: View {
       } else {
         Spacer()
       }
-      // Astra: on iPhone Settings moved to the Libraries tab (KP's mockups, 2026-11-07).
+      // Astra: on iPhone Settings moved to the Libraries tab, and the top right
+      // holds the Plex Watchlist (KP, 2026-11-07).
+      #if os(iOS)
+        Button {
+          showWatchlist = true
+        } label: {
+          Image(systemName: "bookmark")
+        }
+        .astraIconButton(size: 40, variant: .clear)
+        .accessibilityLabel("Watchlist")
+      #endif
     }
     .padding(.top, Astra.Spacing.s)
     .padding(.leading, leading)

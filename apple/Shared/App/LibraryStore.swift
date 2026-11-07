@@ -474,6 +474,27 @@ final class LibraryStore {
     filter.apply(items, twins: libraryIndex ?? [:], swap: swap)
   }
 
+  /// The TMDB titles that are on this server, as the server's items, in order
+  /// (Search's people pages). Waits for the library index.
+  func onServer(_ items: [TMDBItem]) async -> [PlexMetadata] {
+    let index = (try? await loadLibraryIndex()) ?? [:]
+    var seen = Set<String>()
+    return shown(items.compactMap { index[$0.id] }.filter { seen.insert($0.ratingKey).inserted })
+  }
+
+  /// Watchlist items (from Plex's catalog) as this server's items where it has
+  /// them, else as catalog titles that open with Play greyed out.
+  func matchWatchlist(_ items: [PlexMetadata]) async -> [PlexMetadata] {
+    let index = (try? await loadLibraryIndex()) ?? [:]
+    return items.compactMap { item in
+      guard let key = item.tmdbKey else { return nil }
+      if let onServer = index[key] { return onServer }
+      var catalog = item
+      catalog.ratingKey = "tmdb:\(key)"
+      return catalog
+    }
+  }
+
   /// Search, with one copy of each title.
   func search(_ text: String) async throws -> [PlexMetadata] {
     shown(try await client.search(text))

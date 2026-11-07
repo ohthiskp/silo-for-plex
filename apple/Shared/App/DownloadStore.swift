@@ -24,6 +24,8 @@ final class DownloadStore {
     /// The server it comes from, so a saved queue only resumes on that server.
     var serverID: String?
     var fraction: Double = 0
+    /// Bytes received so far (shown even when the total is unknown).
+    var received: Int64?
     var running = false
     var id: String { record.ratingKey }
   }
@@ -270,8 +272,8 @@ final class DownloadStore {
         do {
           try await session.download(
             request, id: job.id, to: destination, expectedBytes: job.record.bytes, resumeData: resume,
-            progress: { [weak self] fraction in
-              Task { @MainActor in self?.setFraction(fraction, for: job.id) }
+            progress: { [weak self] fraction, written in
+              Task { @MainActor in self?.setProgress(fraction, written: written, for: job.id) }
             })
           finish(job, error: nil)
         } catch {
@@ -292,10 +294,11 @@ final class DownloadStore {
     #endif
   }
 
-  private func setFraction(_ fraction: Double, for id: String) {
+  private func setProgress(_ fraction: Double?, written: Int64, for id: String) {
     guard let i = jobs.firstIndex(where: { $0.id == id }) else { return }
-    // Publish whole percents only, so a fast download doesn't redraw every frame.
-    if Int(fraction * 100) != Int(jobs[i].fraction * 100) { jobs[i].fraction = fraction }
+    // Publish whole percents and whole megabytes only, so a fast download doesn't redraw every frame.
+    if let fraction, Int(fraction * 100) != Int(jobs[i].fraction * 100) { jobs[i].fraction = fraction }
+    if written / 1_000_000 != (jobs[i].received ?? -1) / 1_000_000 { jobs[i].received = written }
   }
 
   private func finish(_ job: Job, error: Error?) {
@@ -358,7 +361,7 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     var started: Date
     var destination: URL
     var expectedBytes: Int64?
-    var progress: @Sendable (Double) -> Void
+    var progress: @Sendable (Double?, Int64) -> Void
     var continuation: CheckedContinuation<Void, Error>
     var moveError: Error?
   }
@@ -404,7 +407,7 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
 
   func download(
     _ request: URLRequest, id: String, to destination: URL, expectedBytes: Int64?, resumeData: Data?,
-    progress: @escaping @Sendable (Double) -> Void
+    progress: @escaping @Sendable (Double?, Int64) -> Void
   ) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       // Continue a transfer that broke off, when the server allows it.
@@ -428,11 +431,10 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     _ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
     totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
   ) {
-    guard let entry = lock.withLock({ pending[downloadTask.taskIdentifier] }),
-      let fraction = DownloadCheck.fraction(
-        written: totalBytesWritten, reportedTotal: totalBytesExpectedToWrite, expected: entry.expectedBytes)
-    else { return }
-    entry.progress(fraction)
+    guard let entry = lock.withLock({ pending[downloadTask.taskIdentifier] }) else { return }
+    let fraction = DownloadCheck.fraction(
+      written: totalBytesWritten, reportedTotal: totalBytesExpectedToWrite, expected: entry.expectedBytes)
+    entry.progress(fraction, totalBytesWritten)
   }
 
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {

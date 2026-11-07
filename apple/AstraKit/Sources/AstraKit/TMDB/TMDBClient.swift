@@ -37,6 +37,31 @@ public struct StreamingService: Sendable, Hashable, Identifiable {
   }
 }
 
+/// A person from TMDB search: Search's People rows.
+public struct TMDBPerson: Sendable, Hashable, Identifiable {
+  public var id: Int
+  public var name: String
+  /// "Acting", "Directing"…
+  public var department: String?
+  public var profilePath: String?
+  /// Their best-known titles, for the row's second line.
+  public var knownFor: [String]
+
+  public var profileURL: URL? { TMDBArtwork.url(profilePath, size: "w185") }
+
+  /// "Actor", "Director"…
+  public var role: String {
+    switch department {
+    case "Acting": "Actor"
+    case "Directing": "Director"
+    case "Writing": "Writer"
+    case "Production": "Producer"
+    case let other?: other
+    case nil: "Person"
+    }
+  }
+}
+
 /// One TMDB search/discover result.
 public struct TMDBItem: Sendable, Hashable, Identifiable, Codable {
   public enum Kind: String, Sendable, Codable { case movie, tv }
@@ -49,6 +74,8 @@ public struct TMDBItem: Sendable, Hashable, Identifiable, Codable {
   public var rating: Double?
   public var posterPath: String?
   public var backdropPath: String?
+  /// The original language (ISO 639-1, "en", "hi"), for Search's language filter.
+  public var language: String?
 
   public var id: String { "\(kind.rawValue):\(tmdbID)" }
 
@@ -161,6 +188,72 @@ public struct TMDBClient: Sendable {
     try await list("/discover/\(request.kind.rawValue)", request.query(service: service), kind: request.kind)
   }
 
+  /// Search: titles (with their languages) and people for `text`, best matches first.
+  public func searchMulti(_ text: String) async throws -> (items: [TMDBItem], people: [TMDBPerson]) {
+    let data = try await get("/search/multi", ["query": text, "include_adult": "false"])
+    let page = try JSONDecoder().decode(MultiPage.self, from: data)
+    var items: [TMDBItem] = []
+    var people: [TMDBPerson] = []
+    for result in page.results {
+      if result.media_type == "person" {
+        if let person = result.person { people.append(person) }
+      } else if let item = result.raw.item(forcedKind: nil) {
+        items.append(item)
+      }
+    }
+    return (items, people)
+  }
+
+  /// Everything a person acted in or made, most popular first, each title once.
+  public func credits(of person: Int) async throws -> [TMDBItem] {
+    let data = try await get("/person/\(person)/combined_credits", [:])
+    let credits = try JSONDecoder().decode(Credits.self, from: data)
+    var seen = Set<String>()
+    return ((credits.cast ?? []) + (credits.crew ?? []))
+      .sorted { ($0.popularity ?? 0) > ($1.popularity ?? 0) }
+      .compactMap { $0.raw.item(forcedKind: nil) }
+      .filter { seen.insert($0.id).inserted }
+  }
+
+  struct MultiPage: Decodable {
+    var results: [MultiResult]
+  }
+
+  /// One /search/multi or credits row: a title (Raw's fields) or a person.
+  struct MultiResult: Decodable {
+    var raw: Raw
+    var media_type: String?
+    var popularity: Double?
+    var person: TMDBPerson?
+
+    enum Keys: String, CodingKey { case id, name, media_type, popularity, profile_path, known_for_department, known_for }
+    struct KnownFor: Decodable {
+      var title: String?
+      var name: String?
+    }
+
+    init(from decoder: Decoder) throws {
+      raw = try Raw(from: decoder)
+      let c = try decoder.container(keyedBy: Keys.self)
+      media_type = try? c.decodeIfPresent(String.self, forKey: .media_type)
+      popularity = try? c.decodeIfPresent(Double.self, forKey: .popularity)
+      if media_type == "person", let id = try? c.decodeIfPresent(Int.self, forKey: .id),
+        let name = try? c.decodeIfPresent(String.self, forKey: .name)
+      {
+        let known = (try? c.decodeIfPresent([KnownFor].self, forKey: .known_for)) ?? []
+        person = TMDBPerson(
+          id: id, name: name, department: (try? c.decodeIfPresent(String.self, forKey: .known_for_department)) ?? nil,
+          profilePath: (try? c.decodeIfPresent(String.self, forKey: .profile_path)) ?? nil,
+          knownFor: known.compactMap { $0.title ?? $0.name })
+      }
+    }
+  }
+
+  struct Credits: Decodable {
+    var cast: [MultiResult]?
+    var crew: [MultiResult]?
+  }
+
   /// One title by its TMDB id, or nil when it has no title or artwork.
   public func item(id: Int, kind: TMDBItem.Kind) async throws -> TMDBItem? {
     let data = try await get("/\(kind.rawValue)/\(id)", [:])
@@ -221,6 +314,7 @@ public struct TMDBClient: Sendable {
     var vote_average: Double?
     var poster_path: String?
     var backdrop_path: String?
+    var original_language: String?
 
     func item(forcedKind: TMDBItem.Kind?) -> TMDBItem? {
       let kind = forcedKind ?? TMDBItem.Kind(rawValue: media_type ?? "")
@@ -230,7 +324,8 @@ public struct TMDBClient: Sendable {
       let date = kind == .tv ? first_air_date : release_date
       return TMDBItem(
         tmdbID: id, kind: kind, title: title, year: date.flatMap { Int($0.prefix(4)) }, overview: overview,
-        rating: (vote_average ?? 0) > 0 ? vote_average : nil, posterPath: poster_path, backdropPath: backdrop_path)
+        rating: (vote_average ?? 0) > 0 ? vote_average : nil, posterPath: poster_path, backdropPath: backdrop_path,
+        language: original_language)
     }
   }
 }

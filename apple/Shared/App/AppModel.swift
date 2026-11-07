@@ -302,6 +302,12 @@ final class AppModel {
     }
   }
 
+  /// The account's Plex Watchlist (Home's bookmark button).
+  func watchlist() async throws -> [PlexMetadata] {
+    guard let accountToken else { throw PlexError.notSignedIn }
+    return try await account.watchlist(token: accountToken)
+  }
+
   func retry() async {
     if let accountToken {
       await loadServers(token: accountToken, autoSelect: true)
