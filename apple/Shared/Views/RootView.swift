@@ -64,7 +64,7 @@ struct RootView: View {
     .task(id: loader) {
       // "Connected" stays up briefly, then the app fades in.
       guard loader == .connected else { return }
-      try? await Task.sleep(for: .seconds(1.1))
+      try? await Task.pause(1.1)
       guard !Task.isCancelled, loader == .connected else { return }
       withAnimation(Astra.Motion.hero) { loader = .hidden }
     }

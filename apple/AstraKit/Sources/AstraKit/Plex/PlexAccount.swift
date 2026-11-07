@@ -106,7 +106,7 @@ public struct PlexAccountClient: Sendable {
     while ContinuousClock.now < deadline {
       try Task.checkCancellation()
       if let token = try await checkPin(pin) { return token }
-      try await Task.sleep(for: interval)
+      try await Task.pause(interval)
     }
     throw PlexError.pinExpired
   }

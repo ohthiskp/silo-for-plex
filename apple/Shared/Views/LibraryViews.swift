@@ -209,7 +209,7 @@ struct SearchView: View {
         return
       }
       // Debounce typing.
-      try? await Task.sleep(for: .milliseconds(250))
+      try? await Task.pause(0.25)
       guard !Task.isCancelled else { return }
       results = (try? await library.client.search(text)) ?? []
       searched = true

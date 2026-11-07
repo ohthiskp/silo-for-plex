@@ -988,3 +988,19 @@ final class SeekThumbnailTests: XCTestCase {
     XCTAssertNil(thumbs)
   }
 }
+
+final class PauseTests: XCTestCase {
+  func testPauseWaitsAndStopsWhenCancelled() async throws {
+    let start = Date()
+    try await Task.pause(0.05)
+    XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(start), 0.04)
+    try await Task.pause(.milliseconds(20))
+
+    let task = Task { try await Task.pause(30) }
+    task.cancel()
+    do {
+      try await task.value
+      XCTFail("a cancelled pause should throw")
+    } catch is CancellationError {}
+  }
+}

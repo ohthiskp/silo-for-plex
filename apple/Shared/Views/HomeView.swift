@@ -260,7 +260,7 @@ struct HeroCarousel: View {
       await prefetch((index + 1) % max(items.count, 1))
       // Auto-advance every 8 s; restarts after manual navigation, stops when the view goes away.
       while !Task.isCancelled && items.count > 1 {
-        try? await Task.sleep(for: .seconds(8))
+        try? await Task.pause(8)
         guard !Task.isCancelled else { break }
         await show((index + 1) % items.count)
       }

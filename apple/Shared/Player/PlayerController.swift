@@ -397,7 +397,7 @@ final class PlayerController {
     reporter?.cancel()
     reporter = Task { [weak self] in
       while !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(10))
+        try? await Task.pause(10)
         guard let self, !Task.isCancelled else { return }
         self.report(self.paused ? .paused : (self.buffering ? .buffering : .playing))
       }

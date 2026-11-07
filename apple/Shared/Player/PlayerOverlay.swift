@@ -490,7 +490,7 @@ struct PlayerOverlay: View {
     visible = true
     hideTask?.cancel()
     hideTask = Task { @MainActor in
-      try? await Task.sleep(for: .seconds(3))
+      try? await Task.pause(3)
       guard !Task.isCancelled, !player.paused, scrubbing == nil else { return }
       hide()
     }
