@@ -67,4 +67,17 @@ final class PlayerGestureTests: XCTestCase {
     shot("after-single-tap")
     XCTAssertNotEqual(before, after, "A single tap didn't show or hide the controls (before: \(before))")
   }
+
+  func testSwipeOnTheRightChangesVolume() {
+    point(0.85, 0.7).press(forDuration: 0.05, thenDragTo: point(0.85, 0.3))
+    shot("after-swipe-right")
+    XCTAssertTrue(badge("astra.level.volume").waitForExistence(timeout: 2), "No volume level after a swipe on the right")
+  }
+
+  func testSwipeOnTheLeftChangesBrightness() {
+    point(0.15, 0.3).press(forDuration: 0.05, thenDragTo: point(0.15, 0.7))
+    shot("after-swipe-left")
+    XCTAssertTrue(
+      badge("astra.level.brightness").waitForExistence(timeout: 2), "No brightness level after a swipe on the left")
+  }
 }
