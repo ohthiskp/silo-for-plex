@@ -17,18 +17,19 @@ public struct StreamingService: Sendable, Hashable, Identifiable {
   public var providerIds: [Int]
   /// Visual height of the logo in the switcher, tuned per wordmark.
   public var logoHeight: Double
+  /// The brand's own colour (RGB), used for its logo and Home's accent when chosen.
+  public var accent: UInt32
 
   public var providerFilter: String { providerIds.map(String.init).joined(separator: "|") }
 
   public static let all: [StreamingService] = [
-    .init(id: "netflix", label: "Netflix", logo: "provider-netflix", providerIds: [8], logoHeight: 15),
-    .init(id: "disney", label: "Disney+", logo: "provider-disney", providerIds: [337], logoHeight: 24),
-    .init(id: "prime", label: "Prime Video", logo: "provider-prime", providerIds: [9], logoHeight: 20),
-    .init(id: "appletv", label: "Apple TV+", logo: "provider-appletv", providerIds: [350], logoHeight: 17),
-    .init(id: "max", label: "HBO Max", logo: "provider-max", providerIds: [1899], logoHeight: 22),
-    .init(id: "hulu", label: "Hulu", logo: "provider-hulu", providerIds: [15], logoHeight: 15),
-    .init(id: "paramount", label: "Paramount+", logo: "provider-paramount", providerIds: [531, 2303], logoHeight: 18),
-    .init(id: "peacock", label: "Peacock", logo: "provider-peacock", providerIds: [386, 387], logoHeight: 17),
+    // Astra: the main services only (KP, 2026-11-07), in KP's order, each with its brand colour.
+    .init(id: "netflix", label: "Netflix", logo: "provider-netflix", providerIds: [8], logoHeight: 15, accent: 0xE50914),
+    .init(id: "appletv", label: "Apple TV+", logo: "provider-appletv", providerIds: [350], logoHeight: 17, accent: 0xF5F5F7),
+    .init(id: "prime", label: "Prime Video", logo: "provider-prime", providerIds: [9], logoHeight: 20, accent: 0x00A8E1),
+    .init(id: "disney", label: "Disney+", logo: "provider-disney", providerIds: [337], logoHeight: 24, accent: 0x1F80E0),
+    .init(id: "max", label: "HBO Max", logo: "provider-max", providerIds: [1899], logoHeight: 22, accent: 0x0046FF),
+    .init(id: "hulu", label: "Hulu", logo: "provider-hulu", providerIds: [15], logoHeight: 15, accent: 0x1CE783),
   ]
 
   public static func byID(_ id: String?) -> StreamingService? {

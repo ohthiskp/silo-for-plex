@@ -217,6 +217,7 @@ struct Badge: View {
 struct ClearGlassButtonStyle: ButtonStyle {
   var prominent: Bool
   @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.astraAccent) private var accent
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
@@ -231,7 +232,7 @@ struct ClearGlassButtonStyle: ButtonStyle {
       .contentShape(Capsule())
       .shadow(color: .black.opacity(0.35), radius: 3)
       .astraGlass(
-        in: Capsule(), variant: .clear, interactive: true, tint: prominent ? .white.opacity(0.22) : nil)
+        in: Capsule(), variant: .clear, interactive: true, tint: prominent ? (accent?.opacity(0.6) ?? .white.opacity(0.22)) : nil)
       .astraGlassEdge(Capsule(), strength: prominent ? 1 : 0.8)
       .scaleEffect(configuration.isPressed ? 0.96 : 1)
       .opacity(isEnabled ? 1 : 0.45)

@@ -111,14 +111,22 @@ struct DownloadRing: View {
 
 /// The Downloads page: what is downloading, then saved movies and shows.
 struct DownloadsView: View {
+  var body: some View {
+    AstraPage {
+      AstraSectionHeader(title: "Downloads")
+      DownloadsContent()
+    }
+  }
+}
+
+/// The Downloads page's lists without its page and title (iPhone Libraries shows them under its tabs).
+struct DownloadsContent: View {
   @Environment(AppModel.self) private var app
 
   private var downloads: DownloadStore { app.downloads }
 
   var body: some View {
-    AstraPage {
-      AstraSectionHeader(title: "Downloads")
-
+    VStack(alignment: .leading, spacing: Astra.Spacing.l) {
       if !downloads.hasAnything {
         EmptyState(
           symbol: "arrow.down.circle", title: "No downloads",

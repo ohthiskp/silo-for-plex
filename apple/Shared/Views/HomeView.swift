@@ -26,6 +26,9 @@ struct HomeView: View {
         .animation(Astra.Motion.base, value: showsTopBar)
     }
     .background(Astra.Color.bg.ignoresSafeArea())
+    // Astra: the chosen service's brand colour accents the page (Apple TV+'s is white).
+    .environment(\.astraAccent, library.selectedService.flatMap { $0.id == "appletv" ? nil : Color(hex: $0.accent) })
+    .animation(Astra.Motion.base, value: library.selectedService)
     #if os(iOS)
       .sheet(isPresented: $showSettings) {
         NavigationStack {
@@ -122,16 +125,7 @@ struct HomeView: View {
       } else {
         Spacer()
       }
-      #if os(iOS)
-        // Settings lives here on iPhone; the tab bar holds five tabs.
-        Button {
-          showSettings = true
-        } label: {
-          Image(systemName: "gearshape.fill")
-        }
-        .astraIconButton(size: 44)
-        .accessibilityLabel("Settings")
-      #endif
+      // Astra: on iPhone Settings moved to the Libraries tab (KP's mockups, 2026-11-07).
     }
     .padding(.top, Astra.Spacing.s)
     .padding(.leading, leading)
@@ -148,14 +142,65 @@ struct ServicePill: View {
   @Namespace private var selection
 
   var body: some View {
-    ViewThatFits(in: .horizontal) {
-      chips
-      ScrollView(.horizontal) { chips }
-        .scrollIndicators(.never)
-    }
-    .astraGlass(in: Capsule())
-    .frame(maxWidth: .infinity)
+    #if os(iOS)
+      // Astra: iPhone shows a rail of separate glass chips that scrolls to the
+      // right, each logo in its brand colour; the chosen one is outlined in it
+      // (KP's mockup, 2026-11-07).
+      ScrollView(.horizontal) {
+        HStack(spacing: 8) {
+          railChip(nil, label: "For You") {
+            Text("For You").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+          }
+          ForEach(StreamingService.all) { service in
+            railChip(service, label: service.label) {
+              Image(service.logo)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(height: service.logoHeight * 0.85)
+                .foregroundStyle(Color(hex: service.accent))
+            }
+          }
+        }
+        .padding(.vertical, 2)
+        .padding(.trailing, 16)
+      }
+      .scrollIndicators(.never)
+      .scrollClipDisabled()
+      .animation(.snappy(duration: 0.22), value: library.selectedService)
+    #else
+      ViewThatFits(in: .horizontal) {
+        chips
+        ScrollView(.horizontal) { chips }
+          .scrollIndicators(.never)
+      }
+      .astraGlass(in: Capsule())
+      .frame(maxWidth: .infinity)
+    #endif
   }
+
+  #if os(iOS)
+    private func railChip<Label: View>(
+      _ service: StreamingService?, label: String, @ViewBuilder content: () -> Label
+    ) -> some View {
+      let selected = library.selectedService == service
+      let brand = service.map { Color(hex: $0.accent) } ?? .white
+      return Button {
+        library.select(service)
+      } label: {
+        content()
+          .padding(.horizontal, 16)
+          .frame(height: 38)
+          .background { if selected { Capsule().fill(brand.opacity(0.18)) } }
+          .overlay { if selected { Capsule().strokeBorder(brand, lineWidth: 1.5) } }
+          .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+          .contentShape(Capsule())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(label)
+      .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+  #endif
 
   private var chips: some View {
     HStack(spacing: 2) {

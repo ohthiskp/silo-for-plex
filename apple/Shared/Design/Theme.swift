@@ -145,3 +145,9 @@ extension View {
     containerRelativeFrame(.vertical) { length, _ in min(cap, max(360, length * Astra.Layout.heroShare)) }
   }
 }
+
+extension EnvironmentValues {
+  /// Astra: Home's accent, the chosen streaming service's brand colour (nil is
+  /// the usual white). Tints the main button and progress bars on that page.
+  @Entry var astraAccent: Color? = nil
+}

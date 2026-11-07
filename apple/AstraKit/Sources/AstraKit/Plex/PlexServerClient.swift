@@ -67,9 +67,11 @@ public struct PlexServerClient: Sendable {
     return (body.Directory ?? []).filter { $0.type == "movie" || $0.type == "show" }
   }
 
-  public func libraryItems(sectionKey: String, sort: String = "addedAt:desc", start: Int = 0, size: Int = 60)
-    async throws -> [PlexMetadata]
-  {
+  /// `filters` are Plex's own library filters, such as `unwatched=1`,
+  /// `resolution=4k`, `hdr=1` or `genre=<key>`.
+  public func libraryItems(
+    sectionKey: String, sort: String = "addedAt:desc", start: Int = 0, size: Int = 60, filters: [URLQueryItem] = []
+  ) async throws -> [PlexMetadata] {
     let body: MetadataBody = try await get(
       "/library/sections/\(sectionKey)/all",
       query: [
@@ -77,8 +79,25 @@ public struct PlexServerClient: Sendable {
         .init(name: "X-Plex-Container-Start", value: String(start)),
         .init(name: "X-Plex-Container-Size", value: String(size)),
         .init(name: "includeGuids", value: "1"),
-      ])
+      ] + filters)
     return body.Metadata ?? []
+  }
+
+  /// How many items a library holds with `filters` applied (no items are sent).
+  public func libraryCount(sectionKey: String, filters: [URLQueryItem] = []) async throws -> Int? {
+    let body: CountBody = try await get(
+      "/library/sections/\(sectionKey)/all",
+      query: [
+        .init(name: "X-Plex-Container-Start", value: "0"),
+        .init(name: "X-Plex-Container-Size", value: "0"),
+      ] + filters)
+    return body.totalSize ?? body.size
+  }
+
+  /// A library's genres, for filtering (`genre=<key>`).
+  public func genres(sectionKey: String) async throws -> [PlexFilterValue] {
+    let body: FilterValuesBody = try await get("/library/sections/\(sectionKey)/genre")
+    return body.Directory ?? []
   }
 
   /// Full metadata for one item, with images (clear logo), media versions and streams.

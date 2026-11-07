@@ -1,43 +1,30 @@
 import AstraKit
 import SwiftUI
 
-/// The signed-in iPhone app: Apple's tab bar (Liquid Glass on iOS 26), one
-/// navigation stack per tab, and Search as the separated search tab.
+/// The signed-in iPhone app: three tabs only, Home, Search and Libraries
+/// (KP's mockups, 2026-11-07), in Apple's tab bar (Liquid Glass on iOS 26),
+/// one navigation stack per tab. Settings opens from Libraries' gear.
 struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
 
-  // Same destinations as the Mac sidebar. Settings opens from Home's gear
-  // button, which keeps the tab bar to its five-tab limit.
-  enum TabID: Hashable { case home, movies, shows, downloads, search }
+  enum TabID: Hashable { case home, search, libraries }
 
   @State private var tab: TabID = .home
   @State private var homePath: [Route] = []
-  @State private var moviesPath: [Route] = []
-  @State private var showsPath: [Route] = []
   @State private var searchPath: [Route] = []
-  @State private var downloadsPath: [Route] = []
+  @State private var librariesPath: [Route] = []
 
   var body: some View {
     TabView(selection: $tab) {
       Tab("Home", systemImage: "house.fill", value: TabID.home) {
         stack($homePath) { HomeView(library: library) }
       }
-      Tab("Movies", systemImage: "film", value: TabID.movies) {
-        stack($moviesPath) {
-          LibraryGridView(library: library, title: "Movies", sections: library.sections.filter { $0.type == "movie" })
-        }
-      }
-      Tab("Shows", systemImage: "tv", value: TabID.shows) {
-        stack($showsPath) {
-          LibraryGridView(library: library, title: "Shows", sections: library.sections.filter { $0.type == "show" })
-        }
-      }
-      Tab("Downloads", systemImage: "arrow.down.circle", value: TabID.downloads) {
-        stack($downloadsPath) { DownloadsView() }
-      }
-      Tab(value: TabID.search, role: .search) {
+      Tab("Search", systemImage: "magnifyingglass", value: TabID.search) {
         stack($searchPath) { SearchView(library: library) }
+      }
+      Tab("Libraries", systemImage: "square.stack.fill", value: TabID.libraries) {
+        stack($librariesPath) { LibrariesView(library: library) }
       }
     }
     .environment(\.playItem) { app.play($0) }
@@ -46,10 +33,8 @@ struct MainView: View {
       app.player.openDetails = { item in
         switch tab {
         case .home: homePath.append(.details(item))
-        case .movies: moviesPath.append(.details(item))
-        case .shows: showsPath.append(.details(item))
-        case .downloads: downloadsPath.append(.details(item))
         case .search: searchPath.append(.details(item))
+        case .libraries: librariesPath.append(.details(item))
         }
       }
     }

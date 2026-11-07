@@ -181,6 +181,7 @@ struct PosterCard: View {
 
 struct ProgressBar: View {
   var value: Double
+  @Environment(\.astraAccent) private var accent
 
   var body: some View {
     Capsule()
@@ -188,7 +189,7 @@ struct ProgressBar: View {
       .frame(height: 4)
       .overlay(alignment: .leading) {
         GeometryReader { geo in
-          Capsule().fill(Astra.Color.accent).frame(width: max(4, geo.size.width * value))
+          Capsule().fill(accent ?? Astra.Color.accent).frame(width: max(4, geo.size.width * value))
         }
       }
   }

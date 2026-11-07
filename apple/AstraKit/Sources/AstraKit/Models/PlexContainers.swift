@@ -72,6 +72,38 @@ struct HubBody: Decodable {
   var Hub: [PlexHub]?
 }
 
+struct CountBody: Decodable {
+  var totalSize: Int?
+  var size: Int?
+
+  enum CodingKeys: String, CodingKey { case totalSize, size }
+
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    totalSize = try c.decodeLenientInt(.totalSize)
+    size = try c.decodeLenientInt(.size)
+  }
+}
+
+/// One value of a library filter (a genre): its key for the query and its name.
+public struct PlexFilterValue: Decodable, Sendable, Hashable, Identifiable {
+  public var key: String
+  public var title: String
+  public var id: String { key }
+
+  enum CodingKeys: String, CodingKey { case key, title }
+
+  public init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    key = try c.decodeLenientString(.key) ?? ""
+    title = try c.decodeLenientString(.title) ?? ""
+  }
+}
+
+struct FilterValuesBody: Decodable {
+  var Directory: [PlexFilterValue]?
+}
+
 struct DirectoryBody: Decodable {
   var Directory: [PlexLibrarySection]?
 }
