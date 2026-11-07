@@ -274,14 +274,24 @@ final class LibraryStore {
     isLoadingHero = hero.isEmpty
     // Cleared whatever happens: a newer load that fails never reaches here.
     defer { isLoadingHero = false }
-    var picks: [PlexMetadata] = []
-    if tmdb != nil, let index = try? await loadLibraryIndex() {
-      picks = await loadInFull(TrendingHero.pick(trending: await loadTrending(), index: index))
-        .filter { $0.backdrop != nil }
+    // Astra: today's trending titles straight from TMDB (KP: like cineby's
+    // "Top content today"), shown at once without waiting for the library
+    // index; titles not on the server get a greyed-out Play.
+    let trending = tmdb == nil ? [] : await loadTrending()
+    func picks(_ index: [String: PlexMetadata]) async -> [PlexMetadata] {
+      await loadInFull(TrendingHero.today(trending: trending, index: index)).filter { $0.backdrop != nil }
     }
-    if picks.isEmpty { picks = await pickHero(from: hubs) }
+    var shown = await picks(libraryIndex ?? [:])
+    if shown.isEmpty { shown = await pickHero(from: hubs) }
     guard isCurrent() else { return }
-    if !picks.isEmpty || hero.isEmpty { hero = picks }
+    if !shown.isEmpty || hero.isEmpty { hero = shown }
+    isLoadingHero = false
+    // Once the library index is ready, the titles on the server become playable.
+    guard !trending.isEmpty, libraryIndex == nil, let index = try? await loadLibraryIndex(), !index.isEmpty
+    else { return }
+    let matched = await picks(index)
+    guard isCurrent(), !matched.isEmpty else { return }
+    hero = matched
   }
 
   /// The library index, read once. Concurrent callers share one read; a

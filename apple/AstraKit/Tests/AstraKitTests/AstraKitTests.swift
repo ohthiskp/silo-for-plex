@@ -850,6 +850,18 @@ final class TrendingHeroTests: XCTestCase {
     XCTAssertEqual(picked.map(\.ratingKey), ["c", "b", "a"])
   }
 
+  func testTodayHeroKeepsEveryTrendingTitleAndMarksPlayableOnes() throws {
+    let index = ["movie:3": try plex("c", tmdb: 3)]
+    let picked = TrendingHero.today(trending: [tmdb(9), tmdb(3), tmdb(9), tmdb(2, .tv)], index: index, limit: 10)
+    XCTAssertEqual(picked.count, 3)
+    // TMDB order; the one on the server is the server's item, the others are TMDB-only.
+    XCTAssertTrue(picked[0].isCatalogOnly)
+    XCTAssertEqual(picked[1].ratingKey, "c")
+    XCTAssertFalse(picked[1].isCatalogOnly)
+    XCTAssertTrue(picked[2].isCatalogOnly)
+    XCTAssertEqual(TrendingHero.today(trending: (1...20).map { tmdb($0) }, index: [:], limit: 10).count, 10)
+  }
+
   func testServiceHeroNeverFallsBackToOldTitles() throws {
     let popular = [try plex("old", tmdb: 10, year: 1994), try plex("new", tmdb: 11, year: 2026), try plex("hot", tmdb: 12, year: 2019)]
     let picked = TrendingHero.pick(trending: [tmdb(12)], service: popular, currentYear: 2026)

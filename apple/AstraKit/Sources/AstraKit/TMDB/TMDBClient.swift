@@ -244,6 +244,21 @@ public enum TrendingHero {
     return out
   }
 
+  /// The For You hero, like cineby's "Top content today": TMDB's trending
+  /// titles in order, each once. Ones on the server come from `index` (so
+  /// they play); the rest are TMDB-only and show a greyed-out Play.
+  public static func today(
+    trending: [TMDBItem], index: [String: PlexMetadata], limit: Int = 10
+  ) -> [PlexMetadata] {
+    var seen = Set<String>()
+    var out: [PlexMetadata] = []
+    for item in trending where out.count < limit {
+      guard seen.insert(item.id).inserted else { continue }
+      out.append(index[item.id] ?? item.asMetadata)
+    }
+    return out
+  }
+
   /// For a streaming service: its titles that are trending, in trending
   /// order; then, if that's too few, its popular titles from the last two
   /// years. Never an old catalogue title.
