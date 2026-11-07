@@ -17,10 +17,11 @@ struct PlayerOverlay: View {
       // Clear, but hit-testable. Mac: click pauses, double-click goes full screen.
       // iPhone: tap shows or hides the controls.
       #if os(macOS)
-        Color.black.opacity(0.001)
-          .ignoresSafeArea()
-          .onTapGesture(count: 2) { player.toggleFullScreen() }
-          .onTapGesture { player.togglePause() }
+        // Drag anywhere on the video to move the window.
+        WindowDragArea(
+          onClick: { player.togglePause() }, onDoubleClick: { player.toggleFullScreen() }
+        )
+        .ignoresSafeArea()
       #else
         Color.black.opacity(0.001)
           .ignoresSafeArea()
@@ -31,13 +32,26 @@ struct PlayerOverlay: View {
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible)
 
-      if player.buffering {
+      if !player.hasFirstFrame {
+        // Until the first frame: the title and a spinner, never a blank black window.
+        VStack(spacing: 14) {
+          ProgressView().controlSize(.large).tint(.white)
+          Text(player.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+            .lineLimit(1)
+          Text("Starting…").font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
+        }
+        .padding(.horizontal, 24)
+        .allowsHitTesting(false)
+        .transition(.opacity)
+      } else if player.buffering {
         ProgressView().controlSize(.large).tint(.white)
+          .allowsHitTesting(false)
           .transition(.opacity)
       }
     }
     .animation(Astra.Motion.base, value: visible)
     .animation(Astra.Motion.fast, value: player.buffering)
+    .animation(Astra.Motion.base, value: player.hasFirstFrame)
     #if os(macOS)
       .onContinuousHover { phase in
         if case .active = phase { poke() }

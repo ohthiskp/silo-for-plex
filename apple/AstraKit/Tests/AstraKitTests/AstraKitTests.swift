@@ -786,3 +786,37 @@ final class TrendingHeroTests: XCTestCase {
     XCTAssertEqual(picked.map(\.ratingKey), ["hot", "new"])
   }
 }
+
+final class PlayerGeometryTests: XCTestCase {
+  let screen = CGRect(x: 0, y: 0, width: 1728, height: 1080)
+
+  func testOpensSmallerThanTheAppWindowAndCentredOnIt() {
+    let main = CGRect(x: 100, y: 50, width: 1440, height: 900)
+    let frame = PlayerGeometry.initialFrame(over: main, visible: screen)
+    XCTAssertEqual(frame.width, 1008, accuracy: 0.5)  // 70% of 1440
+    XCTAssertEqual(frame.width / frame.height, 16 / 9, accuracy: 0.01)
+    XCTAssertEqual(frame.midX, main.midX, accuracy: 0.5)
+    XCTAssertEqual(frame.midY, main.midY, accuracy: 0.5)
+  }
+
+  func testNeverLargerThan1280OrOffScreen() {
+    let main = CGRect(x: 0, y: 0, width: 3000, height: 1700)
+    let frame = PlayerGeometry.initialFrame(over: main, visible: screen)
+    XCTAssertLessThanOrEqual(frame.width, 1280)
+    XCTAssertTrue(screen.contains(frame))
+  }
+
+  func testFitsTheVideosShapeKeepingWidth() {
+    let start = CGRect(x: 200, y: 200, width: 1000, height: 562.5)
+    let scope = PlayerGeometry.fit(start, videoWidth: 3840, videoHeight: 1600, visible: screen)
+    XCTAssertEqual(scope.width, 1000, accuracy: 0.5)
+    XCTAssertEqual(scope.height, 416.7, accuracy: 0.5)
+    XCTAssertEqual(scope.midY, start.midY, accuracy: 0.5)
+  }
+
+  func testMiniWindowIsSmallInTheCorner() {
+    let mini = PlayerGeometry.miniFrame(aspect: 16 / 9, visible: screen)
+    XCTAssertEqual(mini.size, CGSize(width: 400, height: 225))
+    XCTAssertEqual(mini.maxX, screen.maxX - 20)
+  }
+}

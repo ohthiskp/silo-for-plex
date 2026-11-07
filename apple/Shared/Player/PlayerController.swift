@@ -28,6 +28,9 @@ final class PlayerController {
   private(set) var duration: Double = 0
   private(set) var paused = false
   private(set) var buffering = true
+  /// False from opening a file until mpv shows its first frame; the overlay
+  /// shows a loading state instead of a black window meanwhile.
+  private(set) var hasFirstFrame = false
   private(set) var videoWidth: Double = 0
   private(set) var videoHeight: Double = 0
   private(set) var audioTracks: [Track] = []
@@ -102,6 +105,7 @@ final class PlayerController {
       // Video plays in its own window whose content view is a plain NSView (see PlayerWindowHost).
       let host = PlayerWindowHost(over: window, content: makeOverlay?() ?? AnyView(EmptyView()))
       host.onUserClose = { [weak self] in self?.close() }
+      host.onMiniChange = { [weak self] mini in self?.isPictureInPicture = mini }
       guard core.initialize(in: host.window) else {
         host.dismiss()
         throw PlaybackFailure("mpv could not start.")
@@ -123,6 +127,7 @@ final class PlayerController {
     duration = Double(source.durationMs) / 1000
     paused = false
     buffering = true
+    hasFirstFrame = false
     videoWidth = 0
     videoHeight = 0
     audioTracks = []
@@ -300,8 +305,12 @@ final class PlayerController {
     case "mute": if let v = value as? Bool { muted = v }
     case "speed": if let v = value as? Double { speed = v }
     case "paused-for-cache": buffering = (value as? Bool) ?? false
-    case "width": videoWidth = (value as? Double) ?? 0
-    case "height": videoHeight = (value as? Double) ?? 0
+    case "width":
+      videoWidth = (value as? Double) ?? 0
+      fitWindowToVideo()
+    case "height":
+      videoHeight = (value as? Double) ?? 0
+      fitWindowToVideo()
     case "eof-reached":
       if (value as? Bool) == true { close() }
     case "aid": audioId = (value as? String).flatMap { Int($0) }
@@ -313,8 +322,10 @@ final class PlayerController {
 
   fileprivate func eventReceived(_ name: String, _ data: [String: Any]?) {
     switch name {
-    case "playback-restart", "file-loaded":
+    case "playback-restart":
+      // The first frame is decoded and on screen (also after every seek).
       buffering = false
+      hasFirstFrame = true
     case "end-file":
       if let reason = data?["reason"] as? String, reason == "error" {
         lastError = (data?["message"] as? String) ?? "This file couldn't be played."
@@ -323,6 +334,13 @@ final class PlayerController {
     default:
       break
     }
+  }
+
+  private func fitWindowToVideo() {
+    #if os(macOS)
+      guard videoWidth > 0, videoHeight > 0 else { return }
+      host?.fitVideo(width: videoWidth, height: videoHeight)
+    #endif
   }
 
   private func updateTracks(_ list: [Any]) {
