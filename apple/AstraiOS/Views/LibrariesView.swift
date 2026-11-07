@@ -26,6 +26,7 @@ struct LibrariesView: View {
     }
   }
 
+  @Environment(AppModel.self) private var app
   @AppStorage("astra.libraries.segment") private var segment: Segment = .movies
   @State private var showSettings = false
   @Namespace private var pill
@@ -82,9 +83,14 @@ struct LibrariesView: View {
         Button {
           withAnimation(Astra.Motion.base) { segment = item }
         } label: {
-          Label(item.title, systemImage: item.symbol)
+          HStack(spacing: 6) {
+            Label(item.title, systemImage: item.symbol).labelStyle(.titleAndIcon)
+            // Astra: how many downloads are running or waiting.
+            if item == .downloads, !app.downloads.jobs.isEmpty {
+              CountBadge(count: app.downloads.jobs.count)
+            }
+          }
             .font(.system(size: 14, weight: .semibold))
-            .labelStyle(.titleAndIcon)
             .foregroundStyle(segment == item ? Astra.Color.ink : Astra.Color.muted)
             .frame(maxWidth: .infinity)
             .frame(height: 38)
@@ -448,5 +454,22 @@ private struct SortSheet: View {
       .scrollIndicators(.never)
     }
     .padding(20)
+  }
+}
+
+/// A small white count, like the badge on an app icon (white and grey only).
+struct CountBadge: View {
+  var count: Int
+
+  var body: some View {
+    Text("\(count)")
+      .font(.system(size: 11, weight: .bold))
+      .monospacedDigit()
+      .foregroundStyle(.black)
+      .padding(.horizontal, 5)
+      .frame(minWidth: 18, minHeight: 18)
+      .background(Capsule().fill(.white))
+      .contentTransition(.numericText())
+      .accessibilityLabel("\(count) downloading")
   }
 }

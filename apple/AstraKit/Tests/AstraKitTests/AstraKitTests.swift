@@ -1190,3 +1190,20 @@ final class ForYouTests: XCTestCase {
     XCTAssertEqual(ForYou.becauseSeed(library: library, continueWatching: [])?.ratingKey, "1")
   }
 }
+
+final class DownloadSegmentsTests: XCTestCase {
+  func testRangesCoverTheWholeFileWithoutGaps() {
+    let ranges = DownloadSegments.ranges(total: 1003, count: 4)
+    XCTAssertEqual(ranges.count, 4)
+    XCTAssertEqual(ranges.first?.lowerBound, 0)
+    XCTAssertEqual(ranges.last?.upperBound, 1002)
+    for (a, b) in zip(ranges, ranges.dropFirst()) { XCTAssertEqual(a.upperBound + 1, b.lowerBound) }
+    XCTAssertEqual(ranges.map { $0.upperBound - $0.lowerBound + 1 }.reduce(0, +), 1003)
+    XCTAssertEqual(DownloadSegments.header(ranges[0]), "bytes=0-249")
+  }
+
+  func testTinyAndEmptyFiles() {
+    XCTAssertEqual(DownloadSegments.ranges(total: 2, count: 4), [0...0, 1...1])
+    XCTAssertEqual(DownloadSegments.ranges(total: 0, count: 4), [])
+  }
+}

@@ -201,6 +201,7 @@ final class DownloadStore {
     guard let job = jobs.first(where: { $0.id == ratingKey }) else { return }
     if job.running { session.cancel(ratingKey) }
     jobs.removeAll { $0.id == ratingKey }
+    if !job.running { removeParts(job.record) }
     jobClients[ratingKey] = nil
     resumeData[ratingKey] = nil
     saveQueue()
@@ -268,6 +269,19 @@ final class DownloadStore {
         continue
       }
       let resume = resumeData.removeValue(forKey: job.id)
+      // Astra: big files over several connections at once (faster on most servers).
+      if resume == nil, let total = job.record.bytes, total >= DownloadSegments.minimumBytes {
+        Task {
+          do {
+            try await downloadInSegments(job, request: request, total: total, to: destination)
+            finish(job, error: nil)
+          } catch {
+            session.cancel(job.id)
+            finish(job, error: error)
+          }
+        }
+        continue
+      }
       Task {
         do {
           try await session.download(
@@ -281,6 +295,105 @@ final class DownloadStore {
         }
       }
     }
+  }
+
+  /// Connections per large download.
+  private static let segmentCount = 4
+  @ObservationIgnored private var segmentWritten: [String: [Int: Int64]] = [:]
+
+  private func partURL(_ destination: URL, _ i: Int) -> URL {
+    destination.deletingLastPathComponent().appendingPathComponent(destination.lastPathComponent + ".part\(i)")
+  }
+
+  /// Fetches the file as `segmentCount` byte ranges in parallel, then joins
+  /// them. Parts already complete from an earlier try are kept, so Retry
+  /// continues. A server that ignores ranges falls back to one connection.
+  private func downloadInSegments(_ job: Job, request: URLRequest, total: Int64, to destination: URL) async throws {
+    guard await Self.supportsRanges(request) else {
+      return try await session.download(
+        request, id: job.id, to: destination, expectedBytes: total, resumeData: nil,
+        progress: { [weak self] fraction, written in
+          Task { @MainActor in self?.setProgress(fraction, written: written, for: job.id) }
+        })
+    }
+    let ranges = DownloadSegments.ranges(total: total, count: Self.segmentCount)
+    segmentWritten[job.id] = [:]
+    defer { segmentWritten[job.id] = nil }
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for (i, range) in ranges.enumerated() {
+        let part = partURL(destination, i)
+        let length = range.upperBound - range.lowerBound + 1
+        if Self.size(of: part) == length {
+          segmentWritten[job.id]?[i] = length
+          continue
+        }
+        var ranged = request
+        ranged.setValue(DownloadSegments.header(range), forHTTPHeaderField: "Range")
+        let segmentRequest = ranged
+        group.addTask { [session] in
+          try await session.download(
+            segmentRequest, id: "\(job.id)#\(i)", to: part, expectedBytes: length, resumeData: nil,
+            progress: { [weak self] _, written in
+              Task { @MainActor in self?.segmentProgress(job.id, part: i, written: written, total: total) }
+            })
+          guard Self.size(of: part) == length else {
+            throw DownloadCheck.Failure.incomplete(got: Self.size(of: part) ?? 0, expected: length)
+          }
+        }
+      }
+      do {
+        while try await group.next() != nil {}
+      } catch {
+        // The other connections stop too (the group waits for them otherwise).
+        session.cancel(job.id)
+        throw error
+      }
+    }
+    let parts = ranges.indices.map { partURL(destination, $0) }
+    try await Task.detached(priority: .utility) {
+      try Self.join(parts, into: destination)
+    }.value
+  }
+
+  private func segmentProgress(_ id: String, part: Int, written: Int64, total: Int64) {
+    segmentWritten[id]?[part] = written
+    let sum = segmentWritten[id]?.values.reduce(0, +) ?? written
+    setProgress(Double(sum) / Double(total), written: sum, for: id)
+  }
+
+  /// Asks for the first byte: a 206 means the server sends ranges.
+  private nonisolated static func supportsRanges(_ request: URLRequest) async -> Bool {
+    var probe = request
+    probe.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+    probe.timeoutInterval = 15
+    guard let (_, response) = try? await URLSession.shared.data(for: probe) else { return false }
+    return (response as? HTTPURLResponse)?.statusCode == 206
+  }
+
+  private nonisolated static func size(of url: URL) -> Int64? {
+    (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value
+  }
+
+  /// Writes the parts one after another into `destination`, then deletes them.
+  private nonisolated static func join(_ parts: [URL], into destination: URL) throws {
+    try? FileManager.default.removeItem(at: destination)
+    FileManager.default.createFile(atPath: destination.path, contents: nil)
+    let out = try FileHandle(forWritingTo: destination)
+    defer { try? out.close() }
+    for part in parts {
+      let input = try FileHandle(forReadingFrom: part)
+      defer { try? input.close() }
+      while let chunk = try input.read(upToCount: 8 << 20), !chunk.isEmpty {
+        try out.write(contentsOf: chunk)
+      }
+    }
+    for part in parts { try? FileManager.default.removeItem(at: part) }
+  }
+
+  /// Removes a download's leftover parts (cancel or delete).
+  private func removeParts(_ record: DownloadRecord) {
+    let destination = fileURL(record)
+    for i in 0..<Self.segmentCount { try? FileManager.default.removeItem(at: partURL(destination, i)) }
   }
 
   /// Free space on the downloads volume, as the system counts it for files the person asked for.
@@ -328,6 +441,7 @@ final class DownloadStore {
       save()
     } else {
       try? FileManager.default.removeItem(at: fileURL(job.record))
+      removeParts(job.record)
     }
     pump()
   }
@@ -388,6 +502,8 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     config.timeoutIntervalForRequest = 60
     config.timeoutIntervalForResource = 60 * 60 * 24
     config.allowsCellularAccess = true
+    // Two downloads at a time, four connections each.
+    config.httpMaximumConnectionsPerHost = 8
     let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     // Transfers left from an earlier launch have nobody waiting for them; the
     // saved queue starts them again, so stop the leftovers.
@@ -422,9 +538,12 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }
   }
 
+  /// Cancels a download and any of its segments (`id#0`, `id#1`…).
   func cancel(_ id: String) {
-    let task = lock.withLock { taskIDs[id].flatMap { tasks[$0] } }
-    task?.cancel()
+    let found = lock.withLock {
+      taskIDs.filter { $0.key == id || $0.key.hasPrefix(id + "#") }.compactMap { tasks[$0.value] }
+    }
+    for task in found { task.cancel() }
   }
 
   func urlSession(
@@ -478,3 +597,4 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }
   }
 }
+

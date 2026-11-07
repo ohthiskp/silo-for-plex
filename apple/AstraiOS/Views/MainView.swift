@@ -40,7 +40,7 @@ struct MainView: View {
       }
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      WideTabBar(selection: tab) { picked in
+      WideTabBar(selection: tab, downloads: app.downloads.jobs.count) { picked in
         if picked == tab {
           // Tapping the open tab again goes back to its first page.
           switch picked {
@@ -88,6 +88,8 @@ struct MainView: View {
 /// the open tab that slides between them.
 struct WideTabBar: View {
   var selection: MainView.TabID
+  /// Running and waiting downloads, shown on Libraries (where Downloads lives).
+  var downloads = 0
   var select: (MainView.TabID) -> Void
 
   @Namespace private var pill
@@ -108,6 +110,11 @@ struct WideTabBar: View {
         } label: {
           VStack(spacing: 4) {
             Image(systemName: symbol).font(.system(size: 22, weight: .semibold))
+              .overlay(alignment: .topTrailing) {
+                if id == .libraries, downloads > 0 {
+                  CountBadge(count: downloads).offset(x: 12, y: -8)
+                }
+              }
             Text(title).font(.system(size: 12, weight: .semibold))
           }
           .foregroundStyle(selected ? Astra.Color.ink : Astra.Color.muted)
