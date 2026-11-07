@@ -3,8 +3,8 @@ import SwiftUI
 
 /// Astra: the iPhone Search tab (KP's mockup, 2026-11-07). A glass search
 /// field, All / Movies / Shows / People, then
-/// rich result rows and people. With nothing typed: Explore, recent searches
-/// and what's popular.
+/// rich result rows and people. With nothing typed: recent searches and
+/// what's popular (KP removed Explore, 2026-11-07).
 struct PhoneSearchView: View {
   var library: LibraryStore
 
@@ -24,6 +24,7 @@ struct PhoneSearchView: View {
   @State private var results: [PlexMetadata] = []
   @State private var people: [TMDBPerson] = []
   @State private var searched = false
+  @State private var peopleSearched = false
   @State private var person: TMDBPerson?
   @FocusState private var focused: Bool
   @Namespace private var scopePill
@@ -123,12 +124,6 @@ struct PhoneSearchView: View {
   // MARK: Nothing typed
 
   @ViewBuilder private var idle: some View {
-    sectionTitle("Explore")
-    HStack(spacing: 10) {
-      exploreButton("Movies", "film") { scope = .movies; focused = true }
-      exploreButton("Shows", "tv") { scope = .shows; focused = true }
-      exploreButton("People", "person.2") { scope = .people; focused = true }
-    }
     if !recent.isEmpty {
       HStack {
         sectionTitle("Recent Searches")
@@ -171,19 +166,6 @@ struct PhoneSearchView: View {
     }
   }
 
-  private func exploreButton(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-    Button(action: action) {
-      Label(title, systemImage: symbol)
-        .font(.system(size: 14, weight: .semibold))
-        .foregroundStyle(Astra.Color.ink)
-        .frame(maxWidth: .infinity)
-        .frame(height: 44)
-        .astraGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous), variant: .clear, interactive: true)
-        .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-  }
-
   private func sectionTitle(_ text: String) -> some View {
     Text(text).font(.system(size: 19, weight: .bold)).foregroundStyle(Astra.Color.ink).padding(.top, 6)
   }
@@ -193,8 +175,13 @@ struct PhoneSearchView: View {
   @ViewBuilder private var resultsList: some View {
     let titles = shownResults
     let people = shownPeople
-    if searched && titles.isEmpty && people.isEmpty {
-      EmptyState(symbol: "magnifyingglass", title: "No results", message: "Nothing on your server matches “\(query)”.")
+    let done = scope == .people ? peopleSearched : (searched && peopleSearched)
+    if done && titles.isEmpty && people.isEmpty {
+      EmptyState(
+        symbol: "magnifyingglass", title: "No results",
+        message: scope == .people ? "No one matches “\(query)”." : "Nothing matches “\(query)”.")
+    } else if titles.isEmpty && people.isEmpty {
+      ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
     } else {
       Text("Results (\(titles.count + people.count))")
         .font(.system(size: 15, weight: .semibold))
@@ -236,6 +223,7 @@ struct PhoneSearchView: View {
       results = []
       people = []
       searched = false
+      peopleSearched = false
       return
     }
     // Astra (KP: "make the search faster"): titles from the library index on
@@ -246,23 +234,36 @@ struct PhoneSearchView: View {
     withAnimation(Astra.Motion.fast) {
       results = local
       searched = !local.isEmpty
+      peopleSearched = false
     }
     // A short pause so each keystroke doesn't send a request.
     try? await Task.pause(0.2)
     guard !Task.isCancelled else { return }
     let tmdbClient = library.tmdb
-    async let tmdb = tmdbClient?.searchMulti(text)
-    // Astra (KP): people come from TMDB only; the People tab never asks the server.
-    let found = scope == .people ? [] : ((try? await library.search(text)) ?? [])
-    guard !Task.isCancelled else { return }
-    withAnimation(Astra.Motion.base) {
-      results = LibraryStore.merged(local, found)
-      searched = true
-    }
-    let catalog = try? await tmdb
-    guard !Task.isCancelled else { return }
-    withAnimation(Astra.Motion.base) {
-      people = Array((catalog?.people ?? []).filter { $0.profilePath != nil }.prefix(8))
+    let peopleOnly = scope == .people
+    enum Answer { case titles([PlexMetadata]), people([TMDBPerson]) }
+    await withTaskGroup(of: Answer.self) { group in
+      // Astra (KP): people come from TMDB only; the server is never asked about them.
+      group.addTask {
+        let found = (try? await tmdbClient?.searchMulti(text))?.people ?? []
+        return .people(Array(found.filter { $0.profilePath != nil }.prefix(8)))
+      }
+      if !peopleOnly {
+        group.addTask { [library] in .titles((try? await library.search(text)) ?? []) }
+      }
+      for await answer in group {
+        guard !Task.isCancelled else { return }
+        withAnimation(Astra.Motion.base) {
+          switch answer {
+          case .titles(let found):
+            results = LibraryStore.merged(local, found)
+            searched = true
+          case .people(let found):
+            people = found
+            peopleSearched = true
+          }
+        }
+      }
     }
   }
 
@@ -392,7 +393,7 @@ private struct PersonRow: View {
   }
 }
 
-/// A person's page: their photo and name, then everything of theirs on your server.
+/// A person's page: their photo and name, then their movies and shows from TMDB.
 struct PersonView: View {
   var library: LibraryStore
   var person: TMDBPerson

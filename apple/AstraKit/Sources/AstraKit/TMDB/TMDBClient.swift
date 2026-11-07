@@ -372,6 +372,22 @@ public enum TrendingHero {
     return (list(.movie), list(.tv))
   }
 
+  /// A streaming service's Top 10 (KP, 2026-11-07: "if I go to Netflix…
+  /// it'll just tell me what the trending thing is"): its titles trending
+  /// now, in trending order, then its most popular titles, each once.
+  public static func serviceTopTen(
+    trending: [TMDBItem], service popular: [PlexMetadata], limit: Int = 10
+  ) -> [PlexMetadata] {
+    let byKey = Dictionary(popular.compactMap { item in item.tmdbKey.map { ($0, item) } }, uniquingKeysWith: { a, _ in a })
+    var out = pick(trending: trending, index: byKey, limit: limit)
+    var seen = Set(out.compactMap(\.tmdbKey))
+    for item in popular where out.count < limit {
+      guard let key = item.tmdbKey, seen.insert(key).inserted else { continue }
+      out.append(item)
+    }
+    return out
+  }
+
   /// For a streaming service: its titles that are trending, in trending
   /// order; then, if that's too few, its popular titles from the last two
   /// years. Never an old catalogue title.

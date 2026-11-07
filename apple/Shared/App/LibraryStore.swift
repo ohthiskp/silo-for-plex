@@ -57,7 +57,7 @@ final class LibraryStore {
   /// The service whose rows are loading right now.
   private(set) var loadingServiceID: String?
   private(set) var serviceErrors: [String: String] = [:]
-  private var serviceContent: [String: (hero: [PlexMetadata], hubs: [PlexHub])] = [:]
+  private var serviceContent: [String: (hero: [PlexMetadata], topTen: [PlexMetadata], hubs: [PlexHub])] = [:]
   @ObservationIgnored private var serviceGeneration = Generation()
   @ObservationIgnored private var serviceTask: Task<Void, Never>?
   /// Every movie and show on the server by TMDB key ("movie:603"), built once, on first use.
@@ -127,6 +127,13 @@ final class LibraryStore {
   var homeHero: [PlexMetadata] {
     guard let selectedService else { return hero }
     return serviceContent[selectedService.id]?.hero ?? []
+  }
+
+  /// The numbered Top 10 for the current tab: For You ranks trending titles
+  /// on the server; a service tab ranks what's trending on that service.
+  var homeTopTen: [PlexMetadata] {
+    guard let selectedService else { return topTenAll }
+    return serviceContent[selectedService.id]?.topTen ?? []
   }
 
   /// The same on every tab (KP, 2026-11-07).
@@ -220,20 +227,22 @@ final class LibraryStore {
     // Which index these rows are matched with (-1: none yet).
     let usedVersion = !index.isEmpty && index.count == libraryIndex?.count ? indexVersion : -1
     func shown(_ item: TMDBItem) -> PlexMetadata { index[item.id] ?? item.asMetadata }
-    // Each title once across the service's rows, in row order.
+    // The Top 10 first, then each title once across the service's rows, in row order.
+    let popular = lists.first.map { $0.1.map(shown) } ?? []
+    let topTen = TrendingHero.serviceTopTen(trending: trending, service: popular)
     var dedup = HomeDeduplicator()
+    _ = dedup.filter(topTen)
     let rows = lists.map { spec, items in
       PlexHub(hubIdentifier: spec.id, title: spec.title, items: Array(dedup.filter(items.map(shown)).prefix(30)))
     }
     .filter { !$0.items.isEmpty }
     // The hero: this service's titles trending now, playable ones first.
-    let popular = lists.first.map { $0.1.map(shown) } ?? []
     let picks = TrendingHero.pick(trending: trending, service: popular, currentYear: Self.currentYear)
     let playable = picks.filter { !$0.isCatalogOnly }
     let heroPicks = playable.count >= 3 ? playable : Array((playable + picks.filter(\.isCatalogOnly)).prefix(8))
     let hero = await loadInFull(heroPicks)
     guard !isClosed else { return }
-    serviceContent[service.id] = (hero, rows)
+    serviceContent[service.id] = (hero, topTen, rows)
     serviceIndexVersion[service.id] = usedVersion
     // The index arrived while these rows were being built: match them again.
     if usedVersion != indexVersion, let current = libraryIndex, !current.isEmpty {

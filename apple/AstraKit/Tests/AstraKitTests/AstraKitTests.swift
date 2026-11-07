@@ -878,6 +878,14 @@ final class TrendingHeroTests: XCTestCase {
     // Trending first (whatever its year), then only recent popular titles.
     XCTAssertEqual(picked.map(\.ratingKey), ["hot", "new"])
   }
+
+  func testServiceTopTenIsTrendingThenPopularEachOnce() throws {
+    let popular = try (1...15).map { try plex("p\($0)", tmdb: $0, year: 1990) }
+    let top = TrendingHero.serviceTopTen(trending: [tmdb(7), tmdb(99), tmdb(3), tmdb(7)], service: popular)
+    XCTAssertEqual(top.count, 10)
+    // Trending titles on the service first (99 isn't on it), then popular order, no repeats.
+    XCTAssertEqual(top.map(\.ratingKey), ["p7", "p3", "p1", "p2", "p4", "p5", "p6", "p8", "p9", "p10"])
+  }
 }
 
 final class PlayerGeometryTests: XCTestCase {

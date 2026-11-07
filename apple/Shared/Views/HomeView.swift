@@ -66,9 +66,12 @@ struct HomeView: View {
           }
         }
 
-        // Astra: one streaming-style Top 10 row (For You only).
-        if library.selectedService == nil, !library.topTenAll.isEmpty {
+        // Astra: one streaming-style Top 10 row on every tab (KP, 2026-11-07):
+        // For You ranks trending titles on the server, a service tab what's
+        // trending on that service.
+        if !library.homeTopTen.isEmpty {
           TopTenRow(library: library)
+            .id(library.selectedService?.id ?? "for-you")
         }
 
         ForEach(library.homeRows) { hub in
@@ -275,12 +278,15 @@ struct TopTenRow: View {
   @Environment(\.contentLeading) private var leading
   @State private var showAll = false
 
-  private var items: [PlexMetadata] { Array(library.topTenAll.prefix(10)) }
+  private var items: [PlexMetadata] { Array(library.homeTopTen.prefix(10)) }
+  private var title: String {
+    library.selectedService.map { "Top 10 on \($0.label)" } ?? "Top 10 This Week"
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack(alignment: .firstTextBaseline, spacing: Astra.Spacing.s) {
-        Text("Top 10 This Week")
+        Text(title)
           .font(Astra.Font.rowTitle)
           .foregroundStyle(Astra.Color.ink)
           .lineLimit(1)
@@ -302,7 +308,7 @@ struct TopTenRow: View {
       .padding(.trailing, Astra.Spacing.pageTrailing)
 
       ScrollView(.horizontal) {
-        LazyHStack(spacing: 12) {
+        LazyHStack(spacing: 6) {
           ForEach(Array(items.enumerated()), id: \.element.id) { rank, item in
             TopTenCard(library: library, item: item, rank: rank + 1)
           }
@@ -313,17 +319,18 @@ struct TopTenRow: View {
       .scrollClipDisabled()
     }
     .navigationDestination(isPresented: $showAll) {
-      TopTenList(library: library, items: items)
+      TopTenList(library: library, items: items, title: title)
     }
   }
 }
 
-/// One Top 10 poster: artwork only, the rank drawn over its top-left corner.
+/// One Top 10 entry, Netflix style (KP, 2026-11-07): a huge outlined rank
+/// number standing beside the poster, the poster overlapping its right edge.
 struct TopTenCard: View {
   var library: LibraryStore
   var item: PlexMetadata
   var rank: Int
-  var width: CGFloat = 124
+  var width: CGFloat = 112
 
   @Environment(\.openItem) private var openItem
 
@@ -332,14 +339,17 @@ struct TopTenCard: View {
     Button {
       openItem(item)
     } label: {
-      ArtworkImage(library: library, item: item, kind: .poster, width: width, height: height)
-        .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
-        .overlay(alignment: .topLeading) { RankNumber(rank: rank) }
-        .overlay(
-          RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))
-        .pressable()
-        .contentShape(Rectangle())
+      HStack(alignment: .bottom, spacing: -width * 0.22) {
+        RankNumber(rank: rank, size: height * 0.86)
+        ArtworkImage(library: library, item: item, kind: .poster, width: width, height: height)
+          .frame(width: width, height: height)
+          .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
+          .overlay(
+            RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))
+          .shadow(color: .black.opacity(0.45), radius: 6, x: -3, y: 0)
+      }
+      .pressable()
+      .contentShape(Rectangle())
     }
     .buttonStyle(AstraCardButtonStyle())
     .itemMenu(library: library, item: item)
@@ -347,24 +357,34 @@ struct TopTenCard: View {
   }
 }
 
-/// The big rank number over a Top 10 poster: translucent white with a soft
-/// shadow so it reads on any artwork (white and grey only).
+/// The big Top 10 rank: the page colour inside a light outline, like the
+/// streaming apps (white and grey only), sitting on the poster's baseline.
 struct RankNumber: View {
   var rank: Int
+  var size: CGFloat = 150
 
   var body: some View {
-    Text("\(rank)")
-      .font(.system(size: 52, weight: .heavy, design: .rounded))
-      .italic()
+    let digits = Text("\(rank)")
+      .font(.system(size: size, weight: .black, design: .rounded))
       .monospacedDigit()
-      .foregroundStyle(
-        LinearGradient(colors: [.white.opacity(0.95), .white.opacity(0.55)], startPoint: .top, endPoint: .bottom))
-      .shadow(color: .black.opacity(0.55), radius: 4, x: 1, y: 1)
-      .lineLimit(1)
-      .fixedSize()
-      .padding(.leading, 8)
-      .padding(.top, 2)
-      .accessibilityHidden(true)
+      .tracking(rank >= 10 ? -size * 0.12 : 0)
+    let line = max(1.5, size / 70)
+    ZStack {
+      // An outline from eight offset copies (SwiftUI has no text stroke).
+      ForEach(0..<8, id: \.self) { step in
+        let angle = Double(step) * .pi / 4
+        digits
+          .foregroundStyle(Astra.Color.ink.opacity(0.85))
+          .offset(x: cos(angle) * line, y: sin(angle) * line)
+      }
+      digits.foregroundStyle(Astra.Color.bg)
+    }
+    .lineLimit(1)
+    .fixedSize()
+    // The glyphs carry space under the baseline; pull the number down so its
+    // foot lines up with the poster's bottom edge.
+    .padding(.bottom, -size * 0.14)
+    .accessibilityHidden(true)
   }
 }
 
@@ -372,6 +392,7 @@ struct RankNumber: View {
 struct TopTenList: View {
   var library: LibraryStore
   var items: [PlexMetadata]
+  var title = "Top 10 This Week"
 
   @Environment(\.openItem) private var openItem
 
@@ -415,7 +436,7 @@ struct TopTenList: View {
     }
     .scrollIndicators(.never)
     .background(Astra.Color.bg.ignoresSafeArea())
-    .navigationTitle("Top 10 This Week")
+    .navigationTitle(title)
     #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar(.visible, for: .navigationBar)

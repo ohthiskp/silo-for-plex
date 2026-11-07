@@ -106,8 +106,8 @@ struct WideTabBar: View {
     (.search, "Search", "magnifyingglass"),
     (.libraries, "Libraries", "square.stack.fill"),
   ]
-  private static let inset: CGFloat = 6
-  private static let height: CGFloat = 58
+  private static let inset: CGFloat = 5
+  private static let height: CGFloat = 52
 
   var body: some View {
     GeometryReader { geo in
@@ -134,13 +134,13 @@ struct WideTabBar: View {
             let (id, title, symbol) = item
             let lit = dragged ? hovered == i : id == selection
             VStack(spacing: 4) {
-              Image(systemName: symbol).font(.system(size: 22, weight: .semibold))
+              Image(systemName: symbol).font(.system(size: 20, weight: .semibold))
                 .overlay(alignment: .topTrailing) {
                   if id == .libraries, downloads > 0 {
                     CountBadge(count: downloads).offset(x: 12, y: -8)
                   }
                 }
-              Text(title).font(.system(size: 12, weight: .semibold))
+              Text(title).font(.system(size: 11, weight: .semibold))
             }
             .foregroundStyle(lit ? Astra.Color.ink : Astra.Color.muted)
             .scaleEffect(lit && dragX != nil ? 1.08 : 1)
@@ -173,7 +173,7 @@ struct WideTabBar: View {
           })
     }
     .frame(height: Self.height + Self.inset * 2)
-    .padding(.horizontal, 16)
+    .padding(.horizontal, 22)
     .padding(.bottom, 2)
     // Stays at the bottom when the keyboard opens (Search).
     .ignoresSafeArea(.keyboard)
@@ -184,12 +184,12 @@ struct WideTabBar: View {
     min(max(Int((x - Self.inset) / max(tabWidth, 1)), 0), items.count - 1)
   }
 
-  /// The bar itself: regular Liquid Glass.
+  /// The bar itself: regular Liquid Glass, tinted a little darker (KP, 2026-11-07).
   @ViewBuilder private var barGlass: some View {
     if #available(iOS 26.0, *) {
-      Capsule().fill(.clear).glassEffect(.regular, in: Capsule())
+      Capsule().fill(.clear).glassEffect(.regular.tint(.black.opacity(0.35)), in: Capsule())
     } else {
-      Capsule().fill(.regularMaterial).overlay(Capsule().stroke(Astra.Color.hairline))
+      Capsule().fill(.regularMaterial).overlay(Capsule().fill(.black.opacity(0.3))).overlay(Capsule().stroke(Astra.Color.hairline))
     }
   }
 
