@@ -41,6 +41,8 @@ public final class NetworkLog: @unchecked Sendable {
   public func record(
     _ request: URLRequest, status: Int?, started: Date, error: Error?, now: Date = Date()
   ) {
+    // A request Astra cancelled itself (a newer one replaced it) isn't a failure.
+    if error is CancellationError || (error as? URLError)?.code == .cancelled { return }
     let url = request.url
     lock.withLock {
       nextID += 1

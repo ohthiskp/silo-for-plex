@@ -131,11 +131,11 @@ struct ServerSwitchSheet: View {
         VStack(spacing: 10) {
           ForEach(state.servers) { server in
             let current = app.serverID == server.clientIdentifier
-            ServerRow(server: server, connecting: state.connecting == server.name, current: current) {
+            ServerRow(server: server, connecting: state.connecting == server.clientIdentifier, current: current) {
               guard !current, state.connecting == nil else { return }
               Task { await app.connect(to: server) }
             }
-            .disabled(state.connecting != nil && state.connecting != server.name)
+            .disabled(state.connecting != nil && state.connecting != server.clientIdentifier)
           }
         }
       }

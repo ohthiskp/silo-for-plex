@@ -752,3 +752,13 @@ final class NetworkLogTests: XCTestCase {
     XCTAssertEqual(log.recent.last?.failure, PlexError.http(500).errorDescription)
   }
 }
+
+final class NetworkLogCancellationTests: XCTestCase {
+  func testRequestsAstraCancelledAreNotLoggedAsFailures() {
+    let log = NetworkLog()
+    let request = URLRequest(url: URL(string: "https://a.test/x")!)
+    log.record(request, status: nil, started: Date(), error: URLError(.cancelled))
+    log.record(request, status: nil, started: Date(), error: CancellationError())
+    XCTAssertTrue(log.recent.isEmpty)
+  }
+}

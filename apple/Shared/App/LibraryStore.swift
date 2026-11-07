@@ -25,7 +25,8 @@ final class LibraryStore {
   private var detailCache: [String: PlexMetadata] = [:]
   /// The newest Home load; an older one that finishes late is ignored.
   @ObservationIgnored private var homeGeneration = Generation()
-  @ObservationIgnored private var background: [Task<Void, Never>] = []
+  @ObservationIgnored private var background: [Int: Task<Void, Never>] = [:]
+  @ObservationIgnored private var nextBackgroundID = 0
 
   // MARK: Streaming-service switcher
 
@@ -55,6 +56,8 @@ final class LibraryStore {
     sections = session.sections
     tmdb = tmdbToken.flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : TMDBClient(token: $0) }
     if tmdb != nil { selectedService = StreamingService.byID(UserDefaults.standard.string(forKey: Self.serviceKey)) }
+    // A saved service starts loading now, so Home never flashes "Nothing from…" first.
+    startService(force: false)
   }
 
   /// Stops everything this store started. Called when another server replaces it.
@@ -62,7 +65,7 @@ final class LibraryStore {
     isClosed = true
     serviceTask?.cancel()
     indexTask?.cancel()
-    background.forEach { $0.cancel() }
+    background.values.forEach { $0.cancel() }
     background.removeAll()
     loadingServiceID = nil
     isLoadingHome = false
@@ -80,8 +83,12 @@ final class LibraryStore {
   /// Runs work tied to this store's lifetime; `close()` cancels it.
   private func spawn(_ work: @escaping @MainActor () async -> Void) {
     guard !isClosed else { return }
-    background.removeAll { $0.isCancelled }
-    background.append(Task { await work() })
+    nextBackgroundID += 1
+    let id = nextBackgroundID
+    background[id] = Task { [weak self] in
+      await work()
+      self?.background[id] = nil
+    }
   }
 
   /// What Home shows for the current switcher choice. Only titles on the Plex server.

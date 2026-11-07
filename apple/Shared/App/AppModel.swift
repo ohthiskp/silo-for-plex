@@ -34,7 +34,7 @@ final class AppModel {
   struct ServerSwitch: Equatable {
     var servers: [PlexServerResource] = []
     var loadingList = true
-    /// The server being validated right now.
+    /// The server (its Plex id) being validated right now.
     var connecting: String?
     var error: String?
   }
@@ -173,7 +173,8 @@ final class AppModel {
     guard phase == .ready, library != nil else {
       return await loadServers(token: accountToken, autoSelect: false)
     }
-    serverSwitch = ServerSwitch()
+    // Already open (maybe mid-connect): keep its state, only refresh the list.
+    if serverSwitch == nil { serverSwitch = ServerSwitch() }
     do {
       let servers = try await account.servers(token: accountToken)
       guard serverSwitch != nil else { return }
@@ -183,7 +184,9 @@ final class AppModel {
     } catch {
       guard serverSwitch != nil else { return }
       serverSwitch?.loadingList = false
-      serverSwitch?.error = PlexError.describe(error, server: "Plex")
+      if serverSwitch?.servers.isEmpty ?? true {
+        serverSwitch?.error = PlexError.describe(error, server: "Plex")
+      }
     }
   }
 
@@ -202,7 +205,7 @@ final class AppModel {
     let switching = phase == .ready && library != nil
     if switching {
       if serverSwitch == nil { serverSwitch = ServerSwitch(loadingList: false) }
-      serverSwitch?.connecting = resource.name
+      serverSwitch?.connecting = resource.clientIdentifier
       serverSwitch?.error = nil
     } else {
       phase = .connecting(resource.name)
