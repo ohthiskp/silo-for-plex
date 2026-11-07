@@ -290,8 +290,12 @@ final class LibraryStore {
   /// The artwork URL for a card or header: TMDB's when it has one, else Plex's.
   /// Episodes keep Plex's stills.
   func artworkURL(for item: PlexMetadata, _ kind: ArtKind, width: CGFloat, height: CGFloat) async -> URL? {
-    let seeded = kind == .logo ? nil : item.tmdbKey.flatMap { seededArt[$0] }
-    if let art = (item.tmdbKey.flatMap { artwork[$0] }) ?? seeded ?? (await tmdbArtwork(for: item)) {
+    // Full artwork if fetched; else the poster and backdrop TMDB's lists gave
+    // (no logo in those); else one lookup.
+    var art = item.tmdbKey.flatMap { artwork[$0] }
+    if art == nil, kind != .logo { art = item.tmdbKey.flatMap { seededArt[$0] } }
+    if art == nil { art = await tmdbArtwork(for: item) }
+    if let art {
       let url: URL? =
         switch kind {
         case .poster: TMDBArtwork.url(art.posterPath, size: "w500")
