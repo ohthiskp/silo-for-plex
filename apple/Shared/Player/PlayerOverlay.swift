@@ -449,9 +449,9 @@ struct PlayerOverlay: View {
             if player.buffering || !player.hasFirstFrame {
               ProgressView().controlSize(.large).tint(.white)
             } else {
+              // Swapped at once (no symbol animation), so play/pause feels instant.
               Image(systemName: player.paused ? "play.fill" : "pause.fill")
                 .font(.system(size: 40, weight: .bold))
-                .contentTransition(.symbolEffect(.replace))
             }
           }
           .frame(width: 84, height: 84)
@@ -545,9 +545,9 @@ struct PlayerOverlay: View {
       Button {
         player.togglePause()
       } label: {
+        // Swapped at once (no symbol animation), so play/pause feels instant.
         Image(systemName: player.paused ? "play.fill" : "pause.fill")
           .font(.system(size: large, weight: .bold))
-          .contentTransition(.symbolEffect(.replace))
       }
       .buttonStyle(PlayerGlyphButtonStyle(size: framedPause ? large * 2.3 : large * 1.6, filled: framedPause, square: true))
       .keyboardShortcut(.space, modifiers: [])
