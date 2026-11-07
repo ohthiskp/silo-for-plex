@@ -1,0 +1,25 @@
+name: Astra TMDB trending probe
+run-name: TMDB trending probe
+
+# Prints TMDB's trending lists (titles only), to compare with a reference site.
+on:
+  push:
+    branches: [claude/project-thread-otuzui]
+    paths: [".github/workflows/astra-tmdb-probe.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trending lists
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          for w in day week; do
+            echo "=== trending/all/$w"
+            curl -sS -H "Authorization: Bearer $TMDB_TOKEN" "https://api.themoviedb.org/3/trending/all/$w?language=en-US" \
+              | python3 -c 'import json,sys; [print(i+1, x.get("media_type"), x.get("title") or x.get("name")) for i,x in enumerate(json.load(sys.stdin).get("results",[])[:15])]'
+          done
