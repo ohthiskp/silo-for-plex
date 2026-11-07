@@ -11,6 +11,8 @@ struct AstraMacApp: App {
         .environment(app)
         .frame(minWidth: 960, minHeight: 600)
         .preferredColorScheme(.dark)
+        // White, never the system accent colour (which can be purple).
+        .tint(.white)
         .task { await app.start() }
     }
     .windowStyle(.hiddenTitleBar)
@@ -37,6 +39,7 @@ struct AstraMacApp: App {
 
     Settings {
       SettingsView()
+        .tint(.white)
         .frame(width: 480, height: 420)
         .environment(app)
         .preferredColorScheme(.dark)

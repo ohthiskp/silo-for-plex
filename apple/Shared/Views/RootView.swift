@@ -55,7 +55,7 @@ struct RootView: View {
     #if os(macOS)
       .onAppear {
         app.player.makeOverlay = { [app] in
-          AnyView(PlayerOverlay().environment(app).preferredColorScheme(.dark))
+          AnyView(PlayerOverlay().environment(app).preferredColorScheme(.dark).tint(.white))
         }
       }
     #endif
