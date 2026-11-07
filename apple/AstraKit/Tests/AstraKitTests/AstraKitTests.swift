@@ -843,3 +843,48 @@ final class DownloadCheckTests: XCTestCase {
     XCTAssertNil(DownloadCheck.validate(status: 200, mimeType: nil, fileSize: 5, expected: nil))
   }
 }
+
+final class SeekThumbnailTests: XCTestCase {
+  /// A BIF file with `images` frames, one every 10 s, each image "JPEGn".
+  static func bif(_ images: [String], multiplier: UInt32 = 1000) -> Data {
+    func le(_ v: UInt32) -> [UInt8] { [UInt8(v & 0xFF), UInt8(v >> 8 & 0xFF), UInt8(v >> 16 & 0xFF), UInt8(v >> 24)] }
+    var header = SeekThumbnails.magic + le(0) + le(UInt32(images.count)) + le(multiplier)
+    header += [UInt8](repeating: 0, count: 64 - header.count)
+    var offset = UInt32(64 + (images.count + 1) * 8)
+    var index: [UInt8] = []
+    for (i, image) in images.enumerated() {
+      index += le(UInt32(i * 10)) + le(offset)
+      offset += UInt32(image.utf8.count)
+    }
+    index += le(0xFFFF_FFFF) + le(offset)
+    return Data(header + index + images.flatMap { Array($0.utf8) })
+  }
+
+  func testParsesFramesAndFindsTheOneShownAtATime() throws {
+    let thumbs = try XCTUnwrap(SeekThumbnails(bif: Self.bif(["JPEG0", "JPEG1x", "JPEG2"])))
+    XCTAssertEqual(thumbs.frames.map(\.milliseconds), [0, 10_000, 20_000])
+    XCTAssertEqual(thumbs.frameIndex(at: 0), 0)
+    XCTAssertEqual(thumbs.frameIndex(at: 9.9), 0)
+    XCTAssertEqual(thumbs.frameIndex(at: 10), 1)
+    XCTAssertEqual(thumbs.frameIndex(at: 9999), 2)
+    XCTAssertEqual(thumbs.jpeg(1).map { String(decoding: $0, as: UTF8.self) }, "JPEG1x")
+    XCTAssertNil(thumbs.jpeg(3))
+  }
+
+  func testRejectsDataThatIsNotABIF() {
+    XCTAssertNil(SeekThumbnails(bif: Data("<html>not found</html>".utf8)))
+    XCTAssertNil(SeekThumbnails(bif: Data()))
+  }
+
+  func testMissingIndexIsNilNotAnError() async throws {
+    let transport = FakeTransport { request in
+      XCTAssertEqual(request.url?.path, "/library/parts/42/indexes/sd")
+      return (404, Data())
+    }
+    let client = PlexServerClient(
+      baseURL: URL(string: "https://server.test:32400")!, token: "tok", serverName: "Home", info: testInfo,
+      transport: transport)
+    let thumbs = try await client.seekThumbnails(partID: 42)
+    XCTAssertNil(thumbs)
+  }
+}

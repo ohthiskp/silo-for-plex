@@ -31,6 +31,10 @@ final class PlayerController {
   /// False from opening a file until mpv shows its first frame; the overlay
   /// shows a loading state instead of a black window meanwhile.
   private(set) var hasFirstFrame = false
+  /// Plex's seek previews for the file playing (nil for downloads, or when the server has none).
+  private(set) var hasThumbnails = false
+  @ObservationIgnored private var thumbnails: SeekThumbnails?
+  @ObservationIgnored private var thumbnailCache: [Int: PlatformImage] = [:]
   private(set) var videoWidth: Double = 0
   private(set) var videoHeight: Double = 0
   private(set) var audioTracks: [Track] = []
@@ -120,6 +124,7 @@ final class PlayerController {
     self.source = source
     self.library = library
     playbackServer = server
+    loadThumbnails(for: source, local: local != nil)
 
     title = source.title
     subtitle = source.subtitle
@@ -178,6 +183,9 @@ final class PlayerController {
     core = nil
     isActive = false
     isPictureInPicture = false
+    thumbnails = nil
+    thumbnailCache = [:]
+    hasThumbnails = false
     if let key = source?.ratingKey { library?.playbackEnded(ratingKey: key) }
     source = nil
     #if os(macOS)
@@ -334,6 +342,31 @@ final class PlayerController {
     default:
       break
     }
+  }
+
+  private func loadThumbnails(for source: PlaybackSource, local: Bool) {
+    thumbnails = nil
+    thumbnailCache = [:]
+    hasThumbnails = false
+    guard !local, let server = playbackServer else { return }
+    let partID = source.part.id
+    Task { [weak self] in
+      let thumbs = try? await server.seekThumbnails(partID: partID)
+      // Still the same file?
+      guard let self, self.source?.part.id == partID, let thumbs else { return }
+      self.thumbnails = thumbs
+      self.hasThumbnails = true
+    }
+  }
+
+  /// The preview image for a time on the timeline, decoded once and kept.
+  func thumbnail(at seconds: Double) -> PlatformImage? {
+    guard let thumbnails, let index = thumbnails.frameIndex(at: seconds) else { return nil }
+    if let hit = thumbnailCache[index] { return hit }
+    guard let data = thumbnails.jpeg(index), let image = PlatformImage(data: data) else { return nil }
+    if thumbnailCache.count > 400 { thumbnailCache.removeAll() }
+    thumbnailCache[index] = image
+    return image
   }
 
   private func fitWindowToVideo() {

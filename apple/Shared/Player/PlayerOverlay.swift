@@ -295,6 +295,10 @@ struct PlayerOverlay: View {
       onCommit: { fraction in
         player.seek(to: fraction * player.duration)
         scrubbing = nil
+      },
+      preview: { fraction in
+        let seconds = fraction * player.duration
+        return (image: player.thumbnail(at: seconds), label: Self.clock(seconds))
       }
     )
     .accessibilityLabel("Playback Position")
@@ -469,8 +473,15 @@ struct ScrubBar: View {
   var height: CGFloat
   var onChange: (Double) -> Void
   var onCommit: (Double) -> Void
+  /// Seek preview: the image and time label for a point on the bar (the
+  /// timeline only). Shown while dragging, and on Mac while hovering.
+  var preview: ((Double) -> (image: PlatformImage?, label: String))? = nil
 
   @State private var dragging = false
+  @State private var hover: Double?
+  @State private var dragAt: Double?
+
+  private static let previewSize = CGSize(width: 192, height: 108)
 
   var body: some View {
     GeometryReader { geo in
@@ -487,20 +498,67 @@ struct ScrubBar: View {
       }
       .frame(maxHeight: .infinity)
       .contentShape(Rectangle())
+      .overlay(alignment: .bottomLeading) {
+        if let preview, let at = dragAt ?? hover {
+          previewView(preview(at), at: at, width: width)
+        }
+      }
+      #if os(macOS)
+        .onContinuousHover { phase in
+          guard preview != nil else { return }
+          switch phase {
+          case .active(let point): hover = value(at: point.x, width: width)
+          case .ended: hover = nil
+          }
+        }
+      #endif
       .gesture(
         DragGesture(minimumDistance: 0)
           .onChanged {
             dragging = true
-            onChange(value(at: $0.location.x, width: width))
+            let v = value(at: $0.location.x, width: width)
+            dragAt = v
+            onChange(v)
           }
           .onEnded {
             dragging = false
+            dragAt = nil
             onCommit(value(at: $0.location.x, width: width))
           }
       )
     }
     .frame(height: max(knob, 22) + 6)
     .animation(Astra.Motion.fast, value: dragging)
+  }
+
+  /// The preview card above the bar, centred on the pointer, kept inside the bar's width.
+  @ViewBuilder
+  private func previewView(_ content: (image: PlatformImage?, label: String), at: Double, width: CGFloat) -> some View {
+    let size = Self.previewSize
+    let hasImage = content.image != nil
+    let cardWidth = hasImage ? size.width : 72
+    let x = min(max(0, width * at - cardWidth / 2), max(0, width - cardWidth))
+    VStack(spacing: 6) {
+      if let image = content.image {
+        Image(platformImage: image)
+          .resizable()
+          .aspectRatio(contentMode: .fill)
+          .frame(width: size.width, height: size.height)
+          .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+          .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(.white.opacity(0.35), lineWidth: 1))
+          .shadow(color: .black.opacity(0.5), radius: 12, y: 4)
+      }
+      Text(content.label)
+        .font(.system(size: 13, weight: .semibold).monospacedDigit())
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(.black.opacity(0.55), in: Capsule())
+    }
+    .frame(width: cardWidth)
+    .offset(x: x, y: -30)
+    .allowsHitTesting(false)
+    .transition(.opacity)
   }
 
   private func value(at x: CGFloat, width: CGFloat) -> Double {
