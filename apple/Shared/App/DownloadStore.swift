@@ -80,6 +80,8 @@ final class DownloadStore {
   func attach(_ library: LibraryStore?, serverID: String?) {
     self.library = library
     self.serverID = serverID
+    // Signed out or switching: queued jobs mustn't start with the old server's token.
+    for job in jobs where !job.running { jobClients[job.id] = nil }
     guard let library else { return }
     for job in jobs where job.serverID == serverID && jobClients[job.id] == nil {
       jobClients[job.id] = library.client
@@ -156,6 +158,10 @@ final class DownloadStore {
           var full = target
           if full.media.isEmpty { full = try await library.details(target.ratingKey, refresh: true) }
           guard let made = DownloadRecord.make(for: full, quality: .stored()) else { continue }
+          // A second tap may have queued it while details loaded.
+          if index.record(made.record.ratingKey) != nil || jobs.contains(where: { $0.id == made.record.ratingKey }) {
+            continue
+          }
           failed[full.ratingKey] = nil
           jobs.append(Job(record: made.record, partKey: made.partKey, serverID: serverID))
           jobClients[made.record.ratingKey] = client

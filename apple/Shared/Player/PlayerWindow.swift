@@ -23,6 +23,9 @@
     /// (the person dragged it bigger), so the controls switch back.
     var onMiniChange: ((Bool) -> Void)?
     private var fittedToVideo = false
+    /// True from the start of a full-screen change until it ends; the frame
+    /// mustn't be set meanwhile.
+    private var inFullScreenTransition = false
 
     init(over main: NSWindow, content: AnyView) {
       mainWindow = main
@@ -91,7 +94,7 @@
     func fitVideo(width: Double, height: Double) {
       guard width > 0, height > 0 else { return }
       window.contentAspectRatio = NSSize(width: width, height: height)
-      guard !fittedToVideo, !window.styleMask.contains(.fullScreen) else { return }
+      guard !fittedToVideo, !inFullScreenTransition, !window.styleMask.contains(.fullScreen) else { return }
       fittedToVideo = true
       let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? window.frame
       let frame = PlayerGeometry.fit(window.frame, videoWidth: width, videoHeight: height, visible: visible)
@@ -106,11 +109,19 @@
     }
 
     func windowWillEnterFullScreen(_ notification: Notification) {
+      inFullScreenTransition = true
+      // Full screen sizes itself; leaving it later keeps the window as it was.
+      fittedToVideo = true
       if isMini {
         leaveMini(restoreFrame: false)
         onMiniChange?(false)
       }
     }
+
+    func windowDidEnterFullScreen(_ notification: Notification) { inFullScreenTransition = false }
+    func windowDidFailToEnterFullScreen(_ window: NSWindow) { inFullScreenTransition = false }
+    func windowWillExitFullScreen(_ notification: Notification) { inFullScreenTransition = true }
+    func windowDidExitFullScreen(_ notification: Notification) { inFullScreenTransition = false }
 
     private func leaveMini(restoreFrame: Bool) {
       window.level = .normal

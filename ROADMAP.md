@@ -51,10 +51,10 @@ Order set by KP. A milestone is done only after CI is green, KP has tried it, an
 | # | Milestone | State | Updated |
 |---|---|---|---|
 | S1 | Connections: server switching, provider loading, diagnostics | Code done, CI + QA review; waiting on KP's test | 2026-11-07 |
-| S2 | Player: size, drag, first-frame state, mini-window restore | Not started | — |
-| S3 | Downloads: real progress, failure reasons, no silent cancel | Not started | — |
-| S4 | Layout: sidebar indicator, switcher overlap, accents, snapshot tests | Not started | — |
-| S5 | Seek thumbnails, loading screen, Sparkle investigation | Not started | — |
+| S2 | Player: size, drag, first-frame state, mini-window restore | Code done, CI + QA review; waiting on KP's test | 2026-11-07 |
+| S3 | Downloads: real progress, failure reasons, no silent cancel | Code done, CI + QA review; waiting on KP's test | 2026-11-07 |
+| S4 | Layout: sidebar indicator, switcher overlap, accents, snapshot tests | Code done except snapshot tests; waiting on KP's test | 2026-11-07 |
+| S5 | Seek thumbnails, loading screen, Sparkle (added) | Code done, CI + QA review; waiting on KP's test | 2026-11-07 |
 
 Audit and dependency report: https://claude.ai/artifact/8NZSQ7ScHNXa2324e58SWL
 

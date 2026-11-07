@@ -250,11 +250,12 @@ final class LibraryStore {
   /// or when none match, recent additions released in the last two years.
   private func loadHero(fallback hubs: [PlexHub], isCurrent: @escaping () -> Bool) async {
     isLoadingHero = hero.isEmpty
-    defer { if isCurrent() { isLoadingHero = false } }
+    // Cleared whatever happens: a newer load that fails never reaches here.
+    defer { isLoadingHero = false }
     var picks: [PlexMetadata] = []
     if tmdb != nil, let index = try? await loadLibraryIndex() {
       picks = await loadInFull(TrendingHero.pick(trending: await loadTrending(), index: index))
-        .filter { $0.backdrop != nil || $0.tmdbKey != nil }
+        .filter { $0.backdrop != nil }
     }
     if picks.isEmpty { picks = await pickHero(from: hubs) }
     guard isCurrent() else { return }
@@ -429,6 +430,7 @@ final class LibraryStore {
       await loadHero(fallback: rows.hubs, isCurrent: isCurrent)
     } catch {
       guard isCurrent() else { return }
+      isLoadingHero = false
       homeError = describe(error)
     }
     isLoadingHome = false
