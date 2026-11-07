@@ -635,6 +635,10 @@ struct MetaRow: View {
   }
 }
 
+extension String {
+  var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
 /// The official age rating of a movie or show: Plex's when it has one, else
 /// TMDB's US certification. Nothing when neither knows.
 struct RatingBadge: View {
