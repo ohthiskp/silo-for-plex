@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Temporary App Store signing for the Apple TV build, via the App Store Connect API.
+"""Temporary App Store signing for the Apple TV build (and the SwiftUI iPhone
+build), via the App Store Connect API.
+
+Defaults are the Flutter Apple TV app. The SwiftUI iPhone workflow sets
+ASTRA_SIGNING_PLATFORM=IOS and ASTRA_SIGNING_TARGETS="com.ohthiskp.astra=AstraiOS".
 
   asc_tv_signing.py setup    -> creates a distribution certificate + tvOS App Store
                                 profiles, installs them in a throwaway keychain and
@@ -33,6 +37,10 @@ TARGETS = {  # bundle id -> Xcode target
     "com.ohthiskp.astra": "Runner",
     "com.ohthiskp.astra.TopShelfExtension": "TopShelfExtension",
 }
+if os.environ.get("ASTRA_SIGNING_TARGETS"):
+    TARGETS = dict(pair.split("=", 1) for pair in os.environ["ASTRA_SIGNING_TARGETS"].split(","))
+PLATFORM = os.environ.get("ASTRA_SIGNING_PLATFORM", "TVOS")  # TVOS or IOS
+PROFILE_TYPE = {"TVOS": "TVOS_APP_STORE", "IOS": "IOS_APP_STORE"}[PLATFORM]
 STATE = pathlib.Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "tv_signing.json"
 KEYCHAIN = pathlib.Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "astra-signing.keychain-db"
 
@@ -112,7 +120,7 @@ def setup():
        *[k.strip().strip('"') for k in existing.split() if k.strip()])
     p12.unlink()
 
-    # 3. one tvOS App Store profile per target
+    # 3. one App Store profile per target
     dirs = [pathlib.Path.home() / "Library/MobileDevice/Provisioning Profiles",
             pathlib.Path.home() / "Library/Developer/Xcode/UserData/Provisioning Profiles"]
     for d in dirs:
@@ -120,9 +128,9 @@ def setup():
     stamp = time.strftime("%Y%m%d%H%M%S")
     for identifier, target in TARGETS.items():
         bid = bundle_id(identifier)
-        name = f"Astra tvOS {target} {stamp}"
+        name = f"Astra {PLATFORM.lower()} {target} {stamp}"
         prof = call("POST", "/profiles", {"data": {"type": "profiles",
-            "attributes": {"name": name, "profileType": "TVOS_APP_STORE"},
+            "attributes": {"name": name, "profileType": PROFILE_TYPE},
             "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bid}},
                               "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}}})
         attrs = prof["data"]["attributes"]
