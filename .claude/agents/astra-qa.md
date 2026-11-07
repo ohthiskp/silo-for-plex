@@ -22,7 +22,8 @@ on the first line and review what you can.
 3. **CI:** read the `astra-swiftui-macos` run for the head commit (`gh api repos/ohthiskp/silo-for-plex/actions/runs?head_sha=…`).
    It must be green: AstraKit `swift test`, the Mac build and the iPhone compile. Red, or no run, fails the review.
 4. **Tests cover the change:** new logic has a test that would fail without it.
-5. **UI:** compare CI/UI-test screenshots with the mockup in `docs/design/`; list each difference.
+5. **UI:** decode the demo-mode screenshots from the launch-check log (base64 between `ASTRA-SHOT-BEGIN`
+   and `ASTRA-SHOT-END`), check `AstraiOSUITests` passed there, and compare the screenshots with the mockup in `docs/design/`; list each difference.
 6. **Core flows:** sign-in, server switch, home (one hero, rows load, no duplicates), details, play/resume,
    progress sync, downloads, settings, Sparkle update (Mac), TestFlight upload (iPhone). Say which you
    checked in code and which need KP's device.

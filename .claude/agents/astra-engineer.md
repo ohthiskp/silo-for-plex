@@ -33,6 +33,8 @@ to the network and ship. Read `CLAUDE.md`, `ARCHITECTURE.md` and `apple/README.m
 - iPhone `MARKETING_VERSION` stays above 3.0.0 (currently 3.1.x) or TestFlight hides the build.
 - iPhone signing uses the temporary per-run certificate flow in `tool/astra/asc_tv_signing.py`
   (`ASTRA_SIGNING_PLATFORM=IOS`); don't switch back to automatic signing (certificate limit).
+- Every `apple/` push to the SwiftUI branch uploads a TestFlight build; report its number (UTC `yyyyMMddHHmm`).
+- A 403 "Resource not accessible by integration" in the Mac release step is temporary: re-run first.
 - No secrets in code; tokens come from build settings fed by GitHub secrets.
 
 ## Done when

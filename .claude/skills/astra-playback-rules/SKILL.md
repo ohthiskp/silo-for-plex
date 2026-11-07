@@ -29,7 +29,8 @@ description: Rules for Astra playback in the SwiftUI app — original files only
    (use `Task.pause`).
 
 ## Before calling it done
-- AstraKit tests pass in `astra-swiftui-macos` CI; `PlayerGestureTests` pass if gestures changed.
+- AstraKit tests pass in `astra-swiftui-macos` CI. Any player or gesture change keeps `AstraiOSUITests`
+  green in the launch-check workflow (demo mode, `AstraDemoPlay <video path>`).
 - Shared mpv file touched → the Flutter Mac build (`astra-macos`) still compiles.
 - Measure first-frame time and dropped frames before/after for performance work.
 - List formats not tried (DV profiles, PGS subs, 4K HEVC 10-bit, Atmos passthrough) as untested.

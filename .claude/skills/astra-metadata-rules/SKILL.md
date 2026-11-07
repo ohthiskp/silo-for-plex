@@ -18,6 +18,10 @@ description: Rules for Astra's data in the SwiftUI app — Plex-only sources, si
 - Log requests to `NetworkLog` without tokens.
 
 ## Lists
+- **For You order** (`Plex/ForYou.swift`): hero of up to 5 trending titles on the server (manual change,
+  no auto-advance), Continue Watching, Top 10 (library titles only), Recommended For You, Because You
+  Watched, Hidden Gems. Never Plex's Recently Added.
+- Provider rail order: Netflix, Apple TV+, Prime Video, Disney+, HBO Max, Hulu.
 - Library quality per device (`LibraryQuality.swift`, Settings > Content): iPhone defaults HD,
   Apple TV 4K. HD hides 4K libraries (name has 4K/UHD/2160). 4K shows one entry per title, using
   the 4K version when present; titles without one show as HD.
@@ -32,6 +36,8 @@ description: Rules for Astra's data in the SwiftUI app — Plex-only sources, si
   downloads `index.json` + `queue.json`. Keep old files readable or migrate them, with a test.
 
 ## Downloads
+- iOS uses a background `URLSession`; files of 200 MB or more download over 4 byte ranges
+  (`DownloadSegments`) and are joined into the original file.
 - Download the original file; real progress; visible failure reasons; no silent cancel; queue and
   finished items survive relaunch; offline playback uses the local file.
 
