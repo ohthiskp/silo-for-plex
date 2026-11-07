@@ -24,7 +24,7 @@ packages:
   MPVKit:
     url: https://github.com/edde746/mpv-build
     revision: 43324582df6c1413c8ea2094563f5e3517317eef
-  # In-app updates on Mac (MIT). Same EdDSA key as the Flutter Mac app.
+  # In-app updates on Mac (MIT).
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     majorVersion: 2.6.4
@@ -60,7 +60,8 @@ targets:
         LSApplicationCategoryType: public.app-category.entertainment
         # In-app updates (Sparkle). Its own feed branch: the Flutter release rewrites `appcast`.
         SUFeedURL: https://raw.githubusercontent.com/ohthiskp/silo-for-plex/appcast-swiftui/appcast.xml
-        SUPublicEDKey: wU6pypWh34GlWbHDy2ns9vpn8AtykWvvFIfLSWrEG7I=
+        # Its own key pair; the private half is the SPARKLE_SWIFTUI_ED_SEED repository secret.
+        SUPublicEDKey: ooLzXvfDw0Un7+ccTSv1qbTlrIFPvPrRkhsA7qgcfFs=
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 3600
         # TMDB read token for artwork and the streaming switcher, from the

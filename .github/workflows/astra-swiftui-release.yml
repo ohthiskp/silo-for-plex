@@ -98,12 +98,13 @@ jobs:
 
       - name: Update in-app update feed
         env:
-          SPARKLE_ED_SEED: ${{ secrets.SPARKLE_ED_SEED }}
+          # The SwiftUI app's own signing key (its public half is SUPublicEDKey in apple/project.yml).
+          SPARKLE_ED_SEED: ${{ secrets.SPARKLE_SWIFTUI_ED_SEED }}
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ -z "$SPARKLE_ED_SEED" ]; then
-            echo "::error::SPARKLE_ED_SEED secret is not set, so the in-app update feed was not updated."
-            exit 1
+            echo "::warning::SPARKLE_SWIFTUI_ED_SEED secret is not set: the release is published, but installed apps won't be offered it."
+            exit 0
           fi
           python3 -m pip install --quiet --break-system-packages cryptography 2>/dev/null || python3 -m pip install --quiet cryptography
           URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Astra-SwiftUI.zip"
