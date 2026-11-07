@@ -22,15 +22,35 @@ struct MainView: View {
   @State private var librariesPath: [Route] = []
 
   var body: some View {
+    // Astra (KP, 2026-11-07): Apple's floating tab bar was too narrow with
+    // three tabs, so the system bar is hidden and a wide Liquid Glass bar
+    // with large buttons (KP's mockup) sits at the bottom instead.
     TabView(selection: $tab) {
       Tab("Home", systemImage: "house.fill", value: TabID.home) {
         stack($homePath) { HomeView(library: library) }
+          .toolbar(.hidden, for: .tabBar)
       }
       Tab("Search", systemImage: "magnifyingglass", value: TabID.search) {
         stack($searchPath) { PhoneSearchView(library: library) }
+          .toolbar(.hidden, for: .tabBar)
       }
       Tab("Libraries", systemImage: "square.stack.fill", value: TabID.libraries) {
         stack($librariesPath) { LibrariesView(library: library) }
+          .toolbar(.hidden, for: .tabBar)
+      }
+    }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      WideTabBar(selection: tab) { picked in
+        if picked == tab {
+          // Tapping the open tab again goes back to its first page.
+          switch picked {
+          case .home: homePath.removeAll()
+          case .search: searchPath.removeAll()
+          case .libraries: librariesPath.removeAll()
+          }
+        } else {
+          tab = picked
+        }
       }
     }
     .environment(\.playItem) { app.play($0) }
@@ -60,5 +80,55 @@ struct MainView: View {
         }
     }
     .environment(\.openItem) { item in path.wrappedValue.append(.details(item)) }
+  }
+}
+
+/// The bottom bar: a wide Liquid Glass capsule nearly the screen's width,
+/// three equal buttons with large icons and labels, and a glass pill behind
+/// the open tab that slides between them.
+struct WideTabBar: View {
+  var selection: MainView.TabID
+  var select: (MainView.TabID) -> Void
+
+  @Namespace private var pill
+
+  private let items: [(MainView.TabID, String, String)] = [
+    (.home, "Home", "house.fill"),
+    (.search, "Search", "magnifyingglass"),
+    (.libraries, "Libraries", "square.stack.fill"),
+  ]
+
+  var body: some View {
+    HStack(spacing: 4) {
+      ForEach(items, id: \.0) { item in
+        let (id, title, symbol) = item
+        let selected = id == selection
+        Button {
+          select(id)
+        } label: {
+          VStack(spacing: 4) {
+            Image(systemName: symbol).font(.system(size: 22, weight: .semibold))
+            Text(title).font(.system(size: 12, weight: .semibold))
+          }
+          .foregroundStyle(selected ? Astra.Color.ink : Astra.Color.muted)
+          .frame(maxWidth: .infinity, minHeight: 58)
+          .background {
+            if selected {
+              Capsule().fill(.white.opacity(0.16))
+                .matchedGeometryEffect(id: "tab", in: pill)
+            }
+          }
+          .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+      }
+    }
+    .padding(6)
+    .astraGlass(in: Capsule(), interactive: true)
+    .animation(.snappy(duration: 0.25), value: selection)
+    .padding(.horizontal, 16)
+    .padding(.bottom, 2)
   }
 }
