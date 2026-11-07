@@ -1,24 +1,22 @@
 import CoreGraphics
 import Foundation
-import Libavcodec
-import Libavformat
-import Libavutil
-import Libswscale
+import Libmpv
 
 /// Astra: seek previews made by Astra itself, from the file being played
 /// (KP, 2026-11-07: "like Infuse, not through Plex").
 ///
-/// It opens its own connection to the same original file (or the downloaded
-/// file), jumps to the keyframe at or before the time asked for, decodes that
-/// one frame and scales it down. Only the newest request is worked on, so
-/// dragging fast never queues up stale frames. Nothing is transcoded or saved:
-/// the frame only exists as a small picture while scrubbing.
+/// A second, silent mpv opens its own connection to the same original file
+/// (or the downloaded file): no audio, no picture on screen, software
+/// decoding, scaled down to a small frame. For each request it jumps to the
+/// keyframe at or before that time and takes that frame (`screenshot-raw`).
+/// Only the newest request is worked on, so dragging fast never queues up
+/// stale frames. Nothing is transcoded or saved.
 final class SeekPreviewGenerator: @unchecked Sendable {
-  /// Previews are this wide (points × 2 for Retina).
+  /// Previews are this many pixels wide.
   static let width = 384
 
   private let url: String
-  private let headers: String
+  private let headers: [String: String]
   private let queue = DispatchQueue(label: "astra.seek-preview", qos: .userInitiated)
   private let lock = NSLock()
   /// The newest request waiting to be decoded.
@@ -27,21 +25,16 @@ final class SeekPreviewGenerator: @unchecked Sendable {
   private var closed = false
 
   // Touched only on `queue`.
-  private var format: UnsafeMutablePointer<AVFormatContext>?
-  private var decoder: UnsafeMutablePointer<AVCodecContext>?
-  private var streamIndex: Int32 = -1
-  private var timeBase = AVRational(num: 1, den: 1000)
-  private var startTime: Int64 = 0
+  private var handle: OpaquePointer?
   private var openFailed = false
 
   init(url: URL, headers: [String: String]) {
     self.url = url.isFileURL ? url.path : url.absoluteString
-    self.headers = headers.map { "\($0.key): \($0.value)\r\n" }.joined()
+    self.headers = headers
   }
 
   deinit {
-    // `close()` normally runs first; this only frees what is left.
-    freeContexts()
+    if let handle { mpv_terminate_destroy(handle) }
   }
 
   /// Asks for the frame at `seconds`; `done` runs on the main queue. A newer
@@ -57,13 +50,16 @@ final class SeekPreviewGenerator: @unchecked Sendable {
     if start { queue.async { [self] in drain() } }
   }
 
-  /// Stops and frees the connection (on its queue, after any frame in progress).
+  /// Stops the preview player (on its queue, after any frame in progress).
   func close() {
     lock.withLock {
       closed = true
       pending = nil
     }
-    queue.async { [self] in freeContexts() }
+    queue.async { [self] in
+      if let handle { mpv_terminate_destroy(handle) }
+      handle = nil
+    }
   }
 
   private func drain() {
@@ -80,132 +76,108 @@ final class SeekPreviewGenerator: @unchecked Sendable {
     }
   }
 
-  // MARK: - FFmpeg
+  // MARK: - mpv
 
-  private func openIfNeeded() -> Bool {
-    if decoder != nil { return true }
-    if openFailed { return false }
+  private func openIfNeeded() -> OpaquePointer? {
+    if let handle { return handle }
+    if openFailed { return nil }
     openFailed = true
-
-    var context = avformat_alloc_context()
-    guard context != nil else { return false }
-    // Read as little as possible before the first frame.
-    context?.pointee.probesize = 2 << 20
-    var options: OpaquePointer?
-    if !headers.isEmpty { av_dict_set(&options, "headers", headers, 0) }
-    av_dict_set(&options, "rw_timeout", "15000000", 0)
-    av_dict_set(&options, "reconnect", "1", 0)
-    let opened = avformat_open_input(&context, url, nil, &options)
-    av_dict_free(&options)
-    guard opened == 0, let context else { return false }
-    format = context
-
-    // The main video stream, not cover art.
-    var index: Int32 = -1
-    for i in 0..<Int(context.pointee.nb_streams) {
-      guard let stream = context.pointee.streams[i], let parameters = stream.pointee.codecpar else { continue }
-      let isCoverArt = stream.pointee.disposition & (1 << 10) != 0
-      if parameters.pointee.codec_type == AVMEDIA_TYPE_VIDEO, !isCoverArt {
-        index = Int32(i)
-        break
-      }
+    guard let mpv = mpv_create() else { return nil }
+    let options: [(String, String)] = [
+      ("config", "no"), ("terminal", "no"), ("msg-level", "all=no"), ("load-scripts", "no"), ("ytdl", "no"),
+      ("input-default-bindings", "no"), ("osc", "no"),
+      // Nothing on screen, nothing heard: frames are only taken as pictures.
+      ("vo", "null"), ("ao", "null"), ("aid", "no"), ("sid", "no"),
+      ("hwdec", "no"), ("pause", "yes"), ("keep-open", "always"), ("idle", "yes"),
+      // Jump to keyframes only (one frame to decode, like Infuse) and read little ahead.
+      ("hr-seek", "no"), ("cache", "no"), ("demuxer-readahead-secs", "0"), ("demuxer-max-bytes", "4MiB"),
+      ("vf", "scale=w=\(Self.width):h=-2"), ("screenshot-sw", "yes"),
+    ]
+    for (name, value) in options { mpv_set_option_string(mpv, name, value) }
+    if !headers.isEmpty {
+      let fields = headers.map { "\($0.key): \($0.value)" }.joined(separator: ",")
+      mpv_set_option_string(mpv, "http-header-fields", fields)
     }
-    guard index >= 0, let stream = context.pointee.streams[Int(index)], let parameters = stream.pointee.codecpar,
-      let codec = avcodec_find_decoder(parameters.pointee.codec_id)
-    else { return false }
-
-    var codecContext = avcodec_alloc_context3(codec)
-    guard let decoding = codecContext, avcodec_parameters_to_context(decoding, parameters) >= 0 else {
-      avcodec_free_context(&codecContext)
-      return false
+    guard mpv_initialize(mpv) >= 0 else {
+      mpv_terminate_destroy(mpv)
+      return nil
     }
-    // Slice threads only: frame threads would hold frames back.
-    decoding.pointee.thread_count = 0
-    decoding.pointee.thread_type = 2  // FF_THREAD_SLICE
-    // A preview doesn't need the deblocking pass.
-    decoding.pointee.skip_loop_filter = AVDISCARD_ALL
-    guard avcodec_open2(decoding, codec, nil) >= 0 else {
-      avcodec_free_context(&codecContext)
-      return false
+    guard command(mpv, ["loadfile", url]) >= 0, wait(mpv, for: MPV_EVENT_PLAYBACK_RESTART, seconds: 20) else {
+      mpv_terminate_destroy(mpv)
+      return nil
     }
-    decoder = decoding
-    streamIndex = index
-    timeBase = stream.pointee.time_base
-    startTime = stream.pointee.start_time == Int64.min ? 0 : stream.pointee.start_time
+    handle = mpv
     openFailed = false
-    return true
+    return mpv
   }
 
   private func frame(at seconds: Double) -> CGImage? {
-    guard openIfNeeded(), let format, let decoder, timeBase.num > 0, timeBase.den > 0 else { return nil }
-    let target = startTime + Int64(max(0, seconds) * Double(timeBase.den) / Double(timeBase.num))
-    // The keyframe at or before the time: one frame to decode, like Infuse.
-    guard avformat_seek_file(format, streamIndex, Int64.min, target, target, 0) >= 0 else { return nil }
-    avcodec_flush_buffers(decoder)
-
-    var packetStorage = av_packet_alloc()
-    var frameStorage = av_frame_alloc()
-    defer {
-      av_packet_free(&packetStorage)
-      av_frame_free(&frameStorage)
-    }
-    guard let packet = packetStorage, let frame = frameStorage else { return nil }
-    var videoPackets = 0
-    while videoPackets < 400, av_read_frame(format, packet) >= 0 {
-      defer { av_packet_unref(packet) }
-      guard packet.pointee.stream_index == streamIndex else { continue }
-      videoPackets += 1
-      guard avcodec_send_packet(decoder, packet) >= 0 else { continue }
-      if avcodec_receive_frame(decoder, frame) >= 0 {
-        defer { av_frame_unref(frame) }
-        return image(from: frame)
-      }
-    }
-    return nil
+    guard let mpv = openIfNeeded() else { return nil }
+    guard command(mpv, ["seek", String(format: "%.3f", max(0, seconds)), "absolute+keyframes"]) >= 0,
+      wait(mpv, for: MPV_EVENT_PLAYBACK_RESTART, seconds: 10)
+    else { return nil }
+    var result = mpv_node()
+    guard command(mpv, ["screenshot-raw", "video"], result: &result) >= 0 else { return nil }
+    defer { mpv_free_node_contents(&result) }
+    return Self.image(from: result)
   }
 
-  /// The frame scaled to `width` (keeping its display shape), as BGRA.
-  private func image(from frame: UnsafeMutablePointer<AVFrame>) -> CGImage? {
-    let sourceWidth = frame.pointee.width
-    let sourceHeight = frame.pointee.height
-    guard sourceWidth > 0, sourceHeight > 0 else { return nil }
-    let aspect = frame.pointee.sample_aspect_ratio
-    let pixelAspect = aspect.num > 0 && aspect.den > 0 ? Double(aspect.num) / Double(aspect.den) : 1
-    let width = Self.width
-    let height = max(2, Int((Double(width) * Double(sourceHeight) / (Double(sourceWidth) * pixelAspect)).rounded()) & ~1)
+  /// Waits for `event` (true) or the file ending / the time running out (false).
+  private func wait(_ mpv: OpaquePointer, for event: mpv_event_id, seconds: Double) -> Bool {
+    let deadline = Date().addingTimeInterval(seconds)
+    while Date() < deadline {
+      if lock.withLock({ closed }) { return false }
+      guard let next = mpv_wait_event(mpv, 0.25) else { continue }
+      let id = next.pointee.event_id
+      if id == event { return true }
+      if id == MPV_EVENT_END_FILE || id == MPV_EVENT_SHUTDOWN { return false }
+    }
+    return false
+  }
 
-    let scaler = sws_getContext(
-      sourceWidth, sourceHeight, AVPixelFormat(rawValue: frame.pointee.format), Int32(width), Int32(height),
-      AV_PIX_FMT_BGRA, 2 /* SWS_BILINEAR */, nil, nil, nil)
-    guard let scaler else { return nil }
-    defer { sws_freeContext(scaler) }
+  @discardableResult
+  private func command(_ mpv: OpaquePointer, _ args: [String], result: UnsafeMutablePointer<mpv_node>? = nil)
+    -> Int32
+  {
+    let strings = args.map { strdup($0) }
+    defer { strings.forEach { free($0) } }
+    var pointers: [UnsafePointer<CChar>?] = strings.map { $0.map { UnsafePointer($0) } } + [nil]
+    if let result { return mpv_command_ret(mpv, &pointers, result) }
+    return mpv_command(mpv, &pointers)
+  }
 
-    let bytesPerRow = width * 4
-    var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
-    let scaled: Int32 = pixels.withUnsafeMutableBufferPointer { buffer in
-      var destination: [UnsafeMutablePointer<UInt8>?] = [buffer.baseAddress, nil, nil, nil]
-      var destinationStride: [Int32] = [Int32(bytesPerRow), 0, 0, 0]
-      return withUnsafePointer(to: &frame.pointee.data) { data in
-        data.withMemoryRebound(to: UnsafePointer<UInt8>?.self, capacity: 8) { planes in
-          withUnsafePointer(to: &frame.pointee.linesize) { lines in
-            lines.withMemoryRebound(to: Int32.self, capacity: 8) { strides in
-              sws_scale(scaler, planes, strides, 0, sourceHeight, &destination, &destinationStride)
-            }
-          }
+  /// `screenshot-raw` answers a map: w, h, stride, format ("bgr0") and data.
+  private static func image(from node: mpv_node) -> CGImage? {
+    guard node.format == MPV_FORMAT_NODE_MAP, let list = node.u.list?.pointee, let keys = list.keys,
+      let values = list.values
+    else { return nil }
+    var width = 0
+    var height = 0
+    var stride = 0
+    var data: Data?
+    for i in 0..<Int(list.num) {
+      guard let key = keys[i] else { continue }
+      let value = values[i]
+      switch String(cString: key) {
+      case "w": width = Int(value.u.int64)
+      case "h": height = Int(value.u.int64)
+      case "stride": stride = Int(value.u.int64)
+      case "data":
+        if value.format == MPV_FORMAT_BYTE_ARRAY, let bytes = value.u.ba?.pointee, let base = bytes.data {
+          data = Data(bytes: base, count: Int(bytes.size))
         }
+      default: break
       }
     }
-    guard scaled > 0, let provider = CGDataProvider(data: Data(pixels) as CFData) else { return nil }
+    guard width > 0, height > 0, stride >= width * 4, let data, data.count >= stride * height,
+      let provider = CGDataProvider(data: data as CFData)
+    else { return nil }
+    // bgr0: blue, green, red, unused, byte by byte.
     return CGImage(
-      width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: bytesPerRow,
+      width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: stride,
       space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
       bitmapInfo: CGBitmapInfo(
         rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue),
       provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
-  }
-
-  private func freeContexts() {
-    if decoder != nil { avcodec_free_context(&decoder) }
-    if format != nil { avformat_close_input(&format) }
   }
 }
