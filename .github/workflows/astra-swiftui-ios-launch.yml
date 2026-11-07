@@ -57,18 +57,19 @@ jobs:
           xcrun simctl install "$UDID" "$APP"
           BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
           xcrun simctl spawn "$UDID" log stream --level error --predicate 'process == "Astra"' > "$RUNNER_TEMP/app.log" 2>&1 &
-          xcrun simctl launch --console-pty "$UDID" "$BID" > "$RUNNER_TEMP/console.log" 2>&1 &
+          # The first launch after boot can be slow; launch waits until the app has a pid.
+          PID=$(xcrun simctl launch "$UDID" "$BID" | awk '{print $NF}')
+          echo "Launched pid $PID"
           sleep 20
           xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/screen.png" || true
-          echo "--- console"; tail -60 "$RUNNER_TEMP/console.log" || true
-          echo "--- errors"; tail -60 "$RUNNER_TEMP/app.log" || true
+                    echo "--- errors"; tail -60 "$RUNNER_TEMP/app.log" || true
           REPORTS=$(find ~/Library/Logs/DiagnosticReports -name "Astra*" -newer "$APP" 2>/dev/null)
           if [ -n "$REPORTS" ]; then
             for r in $REPORTS; do echo "--- $r"; head -150 "$r"; done
             echo "::error::Astra crashed in the simulator"
             exit 1
           fi
-          if ! xcrun simctl spawn "$UDID" launchctl list | grep -q "$BID"; then
+          if ! kill -0 "$PID" 2>/dev/null; then
             echo "::error::Astra is not running after 20 s"
             exit 1
           fi
@@ -80,5 +81,4 @@ jobs:
           name: ios-launch
           path: |
             ${{ runner.temp }}/screen.png
-            ${{ runner.temp }}/console.log
             ${{ runner.temp }}/app.log
