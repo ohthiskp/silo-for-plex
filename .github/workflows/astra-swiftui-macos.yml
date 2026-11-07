@@ -71,6 +71,7 @@ jobs:
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            TMDB_TOKEN="$TMDB_TOKEN" \
             | tee build.log | grep -E "error:|warning: .*(AstraMac|AstraKit)|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build.log
 
@@ -89,8 +90,17 @@ jobs:
             -clonedSourcePackagesDirPath .build/SourcePackages \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
+            TMDB_TOKEN="$TMDB_TOKEN" \
             | tee build-ios.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build-ios.log
+
+      - name: Check the TMDB token reached the app
+        working-directory: apple
+        run: |
+          # Prints only the length, never the token.
+          LEN=$(/usr/libexec/PlistBuddy -c "Print :AstraTMDBToken" .build/Build/Products/Release/Astra.app/Contents/Info.plist 2>/dev/null | tr -d '\n' | wc -c | tr -d ' ')
+          echo "AstraTMDBToken length: $LEN"
+          if [ "$LEN" -lt 20 ]; then echo "::warning::TMDB token missing from the Mac app; artwork and the streaming switcher will be off."; fi
 
       - name: Sign to run locally (ad-hoc)
         working-directory: apple

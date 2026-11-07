@@ -199,32 +199,39 @@ struct HeroCarousel: View {
 
   var body: some View {
     let item = items[min(index, items.count - 1)]
-    ZStack(alignment: .bottomLeading) {
-      ZStack {
-        ArtworkImage(library: library, item: item, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear)
+    // The text and pager are laid out in flow below the backdrop's top space,
+    // so they can never spill onto the rows below. HeroInfo has a fixed
+    // height for every title, so switching titles never resizes the hero.
+    VStack(alignment: .leading, spacing: 22) {
+      ZStack(alignment: .bottomLeading) {
+        HeroInfo(library: library, item: item)
           .id(item.id)
-          .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0.2 : 0.6)))
+          .transition(Self.titleTransition)
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .clipped()
-
-      HeroScrim()
-
-      HeroInfo(library: library, item: item)
-        .id(item.id)
-        .transition(Self.titleTransition)
-        .padding(.leading, leading)
-        .padding(.trailing, Astra.Spacing.pageTrailing)
-        .padding(.bottom, items.count > 1 ? 64 : 36)
-
       if items.count > 1 {
         HeroPager(count: items.count, index: index, previous: { step(-1) }, next: { step(1) })
-          .padding(.leading, leading)
-          .padding(.bottom, 18)
       }
     }
-    .frame(maxWidth: .infinity)
-    .frame(height: height)
+    .padding(.leading, leading)
+    .padding(.trailing, Astra.Spacing.pageTrailing)
+    // Room above the text for the artwork and the streaming switcher.
+    .padding(.top, 110)
+    .padding(.bottom, 8)
+    .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
+    .background {
+      ZStack {
+        ZStack {
+          ArtworkImage(
+            library: library, item: item, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear
+          )
+          .id(item.id)
+          .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0.2 : 0.6)))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        HeroScrim()
+      }
+    }
     .task(id: interaction) {
       await prefetch((index + 1) % max(items.count, 1))
       // Auto-advance every 8 s; restarts after manual navigation, stops when the view goes away.
@@ -270,21 +277,29 @@ struct HeroCarousel: View {
 struct HeroInfo: View {
   var library: LibraryStore
   var item: PlexMetadata
+
+  #if os(macOS)
+    static let titleBox: CGFloat = 130
+  #else
+    static let titleBox: CGFloat = 96
+  #endif
   @Environment(\.openItem) private var openItem
   @Environment(\.playItem) private var playItem
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      HeroTitle(library: library, item: item)
+      // Fixed boxes for the title and summary: every title takes the same
+      // height, so the buttons and pager never move when the hero switches.
+      HeroTitle(library: library, item: item, maxHeight: Self.titleBox)
+        .frame(height: Self.titleBox, alignment: .bottomLeading)
       MetaRow(item: item)
-      if let summary = item.summary, !summary.isEmpty {
-        Text(summary)
-          .font(.system(size: 14.5))
-          .lineSpacing(4)
-          .foregroundStyle(Astra.Color.ink.opacity(0.82))
-          .lineLimit(3)
-          .frame(maxWidth: 560, alignment: .leading)
-      }
+      Text(item.summary ?? "")
+        .font(.system(size: 14.5))
+        .lineSpacing(4)
+        .foregroundStyle(Astra.Color.ink.opacity(0.82))
+        .lineLimit(3)
+        .frame(maxWidth: 560, alignment: .leading)
+        .frame(height: 66, alignment: .topLeading)
       HStack(spacing: 14) {
         Button {
           playItem(item)
@@ -363,8 +378,8 @@ struct HeroTitle: View {
         Text(item.displayTitle.uppercased())
           .astraDisplay(Astra.Layout.titleSize, tracking: 10)
           .lineLimit(2)
-          .minimumScaleFactor(0.6)
-          .frame(maxWidth: 640, alignment: .leading)
+          .minimumScaleFactor(0.5)
+          .frame(maxWidth: 640, maxHeight: maxHeight, alignment: .bottomLeading)
       }
     }
     .frame(minHeight: 44, alignment: .bottomLeading)
