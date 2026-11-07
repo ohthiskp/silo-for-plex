@@ -246,6 +246,18 @@ final class PlayerController {
 
     isActive = true
     startReporting()
+    watchForStall(source)
+  }
+
+  /// Astra (KP, 2026-11-07): when the server is down the player used to spin
+  /// for ever. 30 s without a first frame closes it and says why.
+  private func watchForStall(_ started: PlaybackSource) {
+    Task { [weak self] in
+      try? await Task.pause(30)
+      guard let self, self.isActive, !self.hasFirstFrame, self.source?.url == started.url else { return }
+      self.close()
+      self.lastError = "The server isn't answering, so this can't play right now. Check that your Plex server is on."
+    }
   }
 
   func close() {
