@@ -66,15 +66,40 @@ public struct PlexAccountClient: Sendable {
     self.transport = transport
   }
 
-  /// Starts a sign-in: a strong PIN for the auth page.
-  public func createPin() async throws -> PlexPin {
-    var request = URLRequest(url: Self.apiBase.appending(plexPath: "/pins", query: [.init(name: "strong", value: "true")]))
+  /// How the PIN is approved.
+  public enum PinStyle: Sendable, Equatable {
+    /// A long code, approved on the auth page that opens in the browser (Mac, iPhone).
+    case strong
+    /// A short 4-character code typed at plex.tv/link on another device
+    /// (Apple TV: no browser, and a long code can't be typed with a remote).
+    case link
+
+    /// Link on tvOS, strong everywhere else.
+    public static var platformDefault: PinStyle {
+      #if os(tvOS)
+        .link
+      #else
+        .strong
+      #endif
+    }
+  }
+
+  /// Where a short `link` PIN is typed in.
+  public static let linkURL = URL(string: "https://plex.tv/link")!
+
+  /// Starts a sign-in: a strong PIN for the auth page, or a short one for
+  /// plex.tv/link (Apple TV). Both are checked with `checkPin` / `waitForToken`.
+  public func createPin(style: PinStyle = .platformDefault) async throws -> PlexPin {
+    let strong = style == .strong ? "true" : "false"
+    var request = URLRequest(url: Self.apiBase.appending(plexPath: "/pins", query: [.init(name: "strong", value: strong)]))
     request.httpMethod = "POST"
     request.apply(headers: info.headers())
     return try await decode(PlexPin.self, request)
   }
 
-  /// The page that signs the user in and approves the PIN.
+  /// The page that signs the user in and approves the PIN; works for both
+  /// styles, so on Apple TV it is what a QR code points at (a phone opens
+  /// it, signs in, and the TV's `waitForToken` picks up the token).
   public func authURL(for pin: PlexPin) -> URL {
     // app.plex.tv reads its parameters from the fragment.
     var fragment = URLComponents()
