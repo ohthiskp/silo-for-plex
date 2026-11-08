@@ -42,16 +42,17 @@ struct RootView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Astra.Color.muted)
+            .accessibilityLabel("Dismiss")
           }
           .padding(.horizontal, 18)
           .frame(height: 44)
           .astraGlass(in: Capsule())
           .padding(.bottom, 30)
         }
-        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .astraTransition(.opacity.combined(with: .move(edge: .bottom)))
       }
     }
-    .animation(Astra.Motion.page, value: app.player.lastError ?? app.downloads.lastError)
+    .astraAnimation(Astra.Motion.page, value: app.player.lastError ?? app.downloads.lastError)
     .background { (app.player.isActive && !Self.playerHasOwnWindow ? Color.clear : Astra.Color.bg).ignoresSafeArea() }
     .background(WindowAccessor { app.player.window = $0 })
     #if os(macOS)
@@ -61,14 +62,14 @@ struct RootView: View {
         }
       }
     #endif
-    .animation(Astra.Motion.page, value: app.player.isActive)
+    .astraAnimation(Astra.Motion.page, value: app.player.isActive)
     .onChange(of: app.phase, initial: true) { _, phase in updateLoader(for: phase) }
     .task(id: loader) {
       // "Connected" stays up briefly, then the app fades in.
       guard loader == .connected else { return }
       try? await Task.pause(1.1)
       guard !Task.isCancelled, loader == .connected else { return }
-      withAnimation(Astra.Motion.hero) { loader = .hidden }
+      astraWithAnimation(Astra.Motion.hero) { loader = .hidden }
     }
     // Controls stay inside the safe area (clear of the Mac title bar and the
     // iPhone status bar); only artwork and backgrounds extend under it.
@@ -91,7 +92,7 @@ struct RootView: View {
     case .ready:
       break
     default:
-      withAnimation(Astra.Motion.page) { loader = .hidden }
+      astraWithAnimation(Astra.Motion.page) { loader = .hidden }
     }
   }
 
@@ -207,9 +208,9 @@ struct ServerHealthBanner: View {
         .astraGlass(in: Capsule())
         .padding(.top, 8)
         .padding(.horizontal, 16)
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .astraTransition(.opacity.combined(with: .move(edge: .top)))
       }
     }
-    .animation(Astra.Motion.page, value: health.state)
+    .astraAnimation(Astra.Motion.page, value: health.state)
   }
 }

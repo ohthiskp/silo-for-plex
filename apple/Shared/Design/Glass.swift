@@ -117,7 +117,7 @@ struct Pressable: ViewModifier {
     content
       .shadow(color: .black.opacity(hovering ? 0.45 : 0), radius: 18, y: 10)
       .scaleEffect(reduceMotion ? 1 : (hovering ? hoverScale : 1))
-      .animation(Astra.Motion.base, value: hovering)
+      .astraAnimation(Astra.Motion.base, value: hovering)
       .onHover { hovering = $0 }
   }
 }
@@ -128,7 +128,7 @@ struct AstraCardButtonStyle: ButtonStyle {
     configuration.label
       .contentShape(Rectangle())
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
-      .animation(Astra.Motion.fast, value: configuration.isPressed)
+      .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
   }
 }
 
@@ -160,7 +160,7 @@ struct GlassIconButtonStyle: ButtonStyle {
       .contentShape(Circle())
       .astraGlass(in: Circle(), variant: variant, interactive: true)
       .scaleEffect(configuration.isPressed ? 0.94 : 1)
-      .animation(Astra.Motion.fast, value: configuration.isPressed)
+      .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
   }
 }
 
@@ -177,7 +177,7 @@ struct PlayButtonStyle: ButtonStyle {
       .frame(height: 48)
       .background(Capsule().fill(.white))
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
-      .animation(Astra.Motion.fast, value: configuration.isPressed)
+      .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
       .contentShape(Capsule())
   }
 }
@@ -192,7 +192,7 @@ struct FallbackGlassButtonStyle: ButtonStyle {
       .frame(height: 48)
       .astraGlass(in: Capsule())
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
-      .animation(Astra.Motion.fast, value: configuration.isPressed)
+      .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
       .contentShape(Capsule())
   }
 }
@@ -236,6 +236,6 @@ struct ClearGlassButtonStyle: ButtonStyle {
       .astraGlassEdge(Capsule(), strength: prominent ? 1 : 0.8)
       .scaleEffect(configuration.isPressed ? 0.96 : 1)
       .opacity(isEnabled ? 1 : 0.45)
-      .animation(Astra.Motion.fast, value: configuration.isPressed)
+      .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
   }
 }

@@ -133,8 +133,8 @@ struct WideTabBar: View {
           .frame(width: tabWidth, height: Self.height)
           .scaleEffect(dragX != nil ? 1.12 : 1)
           .offset(x: lensX)
-          .animation(dragged ? .interactiveSpring(response: 0.25, dampingFraction: 0.8) : .snappy(duration: 0.32), value: lensX)
-          .animation(.spring(response: 0.3, dampingFraction: 0.7), value: dragX != nil)
+          .astraAnimation(dragged ? .interactiveSpring(response: 0.25, dampingFraction: 0.8) : .snappy(duration: 0.32), value: lensX)
+          .astraAnimation(.spring(response: 0.3, dampingFraction: 0.7), value: dragX != nil)
 
         HStack(spacing: 0) {
           ForEach(Array(items.enumerated()), id: \.offset) { i, item in
@@ -160,7 +160,7 @@ struct WideTabBar: View {
             .accessibilityAction { select(id) }
           }
         }
-        .animation(.snappy(duration: 0.2), value: hovered)
+        .astraAnimation(.snappy(duration: 0.2), value: hovered)
       }
       .padding(Self.inset)
       .frame(width: geo.size.width, height: Self.height + Self.inset * 2)

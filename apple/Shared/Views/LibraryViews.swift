@@ -262,7 +262,7 @@ struct SearchView: View {
     HStack(spacing: 8) {
       ForEach(Scope.allCases) { item in
         Button {
-          withAnimation(Astra.Motion.fast) {
+          astraWithAnimation(Astra.Motion.fast) {
             scope = item
             person = nil
           }
@@ -347,7 +347,7 @@ struct SearchView: View {
             ForEach(found) { candidate in
               Button {
                 remember(query)
-                withAnimation(Astra.Motion.base) { person = candidate }
+                astraWithAnimation(Astra.Motion.base) { person = candidate }
               } label: {
                 PersonCircle(person: candidate)
               }
@@ -363,7 +363,7 @@ struct SearchView: View {
         LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
           ForEach(titles) { PosterCard(library: library, item: $0) }
         }
-        .animation(Astra.Motion.base, value: titles.map(\.id))
+        .astraAnimation(Astra.Motion.base, value: titles.map(\.id))
       }
     }
   }
@@ -371,7 +371,7 @@ struct SearchView: View {
   @ViewBuilder private func personPage(_ person: TMDBPerson) -> some View {
     HStack(spacing: 16) {
       Button {
-        withAnimation(Astra.Motion.base) { self.person = nil }
+        astraWithAnimation(Astra.Motion.base) { self.person = nil }
       } label: {
         Image(systemName: "chevron.left")
       }
@@ -435,7 +435,7 @@ struct SearchView: View {
     guard !Task.isCancelled else { return }
     let shownPeople = Array((found?.people ?? []).filter { $0.profilePath != nil }.prefix(12))
     if let found { SearchCache.shared[text] = (found.items, shownPeople) }
-    withAnimation(Astra.Motion.base) {
+    astraWithAnimation(Astra.Motion.base) {
       results = library.withServerNow(found?.items ?? [])
       people = shownPeople
       searched = true

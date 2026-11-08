@@ -1,6 +1,12 @@
 import AstraKit
 import SwiftUI
 
+#if canImport(UIKit)
+  import UIKit
+#else
+  import AppKit
+#endif
+
 /// Astra tokens from DESIGN_SYSTEM.md, in one place.
 enum Astra {
   enum Color {
@@ -217,4 +223,54 @@ extension EnvironmentValues {
   /// Astra: Home's accent, the chosen streaming service's brand colour (nil is
   /// the usual white). Tints the main button and progress bars on that page.
   @Entry var astraAccent: Color? = nil
+}
+
+// MARK: - Reduce Motion
+
+/// The system's Reduce Motion setting, for code outside a view (`withAnimation`).
+/// Views read `\.accessibilityReduceMotion` instead.
+@MainActor private var systemReducesMotion: Bool {
+  #if canImport(UIKit)
+    UIAccessibility.isReduceMotionEnabled
+  #else
+    NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+  #endif
+}
+
+/// `withAnimation`, but quick and calm when Reduce Motion is on
+/// (`Astra.Motion.resolved`). Nothing changes when the setting is off.
+@MainActor @discardableResult
+func astraWithAnimation<Result>(_ animation: Animation? = .default, _ body: () throws -> Result) rethrows -> Result {
+  try withAnimation(animation.map { Astra.Motion.resolved($0, reduceMotion: systemReducesMotion) }, body)
+}
+
+private struct AstraAnimationModifier<Value: Equatable>: ViewModifier {
+  var animation: Animation?
+  var value: Value
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    content.animation(animation.map { Astra.Motion.resolved($0, reduceMotion: reduceMotion) }, value: value)
+  }
+}
+
+private struct AstraTransitionModifier: ViewModifier {
+  var transition: AnyTransition
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    content.transition(reduceMotion ? .opacity : transition)
+  }
+}
+
+extension View {
+  /// `.animation(_:value:)` that follows Reduce Motion (`Astra.Motion.resolved`).
+  func astraAnimation<Value: Equatable>(_ animation: Animation?, value: Value) -> some View {
+    modifier(AstraAnimationModifier(animation: animation, value: value))
+  }
+
+  /// `.transition(_:)` that becomes a plain fade when Reduce Motion is on.
+  func astraTransition(_ transition: AnyTransition) -> some View {
+    modifier(AstraTransitionModifier(transition: transition))
+  }
 }

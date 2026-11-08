@@ -33,7 +33,7 @@ struct SignInView: View {
           .astraGlassGroup(spacing: 12)
           ProgressView().controlSize(.small).padding(.top, 6)
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+        .astraTransition(.opacity.combined(with: .scale(scale: 0.98)))
       default:
         VStack(spacing: 14) {
           Text("Your Plex library, made cinematic.")
@@ -46,7 +46,7 @@ struct SignInView: View {
         .transition(.opacity)
       }
     }
-    .animation(Astra.Motion.page, value: app.phase)
+    .astraAnimation(Astra.Motion.page, value: app.phase)
     .padding(.horizontal, Astra.Spacing.l)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(

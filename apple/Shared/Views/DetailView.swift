@@ -250,7 +250,7 @@ struct DetailView: View {
               .background {
                 if selected { Capsule().fill(Astra.Color.accent) } else { Capsule().fill(.white.opacity(0.08)) }
               }
-              .animation(Astra.Motion.base, value: selected)
+              .astraAnimation(Astra.Motion.base, value: selected)
             }
           }
           .padding(.horizontal, leading)
@@ -324,7 +324,7 @@ struct DetailView: View {
         }
       }
       let full = try await library.details(key, refresh: refresh)
-      withAnimation(Astra.Motion.base) { item = full }
+      astraWithAnimation(Astra.Motion.base) { item = full }
       switch full.type {
       case .show:
         seasons = try await library.children(of: full.ratingKey).filter { $0.type == .season }
@@ -544,7 +544,7 @@ struct ExpandableSummary: View {
         .fixedSize(horizontal: false, vertical: true)
       if text.count > 160 {
         Button {
-          withAnimation(Astra.Motion.base) { expanded.toggle() }
+          astraWithAnimation(Astra.Motion.base) { expanded.toggle() }
         } label: {
           HStack(spacing: 4) {
             Text(expanded ? "Less" : "More")
@@ -574,7 +574,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       .frame(height: 50)
       .background(Capsule().fill(Astra.Color.ink.opacity(isEnabled ? 1 : 0.35)))
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
-      .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+      .astraAnimation(.snappy(duration: 0.15), value: configuration.isPressed)
       .contentShape(Capsule())
   }
 }

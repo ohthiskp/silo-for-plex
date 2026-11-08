@@ -102,7 +102,7 @@ struct PhoneSearchView: View {
     HStack(spacing: 8) {
       ForEach(Scope.allCases) { item in
         Button {
-          withAnimation(Astra.Motion.fast) { scope = item }
+          astraWithAnimation(Astra.Motion.fast) { scope = item }
         } label: {
           Text(item.title)
             .font(.system(size: 14, weight: .semibold))
@@ -251,7 +251,7 @@ struct PhoneSearchView: View {
     guard !Task.isCancelled else { return }
     let shownPeople = Array((found?.people ?? []).filter { $0.profilePath != nil }.prefix(12))
     if let found { SearchCache.shared[text] = (found.items, shownPeople) }
-    withAnimation(Astra.Motion.base) {
+    astraWithAnimation(Astra.Motion.base) {
       results = library.withServerNow(found?.items ?? [])
       people = shownPeople
       searched = true

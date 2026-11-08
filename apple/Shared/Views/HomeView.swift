@@ -25,7 +25,7 @@ struct HomeView: View {
         .opacity(showsTopBar ? 1 : 0)
         .offset(y: showsTopBar ? 0 : -12)
         .allowsHitTesting(showsTopBar)
-        .animation(Astra.Motion.base, value: showsTopBar)
+        .astraAnimation(Astra.Motion.base, value: showsTopBar)
     }
     .background(Astra.Color.bg.ignoresSafeArea())
     // Astra: the chosen service's brand colour accents the page (Apple TV+'s is white).
@@ -33,7 +33,7 @@ struct HomeView: View {
     .environment(
       \.astraAccent,
       serviceAccents ? library.selectedService.flatMap { $0.id == "appletv" ? nil : Color(hex: $0.accent) } : nil)
-    .animation(Astra.Motion.base, value: library.selectedService)
+    .astraAnimation(Astra.Motion.base, value: library.selectedService)
     #if os(iOS)
       .navigationDestination(isPresented: $showWatchlist) { WatchlistView(library: library) }
       .sheet(isPresented: $showSettings) {
@@ -111,7 +111,8 @@ struct HomeView: View {
               symbol: "exclamationmark.triangle", title: "Home didn't load", message: error,
               action: ("Try Again", { Task { await library.loadHome() } }))
           } else {
-            Text("Some rows didn't load. Trying again shortly. (\(error))")
+            // The technical reason is in Settings → About → Diagnostics.
+            Text("Some rows didn't load yet. Astra is trying again.")
               .font(Astra.Font.meta)
               .foregroundStyle(Astra.Color.muted)
               .padding(.leading, leading)
@@ -210,7 +211,7 @@ struct ServicePill: View {
           stops: [.init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
           startPoint: .leading, endPoint: .trailing)
       }
-      .animation(.snappy(duration: 0.22), value: library.selectedService)
+      .astraAnimation(.snappy(duration: 0.22), value: library.selectedService)
     #else
       ViewThatFits(in: .horizontal) {
         chips
@@ -261,7 +262,7 @@ struct ServicePill: View {
       }
     }
     .padding(5)
-    .animation(.snappy(duration: 0.22), value: library.selectedService)
+    .astraAnimation(.snappy(duration: 0.22), value: library.selectedService)
   }
 
   private func chip<Label: View>(_ service: StreamingService?, label: String, @ViewBuilder content: () -> Label)
@@ -347,7 +348,7 @@ struct KindSwitch: View {
     HStack(spacing: 0) {
       ForEach([false, true], id: \.self) { isSeries in
         Button {
-          withAnimation(Astra.Motion.fast) { series = isSeries }
+          astraWithAnimation(Astra.Motion.fast) { series = isSeries }
         } label: {
           Text(isSeries ? "Series" : "Movies")
             .font(.system(size: 12, weight: .semibold))
@@ -483,62 +484,6 @@ struct RankNumber: View {
     // foot lines up with the poster's bottom edge.
     .padding(.bottom, -size * 0.14)
     .accessibilityHidden(true)
-  }
-}
-
-/// View All: the whole Top 10 as a ranked list.
-struct TopTenList: View {
-  var library: LibraryStore
-  var items: [PlexMetadata]
-  var title = "Top 10 This Week"
-
-  @Environment(\.openItem) private var openItem
-
-  var body: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: 14) {
-        ForEach(Array(items.enumerated()), id: \.element.id) { rank, item in
-          Button {
-            openItem(item)
-          } label: {
-            HStack(spacing: 14) {
-              Text("\(rank + 1)")
-                .font(.system(size: 30, weight: .heavy, design: .rounded))
-                .italic()
-                .monospacedDigit()
-                .foregroundStyle(Astra.Color.ink)
-                .frame(width: 44)
-              ArtworkImage(library: library, item: item, kind: .poster, width: 70, height: 105)
-                .frame(width: 70, height: 105)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-              VStack(alignment: .leading, spacing: 4) {
-                Text(item.displayTitle)
-                  .font(.system(size: 16, weight: .semibold))
-                  .foregroundStyle(Astra.Color.ink)
-                  .lineLimit(2)
-                Text([item.type == .show ? "Series" : "Movie", item.year.map(String.init)].compactMap { $0 }
-                  .joined(separator: " · "))
-                  .font(Astra.Font.meta)
-                  .foregroundStyle(Astra.Color.muted)
-              }
-              Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          .itemMenu(library: library, item: item)
-        }
-      }
-      .padding(.horizontal, 20)
-      .padding(.vertical, 12)
-    }
-    .scrollIndicators(.never)
-    .background(Astra.Color.bg.ignoresSafeArea())
-    .navigationTitle(title)
-    #if os(iOS)
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar(.visible, for: .navigationBar)
-    #endif
   }
 }
 
@@ -772,7 +717,7 @@ struct WatchlistButton: View {
         if items.count > 1 {
           // On the Mac a click on a dot moves there too (a mouse can't swipe).
           StretchDots(count: items.count, progress: progress) { i in
-            withAnimation(.snappy(duration: 0.4)) { position = i }
+            astraWithAnimation(.snappy(duration: 0.4)) { position = i }
           }
           .padding(.bottom, 6)
         }
@@ -851,7 +796,7 @@ private struct PageProgressReader: ViewModifier {
       }
     } else {
       content.onChange(of: position) { _, new in
-        withAnimation(.snappy(duration: 0.3)) { progress = CGFloat(new ?? 0) }
+        astraWithAnimation(.snappy(duration: 0.3)) { progress = CGFloat(new ?? 0) }
       }
     }
   }

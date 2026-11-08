@@ -62,7 +62,7 @@ struct MainView: View {
         if !opened.contains(item) { opened.append(item) }
         // Instant: the page and the sidebar both switch without animation.
         selection = item
-        withAnimation(Self.cardMotion) { path.removeAll() }
+        astraWithAnimation(Self.cardMotion) { path.removeAll() }
         // Astra (KP, 2026-11-07): clicking Home always goes back to For You.
         if item == .home, library.selectedService != nil { library.select(nil) }
       }
@@ -71,7 +71,7 @@ struct MainView: View {
     .background(Astra.Color.bg.ignoresSafeArea())
     .environment(\.openItem) { item in
       // A TMDB-only title opens too; its page finds it on the server or greys out Play.
-      withAnimation(Self.cardMotion) { path.append(.details(item)) }
+      astraWithAnimation(Self.cardMotion) { path.append(.details(item)) }
     }
     .environment(\.playItem) { app.play($0) }
   }
@@ -109,7 +109,7 @@ struct MainView: View {
           .brightness(isTop ? 0 : -0.12)
           .allowsHitTesting(isTop)
           .accessibilityHidden(!isTop)
-          .transition(.move(edge: .trailing))
+          .astraTransition(.move(edge: .trailing))
           .zIndex(Double(depth))
       }
     }
@@ -133,7 +133,7 @@ struct MainView: View {
 
   private func closeTopCard() {
     guard !path.isEmpty else { return }
-    withAnimation(Self.cardMotion) { _ = path.removeLast() }
+    astraWithAnimation(Self.cardMotion) { _ = path.removeLast() }
   }
 
   @ViewBuilder private func page(for item: SidebarItem) -> some View {
@@ -211,10 +211,10 @@ struct SidebarButton: View {
               .background(Capsule().fill(Astra.Color.accent))
               .overlay(Capsule().stroke(Color.black.opacity(0.25)))
               .offset(x: 2, y: 2)
-              .transition(.scale.combined(with: .opacity))
+              .astraTransition(.scale.combined(with: .opacity))
           }
         }
-        .animation(.snappy(duration: 0.2), value: count)
+        .astraAnimation(.snappy(duration: 0.2), value: count)
         .contentShape(Capsule())
     }
     .buttonStyle(SidebarButtonStyle())
@@ -228,6 +228,6 @@ private struct SidebarButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .scaleEffect(configuration.isPressed ? 0.92 : 1)
-      .animation(.snappy(duration: 0.12), value: configuration.isPressed)
+      .astraAnimation(.snappy(duration: 0.12), value: configuration.isPressed)
   }
 }

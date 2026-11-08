@@ -113,7 +113,7 @@ struct DownloadRing: View {
       RoundedRectangle(cornerRadius: 1).fill(.white).frame(width: 5, height: 5)
     }
     .frame(width: 16, height: 16)
-    .animation(Astra.Motion.base, value: fraction)
+    .astraAnimation(Astra.Motion.base, value: fraction)
   }
 }
 

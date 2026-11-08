@@ -39,7 +39,7 @@ struct LibrarySegmentPill: View {
     HStack(spacing: 0) {
       ForEach(LibrarySegment.allCases) { item in
         Button {
-          withAnimation(Astra.Motion.base) { segment = item }
+          astraWithAnimation(Astra.Motion.base) { segment = item }
         } label: {
           HStack(spacing: 6) {
             Label(item.title, systemImage: item.symbol).labelStyle(.titleAndIcon)
@@ -78,7 +78,7 @@ struct LibraryKindSwitch: View {
     HStack(spacing: 6) {
       ForEach(LibraryKind.allCases) { item in
         Button {
-          withAnimation(Astra.Motion.fast) { kind = item }
+          astraWithAnimation(Astra.Motion.fast) { kind = item }
         } label: {
           Text(item.title)
             .font(.system(size: 13, weight: .semibold))
@@ -195,7 +195,7 @@ struct WatchlistContent: View {
           DownloadsContent()
         }
       }
-      .animation(Astra.Motion.base, value: segment)
+      .astraAnimation(Astra.Motion.base, value: segment)
     }
   }
 #endif

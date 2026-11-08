@@ -83,7 +83,7 @@ struct PlayerOverlay: View {
           }
           .padding(.horizontal, 72)
           .allowsHitTesting(false)
-          .transition(.opacity.combined(with: .scale(scale: 0.9)))
+          .astraTransition(.opacity.combined(with: .scale(scale: 0.9)))
           .id(skip.forward)
         }
       #endif
@@ -126,9 +126,9 @@ struct PlayerOverlay: View {
           .transition(.opacity)
       }
     }
-    .animation(Astra.Motion.base, value: visible)
-    .animation(Astra.Motion.fast, value: player.buffering)
-    .animation(Astra.Motion.base, value: player.hasFirstFrame)
+    .astraAnimation(Astra.Motion.base, value: visible)
+    .astraAnimation(Astra.Motion.fast, value: player.buffering)
+    .astraAnimation(Astra.Motion.base, value: player.hasFirstFrame)
     #if os(macOS)
       .onContinuousHover { phase in
         // Every mouse move reaches here; restart the hide timer at most a few times a second.
@@ -286,7 +286,7 @@ struct PlayerOverlay: View {
       .gesture(panelDrag)
       .onTapGesture(count: 2) { setPanelOffset(.zero) }
       .help("Drag to move the controls; double-click to put them back")
-      .animation(panelDragStart == nil ? Astra.Motion.base : nil, value: panelOffset)
+      .astraAnimation(panelDragStart == nil ? Astra.Motion.base : nil, value: panelOffset)
     }
 
     /// Where the panel is, kept inside the player even after the window shrinks.
@@ -532,13 +532,13 @@ struct PlayerOverlay: View {
       player.seek(by: Double(forward ? step : -step))
       let now = Date()
       let adds = skip?.forward == forward && now.timeIntervalSince(skipShownAt) < 1
-      withAnimation(Astra.Motion.fast) { skip = (forward, adds ? (skip?.seconds ?? 0) + step : step) }
+      astraWithAnimation(Astra.Motion.fast) { skip = (forward, adds ? (skip?.seconds ?? 0) + step : step) }
       skipShownAt = now
       Task { @MainActor in
         // The UI tests (demo mode) need longer to read the badge.
         let shown = Demo.isOn ? 8.0 : 0.9
         try? await Task.pause(shown)
-        if Date().timeIntervalSince(skipShownAt) >= shown - 0.05 { withAnimation(Astra.Motion.base) { skip = nil } }
+        if Date().timeIntervalSince(skipShownAt) >= shown - 0.05 { astraWithAnimation(Astra.Motion.base) { skip = nil } }
       }
     }
 
@@ -842,7 +842,7 @@ struct ScrubBar: View {
       )
     }
     .frame(height: max(knob, 22) + 6)
-    .animation(Astra.Motion.fast, value: dragging)
+    .astraAnimation(Astra.Motion.fast, value: dragging)
   }
 
   /// The preview card above the bar, centred on the pointer, kept inside the bar's width.
@@ -906,7 +906,7 @@ struct PlayerGlyphButtonStyle: ButtonStyle {
       .contentShape(Rectangle())
       .scaleEffect(configuration.isPressed ? 0.9 : 1)
       .opacity(configuration.isPressed ? 0.8 : 1)
-      .animation(Astra.Motion.fast, value: configuration.isPressed)
+      .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
   }
 }
 
@@ -1252,10 +1252,10 @@ struct NextEpisodeButton: View {
           .accessibilityHint(player.upNext?.displayTitle ?? "")
           .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { onFrame($0) }
           .onDisappear { onFrame(nil) }
-          .transition(.opacity.combined(with: .scale(scale: 0.95)))
+          .astraTransition(.opacity.combined(with: .scale(scale: 0.95)))
         }
       }
     }
-    .animation(Astra.Motion.base, value: shown)
+    .astraAnimation(Astra.Motion.base, value: shown)
   }
 }

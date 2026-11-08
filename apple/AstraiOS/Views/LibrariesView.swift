@@ -47,7 +47,7 @@ struct LibrariesView: View {
     }
     .scrollIndicators(.never)
     .background(Astra.Color.bg.ignoresSafeArea())
-    .animation(Astra.Motion.base, value: segment)
+    .astraAnimation(Astra.Motion.base, value: segment)
     .sheet(isPresented: $showSettings) {
       NavigationStack {
         SettingsView()
@@ -231,14 +231,14 @@ struct LibraryBrowser: View {
       .padding(.vertical, 2)
     }
     .scrollIndicators(.never)
-    .animation(Astra.Motion.fast, value: filters)
+    .astraAnimation(Astra.Motion.fast, value: filters)
   }
 
   private var layoutToggle: some View {
     HStack(spacing: 2) {
       ForEach([true, false], id: \.self) { isGrid in
         Button {
-          withAnimation(Astra.Motion.base) { grid = isGrid }
+          astraWithAnimation(Astra.Motion.base) { grid = isGrid }
         } label: {
           Image(systemName: isGrid ? "square.grid.2x2" : "list.bullet")
             .font(.system(size: 15, weight: .semibold))
