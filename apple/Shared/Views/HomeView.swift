@@ -175,6 +175,8 @@ struct HomeView: View {
 struct ServicePill: View {
   var library: LibraryStore
   @Namespace private var selection
+  /// Settings → Appearance: brand-coloured logos, or plain white on glass.
+  @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
 
   var body: some View {
     #if os(iOS)
@@ -193,7 +195,7 @@ struct ServicePill: View {
                 .resizable()
                 .scaledToFit()
                 .frame(height: service.logoHeight * 0.85)
-                .foregroundStyle(Color(hex: service.accent))
+                .foregroundStyle(logoColors ? Color(hex: service.accent) : .white)
             }
           }
         }
@@ -225,7 +227,7 @@ struct ServicePill: View {
       _ service: StreamingService?, label: String, @ViewBuilder content: () -> Label
     ) -> some View {
       let selected = library.selectedService == service
-      let brand = service.map { Color(hex: $0.accent) } ?? .white
+      let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
       return Button {
         library.select(service)
       } label: {

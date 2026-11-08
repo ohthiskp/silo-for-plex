@@ -19,6 +19,9 @@ enum Astra {
     /// An "on" switch: the accent, but grey when the accent is white or
     /// silver so the white knob still shows (KP: "too white for switches").
     @MainActor static var switchOn: SwiftUI.Color { AstraAppearance.shared.switchOn }
+    /// Settings → Appearance → Theme: icons, the tab bar and the sidebar. White by default.
+    @MainActor static var theme: SwiftUI.Color { AstraAppearance.shared.theme }
+    @MainActor static var onTheme: SwiftUI.Color { AstraAppearance.shared.themeHex.prefersDarkText ? .black : .white }
     static let hairline = SwiftUI.Color.white.opacity(0.09)
   }
 
@@ -145,13 +148,31 @@ private struct ContentLeadingKey: EnvironmentKey {
 
   private let defaults: UserDefaults
   private(set) var accentHex: RGBHex
+  private(set) var themeHex: RGBHex
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
     accentHex = defaults.string(forKey: Preferences.accentKey).flatMap(RGBHex.init(string:)) ?? AccentPreset.white.hex
+    themeHex = defaults.string(forKey: Preferences.themeKey).flatMap(RGBHex.init(string:)) ?? AccentPreset.white.hex
   }
 
   var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
+  var theme: SwiftUI.Color { SwiftUI.Color(hex: themeHex.value) }
+
+  func setTheme(_ hex: RGBHex) {
+    themeHex = hex
+    if hex == AccentPreset.white.hex {
+      defaults.removeObject(forKey: Preferences.themeKey)
+    } else {
+      defaults.set(hex.string, forKey: Preferences.themeKey)
+    }
+  }
+
+  func setTheme(_ color: SwiftUI.Color) {
+    let resolved = color.resolve(in: EnvironmentValues())
+    setTheme(RGBHex(red: Double(resolved.red), green: Double(resolved.green), blue: Double(resolved.blue)))
+  }
+
   var onAccent: SwiftUI.Color { accentHex.prefersDarkText ? .black : .white }
   var switchOn: SwiftUI.Color {
     accentHex == AccentPreset.white.hex || accentHex == AccentPreset.silver.hex

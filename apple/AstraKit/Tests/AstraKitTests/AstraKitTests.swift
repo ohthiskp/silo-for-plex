@@ -1612,18 +1612,21 @@ final class TabLayoutTests: XCTestCase {
     XCTAssertEqual(TabLayout.tabs(from: "nonsense"), [.home, .search, .libraries])
   }
 
-  func testSavedTabsKeepHomeAndTheBarOrder() {
-    XCTAssertEqual(TabLayout.tabs(from: "libraries,watchlist"), [.home, .watchlist, .libraries])
-    XCTAssertEqual(TabLayout.tabs(from: "home,search,watchlist,downloads,libraries").count, TabLayout.maximum)
+  func testSavedOrderIsKeptAndHomeIsAlwaysIn() {
+    XCTAssertEqual(TabLayout.tabs(from: "libraries,watchlist"), [.home, .libraries, .watchlist])
+    XCTAssertEqual(TabLayout.tabs(from: "search,home,search"), [.search, .home])
+    let all = TabLayout.tabs(from: "search,watchlist,downloads,libraries,settings,home")
+    XCTAssertEqual(all.count, TabLayout.maximum)
+    XCTAssertTrue(all.contains(.home))
   }
 
-  func testToggling() {
+  func testTogglingAndMoving() {
     let base = TabLayout.defaultTabs
-    XCTAssertEqual(TabLayout.toggled(base, .watchlist, on: true), [.home, .search, .watchlist, .libraries])
+    XCTAssertEqual(TabLayout.toggled(base, .settings, on: true), [.home, .search, .libraries, .settings])
     XCTAssertEqual(TabLayout.toggled(base, .home, on: false), base)
     XCTAssertEqual(TabLayout.toggled(base, .search, on: false), [.home, .libraries])
-    let full = TabLayout.toggled(base, .watchlist, on: true)
-    XCTAssertEqual(TabLayout.toggled(full, .downloads, on: true), full)
+    XCTAssertEqual(TabLayout.moved(base, from: IndexSet(integer: 2), to: 0), [.libraries, .home, .search])
+    XCTAssertEqual(TabLayout.moved(base, from: IndexSet(integer: 0), to: 3), [.search, .libraries, .home])
     XCTAssertEqual(TabLayout.stored(base), "home,search,libraries")
   }
 }

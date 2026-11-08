@@ -68,6 +68,7 @@ struct MainView: View {
     case .search: PhoneSearchView(library: library)
     case .libraries: LibrariesView(library: library)
     case .downloads: DownloadsView()
+    case .settings: SettingsView(showsTitle: true)
     case .watchlist:
       AstraPage {
         AstraSectionHeader(title: "Watchlist")
@@ -148,7 +149,7 @@ struct WideTabBar: View {
                 }
               Text(title).font(.system(size: 11, weight: .semibold))
             }
-            .foregroundStyle(lit ? Astra.Color.ink : Astra.Color.muted)
+            .foregroundStyle(lit ? Astra.Color.theme : Astra.Color.muted)
             .scaleEffect(lit && dragX != nil ? 1.08 : 1)
             .frame(width: tabWidth, height: Self.height)
             .contentShape(Rectangle())
