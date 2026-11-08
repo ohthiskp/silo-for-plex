@@ -163,7 +163,10 @@ final class AppModel {
         let pin = try await account.createPin()
         let url = account.authURL(for: pin)
         phase = .waitingForApproval(code: pin.code, url: url)
-        Self.open(url)
+        // Apple TV has no browser: the screen shows plex.tv/link with the code and a QR code.
+        #if !os(tvOS)
+          Self.open(url)
+        #endif
         let token = try await account.waitForToken(pin)
         // A failed save (logged by the store) only means signing in again next launch.
         tokens.save(token)
