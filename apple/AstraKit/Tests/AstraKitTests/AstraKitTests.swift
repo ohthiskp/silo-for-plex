@@ -1976,3 +1976,18 @@ final class MultiPartTests: XCTestCase {
     XCTAssertEqual(edl, "edl://%\(a.absoluteString.utf8.count)%\(a.absoluteString);%\(b.absoluteString.utf8.count)%\(b.absoluteString)")
   }
 }
+
+/// Apple TV: touch-surface scrubbing.
+final class RemoteScrubTests: XCTestCase {
+  func testSpanIsTenPercentWithinTwoAndTenMinutes() {
+    XCTAssertEqual(RemoteScrub.span(duration: 600), 120)
+    XCTAssertEqual(RemoteScrub.span(duration: 3_000), 300)
+    XCTAssertEqual(RemoteScrub.span(duration: 10_000), 600)
+  }
+
+  func testTargetStaysInsideTheFilm() {
+    XCTAssertEqual(RemoteScrub.target(start: 100, fraction: 0.5, duration: 3_000), 250)
+    XCTAssertEqual(RemoteScrub.target(start: 30, fraction: -1, duration: 3_000), 0)
+    XCTAssertEqual(RemoteScrub.target(start: 2_900, fraction: 1, duration: 3_000), 3_000)
+  }
+}

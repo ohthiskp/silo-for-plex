@@ -236,7 +236,17 @@ final class PlayerController {
     core.setProperty("http-header-fields", value: PlaybackResolver.mpvHeaderFields(source.headers))
     core.setProperty("force-media-title", value: source.title)
     core.setProperty("start", value: source.startSeconds > 0 ? String(format: "%.3f", source.startSeconds) : "none")
-    core.setProperty("pause", value: "no")
+    #if os(tvOS)
+      // Apple TV: opens paused, so nothing plays while the TV switches to the
+      // film's frame rate and HDR / Dolby Vision mode (Match Content); see
+      // playback-restart.
+      core.setProperty("pause", value: "yes")
+      awaitingDisplayMode = true
+      displayGate = true
+      userPausedDuringStart = false
+    #else
+      core.setProperty("pause", value: "no")
+    #endif
     // A bigger read-ahead buffer, so a remote server's hiccups don't pause playback.
     #if os(iOS) || os(tvOS)
       core.setProperty("demuxer-max-bytes", value: "150MiB")
@@ -314,6 +324,8 @@ final class PlayerController {
   }
 
   @ObservationIgnored private var stallTask: Task<Void, Never>?
+  /// Apple TV: the first frame is up and the TV may be changing display mode.
+  @ObservationIgnored private var awaitingDisplayMode = false
   /// The stalled file is being opened again; its first frame ends the watch.
   @ObservationIgnored private var reopening = false
 
@@ -411,8 +423,17 @@ final class PlayerController {
     return true
   }
 
+  /// Apple TV: from opening a file until the TV's display mode is settled.
+  @ObservationIgnored private var displayGate = false
+  /// Apple TV: the viewer paused before the display mode switch ended.
+  @ObservationIgnored private var userPausedDuringStart = false
+
   func setPaused(_ value: Bool) {
     guard let core else { return }
+    #if os(tvOS)
+      // A pause or play before the TV's mode switch ends wins over the automatic start.
+      if displayGate { userPausedDuringStart = value }
+    #endif
     markLocalSet("pause", value ? 1 : 0)
     paused = value
     core.setProperty("pause", value: value ? "yes" : "no")
@@ -686,6 +707,22 @@ final class PlayerController {
       updateNowPlaying()
       // After a seek: Plex gets the new position now, not up to 10 s later.
       if wasStarted { reportSoon() }
+      #if os(tvOS)
+        if awaitingDisplayMode, let core {
+          awaitingDisplayMode = false
+          // The mpv core already handed the film's criteria to AVDisplayManager;
+          // play once the TV's mode switch (if any) has finished, as the
+          // Flutter Apple TV app does.
+          let started = source?.url
+          core.awaitDisplayModeSwitch(extraDelayMs: 0) { [weak self] in
+            MainActor.assumeIsolated {
+              guard let self, self.isActive, self.source?.url == started else { return }
+              self.displayGate = false
+              if !self.userPausedDuringStart { self.setPaused(false) }
+            }
+          }
+        }
+      #endif
     case "end-file":
       if let reason = data?["reason"] as? String, reason == "error" {
         lastError = (data?["message"] as? String) ?? "This file couldn't be played."
