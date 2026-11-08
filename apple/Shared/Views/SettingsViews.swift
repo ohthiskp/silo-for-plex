@@ -45,10 +45,12 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     }
   }
 
-  /// Navigation is iPhone only (the Mac has its sidebar).
+  /// Navigation is iPhone only (the Mac has its sidebar); Apple TV has no downloads.
   static var shown: [SettingsPane] {
     #if os(iOS)
       allCases
+    #elseif os(tvOS)
+      allCases.filter { $0 != .tabs && $0 != .downloads }
     #else
       allCases.filter { $0 != .tabs }
     #endif

@@ -91,9 +91,10 @@ struct ContinueCard: View {
       openItem(item)
     } label: {
       ZStack(alignment: .bottomLeading) {
-        if item.type == .episode {
+        if item.type == .episode, item.thumb != nil {
           RemoteImage(url: library.imageURL(item.thumb, width: width, height: height))
         } else {
+          // Movies, and an episode without its own still: the (show's) backdrop.
           ArtworkImage(library: library, item: item, kind: .backdrop, width: width, height: height)
         }
         LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .center, endPoint: .bottom)
@@ -224,6 +225,11 @@ struct ItemMenu: ViewModifier {
 struct ItemMenuItems: View {
   var library: LibraryStore
   var item: PlexMetadata
+  #if os(tvOS)
+    private static let isTV = true
+  #else
+    private static let isTV = false
+  #endif
   var inContinueWatching = false
   /// Details and Play are left out on the Details page itself (it has its own Play).
   var onDetails = false
@@ -257,7 +263,8 @@ struct ItemMenuItems: View {
       }
       let isGroup = item.type == .show || item.type == .season
       let downloadState = isGroup ? app.downloads.state(forEpisodesOf: item) : app.downloads.state(for: item.ratingKey)
-      if item.type != .collection, downloadState == .none {
+      // Apple TV has no downloads (KP, 2026-11-08).
+      if !Self.isTV, item.type != .collection, downloadState == .none {
         Button { app.downloads.download(item) } label: { Label("Download", systemImage: "arrow.down.circle") }
       }
       if item.type == .episode {
