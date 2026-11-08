@@ -159,8 +159,8 @@ public enum PlaybackResolver {
 }
 
 /// One `/:/timeline` report.
-public struct TimelineReport: Sendable, Equatable {
-  public enum State: String, Sendable { case playing, paused, stopped, buffering }
+public struct TimelineReport: Sendable, Equatable, Codable {
+  public enum State: String, Sendable, Codable { case playing, paused, stopped, buffering }
 
   public var ratingKey: String
   public var key: String
@@ -185,5 +185,56 @@ public struct TimelineReport: Sendable, Equatable {
       .init(name: "duration", value: String(max(0, durationMs))),
       .init(name: "hasMDE", value: "1"),
     ]
+  }
+}
+
+/// QA P2-6: progress watched while the server couldn't be reached (offline,
+/// asleep, a download on a plane). The last stopped report per title and
+/// server is kept, on disk, until the server answers again.
+public struct PendingTimelines: Codable, Sendable, Equatable {
+  public struct Entry: Codable, Sendable, Equatable {
+    public var server: String
+    public var report: TimelineReport
+  }
+
+  public private(set) var entries: [Entry] = []
+
+  public init() {}
+
+  /// Keeps `report` as the one to send for its title on `server`, replacing an older one.
+  public mutating func record(_ report: TimelineReport, server: String) {
+    var report = report
+    report.state = .stopped
+    entries.removeAll { $0.server == server && $0.report.ratingKey == report.ratingKey }
+    entries.append(Entry(server: server, report: report))
+  }
+
+  /// A newer report for the title reached the server: the kept one is out of date.
+  public mutating func superseded(ratingKey: String, server: String) {
+    entries.removeAll { $0.server == server && $0.report.ratingKey == ratingKey }
+  }
+
+  /// The kept reports for `server`, oldest first.
+  public func reports(for server: String) -> [TimelineReport] {
+    entries.filter { $0.server == server }.map(\.report)
+  }
+
+  public var isEmpty: Bool { entries.isEmpty }
+
+  public static let defaultsKey = "astra.playback.pendingTimelines"
+
+  public static func load(from defaults: UserDefaults = .standard) -> PendingTimelines {
+    guard let data = defaults.data(forKey: defaultsKey),
+      let saved = try? JSONDecoder().decode(PendingTimelines.self, from: data)
+    else { return PendingTimelines() }
+    return saved
+  }
+
+  public func save(to defaults: UserDefaults = .standard) {
+    if entries.isEmpty {
+      defaults.removeObject(forKey: Self.defaultsKey)
+    } else if let data = try? JSONEncoder().encode(self) {
+      defaults.set(data, forKey: Self.defaultsKey)
+    }
   }
 }

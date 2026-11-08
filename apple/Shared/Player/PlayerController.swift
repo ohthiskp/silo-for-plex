@@ -65,7 +65,11 @@ final class PlayerController {
     @ObservationIgnored var makeOverlay: (() -> AnyView)?
     @ObservationIgnored private var host: PlayerWindowHost?
   #endif
-  @ObservationIgnored var server: PlexServerClient?
+  @ObservationIgnored var server: PlexServerClient? {
+    // Connected (at launch, or again after a server switch or reconnect):
+    // progress watched while it couldn't be reached goes now (QA P2-6).
+    didSet { if server != nil { flushPendingTimelines() } }
+  }
   /// The server the current item came from. Progress goes there even if
   /// Settings switches to another server mid-playback.
   @ObservationIgnored private var playbackServer: PlexServerClient?
@@ -558,7 +562,85 @@ final class PlayerController {
     let report = TimelineReport(
       ratingKey: source.ratingKey, key: source.metadataKey, state: state, timeMs: Int(position * 1000),
       durationMs: duration > 0 ? Int(duration * 1000) : source.durationMs)
-    Task.detached { try? await server.reportTimeline(report) }
+    Task { [weak self] in
+      do {
+        try await server.reportTimeline(report)
+        self?.timelineReached(report, server: server)
+      } catch {
+        // QA P2-6: the final position of a title watched while the server
+        // couldn't be reached (offline, a download on a plane) is kept and
+        // sent once it answers, instead of being lost.
+        if state == .stopped { self?.keepForLater(report, server: server) }
+      }
+    }
+  }
+
+  // MARK: - Progress watched offline (QA P2-6)
+
+  @ObservationIgnored private var pendingTimelines = PendingTimelines.load()
+  @ObservationIgnored private var flushing = false
+  @ObservationIgnored private var retryTask: Task<Void, Never>?
+
+  private func keepForLater(_ report: TimelineReport, server: PlexServerClient) {
+    pendingTimelines.record(report, server: server.serverName)
+    pendingTimelines.save()
+    scheduleRetry()
+  }
+
+  /// A report got through: an older kept one for that title is out of date,
+  /// and the server is answering, so send what is still kept.
+  private func timelineReached(_ report: TimelineReport, server: PlexServerClient) {
+    if !pendingTimelines.reports(for: server.serverName).isEmpty {
+      pendingTimelines.superseded(ratingKey: report.ratingKey, server: server.serverName)
+      pendingTimelines.save()
+      flushPendingTimelines()
+    }
+  }
+
+  /// Sends the kept reports to the connected server, oldest first. The app
+  /// may call it when the server is back online too; it is cheap when nothing is kept.
+  func flushPendingTimelines() {
+    guard !flushing, let server, !pendingTimelines.reports(for: server.serverName).isEmpty else { return }
+    flushing = true
+    Task { [weak self] in
+      guard let self else { return }
+      defer { self.flushing = false }
+      var sent: [String] = []
+      // Continue Watching and Details show the progress that just arrived.
+      defer { for key in sent { self.library?.playbackEnded(ratingKey: key) } }
+      for report in self.pendingTimelines.reports(for: server.serverName) {
+        do {
+          try await server.reportTimeline(report)
+          sent.append(report.ratingKey)
+        } catch {
+          self.scheduleRetry()
+          return
+        }
+        // Only if a newer one for the title wasn't kept meanwhile.
+        if self.pendingTimelines.reports(for: server.serverName).contains(report) {
+          self.pendingTimelines.superseded(ratingKey: report.ratingKey, server: server.serverName)
+          self.pendingTimelines.save()
+        }
+      }
+    }
+  }
+
+  /// Tries again later: 30 s, then 1, 2 and 5 minutes, then every 5 minutes.
+  private func scheduleRetry() {
+    guard retryTask == nil else { return }
+    retryTask = Task { [weak self] in
+      var wait: Double = 30
+      while !Task.isCancelled {
+        try? await Task.pause(wait)
+        guard let self, !Task.isCancelled else { return }
+        guard let server = self.server, !self.pendingTimelines.reports(for: server.serverName).isEmpty else {
+          self.retryTask = nil
+          return
+        }
+        self.flushPendingTimelines()
+        wait = min(wait * 2, 300)
+      }
+    }
   }
 }
 

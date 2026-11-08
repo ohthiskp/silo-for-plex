@@ -1746,3 +1746,35 @@ final class CinebySectionsTests: XCTestCase {
     XCTAssertEqual(CinebyTrending.section(sections, matching: CinebyTrending.greatsKeywords)?.map(\.id), ["movie:3"])
   }
 }
+
+/// QA P2-6: offline-watched progress is kept until the server answers.
+final class PendingTimelinesTests: XCTestCase {
+  private func report(_ key: String, _ ms: Int, _ state: TimelineReport.State = .playing) -> TimelineReport {
+    TimelineReport(ratingKey: key, key: "/library/metadata/\(key)", state: state, timeMs: ms, durationMs: 100_000)
+  }
+
+  func testKeepsTheLastReportPerTitleAsStopped() {
+    var pending = PendingTimelines()
+    pending.record(report("1", 1_000), server: "Omega")
+    pending.record(report("1", 5_000), server: "Omega")
+    pending.record(report("2", 2_000), server: "Omega")
+    pending.record(report("1", 9_000), server: "Other")
+    XCTAssertEqual(pending.reports(for: "Omega").map(\.timeMs), [5_000, 2_000])
+    XCTAssertEqual(pending.reports(for: "Omega").map(\.state), [.stopped, .stopped])
+    pending.superseded(ratingKey: "1", server: "Omega")
+    XCTAssertEqual(pending.reports(for: "Omega").map(\.ratingKey), ["2"])
+    XCTAssertEqual(pending.reports(for: "Other").map(\.timeMs), [9_000])
+  }
+
+  func testSurvivesARelaunch() throws {
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: "astra.tests.pendingTimelines"))
+    defaults.removePersistentDomain(forName: "astra.tests.pendingTimelines")
+    var pending = PendingTimelines()
+    pending.record(report("7", 42_000), server: "Omega")
+    pending.save(to: defaults)
+    XCTAssertEqual(PendingTimelines.load(from: defaults), pending)
+    pending.superseded(ratingKey: "7", server: "Omega")
+    pending.save(to: defaults)
+    XCTAssertTrue(PendingTimelines.load(from: defaults).isEmpty)
+  }
+}
