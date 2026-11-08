@@ -264,20 +264,25 @@ final class DownloadStore {
       // Settings → Downloads → Wi-Fi Only: the transfer waits off cellular.
       request.allowsCellularAccess = !UserDefaults.standard.bool(forKey: Preferences.wifiOnlyKey)
       let destination = fileURL(job.record)
+      let resume = resumeData.removeValue(forKey: job.id)
+      let segmented = resume == nil && (job.record.bytes ?? 0) >= DownloadSegments.minimumBytes
       // Astra: say so up front when the file can't fit, instead of failing late.
-      if let needed = job.record.bytes, let free = freeSpace(), needed > free {
+      // Segmented: the parts, plus one part while they are joined (QA P1-3).
+      if let needed = spaceNeeded(job.record, destination: destination, segmented: segmented),
+        let free = freeSpace(), needed > free
+      {
         let reason =
           "Not enough space: it needs \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file)), "
           + "\(ByteCountFormatter.string(fromByteCount: free, countStyle: .file)) is free."
         jobs.remove(at: i)
+        if let resume { resumeData[job.id] = resume }  // Retry after freeing space continues.
         failed[job.id] = (job, reason)
         lastError = "\(job.record.displayTitle) didn't download: \(reason)"
         saveQueue()
         continue
       }
-      let resume = resumeData.removeValue(forKey: job.id)
       // Astra: big files over several connections at once (faster on most servers).
-      if resume == nil, let total = job.record.bytes, total >= DownloadSegments.minimumBytes {
+      if segmented, let total = job.record.bytes {
         Task {
           do {
             try await downloadInSegments(job, request: request, total: total, to: destination)
@@ -402,6 +407,14 @@ final class DownloadStore {
       try? input.close()
       try? FileManager.default.removeItem(at: part)
     }
+  }
+
+  /// Bytes of free space `record` needs before it starts; nil when its size is unknown.
+  private func spaceNeeded(_ record: DownloadRecord, destination: URL, segmented: Bool) -> Int64? {
+    guard let total = record.bytes else { return nil }
+    guard segmented else { return total }
+    let onDisk = (0..<Self.segmentCount).compactMap { Self.size(of: partURL(destination, $0)) }.reduce(0, +)
+    return DownloadSegments.spaceNeeded(total: total, count: Self.segmentCount, alreadyOnDisk: onDisk)
   }
 
   /// Removes a download's leftover parts (cancel or delete).

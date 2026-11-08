@@ -1342,6 +1342,15 @@ final class ForYouTests: XCTestCase {
 }
 
 final class DownloadSegmentsTests: XCTestCase {
+  /// QA P1-3: the file plus its largest part, less parts already on disk.
+  func testSpaceNeededIsTheFilePlusOnePart() {
+    XCTAssertEqual(DownloadSegments.spaceNeeded(total: 800, count: 8), 900)
+    // 1003 / 4: parts of 250, 250, 250 and 253.
+    XCTAssertEqual(DownloadSegments.spaceNeeded(total: 1003, count: 4), 1256)
+    XCTAssertEqual(DownloadSegments.spaceNeeded(total: 800, count: 8, alreadyOnDisk: 300), 600)
+    XCTAssertEqual(DownloadSegments.spaceNeeded(total: 0, count: 8), 0)
+  }
+
   func testRangesCoverTheWholeFileWithoutGaps() {
     let ranges = DownloadSegments.ranges(total: 1003, count: 4)
     XCTAssertEqual(ranges.count, 4)

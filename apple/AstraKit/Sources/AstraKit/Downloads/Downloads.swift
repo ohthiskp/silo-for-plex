@@ -233,6 +233,15 @@ public enum DownloadSegments {
     }
   }
 
+  /// Free space a segmented download needs (QA P1-3). The parts add up to the
+  /// file; while they are joined, each part is deleted right after it is
+  /// appended, so the peak is the file plus its largest part. Bytes of parts
+  /// already on disk from an earlier try are already taken, so they count off.
+  public static func spaceNeeded(total: Int64, count: Int, alreadyOnDisk: Int64 = 0) -> Int64 {
+    let largest = ranges(total: total, count: count).map { $0.upperBound - $0.lowerBound + 1 }.max() ?? 0
+    return max(0, total + largest - alreadyOnDisk)
+  }
+
   /// The `Range` header value for one range.
   public static func header(_ range: ClosedRange<Int64>) -> String {
     "bytes=\(range.lowerBound)-\(range.upperBound)"
