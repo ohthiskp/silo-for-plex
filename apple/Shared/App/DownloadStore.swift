@@ -78,6 +78,9 @@ final class DownloadStore {
     if let data = try? Data(contentsOf: queueURL), let saved = try? JSONDecoder().decode([Job].self, from: data) {
       jobs = saved.map { var job = $0; job.running = false; job.fraction = 0; return job }
     }
+    // QA P2-4: transfers the system carried on while Astra was closed are
+    // picked up again by the queued jobs; anything no job wants is stopped.
+    session.keepLeftovers(for: Set(jobs.map(\.id)))
   }
 
   /// Connects the store to a server session; queued downloads from that server carry on.
@@ -554,14 +557,92 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     // with only 8 here the second download's connections queued behind the first.
     config.httpMaximumConnectionsPerHost = 16
     let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-    // Transfers left from an earlier launch have nobody waiting for them; the
-    // saved queue starts them again, so stop the leftovers.
+    // QA P2-4: transfers left from an earlier launch (iPhone: the system kept
+    // them going while Astra was closed) are kept, by the id in their task
+    // description, for the queued job to pick up instead of starting at 0.
     session.getAllTasks { [weak self] tasks in
       guard let self else { return }
-      for task in tasks where self.lock.withLock({ self.pending[task.taskIdentifier] == nil }) { task.cancel() }
+      let waiters = self.lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+        for case let task as URLSessionDownloadTask in tasks where self.pending[task.taskIdentifier] == nil {
+          if let id = task.taskDescription, !id.isEmpty, task.state == .running || task.state == .suspended {
+            self.leftoverTasks[id] = task
+          } else {
+            task.cancel()
+          }
+        }
+        for task in tasks where !(task is URLSessionDownloadTask) { task.cancel() }
+        self.leftoversReady = true
+        defer { self.readyWaiters = [] }
+        return self.readyWaiters
+      }
+      for waiter in waiters { waiter.resume() }
     }
     return session
   }()
+
+  private enum Leftover { case file(URL), task(URLSessionDownloadTask), none }
+
+  /// Transfers from an earlier launch, by download id ("ratingKey" or "ratingKey#part").
+  private var leftoverTasks: [String: URLSessionDownloadTask] = [:]
+  /// Files the system finished while nothing in Astra was waiting for them.
+  private var leftoverFiles: [String: URL] = [:]
+  private var leftoversReady = false
+  private var readyWaiters: [CheckedContinuation<Void, Never>] = []
+
+  /// Where finished leftover files wait for their job (Caches, so the system
+  /// may reclaim them; the job then downloads again).
+  private static let leftoverFolder: URL = {
+    let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    let folder = base.appendingPathComponent("Astra/DownloadLeftovers", isDirectory: true)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    return folder
+  }()
+
+  private static func leftoverURL(_ id: String) -> URL {
+    leftoverFolder.appendingPathComponent(id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id)
+  }
+
+  override init() {
+    super.init()
+    // Files finished by an earlier launch that no job claimed yet.
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: Self.leftoverFolder.path)) ?? []
+    for name in names {
+      guard let id = name.removingPercentEncoding else { continue }
+      leftoverFiles[id] = Self.leftoverFolder.appendingPathComponent(name)
+    }
+    // Create the session now: iOS hands over events for finished background
+    // transfers only once a session with the same identifier exists.
+    _ = session
+  }
+
+  private func waitForLeftovers() async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      let ready = lock.withLock { () -> Bool in
+        if leftoversReady { return true }
+        readyWaiters.append(continuation)
+        return false
+      }
+      if ready { continuation.resume() }
+    }
+  }
+
+  /// Stops leftover transfers and drops leftover files that no queued job
+  /// (`ids`, ratingKeys) wants.
+  func keepLeftovers(for ids: Set<String>) {
+    Task {
+      await waitForLeftovers()
+      let (tasks, files) = lock.withLock { () -> ([URLSessionDownloadTask], [URL]) in
+        func unwanted(_ id: String) -> Bool { !ids.contains(String(id.split(separator: "#").first ?? "")) }
+        let tasks = leftoverTasks.filter { unwanted($0.key) }
+        let files = leftoverFiles.filter { unwanted($0.key) }
+        for key in tasks.keys { leftoverTasks[key] = nil }
+        for key in files.keys { leftoverFiles[key] = nil }
+        return (Array(tasks.values), Array(files.values))
+      }
+      for task in tasks { task.cancel() }
+      for file in files { try? FileManager.default.removeItem(at: file) }
+    }
+  }
 
   func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
     DispatchQueue.main.async {
@@ -574,12 +655,55 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     _ request: URLRequest, id: String, to destination: URL, expectedBytes: Int64?, resumeData: Data?,
     progress: @escaping @Sendable (Double?, Int64) -> Void
   ) async throws {
+    await waitForLeftovers()
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      let entry = Pending(
+        request: request, started: Date(), destination: destination, expectedBytes: expectedBytes, progress: progress,
+        continuation: continuation)
+      // QA P2-4: an earlier launch's transfer for this id, finished or still
+      // going, is used instead of starting again from 0. Decided under the
+      // lock, so it can't race the delegate filing a finished transfer.
+      let leftover = lock.withLock { () -> Leftover in
+        if let file = leftoverFiles.removeValue(forKey: id) {
+          leftoverTasks[id] = nil
+          return .file(file)
+        }
+        if let task = leftoverTasks.removeValue(forKey: id) {
+          if resumeData == nil {
+            pending[task.taskIdentifier] = entry
+            taskIDs[id] = task.taskIdentifier
+            tasks[task.taskIdentifier] = task
+            return .task(task)
+          }
+          task.cancel()
+        }
+        return .none
+      }
+      switch leftover {
+      case .task(let task):
+        task.resume()
+        return
+      case .file(let file):
+        let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.int64Value ?? 0
+        if DownloadCheck.validate(status: 200, mimeType: nil, fileSize: size, expected: expectedBytes) == nil {
+          do {
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: file, to: destination)
+            progress(1, size)
+            continuation.resume()
+            return
+          } catch {}
+        }
+        try? FileManager.default.removeItem(at: file)
+      case .none:
+        break
+      }
       // Continue a transfer that broke off, when the server allows it.
       let task = resumeData.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: request)
+      // Read back after a relaunch (see the session's getAllTasks).
+      task.taskDescription = id
       lock.withLock {
-        pending[task.taskIdentifier] = Pending(
-          request: request, started: Date(), destination: destination, expectedBytes: expectedBytes, progress: progress, continuation: continuation)
+        pending[task.taskIdentifier] = entry
         taskIDs[id] = task.taskIdentifier
         tasks[task.taskIdentifier] = task
       }
@@ -589,10 +713,18 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
 
   /// Cancels a download and any of its segments (`id#0`, `id#1`…).
   func cancel(_ id: String) {
-    let found = lock.withLock {
-      taskIDs.filter { $0.key == id || $0.key.hasPrefix(id + "#") }.compactMap { tasks[$0.value] }
+    func matches(_ key: String) -> Bool { key == id || key.hasPrefix(id + "#") }
+    let (found, files) = lock.withLock { () -> ([URLSessionDownloadTask], [URL]) in
+      var found = taskIDs.filter { matches($0.key) }.compactMap { tasks[$0.value] }
+      let leftovers = leftoverTasks.filter { matches($0.key) }
+      let files = leftoverFiles.filter { matches($0.key) }
+      for key in leftovers.keys { leftoverTasks[key] = nil }
+      for key in files.keys { leftoverFiles[key] = nil }
+      found += leftovers.values
+      return (found, Array(files.values))
     }
     for task in found { task.cancel() }
+    for file in files { try? FileManager.default.removeItem(at: file) }
   }
 
   func urlSession(
@@ -607,8 +739,27 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
 
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
     // The temporary file is deleted when this returns, so move it now.
-    guard let entry = lock.withLock({ pending[downloadTask.taskIdentifier] }) else { return }
     let response = downloadTask.response as? HTTPURLResponse
+    // QA P2-4: finished while nothing waited for it (Astra was closed, or the
+    // job hasn't picked it up yet): kept for the job, if it looks right.
+    let orphan = lock.withLock { () -> String? in
+      guard pending[downloadTask.taskIdentifier] == nil, let id = downloadTask.taskDescription, !id.isEmpty else {
+        return nil
+      }
+      leftoverTasks[id] = nil
+      let size = (try? FileManager.default.attributesOfItem(atPath: location.path)[.size] as? NSNumber)?.int64Value ?? 0
+      guard
+        DownloadCheck.validate(
+          status: response?.statusCode ?? 0, mimeType: response?.mimeType, fileSize: size, expected: nil) == nil
+      else { return nil }
+      let kept = Self.leftoverURL(id)
+      try? FileManager.default.removeItem(at: kept)
+      guard (try? FileManager.default.moveItem(at: location, to: kept)) != nil else { return nil }
+      leftoverFiles[id] = kept
+      return id
+    }
+    if orphan != nil { return }
+    guard let entry = lock.withLock({ pending[downloadTask.taskIdentifier] }) else { return }
     // Settings → Network shows the download's answer too.
     NetworkLog.shared.record(entry.request, status: response?.statusCode, started: entry.started, error: nil)
     let size = (try? FileManager.default.attributesOfItem(atPath: location.path)[.size] as? NSNumber)?.int64Value ?? 0
@@ -632,6 +783,10 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
       let entry = pending.removeValue(forKey: task.taskIdentifier)
       tasks[task.taskIdentifier] = nil
       taskIDs = taskIDs.filter { $0.value != task.taskIdentifier }
+      // A leftover that ended (failed) before its job came for it.
+      if entry == nil, let id = task.taskDescription, leftoverTasks[id]?.taskIdentifier == task.taskIdentifier {
+        leftoverTasks[id] = nil
+      }
       return entry
     }
     guard let entry else { return }
