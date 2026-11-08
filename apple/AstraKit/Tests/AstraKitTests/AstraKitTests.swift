@@ -7,6 +7,14 @@ import XCTest
 #endif
 
 /// Answers requests from a table keyed by host + path; unknown requests fail.
+/// A thread-safe call counter for fake transports.
+final class Counter: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value = 0
+  /// Adds one and returns the new count.
+  func increment() -> Int { lock.withLock { value += 1; return value } }
+}
+
 final class FakeTransport: HTTPTransport, @unchecked Sendable {
   typealias Handler = (URLRequest) async throws -> (Int, Data)
   private let handler: Handler
@@ -659,6 +667,16 @@ final class TMDBTests: XCTestCase {
     XCTAssertEqual(art.logoPath, "/l.png")
     XCTAssertEqual(TMDBArtwork.url(art.posterPath, size: "w500")?.absoluteString, "https://image.tmdb.org/t/p/w500/p.jpg")
     XCTAssertNil(TMDBArtwork.url(nil, size: "w500"))
+  }
+
+  func testTMDBAsksAgainAfterTooManyRequests() async throws {
+    let calls = Counter()
+    let transport = FakeTransport { _ in
+      calls.increment() == 1 ? (429, Data()) : (200, Data(#"{"poster_path":"/p.jpg"}"#.utf8))
+    }
+    let art = try await TMDBClient(token: "t", transport: transport).artwork(id: 1, kind: .movie)
+    XCTAssertEqual(art.posterPath, "/p.jpg")
+    XCTAssertEqual(transport.requests.count, 2)
   }
 
   func testArtworkPicksBestLogoAndFallsBackToOtherLanguages() async throws {

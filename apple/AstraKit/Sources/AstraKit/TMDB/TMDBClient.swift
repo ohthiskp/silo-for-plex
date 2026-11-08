@@ -320,7 +320,15 @@ public struct TMDBClient: Sendable {
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     request.timeoutInterval = 12
-    let (data, response) = try await transport.send(request)
+    var (data, response) = try await transport.send(request)
+    // Home sends bursts (every service tab, artwork, cineby lookups). TMDB
+    // answers 429 when it's too many: wait as told (at most 3 s) and ask
+    // once more, instead of leaving the row or card empty.
+    if response.statusCode == 429 {
+      let wait = response.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init) ?? 0.5
+      try await Task.pause(min(max(wait, 0.2), 3))
+      (data, response) = try await transport.send(request)
+    }
     guard response.statusCode == 200 else { throw PlexError.http(response.statusCode) }
     return data
   }

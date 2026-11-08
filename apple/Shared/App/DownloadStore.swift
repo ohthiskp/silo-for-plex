@@ -383,20 +383,25 @@ final class DownloadStore {
     (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value
   }
 
-  /// Writes the parts one after another into `destination`, then deletes them.
+  /// Joins the parts into `destination`: the first part becomes the file
+  /// and each later one is appended, then deleted. Copying every part into
+  /// a new file needed twice the file's size free, so a big 4K original
+  /// that fit the space check could still fail at the very end.
   private nonisolated static func join(_ parts: [URL], into destination: URL) throws {
+    guard let first = parts.first else { return }
     try? FileManager.default.removeItem(at: destination)
-    FileManager.default.createFile(atPath: destination.path, contents: nil)
+    try FileManager.default.moveItem(at: first, to: destination)
     let out = try FileHandle(forWritingTo: destination)
     defer { try? out.close() }
-    for part in parts {
+    try out.seekToEnd()
+    for part in parts.dropFirst() {
       let input = try FileHandle(forReadingFrom: part)
-      defer { try? input.close() }
       while let chunk = try input.read(upToCount: 8 << 20), !chunk.isEmpty {
         try out.write(contentsOf: chunk)
       }
+      try? input.close()
+      try? FileManager.default.removeItem(at: part)
     }
-    for part in parts { try? FileManager.default.removeItem(at: part) }
   }
 
   /// Removes a download's leftover parts (cancel or delete).
