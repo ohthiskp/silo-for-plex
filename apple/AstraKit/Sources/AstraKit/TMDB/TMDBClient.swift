@@ -171,6 +171,12 @@ public struct TMDBClient: Sendable {
     try await list("/movie/top_rated", [:], kind: .movie)
   }
 
+  /// TMDB's all-time top rated (vote average, with TMDB's own minimum vote
+  /// count), 20 a page. Astra 4.0: All-Time Greats on For You.
+  public func topRated(_ kind: TMDBItem.Kind, page: Int) async throws -> [TMDBItem] {
+    try await list("/\(kind.rawValue)/top_rated", ["page": String(page)], kind: kind)
+  }
+
   /// What streams on `service` (subscription, US), by popularity or rating. 20 per page.
   public func onService(
     _ service: StreamingService, _ kind: TMDBItem.Kind, topRated: Bool = false, page: Int = 1
@@ -560,6 +566,24 @@ public enum ServiceCatalog {
       Row(id: "\(service.id).\(genre.id)", title: genre.title, requests: both(.popular, pages: 1, genre: (genre.movie, genre.tv)))
     }
     return rows
+  }
+
+  /// Astra 4.0: the lists a service's Home is built from. Trending feeds the
+  /// hero and Top 10, Newest feeds Recently Released, Top Rated feeds
+  /// All-Time Greats; Shows and Movies widen the pool. Several pages each,
+  /// since only titles on the Plex server are shown.
+  public static func homeRows(for service: StreamingService) -> [Row] {
+    func pages(_ kind: TMDBItem.Kind, _ order: DiscoverRequest.Order, _ count: Int) -> [DiscoverRequest] {
+      (1...count).map { DiscoverRequest(kind, order, page: $0) }
+    }
+    let name = service.label
+    return [
+      Row(id: "\(service.id).trending", title: "Trending on \(name)", requests: pages(.tv, .popular, 2) + pages(.movie, .popular, 2)),
+      Row(id: "\(service.id).new", title: "Recently Released", requests: pages(.tv, .newest, 3) + pages(.movie, .newest, 3)),
+      Row(id: "\(service.id).top", title: "All-Time Greats", requests: pages(.tv, .topRated, 3) + pages(.movie, .topRated, 3)),
+      Row(id: "\(service.id).shows", title: "Shows", requests: (3...5).map { DiscoverRequest(.tv, .popular, page: $0) }),
+      Row(id: "\(service.id).movies", title: "Movies", requests: (3...5).map { DiscoverRequest(.movie, .popular, page: $0) }),
+    ]
   }
 
   /// One row's results in page order; where a page was asked for both TV

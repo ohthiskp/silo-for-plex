@@ -77,23 +77,21 @@ struct HomeView: View {
             .id(library.selectedService?.id ?? "for-you")
         }
 
-        ForEach(library.homeRows) { hub in
-          ContentRow(title: hub.title) {
-            // Movies and shows as posters; episodes keep landscape stills.
-            if hub.items.contains(where: { $0.type == .episode || $0.type == .clip }) {
-              ForEach(hub.items) { ArtCard(library: library, item: $0) }
-            } else {
-              ForEach(hub.items) { PosterCard(library: library, item: $0) }
-            }
-          }
-        }
+        // Astra 4.0 (KP, 2026-11-08): the same five sections on For You and
+        // every service. Each Movies | Series switch keeps its own choice.
+        ShelfRow(
+          library: library, title: "Recently Released", shelf: library.homeRecent,
+          storageKey: "astra.home.recentSeries")
+        ShelfRow(
+          library: library, title: "All-Time Greats", shelf: library.homeGreats,
+          storageKey: "astra.home.greatsSeries")
 
         if let service = library.selectedService, let error = library.serviceError {
           // The rows already loaded stay above; this only says why new ones didn't come.
           EmptyState(
             symbol: "exclamationmark.triangle", title: "\(service.label) didn't load", message: error,
             action: ("Try Again", { library.retryService() }))
-        } else if let service = library.selectedService, !library.isLoadingService, library.homeRows.isEmpty {
+        } else if let service = library.selectedService, !library.isLoadingService, !library.homeHasSections {
           EmptyState(
             symbol: "tv", title: "Nothing from \(service.label)",
             message: "None of the popular titles on \(service.label) are on your Plex server.")
@@ -122,7 +120,7 @@ struct HomeView: View {
     .scrollIndicators(.never)
     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewport = $0 }
     .overlay {
-      if library.isLoadingHome || (library.isLoadingService && library.homeRows.isEmpty) {
+      if library.isLoadingHome || (library.isLoadingService && !library.homeHasSections) {
         ProgressView().controlSize(.large)
       }
     }
@@ -297,14 +295,14 @@ struct TopTenRow: View {
   @State private var showAll = false
   /// Astra (KP, 2026-11-07): Movies / Series, on For You and every service.
   @AppStorage("astra.home.topTenSeries") private var series = false
-  @Namespace private var kindPill
 
   private var items: [PlexMetadata] {
     let split = library.homeTopTenSplit
     return Array((series ? split.shows : split.movies).prefix(10))
   }
   private var title: String {
-    library.selectedService.map { "Top 10 on \($0.label)" } ?? "Top 10 This Week"
+    // Astra 4.0: TMDB trending, not the service's own viewing figures.
+    library.selectedService.map { "Top 10 Trending on \($0.label)" } ?? "Top 10 This Week"
   }
 
   var body: some View {
@@ -315,7 +313,7 @@ struct TopTenRow: View {
           .foregroundStyle(Astra.Color.ink)
           .lineLimit(1)
         Spacer(minLength: 8)
-        kindSwitch
+        KindSwitch(series: $series)
         Button {
           showAll = true
         } label: {
@@ -347,9 +345,15 @@ struct TopTenRow: View {
       TopTenList(library: library, items: items, title: title)
     }
   }
+}
 
-  /// A small glass capsule: Movies | Series, the chosen one white.
-  private var kindSwitch: some View {
+/// A small glass capsule: Movies | Series, the chosen one white. Each Home
+/// section owns its own (Astra 4.0: changing one never changes another).
+struct KindSwitch: View {
+  @Binding var series: Bool
+  @Namespace private var kindPill
+
+  var body: some View {
     HStack(spacing: 0) {
       ForEach([false, true], id: \.self) { isSeries in
         Button {
@@ -371,6 +375,60 @@ struct TopTenRow: View {
     }
     .padding(3)
     .astraGlass(in: Capsule(), variant: .clear)
+  }
+}
+
+/// Astra 4.0: Recently Released or All-Time Greats: a title, its own
+/// Movies | Series switch, and a row of posters. Hidden when both are empty.
+struct ShelfRow: View {
+  var library: LibraryStore
+  var title: String
+  var shelf: HomeShelf
+  @AppStorage private var series: Bool
+  @Environment(\.contentLeading) private var leading
+
+  init(library: LibraryStore, title: String, shelf: HomeShelf, storageKey: String) {
+    self.library = library
+    self.title = title
+    self.shelf = shelf
+    _series = AppStorage(wrappedValue: false, storageKey)
+  }
+
+  var body: some View {
+    if !shelf.isEmpty {
+      let items = shelf.items(series: series)
+      VStack(alignment: .leading, spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: Astra.Spacing.s) {
+          Text(title)
+            .font(Astra.Font.rowTitle)
+            .foregroundStyle(Astra.Color.ink)
+            .lineLimit(1)
+          Spacer(minLength: 8)
+          KindSwitch(series: $series)
+        }
+        .padding(.leading, leading)
+        .padding(.trailing, Astra.Spacing.pageTrailing)
+
+        if items.isEmpty {
+          Text(series ? "No series here yet." : "No movies here yet.")
+            .font(Astra.Font.meta)
+            .foregroundStyle(Astra.Color.muted)
+            .padding(.leading, leading)
+            .frame(height: 60, alignment: .leading)
+        } else {
+          ScrollView(.horizontal) {
+            LazyHStack(alignment: .top, spacing: 14) {
+              ForEach(items) { PosterCard(library: library, item: $0) }
+            }
+            .padding(.horizontal, leading)
+          }
+          .scrollIndicators(.never)
+          .scrollClipDisabled()
+          // Each kind keeps its own scroll position.
+          .id(series)
+        }
+      }
+    }
   }
 }
 

@@ -1412,3 +1412,50 @@ final class WatchlistTests: XCTestCase {
     XCTAssertEqual(loaded.savedAt, Date(timeIntervalSince1970: 5))
   }
 }
+
+final class HomeSectionsTests: XCTestCase {
+  private func item(_ key: String, _ type: PlexItemType = .movie, date: String? = nil, year: Int? = nil, rating: Double? = nil) -> PlexMetadata {
+    var item = PlexMetadata(ratingKey: key, type: type, title: key)
+    item.originallyAvailableAt = date
+    item.year = year
+    item.audienceRating = rating
+    return item
+  }
+
+  private let now = HomeSections.day.date(from: "2026-11-08")!
+
+  func testRecentlyReleasedUsesReleaseDateNewestFirst() {
+    let items = [
+      item("old", date: "2020-01-01"), item("new", date: "2026-10-01"), item("mid", date: "2026-03-01"),
+      item("future", date: "2027-01-01"), item("undated"), item("tmdb:movie:1", date: "2026-11-01"),
+    ]
+    let shown = HomeSections.recentlyReleased(items, now: now, minimum: 1)
+    XCTAssertEqual(shown.map(\.ratingKey), ["new", "mid"])
+  }
+
+  func testRecentlyReleasedWidensWhenTooFew() {
+    let items = [item("a", date: "2026-10-01"), item("b", date: "2025-01-01"), item("c", year: 2024)]
+    XCTAssertEqual(HomeSections.recentlyReleased(items, now: now, minimum: 3).map(\.ratingKey), ["a", "b", "c"])
+    XCTAssertEqual(HomeSections.recentlyReleased(items, now: now, minimum: 1).map(\.ratingKey), ["a"])
+  }
+
+  func testRankedKeepsOrderOnlyOnServer() {
+    func tmdb(_ id: Int) -> TMDBItem { TMDBItem(tmdbID: id, kind: .movie, title: "\(id)") }
+    let index = ["movie:2": item("two"), "movie:3": item("three")]
+    XCTAssertEqual(HomeSections.ranked([tmdb(1), tmdb(3), tmdb(2), tmdb(3)], index: index).map(\.ratingKey), ["three", "two"])
+  }
+
+  func testGreatsFromLibraryStable() {
+    let items = [
+      item("b", year: 1990, rating: 9.0), item("a", year: 1972, rating: 9.0), item("low", rating: 6.0),
+      item("c", rating: 8.0), item("tmdb:movie:9", rating: 10),
+    ]
+    XCTAssertEqual(HomeSections.greatsFromLibrary(items).map(\.ratingKey), ["a", "b", "c"])
+  }
+
+  func testShelfSplitsKinds() {
+    let shelf = HomeSections.shelf([item("m"), item("s", .show)])
+    XCTAssertEqual(shelf.items(series: false).map(\.ratingKey), ["m"])
+    XCTAssertEqual(shelf.items(series: true).map(\.ratingKey), ["s"])
+  }
+}
