@@ -197,7 +197,7 @@ struct SidebarButton: View {
       Image(systemName: symbol)
         .font(.system(size: 17, weight: .semibold))
         .frame(width: 44, height: 44)
-        .foregroundStyle(selected ? Color.black : Astra.Color.muted)
+        .foregroundStyle(selected ? Astra.Color.onAccent : Astra.Color.muted)
         // A white fill, not glass: it sits on the sidebar's glass.
         .background { if selected { Capsule().fill(Astra.Color.accent) } }
         .overlay(alignment: .topTrailing) {
@@ -205,7 +205,7 @@ struct SidebarButton: View {
             Text("\(count)")
               .font(.system(size: 10, weight: .bold))
               .monospacedDigit()
-              .foregroundStyle(Color.black)
+              .foregroundStyle(Astra.Color.onAccent)
               .padding(.horizontal, 5)
               .frame(minWidth: 16, minHeight: 16)
               .background(Capsule().fill(Astra.Color.accent))

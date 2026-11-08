@@ -127,6 +127,9 @@ final class DownloadStore {
     return .none
   }
 
+  /// Settings → Downloads → Storage Used.
+  var storageUsed: Int64 { index.totalBytes }
+
   var hasAnything: Bool { !index.records.isEmpty || !jobs.isEmpty || !failed.isEmpty }
 
   /// Failed downloads, by title.
@@ -255,7 +258,9 @@ final class DownloadStore {
       guard let client = jobClients[jobs[i].id] else { return }
       jobs[i].running = true
       let job = jobs[i]
-      let request = PlaybackResolver.downloadRequest(partKey: job.partKey, client: client)
+      var request = PlaybackResolver.downloadRequest(partKey: job.partKey, client: client)
+      // Settings → Downloads → Wi-Fi Only: the transfer waits off cellular.
+      request.allowsCellularAccess = !UserDefaults.standard.bool(forKey: Preferences.wifiOnlyKey)
       let destination = fileURL(job.record)
       // Astra: say so up front when the file can't fit, instead of failing late.
       if let needed = job.record.bytes, let free = freeSpace(), needed > free {

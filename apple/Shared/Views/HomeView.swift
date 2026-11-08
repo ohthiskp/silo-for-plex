@@ -8,6 +8,7 @@ struct HomeView: View {
   @State private var viewport: CGFloat = 800
   @State private var showSettings = false
   @State private var showWatchlist = false
+  @AppStorage(Preferences.serviceAccentsKey) private var serviceAccents = true
   /// The switcher shows only near the top of the page, so the hero's title
   /// never slides under it. Changes only when crossing the line, not every frame.
   @State private var showsTopBar = true
@@ -28,7 +29,10 @@ struct HomeView: View {
     }
     .background(Astra.Color.bg.ignoresSafeArea())
     // Astra: the chosen service's brand colour accents the page (Apple TV+'s is white).
-    .environment(\.astraAccent, library.selectedService.flatMap { $0.id == "appletv" ? nil : Color(hex: $0.accent) })
+    // Settings → Appearance → Streaming Service Accents turns it off.
+    .environment(
+      \.astraAccent,
+      serviceAccents ? library.selectedService.flatMap { $0.id == "appletv" ? nil : Color(hex: $0.accent) } : nil)
     .animation(Astra.Motion.base, value: library.selectedService)
     #if os(iOS)
       .navigationDestination(isPresented: $showWatchlist) { WatchlistView(library: library) }
@@ -669,6 +673,7 @@ struct MetaRow: View {
   var library: LibraryStore? = nil
   var fontSize: CGFloat = 15
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
+  @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
 
   var body: some View {
     HStack(spacing: 10) {
@@ -686,7 +691,7 @@ struct MetaRow: View {
       // then the version this device would play. Still no star ratings.
       RatingBadge(item: item, library: library)
       let pick = quality == .auto ? PlaybackQuality.current() : quality
-      if let badge = item.resolutionBadge(for: pick) { Badge(text: badge).fixedSize() }
+      if showQuality, let badge = item.resolutionBadge(for: pick) { Badge(text: badge).fixedSize() }
       // Astra (KP, 2026-11-07): Dolby Vision / HDR of that file, when Plex says.
       if let range = item.dynamicRange(for: pick) {
         Badge(text: range == .dolbyVision ? "Dolby Vision" : "HDR").fixedSize()
@@ -706,12 +711,13 @@ struct RatingBadge: View {
   var library: LibraryStore?
 
   @State private var fetched: String?
+  @AppStorage(Preferences.ratingsKey) private var showRatings = true
 
   private var rating: String? { item.officialRating ?? fetched }
 
   var body: some View {
     Group {
-      if let rating { Badge(text: rating).fixedSize() }
+      if showRatings, let rating { Badge(text: rating).fixedSize() }
     }
     .task(id: item.id) {
       fetched = nil

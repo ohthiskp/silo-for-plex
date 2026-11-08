@@ -230,6 +230,10 @@ final class PlayerController {
     core.setProperty("force-media-title", value: source.title)
     core.setProperty("start", value: source.startSeconds > 0 ? String(format: "%.3f", source.startSeconds) : "none")
     core.setProperty("pause", value: "no")
+    // Settings → Playback → Subtitles (Astra 4.0).
+    for (name, value) in SubtitlePreference.current().mpvOptions(languages: Locale.preferredLanguages) {
+      core.setProperty(name, value: value)
+    }
     core.command(["loadfile", source.url.absoluteString, "replace"])
     core.setVisible(true)
     #if os(macOS)

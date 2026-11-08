@@ -1,3 +1,4 @@
+import AstraKit
 import SwiftUI
 
 /// Astra tokens from DESIGN_SYSTEM.md, in one place.
@@ -10,8 +11,11 @@ enum Astra {
     static let surface2 = SwiftUI.Color(hex: 0x1E1E21)
     static let ink = SwiftUI.Color(hex: 0xF5F5F7)
     static let muted = SwiftUI.Color(hex: 0xF5F5F7).opacity(0.62)
-    /// Selection, progress and focus: white.
-    static let accent = SwiftUI.Color.white
+    /// Selection, progress and focus: white unless KP picks another accent
+    /// in Settings → Appearance (Astra 4.0).
+    @MainActor static var accent: SwiftUI.Color { AstraAppearance.shared.accent }
+    /// Text and icons on an accent fill: black on light accents, white on dark ones.
+    @MainActor static var onAccent: SwiftUI.Color { AstraAppearance.shared.onAccent }
     static let hairline = SwiftUI.Color.white.opacity(0.09)
   }
 
@@ -131,6 +135,38 @@ private struct ContentLeadingKey: EnvironmentKey {
   static let defaultValue: CGFloat = Astra.Layout.leading
 }
 
+/// Settings → Appearance, read wherever a view uses `Astra.Color.accent`;
+/// views redraw when it changes because it is observed.
+@MainActor @Observable final class AstraAppearance {
+  static let shared = AstraAppearance()
+
+  private let defaults: UserDefaults
+  private(set) var accentHex: RGBHex
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+    accentHex = defaults.string(forKey: Preferences.accentKey).flatMap(RGBHex.init(string:)) ?? AccentPreset.white.hex
+  }
+
+  var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
+  var onAccent: SwiftUI.Color { accentHex.prefersDarkText ? .black : .white }
+
+  func setAccent(_ hex: RGBHex) {
+    accentHex = hex
+    if hex == AccentPreset.white.hex {
+      defaults.removeObject(forKey: Preferences.accentKey)
+    } else {
+      defaults.set(hex.string, forKey: Preferences.accentKey)
+    }
+  }
+
+  /// The accent from a ColorPicker, in sRGB.
+  func setAccent(_ color: SwiftUI.Color) {
+    let resolved = color.resolve(in: EnvironmentValues())
+    setAccent(RGBHex(red: Double(resolved.red), green: Double(resolved.green), blue: Double(resolved.blue)))
+  }
+}
+
 extension EnvironmentValues {
   /// The left inset every page aligns its titles, rows and buttons to.
   var contentLeading: CGFloat {
@@ -143,6 +179,38 @@ extension View {
   /// A header height that fits the window: `share` of the visible height, capped at `cap`.
   func astraHeaderHeight(cap: CGFloat) -> some View {
     containerRelativeFrame(.vertical) { length, _ in min(cap, max(360, length * Astra.Layout.heroShare)) }
+  }
+}
+
+/// Settings → Appearance, read wherever a view uses `Astra.Color.accent`;
+/// views redraw when it changes because it is observed.
+@MainActor @Observable final class AstraAppearance {
+  static let shared = AstraAppearance()
+
+  private let defaults: UserDefaults
+  private(set) var accentHex: RGBHex
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+    accentHex = defaults.string(forKey: Preferences.accentKey).flatMap(RGBHex.init(string:)) ?? AccentPreset.white.hex
+  }
+
+  var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
+  var onAccent: SwiftUI.Color { accentHex.prefersDarkText ? .black : .white }
+
+  func setAccent(_ hex: RGBHex) {
+    accentHex = hex
+    if hex == AccentPreset.white.hex {
+      defaults.removeObject(forKey: Preferences.accentKey)
+    } else {
+      defaults.set(hex.string, forKey: Preferences.accentKey)
+    }
+  }
+
+  /// The accent from a ColorPicker, in sRGB.
+  func setAccent(_ color: SwiftUI.Color) {
+    let resolved = color.resolve(in: EnvironmentValues())
+    setAccent(RGBHex(red: Double(resolved.red), green: Double(resolved.green), blue: Double(resolved.blue)))
   }
 }
 

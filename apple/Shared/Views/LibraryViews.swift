@@ -500,34 +500,56 @@ struct SettingsView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.checkForUpdates) private var checkForUpdates
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
+  @AppStorage(SubtitlePreference.storageKey) private var subtitles: SubtitlePreference = .automatic
   @AppStorage(LibraryQuality.storageKey) private var libraryQuality: LibraryQuality = .deviceDefault
+  @AppStorage(Preferences.serviceAccentsKey) private var serviceAccents = true
+  @AppStorage(Preferences.qualityBadgesKey) private var qualityBadges = true
+  @AppStorage(Preferences.ratingsKey) private var ratings = true
+  @AppStorage(Preferences.wifiOnlyKey) private var wifiOnly = false
 
+  // Astra 4.0 (KP, 2026-11-08): Appearance, Playback, Library, Sources,
+  // Downloads, About.
   var body: some View {
     Form {
-      // Astra: Content → Library Quality, per device (KP, 2026-11-07).
       Section {
-        Picker("Library Quality", selection: $libraryQuality) {
-          ForEach(LibraryQuality.allCases) { Text($0.title).tag($0) }
-        }
-        .pickerStyle(.segmented)
-        .onChange(of: libraryQuality) { app.libraryQualityChanged() }
+        AccentPicker()
+        Toggle("Streaming Service Accents", isOn: $serviceAccents)
       } header: {
-        Text("Content")
+        Text("Appearance")
       } footer: {
-        Text(
-          libraryQuality == .hd
-            ? "One copy of each title, in HD. 4K libraries are hidden on this device."
-            : "One copy of each title: the 4K one when there is one, otherwise HD.")
+        Text("The accent colours selection and progress. Service accents tint a streaming service's Home page in its colour.")
       }
       Section {
         Picker("Preferred Quality", selection: $quality) {
           ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
         }
         .pickerStyle(.segmented)
+        Picker("Subtitles", selection: $subtitles) {
+          ForEach(SubtitlePreference.allCases) { Text($0.title).tag($0) }
+        }
       } header: {
         Text("Playback")
       } footer: {
-        Text("Astra always plays the original file. When a title has several versions, this picks which one.")
+        Text(
+          "Astra always plays the original file. When a title has several versions, quality picks which one. "
+            + "Automatic subtitles show what the file marks as forced or default; Always picks your language.")
+      }
+      // Astra: Library Quality, per device (KP, 2026-11-07).
+      Section {
+        Picker("Library Quality", selection: $libraryQuality) {
+          ForEach(LibraryQuality.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .onChange(of: libraryQuality) { app.libraryQualityChanged() }
+        Toggle("HD and 4K Badges", isOn: $qualityBadges)
+        Toggle("Age Ratings", isOn: $ratings)
+      } header: {
+        Text("Library")
+      } footer: {
+        Text(
+          libraryQuality == .hd
+            ? "One copy of each title, in HD. 4K libraries are hidden on this device."
+            : "One copy of each title: the 4K one when there is one, otherwise HD.")
       }
       // Astra 4.0 (KP, 2026-11-08): Sources, with each server's health.
       Section("Sources") {
@@ -541,17 +563,36 @@ struct SettingsView: View {
         Button("Sign Out", role: .destructive) { app.signOut() }
       }
       Section {
-        NetworkDiagnosticsView()
+        #if os(iOS)
+          Toggle("Wi-Fi Only", isOn: $wifiOnly)
+        #endif
+        LabeledContent(
+          "Storage Used", value: ByteCountFormatter.string(fromByteCount: app.downloads.storageUsed, countStyle: .file))
       } header: {
-        Text("Network")
+        Text("Downloads")
       } footer: {
-        Text("The last requests Astra made, newest first. Tokens are never shown or saved.")
+        Text("Manage downloads in Library → Downloads.")
       }
-      Section("About") {
+      Section {
         LabeledContent("Version", value: Self.versionText)
         if let checkForUpdates {
           Button("Check for Updates…", action: checkForUpdates)
         }
+        DisclosureGroup("Licenses") {
+          Text(
+            "Astra is free software under the GNU General Public License, version 3. "
+              + "Playback uses mpv and FFmpeg (LGPL/GPL); Mac updates use Sparkle (MIT).")
+            .font(Astra.Font.meta)
+            .foregroundStyle(Astra.Color.muted)
+          if let url = URL(string: "https://www.gnu.org/licenses/gpl-3.0.html") {
+            Link("GNU GPL v3", destination: url)
+          }
+        }
+        NetworkDiagnosticsView()
+      } header: {
+        Text("About")
+      } footer: {
+        Text("Diagnostics list the last requests Astra made, newest first. Tokens are never shown or saved.")
       }
     }
     .formStyle(.grouped)
@@ -564,6 +605,37 @@ struct SettingsView: View {
     let short = info["CFBundleShortVersionString"] as? String ?? ""
     let build = info["CFBundleVersion"] as? String ?? ""
     return build.isEmpty ? short : "\(short) (\(build))"
+  }
+}
+
+/// Settings → Appearance → Accent: Astra's presets (no purple) and a picker.
+struct AccentPicker: View {
+  private var appearance: AstraAppearance { .shared }
+
+  var body: some View {
+    LabeledContent("Accent") {
+      HStack(spacing: 8) {
+        ForEach(AccentPreset.allCases) { preset in
+          let selected = appearance.accentHex == preset.hex
+          Button { appearance.setAccent(preset.hex) } label: {
+            Circle()
+              .fill(Color(hex: preset.hex.value))
+              .frame(width: 20, height: 20)
+              .overlay(Circle().stroke(Astra.Color.ink, lineWidth: selected ? 2 : 0).padding(-3))
+              .overlay(Circle().stroke(Astra.Color.hairline, lineWidth: 1))
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(preset.title)
+          .accessibilityAddTraits(selected ? .isSelected : [])
+        }
+        ColorPicker(
+          "Custom Accent",
+          selection: Binding(get: { appearance.accent }, set: { appearance.setAccent($0) }),
+          supportsOpacity: false
+        )
+        .labelsHidden()
+      }
+    }
   }
 }
 
@@ -598,7 +670,7 @@ struct NetworkDiagnosticsView: View {
   @State private var expanded = false
 
   var body: some View {
-    DisclosureGroup("Recent Requests", isExpanded: $expanded) {
+    DisclosureGroup("Diagnostics", isExpanded: $expanded) {
       if expanded {
         TimelineView(.periodic(from: .now, by: 2)) { _ in
           let events = Array(NetworkLog.shared.recent.suffix(60).reversed())

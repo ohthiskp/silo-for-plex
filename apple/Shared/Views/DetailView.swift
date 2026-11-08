@@ -244,7 +244,7 @@ struct DetailView: View {
               }
               .buttonStyle(.plain)
               .font(.system(size: 13, weight: .semibold))
-              .foregroundStyle(selected ? Color.black : Astra.Color.muted)
+              .foregroundStyle(selected ? Astra.Color.onAccent : Astra.Color.muted)
               .padding(.horizontal, 16)
               .frame(height: 34)
               .background {
@@ -475,13 +475,15 @@ struct FormatBadges: View {
 
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
   @State private var fetchedRating: String?
+  @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
+  @AppStorage(Preferences.ratingsKey) private var showRatings = true
 
   private var pick: PlaybackQuality { quality == .auto ? .current() : quality }
   private var rating: String? { item.officialRating ?? fetchedRating }
 
   var body: some View {
     HStack(spacing: 8) {
-      if let badge = item.resolutionBadge(for: pick) {
+      if showQuality, let badge = item.resolutionBadge(for: pick) {
         FormatPill { Text(badge == "4K UHD" ? "4K" : badge) }
       }
       switch item.dynamicRange(for: pick) {
@@ -493,7 +495,7 @@ struct FormatBadges: View {
       if item.hasAtmos(for: pick) {
         FormatPill { logo("format-dolby-atmos", height: 12) }.accessibilityLabel("Dolby Atmos")
       }
-      if let rating { FormatPill { Text(rating) }.accessibilityLabel("Rated \(rating)") }
+      if showRatings, let rating { FormatPill { Text(rating) }.accessibilityLabel("Rated \(rating)") }
     }
     .task(id: item.id) {
       fetchedRating = nil

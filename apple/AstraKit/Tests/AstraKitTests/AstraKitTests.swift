@@ -1499,3 +1499,57 @@ final class ServerHealthTests: XCTestCase {
     XCTAssertEqual(ProbeFailure.classify(PlexError.http(500)), .server)
   }
 }
+
+final class PreferencesTests: XCTestCase {
+  func testHexParsesAndFormats() {
+    XCTAssertEqual(RGBHex(string: "#ff9f0a")?.value, 0xFF9F0A)
+    XCTAssertEqual(RGBHex(string: "0A84FF")?.string, "0A84FF")
+    XCTAssertNil(RGBHex(string: "12345"))
+    XCTAssertNil(RGBHex(string: "GGGGGG"))
+    XCTAssertEqual(RGBHex(red: 1, green: 0.5, blue: -2).string, "FF8000")
+  }
+
+  func testTextOnAccentKeepsContrast() {
+    XCTAssertTrue(RGBHex(0xFFFFFF).prefersDarkText)
+    XCTAssertTrue(RGBHex(0xFFD60A).prefersDarkText)
+    XCTAssertFalse(RGBHex(0x000000).prefersDarkText)
+    XCTAssertFalse(RGBHex(0x1C1C80).prefersDarkText)
+  }
+
+  func testPresetsHaveNoPurpleAndMatchBack() {
+    for preset in AccentPreset.allCases {
+      XCTAssertEqual(AccentPreset.matching(preset.hex), preset)
+      // Purple/violet: blue and red both well above green.
+      let hex = preset.hex
+      XCTAssertFalse(hex.blue > 0.5 && hex.red > 0.4 && hex.green < hex.red * 0.7, preset.title)
+    }
+    XCTAssertNil(AccentPreset.matching(RGBHex(0x123456)))
+  }
+
+  func testSubtitleOptions() {
+    XCTAssertEqual(SubtitlePreference.off.mpvOptions(languages: ["en-US"]).map(\.1), ["no"])
+    let always = SubtitlePreference.always.mpvOptions(languages: ["en-US", "en-GB", "fr_FR"])
+    XCTAssertEqual(always.first { $0.0 == "slang" }?.1, "en,fr")
+    XCTAssertEqual(always.first { $0.0 == "subs-with-matching-audio" }?.1, "yes")
+    XCTAssertNil(SubtitlePreference.automatic.mpvOptions(languages: ["en"]).first { $0.0 == "slang" })
+  }
+
+  func testSubtitlePreferenceDefaultsToAutomatic() {
+    let defaults = UserDefaults(suiteName: "astra.tests.subtitles")!
+    defaults.removePersistentDomain(forName: "astra.tests.subtitles")
+    XCTAssertEqual(SubtitlePreference.current(defaults), .automatic)
+    defaults.set("off", forKey: SubtitlePreference.storageKey)
+    XCTAssertEqual(SubtitlePreference.current(defaults), .off)
+  }
+
+  func testDownloadStorageAddsRecordedSizes() {
+    func record(_ key: String, _ bytes: Int64?) -> DownloadRecord {
+      DownloadRecord(
+        ratingKey: key, metadataKey: "/library/metadata/\(key)", type: .movie, title: key, showTitle: nil,
+        showRatingKey: nil, seasonNumber: nil, episodeNumber: nil, year: nil, summary: nil, durationMs: 0,
+        fileName: "\(key).mkv", imageName: nil, bytes: bytes, width: nil, height: nil, addedAt: Date())
+    }
+    let index = DownloadIndex(records: [record("1", 1_000), record("2", nil), record("3", 2_500)])
+    XCTAssertEqual(index.totalBytes, 3_500)
+  }
+}
