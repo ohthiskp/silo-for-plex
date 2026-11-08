@@ -90,6 +90,17 @@ struct PlayerOverlay: View {
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible)
 
+      // Astra 4.0: Next Episode in the last 15 s of an episode, tap only.
+      NextEpisodeButton(player: player)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        #if os(macOS)
+          .padding(.trailing, 28)
+          .padding(.bottom, 150)
+        #else
+          .padding(.trailing, 24)
+          .padding(.bottom, 110)
+        #endif
+
       if loaderInRing {
         // iPhone with controls showing: the play button's ring shows loading.
       } else if !player.hasFirstFrame {
@@ -1149,5 +1160,44 @@ private struct PlayerAtmosTag: View {
   var body: some View {
     Image("format-dolby-atmos").renderingMode(.template).resizable().scaledToFit()
       .frame(height: 13).foregroundStyle(.white).accessibilityLabel("Dolby Atmos")
+  }
+}
+
+/// Astra 4.0 (KP, 2026-11-08): a small Liquid Glass "Next Episode" button in
+/// the last 15 seconds of an episode that has a next one. Nothing plays
+/// unless it is tapped. It reads the position itself, so only it redraws.
+struct NextEpisodeButton: View {
+  let player: PlayerController
+
+  private var shown: Bool {
+    guard player.upNext != nil, player.duration > 0, player.hasFirstFrame else { return false }
+    let left = player.duration - player.position
+    return left > 0 && left <= PlayerController.nextEpisodeLead
+  }
+
+  var body: some View {
+    ZStack {
+      if shown {
+        Button {
+          player.playUpNext()
+        } label: {
+          HStack(spacing: 8) {
+            Text("Next Episode")
+            Image(systemName: "forward.end.fill")
+          }
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(.white)
+          .padding(.horizontal, 18)
+          .frame(height: 44)
+          .astraGlass(in: Capsule(), variant: .regular, interactive: true)
+          .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("next-episode")
+        .accessibilityHint(player.upNext?.displayTitle ?? "")
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+      }
+    }
+    .animation(Astra.Motion.base, value: shown)
   }
 }

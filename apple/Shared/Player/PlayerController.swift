@@ -73,9 +73,12 @@ final class PlayerController {
   @ObservationIgnored private var core: MpvPlayerCore?
   @ObservationIgnored private var source: PlaybackSource?
   @ObservationIgnored private weak var library: LibraryStore?
-  /// Astra (KP, 2026-11-07): called with an episode that played to the end,
-  /// so the next one starts (continuous playback).
+  /// Astra 4.0 (KP, 2026-11-08): plays the episode the Next Episode button
+  /// offers. Only ever called from a tap; nothing plays on its own.
   @ObservationIgnored var playNext: ((PlexMetadata) -> Void)?
+  /// The episode after the one playing, looked up when playback starts so
+  /// the last seconds need no network. Nil for movies and the last episode.
+  private(set) var upNext: PlexMetadata?
   @ObservationIgnored private var reporter: Task<Void, Never>?
   @ObservationIgnored private lazy var bridge = MpvDelegateBridge(owner: self)
 
@@ -247,6 +250,27 @@ final class PlayerController {
     isActive = true
     startReporting()
     watchForStall(source)
+    findUpNext(after: item, library: library, source: source)
+  }
+
+  /// Looks up the next episode once, at the start, for the Next Episode button.
+  private func findUpNext(after item: PlexMetadata, library: LibraryStore, source started: PlaybackSource) {
+    upNext = nil
+    guard item.type == .episode else { return }
+    Task { [weak self] in
+      let next = await library.nextEpisode(after: item)
+      guard let self, self.isActive, self.source?.url == started.url else { return }
+      self.upNext = next
+    }
+  }
+
+  /// Seconds left before the Next Episode button shows.
+  static let nextEpisodeLead: Double = 15
+
+  /// Next Episode tapped: plays the next episode now (progress of this one is reported on close).
+  func playUpNext() {
+    guard let next = upNext else { return }
+    playNext?(next)
   }
 
   /// Astra (KP, 2026-11-07): when the server is down the player used to spin
@@ -412,10 +436,8 @@ final class PlayerController {
       videoHeight = (value as? Double) ?? 0
       fitWindowToVideo()
     case "eof-reached":
-      guard (value as? Bool) == true else { break }
-      let finished = item
-      close()
-      if let finished, finished.type == .episode { playNext?(finished) }
+      // No autoplay (KP, Astra 4.0): the episode ends and the player closes.
+      if (value as? Bool) == true { close() }
     case "aid": audioId = (value as? String).flatMap { Int($0) }
     case "sid": subtitleId = (value as? String).flatMap { Int($0) }
     case "track-list": updateTracks(value as? [Any] ?? [])

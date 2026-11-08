@@ -82,20 +82,16 @@ final class AppModel {
     connector = ServerConnector(info: info)
     self.tokens = tokens
     self.serverTokens = serverTokens
-    player.playNext = { [weak self] finished in self?.playNextEpisode(after: finished) }
+    player.playNext = { [weak self] next in self?.playEpisode(next) }
   }
 
-  /// Continuous playback: after an episode ends, the next one plays (from
-  /// its download when there is one). After the last episode, nothing.
-  private func playNextEpisode(after finished: PlexMetadata) {
+  /// Next Episode (tap only): plays `episode`, from its download when there is one.
+  private func playEpisode(_ episode: PlexMetadata) {
     guard let library else { return }
-    Task {
-      guard let next = await library.nextEpisode(after: finished) else { return }
-      do {
-        try player.play(next, library: library, local: downloads.source(for: next))
-      } catch {
-        player.lastError = error.localizedDescription
-      }
+    do {
+      try player.play(episode, library: library, local: downloads.source(for: episode))
+    } catch {
+      player.lastError = error.localizedDescription
     }
   }
 
