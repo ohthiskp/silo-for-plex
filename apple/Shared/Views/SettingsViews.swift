@@ -12,7 +12,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
   var title: String {
     switch self {
     case .appearance: "Appearance"
-    case .tabs: "Tabs"
+    case .tabs: "Navigation"
     case .playback: "Playback"
     case .library: "Library"
     case .downloads: "Downloads"
@@ -24,7 +24,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
   var subtitle: String {
     switch self {
     case .appearance: "Accent, theme, streaming services"
-    case .tabs: "Which tabs, in what order"
+    case .tabs: "Tab bar: which tabs, in what order"
     case .playback: "Quality, subtitles, gestures"
     case .library: "Library quality, badges"
     case .downloads: "Wi-Fi, storage"
@@ -45,7 +45,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     }
   }
 
-  /// Tabs is iPhone only (the Mac has its sidebar).
+  /// Navigation is iPhone only (the Mac has its sidebar).
   static var shown: [SettingsPane] {
     #if os(iOS)
       allCases
@@ -116,6 +116,9 @@ struct SettingsView: View {
     }
     .formStyle(.grouped)
     .scrollContentBackground(.hidden)
+    // Same background as every Settings page (it showed the system grey before).
+    .background(Astra.Color.bg.ignoresSafeArea())
+    .settingsBottomRoom()
   }
 
   @ViewBuilder private func page(_ pane: SettingsPane) -> some View {
@@ -188,6 +191,20 @@ private struct SettingsForm<Content: View>: View {
       .formStyle(.grouped)
       .scrollContentBackground(.hidden)
       .background(Astra.Color.bg.ignoresSafeArea())
+      .settingsBottomRoom()
+  }
+}
+
+extension View {
+  /// iPhone: room under the last row for the floating tab bar, which is an
+  /// overlay and not a safe-area inset, so About and Reset to Default never
+  /// end up behind it when Settings is a tab.
+  @ViewBuilder func settingsBottomRoom() -> some View {
+    #if os(iOS)
+      contentMargins(.bottom, Astra.Layout.tabBarRoom, for: .scrollContent)
+    #else
+      self
+    #endif
   }
 }
 

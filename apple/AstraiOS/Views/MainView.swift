@@ -1,9 +1,10 @@
 import AstraKit
 import SwiftUI
 
-/// The signed-in iPhone app: three tabs only, Home, Search and Libraries
-/// (KP's mockups, 2026-11-07), in Apple's tab bar (Liquid Glass on iOS 26),
-/// one navigation stack per tab. Settings opens from Libraries' gear.
+/// The signed-in iPhone app: Home, Search and Library by default (KP's
+/// mockups, 2026-11-07), reorderable and extendable to five tabs in
+/// Settings → Navigation (KP, 2026-11-08), in Astra's own Liquid Glass bar,
+/// one navigation stack per tab. Settings opens from Library's gear, or is a tab.
 struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
@@ -96,7 +97,7 @@ struct MainView: View {
 }
 
 /// The bottom bar: a wide Liquid Glass capsule nearly the screen's width with
-/// three equal tabs. The open tab sits under a Liquid Glass lens that slides
+/// equal tabs (three to five). The open tab sits under a Liquid Glass lens that slides
 /// between tabs; press and drag along the bar and the lens lifts and follows
 /// the finger, then settles on the tab it is let go over (like Apple's own
 /// tab bar on iOS 26).

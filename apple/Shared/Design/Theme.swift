@@ -79,6 +79,9 @@ enum Astra {
       static let posterMinWidth: CGFloat = 104
       static let titleSize: CGFloat = 38
       static let pageTitleSize: CGFloat = 30
+      /// Space a scrolling page leaves at its bottom for the floating tab bar
+      /// (52 pt bar + insets, `WideTabBar`) plus a little air.
+      static let tabBarRoom: CGFloat = 80
     #endif
   }
 

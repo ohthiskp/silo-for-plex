@@ -134,21 +134,21 @@ struct DetailView: View {
         }
 
         if !shown.isCatalogOnly {
-        Button {
-          let watched = library.isWatched(shown)
-          Task { @MainActor in
-            await library.setWatched(shown, watched: !watched)
-            await load(refresh: true)
+          Button {
+            let watched = library.isWatched(shown)
+            Task { @MainActor in
+              await library.setWatched(shown, watched: !watched)
+              await load(refresh: true)
+            }
+          } label: {
+            let watched = library.isWatched(shown)
+            Label(watched ? "Watched" : "Mark Watched", systemImage: watched ? "checkmark" : "eye")
+              .labelStyle(WatchedLabelStyle(iconOnly: true))
+              .contentTransition(.symbolEffect(.replace))
           }
-        } label: {
-          let watched = library.isWatched(shown)
-          Label(watched ? "Watched" : "Mark Watched", systemImage: watched ? "checkmark" : "eye")
-            .labelStyle(WatchedLabelStyle(iconOnly: true))
-            .contentTransition(.symbolEffect(.replace))
-        }
-        .accessibilityLabel(library.isWatched(shown) ? "Watched" : "Mark Watched")
-        .help(library.isWatched(shown) ? "Watched" : "Mark Watched")
-        .modifier(ActionButtonShape(round: true))
+          .accessibilityLabel(library.isWatched(shown) ? "Watched" : "Mark Watched")
+          .help(library.isWatched(shown) ? "Watched" : "Mark Watched")
+          .modifier(ActionButtonShape(round: true))
         }
       }
       .frame(maxWidth: narrow ? .infinity : 560)
