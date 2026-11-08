@@ -9,9 +9,6 @@ struct TVRootView: View {
 
   var body: some View {
     RootView()
-      // Edge to edge, like the Apple TV app: the hero and backdrops fill the
-      // width. Side margins come from the tokens (Sidebar.margin).
-      .ignoresSafeArea(edges: .horizontal)
       // The player draws under this window; play() needs it before the
       // player's own host is on screen.
       .background(WindowAccessor { app.player.window = $0 })

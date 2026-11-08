@@ -226,6 +226,7 @@ struct DetailView: View {
           .overlay(Astra.Color.bg.opacity(min(0.55, max(0, scrolled) / 700)))
         HeroScrim()
       }
+      .tvFullBleed()
       // Held in place: only the logo, text and buttons move with the scroll.
       .offset(y: max(0, scrolled))
     }

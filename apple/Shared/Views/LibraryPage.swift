@@ -37,7 +37,7 @@ struct LibrarySegmentPill: View {
 
   var body: some View {
     HStack(spacing: 0) {
-      ForEach(LibrarySegment.allCases) { item in
+      ForEach(Self.segments) { item in
         Button {
           astraWithAnimation(Astra.Motion.base) { segment = item }
         } label: {
@@ -48,16 +48,17 @@ struct LibrarySegmentPill: View {
               CountBadge(count: app.downloads.jobs.count)
             }
           }
-          .font(.system(size: 14, weight: .semibold))
+          .astraFont(size: 14, weight: .semibold)
           .foregroundStyle(segment == item ? Astra.Color.ink : Astra.Color.muted)
           .frame(maxWidth: .infinity)
-          .frame(height: 38)
+          .frame(height: 38 * Astra.Layout.controlScale)
           .background {
             if segment == item {
               Capsule().fill(.white.opacity(0.16)).matchedGeometryEffect(id: "segment", in: pill)
             }
           }
           .contentShape(Capsule())
+          .tvFocusLift(1.06)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(segment == item ? .isSelected : [])
@@ -66,7 +67,15 @@ struct LibrarySegmentPill: View {
     .padding(4)
     .astraGlass(in: Capsule(), variant: .clear)
     .astraGlassEdge(Capsule(), strength: 0.6)
+    .tvFocusSection()
   }
+
+  /// Apple TV has no downloads (nothing to watch offline on a TV).
+  #if os(tvOS)
+    static let segments: [LibrarySegment] = LibrarySegment.allCases.filter { $0 != .downloads }
+  #else
+    static let segments = LibrarySegment.allCases
+  #endif
 }
 
 /// The smaller Movies | Shows switch inside Libraries.
@@ -81,15 +90,16 @@ struct LibraryKindSwitch: View {
           astraWithAnimation(Astra.Motion.fast) { kind = item }
         } label: {
           Text(item.title)
-            .font(.system(size: 13, weight: .semibold))
+            .astraFont(size: 13, weight: .semibold)
             .foregroundStyle(kind == item ? Color.black : Astra.Color.ink)
-            .padding(.horizontal, 16)
-            .frame(height: 30)
+            .padding(.horizontal, 16 * Astra.Layout.controlScale)
+            .frame(height: 30 * Astra.Layout.controlScale)
             .background {
               if kind == item { Capsule().fill(.white).matchedGeometryEffect(id: "kind", in: kindPill) }
             }
             .astraGlass(in: Capsule(), variant: .clear, interactive: true)
             .contentShape(Capsule())
+            .tvFocusLift(1.08)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(kind == item ? .isSelected : [])
@@ -185,7 +195,7 @@ struct WatchlistContent: View {
       AstraPage {
         AstraSectionHeader(title: "Library")
         LibrarySegmentPill(segment: $segment)
-          .frame(maxWidth: 520)
+          .frame(maxWidth: 520 * Astra.Layout.controlScale)
         switch segment {
         case .libraries:
           LibraryKindSwitch(kind: $kind)

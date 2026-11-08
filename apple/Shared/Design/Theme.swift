@@ -102,6 +102,8 @@ enum Astra {
       static let textScale: CGFloat = 1.6
       /// Buttons, chips and small cards are this much larger, for focus from the sofa.
       static let controlScale: CGFloat = 1.5
+      /// The TV's side safe area (80 pt on every Apple TV), which `tvFullBleed` runs past.
+      static let tvSideSafeArea: CGFloat = 80
     #else
       static let leading: CGFloat = 20
       static let heroHeight: CGFloat = 560
@@ -145,9 +147,7 @@ enum Astra {
   enum Sidebar {
     #if os(tvOS)
       // Apple TV: the same sidebar, sized for the remote's focus (KP, 2026-11-08).
-      // The app runs edge to edge (TVRootView ignores the side safe area), so
-      // the margin includes the TV's 80 pt side safe area.
-      static let margin: CGFloat = 100
+      static let margin: CGFloat = 20
       static let collapsedWidth: CGFloat = 96
     #else
       static let margin: CGFloat = 14

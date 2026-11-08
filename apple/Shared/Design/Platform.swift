@@ -132,6 +132,19 @@ extension View {
     #endif
   }
 
+  /// Apple TV: runs past the TV's 80 pt side safe area to the screen edges
+  /// (hero, backdrops), the way the Apple TV app does. Pages inside a
+  /// NavigationStack keep that inset whatever the root ignores, so this
+  /// pads it back out; `contentLeading` grows by the same amount so text
+  /// inside still lines up with the rows. Nothing elsewhere.
+  @ViewBuilder func tvFullBleed() -> some View {
+    #if os(tvOS)
+      modifier(TVFullBleed())
+    #else
+      self
+    #endif
+  }
+
   /// Apple TV: where focus starts at launch (the hero's Play, or + when Play
   /// is greyed), set by the TV shell through `tvLaunchFocus`. Nothing elsewhere.
   @ViewBuilder func tvLaunchFocus(_ id: String, when enabled: Bool = true) -> some View {
@@ -144,6 +157,18 @@ extension View {
 }
 
 #if os(tvOS)
+  private struct TVFullBleed: ViewModifier {
+    @Environment(\.contentLeading) private var leading
+
+    func body(content: Content) -> some View {
+      content
+        .environment(\.contentLeading, leading + Astra.Layout.tvSideSafeArea)
+        // So a scroll view inside doesn't inset its pages by the safe area again.
+        .ignoresSafeArea(edges: .horizontal)
+        .padding(.horizontal, -Astra.Layout.tvSideSafeArea)
+    }
+  }
+
   private struct TVLaunchFocus: ViewModifier {
     var id: String
     var enabled: Bool

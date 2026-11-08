@@ -63,6 +63,7 @@ struct HomeView: View {
           SwipeHero(library: library, items: library.homeHero, height: heroHeight)
           // A new set of titles (another service) starts a fresh carousel.
           .id(library.selectedService?.id ?? "for-you")
+          .tvFullBleed()
         }
 
         if !library.homeContinueWatching.isEmpty {
