@@ -640,6 +640,13 @@ final class LibraryStore {
   /// the title up).
   enum PlayAvailability { case playable, checking, notOnServer }
 
+  /// The server's copy of a catalog title from the index in memory, without
+  /// waiting: Details shows it (Play enabled) while the full details load.
+  func indexMatch(_ item: PlexMetadata) -> PlexMetadata? {
+    guard item.isCatalogOnly else { return nil }
+    return libraryIndex?.match(item)
+  }
+
   func availability(of item: PlexMetadata) -> PlayAvailability {
     guard item.isCatalogOnly else { return .playable }
     _ = indexReady
@@ -796,19 +803,8 @@ final class LibraryStore {
     // The saved index loads in a moment, so wait for it rather than search.
     let index = (try? await loadLibraryIndex()) ?? libraryIndex
     if let hit = index?.match(item) { return hit }
-    // Not in the index: not on the server. Before, every title missing from
-    // the index waited on a server search (about 8 s over a remote
-    // connection, KP 2026-11-08) before Details said so. The search still
-    // runs, in the background, in case the title was added since the index
-    // was read: a match is remembered for the next open (and the index
-    // re-read clears remembered misses).
-    if let index, !index.isEmpty {
-      spawn { [weak self] in
-        guard let self, let match = try? await self.searchMatch(item) else { return }
-        self.resolveCache[item.ratingKey] = .some(match.ratingKey)
-      }
-      throw CatalogError.notOnServer(item.title)
-    }
+    // Not in the index (added since it was read, or titled differently on
+    // the server): ask the server.
     return try await searchMatch(item)
   }
 
