@@ -26,10 +26,13 @@ final class SeekPreviewGenerator: @unchecked Sendable {
 
   // Touched only on `queue`.
   private var handle: OpaquePointer?
-  private var openFailed = false
+  /// When opening last failed; another try waits a while (a server that
+  /// was busy or briefly unreachable), instead of turning previews off for good.
+  private var openFailedAt: Date?
 
-  init(url: URL, headers: [String: String]) {
-    self.url = url.isFileURL ? url.path : url.absoluteString
+  /// `mpvURL`: what the player opens when it isn't `url` (a multi-part EDL).
+  init(url: URL, mpvURL: String? = nil, headers: [String: String]) {
+    self.url = mpvURL ?? (url.isFileURL ? url.path : url.absoluteString)
     self.headers = headers
   }
 
@@ -80,8 +83,8 @@ final class SeekPreviewGenerator: @unchecked Sendable {
 
   private func openIfNeeded() -> OpaquePointer? {
     if let handle { return handle }
-    if openFailed { return nil }
-    openFailed = true
+    if let failed = openFailedAt, Date().timeIntervalSince(failed) < 15 { return nil }
+    openFailedAt = Date()
     guard let mpv = mpv_create() else { return nil }
     let options: [(String, String)] = [
       ("config", "no"), ("terminal", "no"), ("msg-level", "all=no"), ("load-scripts", "no"), ("ytdl", "no"),
@@ -107,7 +110,7 @@ final class SeekPreviewGenerator: @unchecked Sendable {
       return nil
     }
     handle = mpv
-    openFailed = false
+    openFailedAt = nil
     return mpv
   }
 

@@ -16,6 +16,9 @@ public struct PlaybackSource: Sendable, Equatable {
   public var subtitle: String?
   public var media: PlexMedia
   public var part: PlexPart
+  /// What mpv opens when it isn't `url`: a movie split into several files
+  /// (CD1, CD2…) plays as one, through an mpv EDL of the parts in order.
+  public var mpvURL: String? = nil
 }
 
 /// Settings → Playback → Preferred Quality. Saved per device, default Auto.
@@ -145,8 +148,19 @@ public enum PlaybackResolver {
       title: item.displayTitle,
       subtitle: item.type == .episode ? [item.episodeLabel, item.title].compactMap { $0 }.joined(separator: "  ") : nil,
       media: media,
-      part: part
+      part: part,
+      mpvURL: edl(media.parts.compactMap { $0.key.map { client.baseURL.appending(plexPath: $0) } })
     )
+  }
+
+  /// "edl://%<n>%<url>;%<n>%<url>" for two or more files, else nil. Each
+  /// entry is length-prefixed, so nothing in a URL needs escaping.
+  public static func edl(_ urls: [URL]) -> String? {
+    guard urls.count > 1 else { return nil }
+    return "edl://" + urls.map { url in
+      let string = url.absoluteString
+      return "%\(string.utf8.count)%\(string)"
+    }.joined(separator: ";")
   }
 
   /// mpv's `http-header-fields` value. Header values never contain commas here

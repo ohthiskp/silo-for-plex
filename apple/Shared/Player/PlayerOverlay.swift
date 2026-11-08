@@ -1107,7 +1107,9 @@ extension View {
           window.addGestureRecognizer(recognizer)
         }
         recognizers = [double, single, pan, twoFinger]
-        NSLog("Astra gesture: recognizers attached to window %@", String(describing: window))
+        #if DEBUG
+          NSLog("Astra gesture: recognizers attached to window %@", String(describing: window))
+        #endif
       }
 
       func detach() {
@@ -1119,7 +1121,9 @@ extension View {
         guard let window = recognizer.view else { return false }
         let point = touch.location(in: window)
         let allowed = !blocked.contains { $0.insetBy(dx: -8, dy: -8).contains(point) }
-        NSLog("Astra gesture: touch at %@ allowed=%d blocked=%@", NSCoder.string(for: point), allowed ? 1 : 0, blocked.description)
+        #if DEBUG
+          NSLog("Astra gesture: touch at %@ allowed=%d blocked=%@", NSCoder.string(for: point), allowed ? 1 : 0, blocked.description)
+        #endif
         return allowed
       }
 
@@ -1154,13 +1158,17 @@ extension View {
       }
 
       @objc func tapped(_ recognizer: UITapGestureRecognizer) {
-        NSLog("Astra gesture: single tap")
+        #if DEBUG
+          NSLog("Astra gesture: single tap")
+        #endif
         onTap()
       }
 
       @objc func doubleTapped(_ recognizer: UITapGestureRecognizer) {
         guard let view = recognizer.view else { return }
-        NSLog("Astra gesture: double tap at x=%f of %f", recognizer.location(in: view).x, view.bounds.width)
+        #if DEBUG
+          NSLog("Astra gesture: double tap at x=%f of %f", recognizer.location(in: view).x, view.bounds.width)
+        #endif
         onDoubleTap(recognizer.location(in: view).x >= view.bounds.width / 2)
       }
     }

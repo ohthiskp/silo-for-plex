@@ -249,7 +249,7 @@ final class PlayerController {
     for (name, value) in SubtitlePreference.current().mpvOptions(languages: Locale.preferredLanguages) {
       core.setProperty(name, value: value)
     }
-    core.command(["loadfile", source.url.absoluteString, "replace"])
+    core.command(["loadfile", source.mpvURL ?? source.url.absoluteString, "replace"])
     core.setVisible(true)
     #if os(macOS)
       core.setPaused(false)
@@ -313,8 +313,39 @@ final class PlayerController {
     }
   }
 
+  @ObservationIgnored private var stallTask: Task<Void, Never>?
+  /// The stalled file is being opened again; its first frame ends the watch.
+  @ObservationIgnored private var reopening = false
+
+  /// Waiting for data mid-film: after 20 s the file is opened again at the
+  /// same place (a dropped connection usually comes back that way); if it is
+  /// still waiting 30 s later, the player closes and says why, instead of
+  /// spinning for ever.
+  private func watchMidPlaybackStall() {
+    stallTask?.cancel()
+    guard let started = source else { return }
+    stallTask = Task { [weak self] in
+      try? await Task.pause(20)
+      guard let self, !Task.isCancelled, self.isActive, self.buffering, self.source?.url == started.url,
+        let core = self.core
+      else { return }
+      self.reopening = true
+      // A reopened file lists its tracks again; external subtitles go back on.
+      self.selectionApplied = false
+      core.setProperty("start", value: String(format: "%.3f", self.position))
+      core.command(["loadfile", started.mpvURL ?? started.url.absoluteString, "replace"])
+      try? await Task.pause(30)
+      guard !Task.isCancelled, self.isActive, self.reopening, self.source?.url == started.url else { return }
+      self.close()
+      self.lastError = "The server stopped sending this video. Check your connection to the Plex server, then play it again."
+    }
+  }
+
   func close() {
     guard isActive else { return }
+    stallTask?.cancel()
+    stallTask = nil
+    reopening = false
     reporter?.cancel()
     reporter = nil
     report(.stopped)
@@ -365,14 +396,24 @@ final class PlayerController {
   /// When Astra last set a property itself: mpv's echo of an older value
   /// arriving just after is ignored, so the slider and Play/Pause never jump
   /// back (KP, 2026-11-08: "make playback snappier", "volume instant").
-  @ObservationIgnored private var localSetAt: [String: Date] = [:]
-  private func isEcho(_ name: String) -> Bool {
-    localSetAt[name].map { Date().timeIntervalSince($0) < 0.5 } ?? false
+  ///
+  /// Only values other than the one Astra set count as an echo, and only
+  /// until mpv reports Astra's value (events arrive in order, so anything
+  /// after that is real: PiP, an interruption, the end of the file), or 0.5 s.
+  @ObservationIgnored private var localSets: [String: (value: Double, at: Date)] = [:]
+  private func markLocalSet(_ name: String, _ value: Double) { localSets[name] = (value, Date()) }
+  private func isEcho(_ name: String, _ value: Double) -> Bool {
+    guard let set = localSets[name] else { return false }
+    if abs(set.value - value) < 0.5 || Date().timeIntervalSince(set.at) >= 0.5 {
+      localSets[name] = nil  // Confirmed (or too old): from here on mpv's values are real.
+      return false
+    }
+    return true
   }
 
   func setPaused(_ value: Bool) {
     guard let core else { return }
-    localSetAt["pause"] = Date()
+    markLocalSet("pause", value ? 1 : 0)
     paused = value
     core.setProperty("pause", value: value ? "yes" : "no")
     #if os(macOS)
@@ -386,13 +427,25 @@ final class PlayerController {
     nowPlaying.update(position: position, duration: duration, playing: !paused && !buffering)
   }
 
+  /// While a seek runs, mpv's older positions are not shown, so the bar
+  /// stays where it was let go instead of jumping back and forth.
+  @ObservationIgnored private var seekingSince: Date?
+
   func seek(by seconds: Double) {
-    core?.command(["seek", String(seconds), "relative+exact"])
+    guard let core else { return }
+    let target = max(0, duration > 0 ? min(duration, position + seconds) : position + seconds)
+    position = target
+    seekingSince = Date()
+    core.command(["seek", String(seconds), "relative+exact"])
   }
 
   func seek(to seconds: Double) {
+    guard let core else { return }
     position = seconds
-    core?.command(["seek", String(format: "%.3f", seconds), "absolute+keyframes"])
+    seekingSince = Date()
+    // Exact, so playback continues where the bar was let go; keyframe seeks
+    // landed up to a few seconds early and the bar jumped back.
+    core.command(["seek", String(format: "%.3f", seconds), "absolute+exact"])
   }
 
   func selectAudio(_ id: Int) {
@@ -514,14 +567,14 @@ final class PlayerController {
 
   func setVolume(_ value: Double) {
     volume = min(100, max(0, value))
-    localSetAt["volume"] = Date()
+    markLocalSet("volume", volume)
     core?.setProperty("volume", value: String(format: "%.0f", volume))
     if muted, volume > 0 { setMuted(false) }
   }
 
   func setMuted(_ value: Bool) {
     muted = value
-    localSetAt["mute"] = Date()
+    markLocalSet("mute", value ? 1 : 0)
     core?.setProperty("mute", value: value ? "yes" : "no")
   }
 
@@ -575,23 +628,33 @@ final class PlayerController {
 
   fileprivate func propertyChanged(_ name: String, _ value: Any?) {
     switch name {
-    case "time-pos": if let v = value as? Double { position = v }
+    case "time-pos":
+      if let v = value as? Double {
+        // A seek in flight (up to 5 s): keep the target on the bar.
+        if let since = seekingSince, Date().timeIntervalSince(since) < 5 { break }
+        position = v
+      }
     case "duration":
       if let v = value as? Double, v > 0 {
         duration = v
         updateNowPlaying()
       }
     case "pause":
-      if let v = value as? Bool, !isEcho("pause") {
+      if let v = value as? Bool, !isEcho("pause", v ? 1 : 0) {
         paused = v
         updateNowPlaying()
       }
-    case "volume": if let v = value as? Double, !isEcho("volume") { volume = v }
-    case "mute": if let v = value as? Bool, !isEcho("mute") { muted = v }
+    case "volume": if let v = value as? Double, !isEcho("volume", v) { volume = v }
+    case "mute": if let v = value as? Bool, !isEcho("mute", v ? 1 : 0) { muted = v }
     case "speed": if let v = value as? Double { speed = v }
     case "paused-for-cache":
       buffering = (value as? Bool) ?? false
       updateNowPlaying()
+      if buffering, hasFirstFrame, !reopening {
+        watchMidPlaybackStall()
+      } else if !buffering, !reopening {
+        stallTask?.cancel()
+      }
     case "width":
       videoWidth = (value as? Double) ?? 0
       fitWindowToVideo()
@@ -613,6 +676,11 @@ final class PlayerController {
     case "playback-restart":
       // The first frame is decoded and on screen (also after every seek).
       buffering = false
+      seekingSince = nil
+      if reopening {
+        reopening = false
+        stallTask?.cancel()
+      }
       let wasStarted = hasFirstFrame
       hasFirstFrame = true
       updateNowPlaying()
@@ -635,7 +703,7 @@ final class PlayerController {
     previewCache = [:]
     lastPreview = nil
     requestedSlot = nil
-    previews = SeekPreviewGenerator(url: source.url, headers: source.headers)
+    previews = SeekPreviewGenerator(url: source.url, mpvURL: source.mpvURL, headers: source.headers)
   }
 
   /// The preview for a time on the timeline: the decoded frame for its

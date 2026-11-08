@@ -1952,3 +1952,14 @@ final class StreamSelectionTests: XCTestCase {
     XCTAssertEqual(SidecarSubtitle.fileExtension(codec: "subrip"), "srt")
   }
 }
+
+/// Playback audit: a movie in several files plays as one.
+final class MultiPartTests: XCTestCase {
+  func testEDLJoinsThePartsInOrder() throws {
+    let a = try XCTUnwrap(URL(string: "https://srv.example:32400/library/parts/1/file.mkv"))
+    let b = try XCTUnwrap(URL(string: "https://srv.example:32400/library/parts/2/a;b,c.mkv"))
+    XCTAssertNil(PlaybackResolver.edl([a]))
+    let edl = try XCTUnwrap(PlaybackResolver.edl([a, b]))
+    XCTAssertEqual(edl, "edl://%\(a.absoluteString.utf8.count)%\(a.absoluteString);%\(b.absoluteString.utf8.count)%\(b.absoluteString)")
+  }
+}
