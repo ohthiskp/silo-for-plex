@@ -1307,6 +1307,31 @@ final class LibraryStore {
     }
   }
 
+  /// Astra (KP, 2026-11-08: "full details should be instant"): the server's
+  /// full item for every title in the Home rows, read ahead three at a time,
+  /// so a tap opens Details complete. Only the server item (no artwork,
+  /// seasons or related rows, which `prewarmDetails` does for the hero and
+  /// Top Trending); titles not on the server are skipped without a search.
+  func prewarmServerItems(_ items: [PlexMetadata]) async {
+    var keys: [String] = []
+    var seen = Set<String>()
+    for item in items {
+      let key = item.isCatalogOnly ? indexMatch(item)?.ratingKey : item.ratingKey
+      guard let key, detailCache[key] == nil, seen.insert(key).inserted else { continue }
+      keys.append(key)
+    }
+    // Three at a time, so a tap's own request is never stuck behind them.
+    for start in stride(from: 0, to: keys.count, by: 3) {
+      guard !isClosed, !Task.isCancelled else { return }
+      let batch = Array(keys[start..<min(start + 3, keys.count)])
+      await withTaskGroup(of: Void.self) { group in
+        for key in batch {
+          group.addTask { @MainActor in _ = try? await self.details(key) }
+        }
+      }
+    }
+  }
+
   /// Astra (KP, 2026-11-07): the episode that plays after `episode` ends,
   /// read fresh from the server (the next in its season, else the first of
   /// the next season). Nil after a show's last episode.

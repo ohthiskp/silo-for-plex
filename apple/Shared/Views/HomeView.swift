@@ -136,13 +136,22 @@ struct HomeView: View {
     .task(id: prewarmKey) {
       let split = library.homeTopTenSplit
       await library.prewarmDetails(library.homeHero + split.movies + split.shows)
+      // Then every other title on Home (KP, 2026-11-08: Details should be instant).
+      let recent = library.homeRecent
+      let greats = library.homeGreats
+      await library.prewarmServerItems(
+        library.homeContinueWatching + recent.movies + recent.shows + greats.movies + greats.shows)
     }
     .ignoresSafeArea(edges: .top)
   }
 
   private var prewarmKey: String {
     let split = library.homeTopTenSplit
-    return (library.homeHero + split.movies + split.shows).map(\.id).joined(separator: ",")
+    let recent = library.homeRecent
+    let greats = library.homeGreats
+    let all = library.homeHero + split.movies + split.shows + library.homeContinueWatching
+      + recent.movies + recent.shows + greats.movies + greats.shows
+    return all.map(\.id).joined(separator: ",")
   }
 
   private var topBar: some View {
