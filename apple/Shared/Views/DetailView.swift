@@ -147,8 +147,8 @@ struct DetailView: View {
     VStack(alignment: .leading, spacing: 12) {
       HeroTitle(library: library, item: shown, maxWidth: narrow ? 250 : 380, maxHeight: narrow ? 92 : 120)
         .padding(.bottom, 4)
-      DetailMetaLine(item: shown)
-      FormatBadges(item: shown, library: library)
+      DetailMetaLine(item: shown, library: library)
+      FormatBadges(item: shown)
       if let tagline = shown.tagline, !tagline.isEmpty {
         Text(tagline)
           .astraFont(size: 15, weight: .semibold)
@@ -475,56 +475,62 @@ private struct ScrollOffsetReader: ViewModifier {
 /// "2014 • 2h 49m • Sci-Fi, Adventure"; a show gives its seasons instead of a length.
 struct DetailMetaLine: View {
   var item: PlexMetadata
+  /// For the official rating of titles Plex has none for (TMDB-only ones).
+  var library: LibraryStore? = nil
+  /// Details lists two genres; the hero doesn't (KP's mockup, 2026-11-08).
+  var showsGenres = true
+  var fontSize: CGFloat = 15
+
+  @State private var fetchedRating: String?
+  @AppStorage(Preferences.ratingsKey) private var showRatings = true
 
   var body: some View {
+    // KP (2026-11-08): "2014 · 2h 49m · PG-13": the official rating is part
+    // of the line, not a badge.
     let parts = [
       item.year.map(String.init),
       item.type == .show ? item.childCount.map { "\($0) Season\($0 == 1 ? "" : "s")" } : item.durationLabel,
-      item.genres.prefix(2).map(\.tag).joined(separator: ", ").nilIfEmpty,
+      showRatings ? (item.officialRating ?? fetchedRating) : nil,
+      showsGenres ? item.genres.prefix(2).map(\.tag).joined(separator: ", ").nilIfEmpty : nil,
     ].compactMap { $0 }
-    Text(parts.joined(separator: "  •  "))
-      .astraFont(size: 15, weight: .medium)
+    Text(parts.joined(separator: "  ·  "))
+      .astraFont(size: fontSize, weight: .medium)
       .foregroundStyle(Astra.Color.ink.opacity(0.9))
       .lineLimit(1)
+      .task(id: item.id) {
+        fetchedRating = nil
+        guard item.officialRating == nil, item.type == .movie || item.type == .show, let library else { return }
+        fetchedRating = await library.tmdbArtwork(for: item)?.certification
+      }
   }
 }
 
-/// The format badges under the meta line: resolution, HDR format, Dolby
-/// Atmos, then the official rating, each in a small grey pill. Dolby Vision
-/// and Dolby Atmos use KP's official logos (Formats.xcassets); HDR10, HDR10+
-/// and HLG share a plain "HDR".
+/// The format badges under the meta line: resolution, HDR format and Dolby
+/// Atmos, each in a small dark glass pill (KP's mockup, 2026-11-08; the
+/// rating moved into the meta line). Dolby Vision and Dolby Atmos use KP's
+/// official logos (Formats.xcassets); HDR10, HDR10+ and HLG share a plain "HDR".
 struct FormatBadges: View {
   var item: PlexMetadata
-  var library: LibraryStore
 
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
-  @State private var fetchedRating: String?
   @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
-  @AppStorage(Preferences.ratingsKey) private var showRatings = true
 
   private var pick: PlaybackQuality { quality == .auto ? .current() : quality }
-  private var rating: String? { item.officialRating ?? fetchedRating }
 
   var body: some View {
-    HStack(spacing: 8) {
+    HStack(spacing: 6) {
       if showQuality, let badge = item.resolutionBadge(for: pick) {
         FormatPill { Text(badge == "4K UHD" ? "4K" : badge) }
       }
       switch item.dynamicRange(for: pick) {
-      case .dolbyVision?: FormatPill { logo("format-dolby-vision", height: 15) }.accessibilityLabel("Dolby Vision")
+      case .dolbyVision?: FormatPill { logo("format-dolby-vision", height: 11) }.accessibilityLabel("Dolby Vision")
       // KP: one general HDR badge for HDR10, HDR10+ and HLG.
       case .hdr10Plus?, .hdr10?, .hlg?: FormatPill { Text("HDR") }
       case nil: EmptyView()
       }
       if item.hasAtmos(for: pick) {
-        FormatPill { logo("format-dolby-atmos", height: 12) }.accessibilityLabel("Dolby Atmos")
+        FormatPill { logo("format-dolby-atmos", height: 9) }.accessibilityLabel("Dolby Atmos")
       }
-      if showRatings, let rating { FormatPill { Text(rating) }.accessibilityLabel("Rated \(rating)") }
-    }
-    .task(id: item.id) {
-      fetchedRating = nil
-      guard item.officialRating == nil, item.type == .movie || item.type == .show else { return }
-      fetchedRating = await library.tmdbArtwork(for: item)?.certification
     }
   }
 
@@ -533,21 +539,26 @@ struct FormatBadges: View {
       .renderingMode(.template)
       .resizable()
       .scaledToFit()
-      .frame(height: height)
+      .frame(height: height * Astra.Layout.textScale)
   }
 }
 
-/// One grey pill in the format row.
+/// One small dark glass pill in the format row (KP's mockup, 2026-11-08):
+/// quiet, so it reads as information, not a sticker.
 struct FormatPill<Content: View>: View {
   @ViewBuilder var content: Content
 
   var body: some View {
     content
-      .font(.system(size: 12, weight: .bold))
-      .foregroundStyle(Astra.Color.ink)
-      .padding(.horizontal, 9)
-      .frame(height: 26)
-      .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Astra.Color.ink.opacity(0.14)))
+      .font(.system(size: 11 * Astra.Layout.textScale, weight: .semibold))
+      .foregroundStyle(Astra.Color.ink.opacity(0.92))
+      .padding(.horizontal, 7 * Astra.Layout.textScale)
+      .frame(height: 21 * Astra.Layout.textScale)
+      .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Astra.Color.bg.opacity(0.45)))
+      .overlay(
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+          .strokeBorder(Astra.Color.ink.opacity(0.16), lineWidth: 0.5)
+      )
       .fixedSize()
   }
 }

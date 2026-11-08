@@ -516,7 +516,7 @@ struct HeroInfo: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      // Fixed boxes for the title and summary: every title takes the same
+      // Fixed boxes for the title and the meta: every title takes the same
       // height, so the buttons and pager never move when the hero switches.
       // Tapping the logo opens Details (the Details button became +, KP 2026-11-07).
       Button {
@@ -528,16 +528,14 @@ struct HeroInfo: View {
       }
       .buttonStyle(.plain)
       .accessibilityLabel("\(item.displayTitle), Details")
-      MetaRow(item: item, library: library)
-      Text(item.summary ?? "")
-        .astraFont(size: 14.5)
-        .lineSpacing(4)
-        .foregroundStyle(Astra.Color.ink.opacity(0.82))
-        .lineLimit(3)
-        .frame(maxWidth: 560 * Astra.Layout.textScale, alignment: .leading)
-        .frame(height: 66 * Astra.Layout.textScale, alignment: .topLeading)
-      // Astra (KP, 2026-11-07): a white Play like the Apple TV app, and a
-      // round grey Liquid Glass + that adds the title to the Plex Watchlist.
+      // KP's mockup (2026-11-08): no summary; "year · runtime · rating",
+      // the 4K / Dolby Vision / Atmos pills, then Play and Details.
+      VStack(alignment: .leading, spacing: 8) {
+        DetailMetaLine(item: item, library: library, showsGenres: false, fontSize: 14.5)
+        FormatBadges(item: item)
+      }
+      // Same height for every title, so the buttons never move.
+      .frame(height: 52 * Astra.Layout.textScale, alignment: .topLeading)
       HStack(spacing: 12) {
         Button {
           playItem(item)
@@ -553,8 +551,15 @@ struct HeroInfo: View {
         // Apple TV: focus starts on Play, not on the sidebar.
         .tvLaunchFocus(item.id, when: playable)
         .help(library.availability(of: item) == .notOnServer ? "Not on your Plex server" : "")
-        WatchlistButton(item: item)
-          .tvLaunchFocus(item.id, when: !playable)
+        // KP's mockup (2026-11-08): a glass Details button where the + was;
+        // + Watchlist is on the Details screen.
+        Button {
+          openItem(item)
+        } label: {
+          Label("Details", systemImage: "info.circle")
+        }
+        .astraSecondaryButton()
+        .tvLaunchFocus(item.id, when: !playable)
       }
       .astraGlassGroup(spacing: 12)
       .padding(.top, 6)
