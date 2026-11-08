@@ -578,6 +578,14 @@ struct DetailMetaLine: View {
   }
 }
 
+/// Format badges are read from the sofa on Apple TV, so they grow more there
+/// than other text does (the hub thread, 2026-11-08: they looked tiny at 1.6x).
+#if os(tvOS)
+  private let formatBadgeScale: CGFloat = 1.8
+#else
+  private let formatBadgeScale: CGFloat = 1
+#endif
+
 /// The format badges under the meta line: resolution, Dolby Atmos, then the
 /// HDR format, each in a thin outlined pill (KP's Avatar mockup, 2026-11-08;
 /// the hero uses the same row). Dolby Vision and Dolby Atmos use KP's official
@@ -591,7 +599,7 @@ struct FormatBadges: View {
   private var pick: PlaybackQuality { quality == .auto ? .current() : quality }
 
   var body: some View {
-    HStack(spacing: 10 * Astra.Layout.textScale) {
+    HStack(spacing: 10 * formatBadgeScale) {
       if showQuality, let badge = item.resolutionBadge(for: pick) {
         FormatPill { Text(badge == "4K UHD" ? "4K" : badge) }
       }
@@ -612,7 +620,7 @@ struct FormatBadges: View {
       .renderingMode(.template)
       .resizable()
       .scaledToFit()
-      .frame(height: height * Astra.Layout.textScale)
+      .frame(height: height * formatBadgeScale)
   }
 }
 
@@ -623,12 +631,12 @@ struct FormatPill<Content: View>: View {
 
   var body: some View {
     content
-      .font(.system(size: 13 * Astra.Layout.textScale, weight: .bold))
+      .font(.system(size: 13 * formatBadgeScale, weight: .bold))
       .foregroundStyle(Astra.Color.ink)
-      .padding(.horizontal, 10 * Astra.Layout.textScale)
-      .frame(height: 22 * Astra.Layout.textScale)
+      .padding(.horizontal, 10 * formatBadgeScale)
+      .frame(height: 22 * formatBadgeScale)
       .overlay(
-        RoundedRectangle(cornerRadius: 6 * Astra.Layout.textScale, style: .continuous)
+        RoundedRectangle(cornerRadius: 6 * formatBadgeScale, style: .continuous)
           .strokeBorder(Astra.Color.ink.opacity(0.5), lineWidth: 1)
       )
       .fixedSize()
