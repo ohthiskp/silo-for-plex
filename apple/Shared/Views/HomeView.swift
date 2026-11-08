@@ -12,9 +12,6 @@ struct HomeView: View {
   /// The switcher shows only near the top of the page, so the hero's title
   /// never slides under it. Changes only when crossing the line, not every frame.
   @State private var showsTopBar = true
-  /// Apple TV: the screen's side safe area, which the page runs under so the
-  /// hero is edge to edge; rows add it to their leading inset.
-  @State private var safeLeading: CGFloat = 0
 
   private var heroHeight: CGFloat {
     min(Astra.Layout.heroHeight, max(380, viewport * Astra.Layout.heroShare))
@@ -139,14 +136,7 @@ struct HomeView: View {
       let split = library.homeTopTenSplit
       await library.prewarmDetails(library.homeHero + split.movies + split.shows)
     }
-    // Apple TV: the hero runs edge to edge; rows keep their own leading inset.
-    #if os(tvOS)
-      .ignoresSafeArea(edges: [.top, .horizontal])
-      .environment(\.contentLeading, leading + safeLeading)
-      .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.leading } action: { safeLeading = $0 }
-    #else
-      .ignoresSafeArea(edges: .top)
-    #endif
+    .ignoresSafeArea(edges: .top)
   }
 
   private var prewarmKey: String {
@@ -519,6 +509,10 @@ struct HeroInfo: View {
   @Environment(\.playItem) private var playItem
   @Environment(AppModel.self) private var app
 
+  private var playable: Bool {
+    library.availability(of: item) != .notOnServer && app.canPlay(item)
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       // Fixed boxes for the title and summary: every title takes the same
@@ -554,14 +548,14 @@ struct HeroInfo: View {
         // On the service but not on the Plex server: nothing to play.
         // Greyed only once it's known the title isn't on the server, never
         // while the library is still loading.
-        .disabled(library.availability(of: item) == .notOnServer || !app.canPlay(item))
+        .disabled(!playable)
+        // Apple TV: focus starts on Play, not on the sidebar.
+        .tvLaunchFocus(item.id, when: playable)
         .help(library.availability(of: item) == .notOnServer ? "Not on your Plex server" : "")
         WatchlistButton(item: item)
+          .tvLaunchFocus(item.id, when: !playable)
       }
       .astraGlassGroup(spacing: 12)
-      // Apple TV: focus starts on Play (or + when the title isn't on the
-      // server and Play is greyed), not on the sidebar.
-      .tvPrefersDefaultFocus()
       .padding(.top, 6)
     }
   }

@@ -132,11 +132,11 @@ extension View {
     #endif
   }
 
-  /// Apple TV: where focus starts on a page (the hero's Play), inside the
-  /// focus scope the TV shell sets. Nothing elsewhere.
-  @ViewBuilder func tvPrefersDefaultFocus() -> some View {
+  /// Apple TV: where focus starts at launch (the hero's Play, or + when Play
+  /// is greyed), set by the TV shell through `tvLaunchFocus`. Nothing elsewhere.
+  @ViewBuilder func tvLaunchFocus(_ id: String, when enabled: Bool = true) -> some View {
     #if os(tvOS)
-      modifier(TVPrefersDefaultFocus())
+      modifier(TVLaunchFocus(id: id, enabled: enabled))
     #else
       self
     #endif
@@ -144,27 +144,29 @@ extension View {
 }
 
 #if os(tvOS)
-  private struct TVPrefersDefaultFocus: ViewModifier {
-    @Environment(\.tvFocusScope) private var scope
+  private struct TVLaunchFocus: ViewModifier {
+    var id: String
+    var enabled: Bool
+    @Environment(\.tvLaunchFocus) private var focus
 
     func body(content: Content) -> some View {
-      if let scope {
-        content.prefersDefaultFocus(true, in: scope)
+      if enabled, let focus {
+        content.focused(focus, equals: id)
       } else {
         content
       }
     }
   }
-#endif
 
-private struct TVFocusScopeKey: EnvironmentKey {
-  static let defaultValue: Namespace.ID? = nil
-}
-
-extension EnvironmentValues {
-  /// The Apple TV shell's focus scope, for `tvPrefersDefaultFocus()`; nil elsewhere.
-  var tvFocusScope: Namespace.ID? {
-    get { self[TVFocusScopeKey.self] }
-    set { self[TVFocusScopeKey.self] = newValue }
+  private struct TVLaunchFocusKey: EnvironmentKey {
+    static var defaultValue: FocusState<String?>.Binding? { nil }
   }
-}
+
+  extension EnvironmentValues {
+    /// The Apple TV shell's launch focus, by item id; nil elsewhere.
+    var tvLaunchFocus: FocusState<String?>.Binding? {
+      get { self[TVLaunchFocusKey.self] }
+      set { self[TVLaunchFocusKey.self] = newValue }
+    }
+  }
+#endif

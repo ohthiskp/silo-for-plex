@@ -9,6 +9,9 @@ struct TVRootView: View {
 
   var body: some View {
     RootView()
+      // Edge to edge, like the Apple TV app: the hero and backdrops fill the
+      // width. Side margins come from the tokens (Sidebar.margin).
+      .ignoresSafeArea(edges: .horizontal)
       // The player draws under this window; play() needs it before the
       // player's own host is on screen.
       .background(WindowAccessor { app.player.window = $0 })
@@ -54,9 +57,8 @@ struct MainView: View {
     .home: Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
   ]
   @FocusState private var sidebarFocus: TVSection?
-  /// Focus starts on the hero's Play, not the sidebar (`tvPrefersDefaultFocus`).
-  @Namespace private var focusScope
-  @Environment(\.resetFocus) private var resetFocus
+  /// Focus starts on the first hero's Play, not the sidebar (`tvLaunchFocus`).
+  @FocusState private var launchFocus: String?
   @State private var startedOnHero = false
 
   private func path(_ id: TVSection) -> Binding<[Route]> {
@@ -108,27 +110,30 @@ struct MainView: View {
       .padding(.leading, Astra.Sidebar.margin)
       .focusSection()
     }
-    .focusScope(focusScope)
-    .environment(\.tvFocusScope, focusScope)
+    .environment(\.tvLaunchFocus, $launchFocus)
     .background(Astra.Color.bg.ignoresSafeArea())
     // Moving left into the sidebar lands on the open page's icon, whichever
     // row you came from.
     .onChange(of: sidebarFocus) { old, new in
       if old == nil, let new, new != section { sidebarFocus = section }
     }
-    // The hero can arrive after the first focus pass; send focus to its Play
-    // then, unless you've already moved somewhere on the page.
-    .onChange(of: library.homeHero.isEmpty) { _, empty in
-      guard !empty, !startedOnHero else { return }
-      startedOnHero = true
-      if section == .home, sidebarFocus != nil { resetFocus(in: focusScope) }
-    }
+    // Launch: focus goes to the first hero's Play as soon as the hero is
+    // there (it can arrive after the first focus pass), once.
+    .task(id: library.homeHero.first?.id) { focusHero() }
     .environment(\.playItem) { app.play($0) }
     .onAppear {
       app.player.openDetails = { item in
         paths[section, default: []].append(.details(item))
       }
     }
+  }
+
+  private func focusHero() {
+    guard !startedOnHero, section == .home, paths[.home]?.isEmpty ?? true,
+      let first = library.homeHero.first
+    else { return }
+    startedOnHero = true
+    launchFocus = first.id
   }
 
   private func stack(_ id: TVSection) -> some View {
