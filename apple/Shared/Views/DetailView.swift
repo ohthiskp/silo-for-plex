@@ -453,17 +453,6 @@ struct ActionButtonShape: ViewModifier {
   }
 }
 
-private struct WatchedLabelStyle: LabelStyle {
-  var iconOnly: Bool
-  func makeBody(configuration: Configuration) -> some View {
-    if iconOnly {
-      configuration.icon
-    } else {
-      Label(configuration)
-    }
-  }
-}
-
 /// Reports how far a scroll view has scrolled (macOS 15 / iOS 18 and later;
 /// older systems keep 0, so the backdrop simply scrolls with the page).
 private struct ScrollOffsetReader: ViewModifier {
