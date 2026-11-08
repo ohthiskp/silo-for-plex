@@ -481,15 +481,17 @@ final class LibraryStore {
     let url = indexURL
     let task = Task.detached(priority: .userInitiated) { () throws -> (items: [String: PlexMetadata], stale: Bool) in
       // The saved copy first: tabs open at once.
+      // Title-and-year aliases are added here, off the main actor (a big
+      // library has thousands of titles); the saved file never has them.
       if let saved = LibraryIndexSnapshot.load(from: url), !saved.items.isEmpty {
-        return (saved.items, !saved.isFresh())
+        return (LibraryMatch.withAliases(saved.items), !saved.isFresh())
       }
       let items = try await Self.buildIndex(client: client, sections: sections, quality: quality)
       try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
-      return (items, false)
+      return (LibraryMatch.withAliases(items), false)
     }
     indexBuild = task
-    let shared = Task { LibraryMatch.withAliases(try await task.value.items) }
+    let shared = Task { try await task.value.items }
     indexTask = shared
     defer { indexTask = nil }
     // Not cancelled with the caller: other tabs may be waiting on the same read.
@@ -505,9 +507,9 @@ final class LibraryStore {
   /// The index version each service's rows were matched with.
   @ObservationIgnored private var serviceIndexVersion: [String: Int] = [:]
 
-  private func setLibraryIndex(_ index: [String: PlexMetadata]) {
-    // Title-and-year aliases, so titles with a missing or different TMDB id still match.
-    let aliased = LibraryMatch.withAliases(index)
+  /// `aliased` already has its title-and-year aliases (`LibraryMatch.withAliases`).
+  private func setLibraryIndex(_ aliased: [String: PlexMetadata]) {
+    let replacing = libraryIndex != nil
     libraryIndex = aliased
     // Titles remembered as missing get another look with the new index.
     resolveCache = resolveCache.filter { $0.value != nil }
@@ -522,6 +524,21 @@ final class LibraryStore {
         await self.publishService(service, lists: lists, index: aliased, trending: await trending?.value ?? [])
       }
     }
+    // For You's Recently Released and All-Time Greats are matched again too,
+    // so titles on the server show as the server's items (watched state, progress).
+    spawn { [weak self] in
+      await self?.publishForYou { [weak self] in self.map { !$0.isClosed } ?? false }
+    }
+    // A newer index (the background re-read) also re-matches the hero and
+    // Top Trending, so a title just added to Plex shows as playable there.
+    // The first index is handled by loadHero itself.
+    if replacing, let weekTrendingTask {
+      spawn { [weak self] in
+        let trending = await weekTrendingTask.value
+        guard let self, !trending.isEmpty else { return }
+        await self.showTrending(trending)
+      }
+    }
   }
 
   /// Reads the library again in the background and saves it; open tabs are
@@ -531,7 +548,7 @@ final class LibraryStore {
     let task = Task.detached(priority: .utility) {
       let items = try await Self.buildIndex(client: client, sections: sections, quality: quality)
       try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
-      return items
+      return LibraryMatch.withAliases(items)
     }
     refreshTask = task
     spawn { [weak self] in
@@ -774,10 +791,17 @@ final class LibraryStore {
     // Before, a pre-cache that ran while the server was connecting marked
     // hero and Top Trending titles missing for the whole session (KP, 2026-11-08).
     let results = try await search(item.title).filter { $0.type == item.type }
+    // The same title rules as the library index ("Fire & Ash" is "Fire and
+    // Ash", accents and punctuation ignored, a year either side).
+    var found: [String: PlexMetadata] = [:]
+    for result in results {
+      guard let key = result.titleMatchKey, found[LibraryMatch.aliasPrefix + key] == nil else { continue }
+      found[LibraryMatch.aliasPrefix + key] = result
+    }
     let title = item.title.lowercased()
     let match =
       results.first { $0.guids.contains { $0.id == tmdbID } }
-      ?? results.first { $0.title.lowercased() == title && abs(($0.year ?? 0) - (item.year ?? 0)) <= 1 }
+      ?? found.match(item)
       ?? (item.year == nil ? results.first { $0.title.lowercased() == title } : nil)
     guard let match else { throw CatalogError.notOnServer(item.title) }
     return match
@@ -973,30 +997,28 @@ final class LibraryStore {
     // KP (2026-11-08, "For You still doesn't have the sections"): never wait
     // on the library or on cineby. TMDB's lists show as soon as they arrive,
     // cineby's rows replace them when its page has them (KP: "from cineby"),
-    // and everything is matched again once the library index is in, so
-    // titles on the server play.
-    async let cineby = loadCinebyRows()
-    async let recentTMDB = loadRecentReleases()
-    async let ratedTMDB = loadTopRated()
-    var recent = await recentTMDB
-    var rated = await ratedTMDB
-    guard isCurrent() else { return }
-    publishForYou(recent: recent, rated: rated, index: libraryIndex ?? [:])
-    let rows = await cineby
-    if !rows.recent.isEmpty { recent = rows.recent }
-    if !rows.greats.isEmpty { rated = rows.greats }
-    guard isCurrent() else { return }
-    if !rows.recent.isEmpty || !rows.greats.isEmpty {
-      publishForYou(recent: recent, rated: rated, index: libraryIndex ?? [:])
-    }
-    let before = libraryIndex?.count
-    guard let index = try? await loadLibraryIndex(), index.count != before || before == nil, isCurrent() else { return }
-    publishForYou(recent: recent, rated: rated, index: index)
+    // and setLibraryIndex matches them again when the index is read or changes.
+    if libraryIndex == nil { spawn { [weak self] in _ = try? await self?.loadLibraryIndex() } }
+    await publishForYou(isCurrent: isCurrent)
+    let rows = await loadCinebyRows()
+    guard !rows.recent.isEmpty || !rows.greats.isEmpty else { return }
+    await publishForYou(isCurrent: isCurrent)
   }
 
-  /// For You's Recently Released and All-Time Greats from ranked TMDB lists,
-  /// falling back to the library's own when a list has fewer than 5.
-  private func publishForYou(recent: [TMDBItem], rated: [TMDBItem], index: [String: PlexMetadata]) {
+  /// Cineby's rows once read this session (nil until then).
+  @ObservationIgnored private var cinebyRows: (recent: [TMDBItem], greats: [TMDBItem])?
+
+  /// Builds both shelves from the session's cached lists and the index in
+  /// memory now. Every await comes first, so the newest index is used. Never
+  /// waits on cineby: its rows are used once they've arrived.
+  private func publishForYou(isCurrent: @escaping () -> Bool) async {
+    async let recentTMDB = loadRecentReleases()
+    async let ratedTMDB = loadTopRated()
+    let rows = cinebyRows ?? ([], [])
+    let recent = rows.recent.isEmpty ? await recentTMDB : rows.recent
+    let rated = rows.greats.isEmpty ? await ratedTMDB : rows.greats
+    guard isCurrent() else { return }
+    let index = libraryIndex ?? [:]
     let library = index.libraryItems
     let movies = library.filter { $0.type == .movie }
     let shows = library.filter { $0.type == .show }
@@ -1048,7 +1070,9 @@ final class LibraryStore {
     }
     // Kept even when empty: a page without these rows isn't read again this session.
     cinebyRowsTask = task
-    return await task.value
+    let result = await task.value
+    cinebyRows = result
+    return result
   }
 
   /// TMDB's popular titles released in the last four months, movies and

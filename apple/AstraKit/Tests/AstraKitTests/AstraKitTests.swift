@@ -1633,6 +1633,18 @@ final class LibraryMatchTests: XCTestCase {
       LibraryMatch.titleKey(kind: "movie", title: "pokemon movie mewtwo", year: 1999))
   }
 
+  func testAmpersandMatchesAnd() {
+    let index = LibraryMatch.withAliases(["movie:9": movie("9", "Avatar: Fire & Ash", year: 2025, tmdb: 9)])
+    let trending = TMDBItem(tmdbID: 83533, kind: .movie, title: "Avatar: Fire and Ash", year: 2025)
+    XCTAssertEqual(index.match(trending)?.ratingKey, "9")
+  }
+
+  func testMatchesAServerCopyWithNoYear() {
+    let raw = [LibraryMatch.titlePrefix + "movie:sinners:": movie("3", "Sinners", year: nil)]
+    let index = LibraryMatch.withAliases(raw)
+    XCTAssertEqual(index.match(TMDBItem(tmdbID: 1233413, kind: .movie, title: "Sinners", year: 2025))?.ratingKey, "3")
+  }
+
   func testLibraryItemsLeaveAliasesOut() {
     let index = LibraryMatch.withAliases(["movie:1": movie("1", "Dune", year: 2021, tmdb: 1)])
     XCTAssertEqual(index.count, 2)

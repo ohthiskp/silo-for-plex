@@ -52,7 +52,8 @@ extension TMDBItem {
 
 extension Dictionary where Key == String, Value == PlexMetadata {
   /// The server's copy of a TMDB title: by TMDB id, else by title and year
-  /// (a year either side too, release dates differ by region).
+  /// (a year either side too, release dates differ by region; else a copy
+  /// on the server with no year).
   public func match(_ item: TMDBItem) -> PlexMetadata? {
     if let byID = self[item.id] { return byID }
     return matchTitle(kind: item.kind == .movie ? "movie" : "tv", title: item.title, year: item.year)
@@ -69,7 +70,9 @@ extension Dictionary where Key == String, Value == PlexMetadata {
   }
 
   private func matchTitle(kind: String, title: String, year: Int?) -> PlexMetadata? {
-    let years: [Int?] = year.map { [$0, $0 - 1, $0 + 1] } ?? [nil]
+    // A Plex item with no year (unmatched, or added by hand) is keyed with
+    // none, so it is tried last.
+    let years: [Int?] = year.map { [$0, $0 - 1, $0 + 1, nil] } ?? [nil]
     for y in years {
       guard let key = LibraryMatch.titleKey(kind: kind, title: title, year: y) else { return nil }
       if let hit = self[LibraryMatch.aliasPrefix + key] ?? self[LibraryMatch.titlePrefix + key] { return hit }
