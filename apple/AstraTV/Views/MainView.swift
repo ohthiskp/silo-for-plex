@@ -47,11 +47,17 @@ struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
 
-  @State private var section: TVSection = .home
+  @State private var section: TVSection = Demo.tvSection
   /// Pages stay alive once opened, so switching back keeps scroll and focus.
-  @State private var opened: [TVSection] = [.home]
-  @State private var paths: [TVSection: [Route]] = [:]
+  @State private var opened: [TVSection] = Demo.tvSection == .home ? [.home] : [.home, Demo.tvSection]
+  @State private var paths: [TVSection: [Route]] = [
+    .home: Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
+  ]
   @FocusState private var sidebarFocus: TVSection?
+  /// Focus starts on the hero's Play, not the sidebar (`tvPrefersDefaultFocus`).
+  @Namespace private var focusScope
+  @Environment(\.resetFocus) private var resetFocus
+  @State private var startedOnHero = false
 
   private func path(_ id: TVSection) -> Binding<[Route]> {
     Binding(get: { paths[id] ?? [] }, set: { paths[id] = $0 })
@@ -72,6 +78,23 @@ struct MainView: View {
       .environment(\.contentLeading, Astra.Sidebar.contentInset)
       .focusSection()
 
+      // While the sidebar is open, the page behind it dims from the left, so
+      // the names never sit on top of the hero's text.
+      LinearGradient(
+        stops: [
+          .init(color: Astra.Color.bg.opacity(0.92), location: 0),
+          .init(color: Astra.Color.bg.opacity(0.7), location: 0.5),
+          .init(color: Astra.Color.bg.opacity(0), location: 1),
+        ],
+        startPoint: .leading, endPoint: .trailing
+      )
+      .frame(width: Astra.Sidebar.expandedWidth * 2.4)
+      .frame(maxHeight: .infinity)
+      .ignoresSafeArea()
+      .opacity(sidebarFocus != nil ? 1 : 0)
+      .allowsHitTesting(false)
+      .astraAnimation(Astra.Motion.base, value: sidebarFocus != nil)
+
       TVSidebar(selection: section, focus: $sidebarFocus) { picked in
         if !opened.contains(picked) { opened.append(picked) }
         if picked == section {
@@ -84,10 +107,22 @@ struct MainView: View {
       }
       .padding(.leading, Astra.Sidebar.margin)
       .focusSection()
-      // Moving left into the sidebar lands on the open page's icon.
-      .defaultFocus($sidebarFocus, section)
     }
+    .focusScope(focusScope)
+    .environment(\.tvFocusScope, focusScope)
     .background(Astra.Color.bg.ignoresSafeArea())
+    // Moving left into the sidebar lands on the open page's icon, whichever
+    // row you came from.
+    .onChange(of: sidebarFocus) { old, new in
+      if old == nil, let new, new != section { sidebarFocus = section }
+    }
+    // The hero can arrive after the first focus pass; send focus to its Play
+    // then, unless you've already moved somewhere on the page.
+    .onChange(of: library.homeHero.isEmpty) { _, empty in
+      guard !empty, !startedOnHero else { return }
+      startedOnHero = true
+      if section == .home, sidebarFocus != nil { resetFocus(in: focusScope) }
+    }
     .environment(\.playItem) { app.play($0) }
     .onAppear {
       app.player.openDetails = { item in
@@ -116,6 +151,18 @@ struct MainView: View {
     case .library: LibraryPage(library: library)
     case .search: SearchView(library: library)
     case .settings: SettingsView(showsTitle: true)
+    }
+  }
+}
+
+extension Demo {
+  /// `-AstraDemoTab home|search|libraries|settings` for the TV screenshots.
+  static var tvSection: TVSection {
+    switch tab {
+    case "search": .search
+    case "libraries", "library": .library
+    case "settings": .settings
+    default: .home
     }
   }
 }

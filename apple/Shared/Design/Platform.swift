@@ -131,4 +131,40 @@ extension View {
       self
     #endif
   }
+
+  /// Apple TV: where focus starts on a page (the hero's Play), inside the
+  /// focus scope the TV shell sets. Nothing elsewhere.
+  @ViewBuilder func tvPrefersDefaultFocus() -> some View {
+    #if os(tvOS)
+      modifier(TVPrefersDefaultFocus())
+    #else
+      self
+    #endif
+  }
+}
+
+#if os(tvOS)
+  private struct TVPrefersDefaultFocus: ViewModifier {
+    @Environment(\.tvFocusScope) private var scope
+
+    func body(content: Content) -> some View {
+      if let scope {
+        content.prefersDefaultFocus(true, in: scope)
+      } else {
+        content
+      }
+    }
+  }
+#endif
+
+private struct TVFocusScopeKey: EnvironmentKey {
+  static let defaultValue: Namespace.ID? = nil
+}
+
+extension EnvironmentValues {
+  /// The Apple TV shell's focus scope, for `tvPrefersDefaultFocus()`; nil elsewhere.
+  var tvFocusScope: Namespace.ID? {
+    get { self[TVFocusScopeKey.self] }
+    set { self[TVFocusScopeKey.self] = newValue }
+  }
 }

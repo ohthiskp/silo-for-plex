@@ -12,6 +12,9 @@ struct HomeView: View {
   /// The switcher shows only near the top of the page, so the hero's title
   /// never slides under it. Changes only when crossing the line, not every frame.
   @State private var showsTopBar = true
+  /// Apple TV: the screen's side safe area, which the page runs under so the
+  /// hero is edge to edge; rows add it to their leading inset.
+  @State private var safeLeading: CGFloat = 0
 
   private var heroHeight: CGFloat {
     min(Astra.Layout.heroHeight, max(380, viewport * Astra.Layout.heroShare))
@@ -136,7 +139,14 @@ struct HomeView: View {
       let split = library.homeTopTenSplit
       await library.prewarmDetails(library.homeHero + split.movies + split.shows)
     }
-    .ignoresSafeArea(edges: .top)
+    // Apple TV: the hero runs edge to edge; rows keep their own leading inset.
+    #if os(tvOS)
+      .ignoresSafeArea(edges: [.top, .horizontal])
+      .environment(\.contentLeading, leading + safeLeading)
+      .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.leading } action: { safeLeading = $0 }
+    #else
+      .ignoresSafeArea(edges: .top)
+    #endif
   }
 
   private var prewarmKey: String {
@@ -525,12 +535,12 @@ struct HeroInfo: View {
       .accessibilityLabel("\(item.displayTitle), Details")
       MetaRow(item: item, library: library)
       Text(item.summary ?? "")
-        .font(.system(size: 14.5))
+        .astraFont(size: 14.5)
         .lineSpacing(4)
         .foregroundStyle(Astra.Color.ink.opacity(0.82))
         .lineLimit(3)
-        .frame(maxWidth: 560, alignment: .leading)
-        .frame(height: 66, alignment: .topLeading)
+        .frame(maxWidth: 560 * Astra.Layout.textScale, alignment: .leading)
+        .frame(height: 66 * Astra.Layout.textScale, alignment: .topLeading)
       // Astra (KP, 2026-11-07): a white Play like the Apple TV app, and a
       // round grey Liquid Glass + that adds the title to the Plex Watchlist.
       HStack(spacing: 12) {
@@ -549,6 +559,9 @@ struct HeroInfo: View {
         WatchlistButton(item: item)
       }
       .astraGlassGroup(spacing: 12)
+      // Apple TV: focus starts on Play (or + when the title isn't on the
+      // server and Play is greyed), not on the sidebar.
+      .tvPrefersDefaultFocus()
       .padding(.top, 6)
     }
   }
