@@ -597,6 +597,8 @@ struct SettingsView: View {
     }
     .formStyle(.grouped)
     .scrollContentBackground(.hidden)
+    .toggleStyle(.switch)
+    .tint(Astra.Color.switchOn)
   }
 
   /// "0.1.0 (202611070245)": the marketing version and the build that updates compare.

@@ -16,6 +16,9 @@ enum Astra {
     @MainActor static var accent: SwiftUI.Color { AstraAppearance.shared.accent }
     /// Text and icons on an accent fill: black on light accents, white on dark ones.
     @MainActor static var onAccent: SwiftUI.Color { AstraAppearance.shared.onAccent }
+    /// An "on" switch: the accent, but grey when the accent is white or
+    /// silver so the white knob still shows (KP: "too white for switches").
+    @MainActor static var switchOn: SwiftUI.Color { AstraAppearance.shared.switchOn }
     static let hairline = SwiftUI.Color.white.opacity(0.09)
   }
 
@@ -150,6 +153,10 @@ private struct ContentLeadingKey: EnvironmentKey {
 
   var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
   var onAccent: SwiftUI.Color { accentHex.prefersDarkText ? .black : .white }
+  var switchOn: SwiftUI.Color {
+    accentHex == AccentPreset.white.hex || accentHex == AccentPreset.silver.hex
+      ? SwiftUI.Color(hex: 0x636366) : accent
+  }
 
   func setAccent(_ hex: RGBHex) {
     accentHex = hex
