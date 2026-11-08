@@ -21,6 +21,8 @@ public struct PlexServerClient: Sendable {
     self.serverName = serverName
     self.info = info
     self.transport = transport
+    // Image URLs carry no token; the image loader adds it as a header.
+    PlexImageAuth.register(baseURL, token: token)
   }
 
   // MARK: - Browsing
@@ -169,6 +171,8 @@ public struct PlexServerClient: Sendable {
   // MARK: - URLs
 
   /// A server image resized by Plex, so a 300 pt card never downloads a 4K poster.
+  /// No token in the URL (it is a cache key on disk): fetch it with
+  /// `PlexImageAuth.request(_:)`, which adds the token as a header.
   public func imageURL(_ path: String?, width: Int, height: Int) -> URL? {
     guard let path, !path.isEmpty else { return nil }
     return baseURL.appending(
@@ -179,7 +183,6 @@ public struct PlexServerClient: Sendable {
         .init(name: "height", value: String(height)),
         .init(name: "minSize", value: "1"),
         .init(name: "upscale", value: "1"),
-        .init(name: "X-Plex-Token", value: token),
       ])
   }
 

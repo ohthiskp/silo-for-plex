@@ -504,7 +504,7 @@ final class DownloadStore {
       item.type == .episode
       ? library.imageURL(item.thumb, width: 400, height: 225)
       : await library.artworkURL(for: item, .poster, width: 300, height: 450)
-    guard let url, let (data, _) = try? await URLSession.shared.data(from: url) else { return }
+    guard let url, let (data, _) = try? await URLSession.shared.data(for: PlexImageAuth.request(url)) else { return }
     let image = folder.appendingPathComponent("\(DownloadRecord.safeName(record.ratingKey)).jpg")
     try? data.write(to: image, options: .atomic)
     if var saved = index.record(record.ratingKey), saved.imageName == nil {

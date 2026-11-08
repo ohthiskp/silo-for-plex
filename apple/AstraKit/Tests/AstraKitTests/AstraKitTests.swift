@@ -276,6 +276,11 @@ final class PlaybackTests: XCTestCase {
     XCTAssertEqual(query["url"], "/library/metadata/1/thumb/9")
     XCTAssertEqual(query["width"], "300")
     XCTAssertNil(client.imageURL(nil, width: 1, height: 1))
+    // The token goes in a header, never the URL (the URL is a cache key on disk).
+    XCTAssertNil(query["X-Plex-Token"])
+    XCTAssertFalse(url.absoluteString.contains(client.token))
+    XCTAssertEqual(PlexImageAuth.request(url).value(forHTTPHeaderField: "X-Plex-Token"), client.token)
+    XCTAssertNil(PlexImageAuth.request(URL(string: "https://image.tmdb.org/t/p/w500/a.jpg")!).value(forHTTPHeaderField: "X-Plex-Token"))
   }
 
   func testTimelineReportQuery() async throws {

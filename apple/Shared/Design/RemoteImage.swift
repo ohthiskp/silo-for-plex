@@ -17,13 +17,38 @@ actor ImagePipeline {
     return cache
   }()
   private var inFlight: [URL: Task<PlatformImage?, Never>] = [:]
+  /// The artwork disk cache ("AstraImages" in Caches). Plex URLs in it carry
+  /// no token (see `PlexImageAuth`); `clearCache()` empties it on sign-out.
+  nonisolated static let urlCache: URLCache = {
+    // Builds before this one cached Plex URLs with the token in them, in the
+    // default location: emptied once.
+    let migrated = "astra.imageCache.tokenFree"
+    if !UserDefaults.standard.bool(forKey: migrated) {
+      URLCache(memoryCapacity: 0, diskCapacity: 512 << 20).removeAllCachedResponses()
+      UserDefaults.standard.set(true, forKey: migrated)
+    }
+    return URLCache(memoryCapacity: 32 << 20, diskCapacity: 512 << 20, directory: cacheDirectory)
+  }()
+
+  nonisolated static var cacheDirectory: URL {
+    (FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory)
+      .appendingPathComponent("AstraImages", isDirectory: true)
+  }
+
   private let session: URLSession = {
     let config = URLSessionConfiguration.default
-    config.urlCache = URLCache(memoryCapacity: 32 << 20, diskCapacity: 512 << 20)
+    config.urlCache = ImagePipeline.urlCache
     config.requestCachePolicy = .returnCacheDataElseLoad
     config.httpMaximumConnectionsPerHost = 8
     return URLSession(configuration: config)
   }()
+
+  /// Sign-out: forgets every image, on disk and in memory, and the Plex tokens.
+  nonisolated func clearCache() {
+    Self.urlCache.removeAllCachedResponses()
+    cache.removeAllObjects()
+    PlexImageAuth.reset()
+  }
 
   nonisolated func cached(_ url: URL) -> PlatformImage? {
     cache.object(forKey: url as NSURL)
@@ -34,7 +59,8 @@ actor ImagePipeline {
     if let running = inFlight[url] { return await running.value }
     let session = session
     let task = Task.detached(priority: .userInitiated) { () -> PlatformImage? in
-      guard let (data, _) = try? await session.data(from: url) else { return nil }
+      // Plex images get the server's token as a header, never in the URL.
+      guard let (data, _) = try? await session.data(for: PlexImageAuth.request(url)) else { return nil }
       return Self.decode(data)
     }
     inFlight[url] = task
