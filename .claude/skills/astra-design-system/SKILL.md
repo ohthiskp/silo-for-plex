@@ -59,6 +59,12 @@ Source of truth, in order: KP's latest instruction → the mockups in `docs/desi
 - **Settings:** server card, then Appearance, Navigation (iPhone only), Playback, Library, Downloads,
   then Sources and About. Same Astra background on every page.
 
+- **Apple TV:** glass sidebar (Home, Library, Search, Settings) that expands to icons + names while it has
+  focus and floats over the page; streaming switcher on top; rows are focus sections; cards and buttons use
+  `tvFocusLift`; sizes come from the tvOS branches of the tokens (`textScale`, `controlScale`). The player
+  chrome sits inside playback's `TVPlayerHost`, which owns the remote; the remote is off while a button has
+  focus. Gate hover, shortcuts, haptics, `controlSize`, `DisclosureGroup` and `scrollContentBackground` off tvOS.
+
 ## Checking your work
 - Compare with the matching image in `docs/design/` and list differences.
 - Screenshots come from demo mode in CI: launch arguments `-AstraDemo YES` plus `AstraDemoTab`,

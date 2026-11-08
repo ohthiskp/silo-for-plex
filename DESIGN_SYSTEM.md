@@ -52,12 +52,31 @@ transitions into fades only when the setting is on.
 |---|---|---|
 | Mac home + sidebar | `desktop-home.png` | `Shared/Views/HomeView.swift`, `AstraMac/Views/MainView.swift` |
 | iPhone home + tab bar | `iphone-home.png` | `HomeView.swift`, `AstraiOS/Views/MainView.swift` (Liquid Glass tab bar with a draggable lens) |
-| Apple TV home | `appletv-home.png` | Not in the SwiftUI app yet |
+| Apple TV home + sidebar | `appletv-home.png` | `HomeView.swift`, `AstraTV/Views/MainView.swift` (glass sidebar that expands with focus) |
 | Mac player | `desktop-player.png` | `Shared/Player/PlayerOverlay.swift`, `PlayerWindow.swift` |
 | iPhone player | `iphone-player.png` | `PlayerOverlay.swift` (landscape, Infuse-style) |
-| Apple TV player | `appletv-player.png` | Not in the SwiftUI app yet |
+| Apple TV player | `appletv-player.png` | `AstraTV/Views/TVPlayerOverlay.swift` inside `Shared/Player/TVRemoteInput.swift` (`TVPlayerHost`) |
 | Details | `details.png` | `Shared/Views/DetailView.swift` (stacked card with an X) |
 | Settings | `settings.png` | Settings views in `Shared/Views/` |
+
+## Apple TV (tvOS 26, KP 2026-11-08)
+- **Shell:** the same four pages as Mac and iPhone (Home, Library, Search, Settings) in a glass sidebar on
+  the left. Icons only; it expands to icons and names while focus is in it and floats over the page, so the
+  content never moves. Moving left lands on the open page's icon. Focused item = theme fill with black
+  text; the open page = quiet grey fill.
+- **Home:** the same five sections and the streaming switcher pill row along the top (For You, Netflix…).
+  Rows and the switcher are focus sections, so up/down moves between rows and left/right stays in one.
+- **Sizes:** tvOS branches in `Astra.Layout`, `Astra.Spacing`, `Astra.Sidebar` and `Astra.Font` (TV
+  safe-area leading 140, bigger cards, `textScale` 1.6 for type, `controlScale` 1.5 for glass buttons).
+  Never hard-code TV sizes in a view; add a token.
+- **Focus:** every card and glass button lifts on focus with `tvFocusLift` (scale, brightness, shadow); no
+  system platter on custom buttons. Hover, keyboard shortcuts, haptics and `controlSize` are gated off on
+  tvOS (`astraControlSize`, `tvFocusSection`).
+- **Player:** title bottom left with the white timeline under it, captions and quality (Auto/HD/4K
+  between original files) bottom right, Next Episode only in the last 15 s. The remote is
+  `TVPlayerHost`'s (click/Play-Pause, ±10 s, swipe scrub, Menu hides then closes); it is off while a button
+  has focus. Hidden controls can't take focus.
+- **Sign-in:** plex.tv/link with a large code and a QR code beside it.
 
 ## Behaviour rules (KP's current rules, 2026-11-08)
 - **Mac sidebar:** Home, Library, Search, Settings. Icons only; it expands on hover to icons plus names
