@@ -209,28 +209,39 @@ struct SearchView: View {
 
   var body: some View {
     AstraPage {
-      HStack(spacing: 12) {
-        Image(systemName: "magnifyingglass").foregroundStyle(Astra.Color.muted)
+      #if os(tvOS)
+        // Apple TV: the system's own search field (it opens the TV keyboard
+        // and draws its own focus), without a glass capsule around it.
         TextField("Movies, shows and people", text: $query)
-          .textFieldStyle(.plain)
           .astraFont(size: 18)
           .focused($focused)
           .submitLabel(.search)
           .onSubmit { remember(query) }
-        if !query.isEmpty {
-          Button {
-            query = ""
-          } label: {
-            Image(systemName: "xmark.circle.fill").foregroundStyle(Astra.Color.muted)
+          .frame(maxWidth: 620 * Astra.Layout.controlScale)
+      #else
+        HStack(spacing: 12) {
+          Image(systemName: "magnifyingglass").foregroundStyle(Astra.Color.muted)
+          TextField("Movies, shows and people", text: $query)
+            .textFieldStyle(.plain)
+            .astraFont(size: 18)
+            .focused($focused)
+            .submitLabel(.search)
+            .onSubmit { remember(query) }
+          if !query.isEmpty {
+            Button {
+              query = ""
+            } label: {
+              Image(systemName: "xmark.circle.fill").foregroundStyle(Astra.Color.muted)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Clear Search")
           }
-          .buttonStyle(.plain)
-          .accessibilityLabel("Clear Search")
         }
-      }
-      .padding(.horizontal, 20)
-      .frame(height: 52)
-      .frame(maxWidth: 620)
-      .astraGlass(in: Capsule())
+        .padding(.horizontal, 20)
+        .frame(height: 52)
+        .frame(maxWidth: 620)
+        .astraGlass(in: Capsule())
+      #endif
 
       scopes
 
@@ -268,20 +279,22 @@ struct SearchView: View {
           }
         } label: {
           Text(item.title)
-            .font(.system(size: 13, weight: .semibold))
+            .astraFont(size: 13, weight: .semibold)
             .foregroundStyle(scope == item ? Color.black : Astra.Color.ink)
-            .padding(.horizontal, 18)
-            .frame(height: 32)
+            .padding(.horizontal, 18 * Astra.Layout.controlScale)
+            .frame(height: 32 * Astra.Layout.controlScale)
             .background {
               if scope == item { Capsule().fill(.white).matchedGeometryEffect(id: "scope", in: scopePill) }
             }
             .astraGlass(in: Capsule(), variant: .clear, interactive: true)
             .contentShape(Capsule())
+            .tvFocusLift()
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(scope == item ? .isSelected : [])
       }
     }
+    .tvFocusSection()
   }
 
   // MARK: Nothing typed
@@ -293,7 +306,7 @@ struct SearchView: View {
         Spacer()
         Button("Clear") { recentStore = "" }
           .buttonStyle(.plain)
-          .font(.system(size: 13, weight: .medium))
+          .astraFont(size: 13, weight: .medium)
           .foregroundStyle(Astra.Color.muted)
       }
       .frame(maxWidth: 620)
@@ -303,12 +316,13 @@ struct SearchView: View {
             query = text
           } label: {
             Label(text, systemImage: "clock.arrow.circlepath")
-              .font(.system(size: 13, weight: .medium))
+              .astraFont(size: 13, weight: .medium)
               .foregroundStyle(Astra.Color.ink)
-              .padding(.horizontal, 14)
-              .frame(height: 30)
+              .padding(.horizontal, 14 * Astra.Layout.controlScale)
+              .frame(height: 30 * Astra.Layout.controlScale)
               .astraGlass(in: Capsule(), variant: .clear, interactive: true)
               .contentShape(Capsule())
+              .tvFocusLift()
           }
           .buttonStyle(.plain)
         }
