@@ -44,7 +44,7 @@ Source of truth, in order: KP's latest instruction → the mockups in `docs/desi
   no auto-advance. White Apple TV-style Play + round grey glass "+" (Plex Watchlist); a tap elsewhere opens Details.
 - **Top Trending card:** Netflix-style big outlined rank beside the poster.
 - **Continue Watching:** same on every tab; card tap opens Details, only Play plays; red
-  "Remove from Continue Watching" at the bottom of its menu.
+  "Remove" (minus.circle) at the bottom of its menu (KP, 2026-11-08: less cluttered).
 - **Details:** card stacked over the page with an X; logo left (KP's mockup); backdrop stays still;
   badge row starts with the grey content-rating pill, then plain "HDR", official Dolby Vision / Atmos logos.
 - **Long-press a title:** Details, Play, Download, Mark watched/unwatched, Go to season/show.

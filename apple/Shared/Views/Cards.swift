@@ -209,54 +209,71 @@ extension View {
 struct ItemMenu: ViewModifier {
   var library: LibraryStore
   var item: PlexMetadata
-  /// Continue Watching cards end the menu with a red Remove from Continue Watching.
+  /// Continue Watching cards end the menu with a short red Remove (KP, 2026-11-08: less cluttered).
   var inContinueWatching = false
+
+  func body(content: Content) -> some View {
+    content.contextMenu {
+      ItemMenuItems(library: library, item: item, inContinueWatching: inContinueWatching)
+    }
+  }
+}
+
+/// The title menu's buttons, shared by the long-press menu and the ••• menu on Details.
+struct ItemMenuItems: View {
+  var library: LibraryStore
+  var item: PlexMetadata
+  var inContinueWatching = false
+  /// Details and Play are left out on the Details page itself (it has its own Play).
+  var onDetails = false
   @Environment(AppModel.self) private var app
   @Environment(\.openItem) private var openItem
   @Environment(\.playItem) private var playItem
 
-  func body(content: Content) -> some View {
-    content.contextMenu {
+  var body: some View {
+    if !onDetails {
       Button { openItem(item) } label: { Label("Details", systemImage: "info.circle") }
-      if !item.isCatalogOnly {
+    }
+    if !item.isCatalogOnly {
+      if !onDetails {
         Button { playItem(item) } label: { Label("Play", systemImage: "play.fill") }
-        let watched = library.isWatched(item)
-        Button {
-          Task { await library.setWatched(item, watched: !watched) }
-        } label: {
-          Label(watched ? "Mark Unwatched" : "Mark Watched", systemImage: watched ? "eye.slash" : "checkmark.circle")
-        }
-        let isGroup = item.type == .show || item.type == .season
-        let downloadState = isGroup ? app.downloads.state(forEpisodesOf: item) : app.downloads.state(for: item.ratingKey)
-        if item.type != .collection, downloadState == .none {
-          Button { app.downloads.download(item) } label: { Label("Download", systemImage: "arrow.down.circle") }
-        }
-        if item.type == .episode {
-          Divider()
-          if let season = item.parentRatingKey {
-            Button {
-              openItem(PlexMetadata(ratingKey: season, type: .season, title: item.parentTitle ?? "Season"))
-            } label: { Label("Go to Season", systemImage: "square.stack") }
-          }
-          if let show = item.grandparentRatingKey {
-            Button {
-              openItem(PlexMetadata(ratingKey: show, type: .show, title: item.grandparentTitle ?? "Show"))
-            } label: { Label("Go to Show", systemImage: "tv") }
-          }
-        } else if item.type == .season, let show = item.parentRatingKey {
-          Divider()
+      }
+      let watched = library.isWatched(item)
+      Button {
+        Task { await library.setWatched(item, watched: !watched) }
+      } label: {
+        Label(watched ? "Mark Unwatched" : "Mark Watched", systemImage: watched ? "eye.slash" : "checkmark.circle")
+      }
+      let isGroup = item.type == .show || item.type == .season
+      let downloadState = isGroup ? app.downloads.state(forEpisodesOf: item) : app.downloads.state(for: item.ratingKey)
+      if item.type != .collection, downloadState == .none {
+        Button { app.downloads.download(item) } label: { Label("Download", systemImage: "arrow.down.circle") }
+      }
+      if item.type == .episode {
+        Divider()
+        if let season = item.parentRatingKey {
           Button {
-            openItem(PlexMetadata(ratingKey: show, type: .show, title: item.parentTitle ?? "Show"))
+            openItem(PlexMetadata(ratingKey: season, type: .season, title: item.parentTitle ?? "Season"))
+          } label: { Label("Go to Season", systemImage: "square.stack") }
+        }
+        if let show = item.grandparentRatingKey {
+          Button {
+            openItem(PlexMetadata(ratingKey: show, type: .show, title: item.grandparentTitle ?? "Show"))
           } label: { Label("Go to Show", systemImage: "tv") }
         }
-      }
-      if inContinueWatching, !item.isCatalogOnly {
+      } else if item.type == .season, let show = item.parentRatingKey {
         Divider()
-        Button(role: .destructive) {
-          Task { await library.removeFromContinueWatching(item) }
-        } label: {
-          Label("Remove from Continue Watching", systemImage: "minus.circle")
-        }
+        Button {
+          openItem(PlexMetadata(ratingKey: show, type: .show, title: item.parentTitle ?? "Show"))
+        } label: { Label("Go to Show", systemImage: "tv") }
+      }
+    }
+    if inContinueWatching, !item.isCatalogOnly {
+      Divider()
+      Button(role: .destructive) {
+        Task { await library.removeFromContinueWatching(item) }
+      } label: {
+        Label("Remove", systemImage: "minus.circle")
       }
     }
   }

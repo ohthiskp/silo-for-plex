@@ -80,7 +80,7 @@ transitions into fades only when the setting is on.
   A tap elsewhere opens Details.
 - **Top Trending:** Netflix-style big outlined rank number beside each poster.
 - **Continue Watching:** a card tap opens Details; only its Play plays. The menu ends with a red
-  "Remove from Continue Watching".
+  "Remove" with a minus-circle icon.
 - **Details:** a card stacked over the page with an X; logo left (KP's mockup); the backdrop stays still;
   content rating pill first in the badge row, a plain "HDR" badge, official Dolby Vision and Atmos logos.
 - **Long-press a title:** Details, Play, Download, Mark watched/unwatched, Go to season/show.
