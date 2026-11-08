@@ -513,7 +513,7 @@ struct SettingsView: View {
     Form {
       Section {
         AccentPicker()
-        Toggle("Streaming Service Accents", isOn: $serviceAccents)
+        Toggle("Streaming Service Accents", isOn: $serviceAccents).tint(Astra.Color.switchOn)
       } header: {
         Text("Appearance")
       } footer: {
@@ -541,8 +541,8 @@ struct SettingsView: View {
         }
         .pickerStyle(.segmented)
         .onChange(of: libraryQuality) { app.libraryQualityChanged() }
-        Toggle("HD and 4K Badges", isOn: $qualityBadges)
-        Toggle("Age Ratings", isOn: $ratings)
+        Toggle("HD and 4K Badges", isOn: $qualityBadges).tint(Astra.Color.switchOn)
+        Toggle("Age Ratings", isOn: $ratings).tint(Astra.Color.switchOn)
       } header: {
         Text("Library")
       } footer: {
@@ -564,7 +564,7 @@ struct SettingsView: View {
       }
       Section {
         #if os(iOS)
-          Toggle("Wi-Fi Only", isOn: $wifiOnly)
+          Toggle("Wi-Fi Only", isOn: $wifiOnly).tint(Astra.Color.switchOn)
         #endif
         LabeledContent(
           "Storage Used", value: ByteCountFormatter.string(fromByteCount: app.downloads.storageUsed, countStyle: .file))
@@ -597,8 +597,6 @@ struct SettingsView: View {
     }
     .formStyle(.grouped)
     .scrollContentBackground(.hidden)
-    .toggleStyle(.switch)
-    .tint(Astra.Color.switchOn)
   }
 
   /// "0.1.0 (202611070245)": the marketing version and the build that updates compare.
