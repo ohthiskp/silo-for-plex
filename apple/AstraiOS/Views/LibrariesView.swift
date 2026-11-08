@@ -18,7 +18,7 @@ struct LibrariesView: View {
       VStack(alignment: .leading, spacing: 16) {
         HStack(alignment: .center) {
           Text("Library")
-            .font(.system(size: 34, weight: .bold))
+            .astraFont(size: 34, weight: .bold)
             .foregroundStyle(Astra.Color.ink)
             .contentTransition(.opacity)
           Spacer()
@@ -143,7 +143,7 @@ struct LibraryBrowser: View {
       chips
       HStack {
         Text(total.map { "\($0.formatted()) \(noun)" } ?? noun)
-          .font(.system(size: 15, weight: .medium))
+          .astraFont(size: 15, weight: .medium)
           .foregroundStyle(Astra.Color.muted)
           .contentTransition(.numericText())
         Spacer()
@@ -340,10 +340,10 @@ private struct ListRow: View {
           .frame(width: 56, height: 84)
           .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         VStack(alignment: .leading, spacing: 4) {
-          Text(item.displayTitle).font(.system(size: 16, weight: .semibold)).foregroundStyle(Astra.Color.ink)
+          Text(item.displayTitle).astraFont(size: 16, weight: .semibold).foregroundStyle(Astra.Color.ink)
             .lineLimit(2)
           Text([item.year.map(String.init), item.durationLabel].compactMap { $0 }.joined(separator: " · "))
-            .font(.system(size: 13)).foregroundStyle(Astra.Color.muted)
+            .astraFont(size: 13).foregroundStyle(Astra.Color.muted)
         }
         Spacer(minLength: 8)
         if library.isWatched(item) {
@@ -365,7 +365,7 @@ private struct SortSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack {
-        Text("Sort By").font(.system(size: 22, weight: .bold)).foregroundStyle(Astra.Color.ink)
+        Text("Sort By").astraFont(size: 22, weight: .bold).foregroundStyle(Astra.Color.ink)
         Spacer()
         Button(action: close) { Image(systemName: "xmark") }
           .astraIconButton(size: 36)

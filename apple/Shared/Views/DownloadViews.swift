@@ -172,7 +172,7 @@ struct DownloadsContent: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Cancel Download")
               }
-              .font(Astra.Font.meta)
+              .astraFont(.meta)
               .foregroundStyle(Astra.Color.muted)
             }
           }
@@ -198,7 +198,7 @@ struct DownloadsContent: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove")
               }
-              .font(Astra.Font.meta)
+              .astraFont(.meta)
               .foregroundStyle(Astra.Color.muted)
             }
           }
@@ -221,7 +221,7 @@ struct DownloadsContent: View {
 
   private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
     VStack(alignment: .leading, spacing: Astra.Spacing.s) {
-      Text(title).font(Astra.Font.rowTitle).foregroundStyle(Astra.Color.ink).lineLimit(1)
+      Text(title).astraFont(.rowTitle).foregroundStyle(Astra.Color.ink).lineLimit(1)
       VStack(spacing: 2) { content() }
     }
   }
@@ -235,7 +235,7 @@ struct DownloadsContent: View {
           if let badge = record.resolutionBadge { Badge(text: badge) }
           if let bytes = record.bytes {
             Text(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
-              .font(Astra.Font.meta).foregroundStyle(Astra.Color.muted)
+              .astraFont(.meta).foregroundStyle(Astra.Color.muted)
           }
           Image(systemName: "play.fill").foregroundStyle(Astra.Color.ink)
         }
@@ -264,9 +264,9 @@ struct DownloadRow<Trailing: View>: View {
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Astra.Color.hairline))
       VStack(alignment: .leading, spacing: 3) {
         Text(record.type == .episode ? record.title : record.displayTitle)
-          .font(.system(size: 15, weight: .semibold)).foregroundStyle(Astra.Color.ink).lineLimit(1)
+          .astraFont(size: 15, weight: .semibold).foregroundStyle(Astra.Color.ink).lineLimit(1)
         if let sub = record.episodeLabel ?? record.year.map(String.init) {
-          Text(sub).font(Astra.Font.meta).foregroundStyle(Astra.Color.muted).lineLimit(1)
+          Text(sub).astraFont(.meta).foregroundStyle(Astra.Color.muted).lineLimit(1)
         }
       }
       Spacer(minLength: Astra.Spacing.m)

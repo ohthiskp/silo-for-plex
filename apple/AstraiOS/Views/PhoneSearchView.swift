@@ -49,7 +49,7 @@ struct PhoneSearchView: View {
     ScrollView(.vertical) {
       VStack(alignment: .leading, spacing: 16) {
         Text("Search")
-          .font(.system(size: 34, weight: .bold))
+          .astraFont(size: 34, weight: .bold)
           .foregroundStyle(Astra.Color.ink)
         field
         scopes
@@ -77,7 +77,7 @@ struct PhoneSearchView: View {
       Image(systemName: "magnifyingglass").foregroundStyle(Astra.Color.muted)
       TextField("Movies, shows and people", text: $query)
         .textFieldStyle(.plain)
-        .font(.system(size: 17))
+        .astraFont(size: 17)
         .focused($focused)
         .submitLabel(.search)
         .autocorrectionDisabled()
@@ -167,7 +167,7 @@ struct PhoneSearchView: View {
   }
 
   private func sectionTitle(_ text: String) -> some View {
-    Text(text).font(.system(size: 19, weight: .bold)).foregroundStyle(Astra.Color.ink).padding(.top, 6)
+    Text(text).astraFont(size: 19, weight: .bold).foregroundStyle(Astra.Color.ink).padding(.top, 6)
   }
 
   // MARK: Results
@@ -184,7 +184,7 @@ struct PhoneSearchView: View {
         message: scope == .people ? "No one matches “\(query)”." : "Nothing matches “\(query)”.")
     } else {
       Text("Results (\(titles.count + people.count))")
-        .font(.system(size: 15, weight: .semibold))
+        .astraFont(size: 15, weight: .semibold)
         .foregroundStyle(Astra.Color.muted)
       VStack(spacing: 10) {
         ForEach(titles) { item in
@@ -315,12 +315,12 @@ private struct ResultRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
           VStack(alignment: .leading, spacing: 6) {
             Text(item.displayTitle)
-              .font(.system(size: 17, weight: .bold))
+              .astraFont(size: 17, weight: .bold)
               .foregroundStyle(Astra.Color.ink)
               .lineLimit(2)
             Text([kind, item.episodeLabel, item.year.map(String.init), item.durationLabel].compactMap { $0 }
               .joined(separator: " · "))
-              .font(.system(size: 13))
+              .astraFont(size: 13)
               .foregroundStyle(Astra.Color.muted)
               .lineLimit(1)
             if !badges.isEmpty {
@@ -338,7 +338,7 @@ private struct ResultRow: View {
             }
             if !item.genres.isEmpty {
               Text(item.genres.prefix(3).map(\.tag).joined(separator: " · "))
-                .font(.system(size: 12))
+                .astraFont(size: 12)
                 .foregroundStyle(Astra.Color.muted)
                 .lineLimit(1)
             }
@@ -374,9 +374,9 @@ private struct PersonRow: View {
         .frame(width: 52, height: 52)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
       VStack(alignment: .leading, spacing: 3) {
-        Text(person.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Astra.Color.ink)
+        Text(person.name).astraFont(size: 16, weight: .semibold).foregroundStyle(Astra.Color.ink)
         Text(([person.role] + person.knownFor.prefix(1)).joined(separator: " · "))
-          .font(.system(size: 13))
+          .astraFont(size: 13)
           .foregroundStyle(Astra.Color.muted)
           .lineLimit(1)
       }
@@ -404,11 +404,11 @@ struct PersonView: View {
             .frame(width: 96, height: 120)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
           VStack(alignment: .leading, spacing: 6) {
-            Text(person.name).font(.system(size: 26, weight: .bold)).foregroundStyle(Astra.Color.ink)
-            Text(person.role).font(.system(size: 15)).foregroundStyle(Astra.Color.muted)
+            Text(person.name).astraFont(size: 26, weight: .bold).foregroundStyle(Astra.Color.ink)
+            Text(person.role).astraFont(size: 15).foregroundStyle(Astra.Color.muted)
           }
         }
-        Text("Movies & Shows").font(.system(size: 19, weight: .bold)).foregroundStyle(Astra.Color.ink)
+        Text("Movies & Shows").astraFont(size: 19, weight: .bold).foregroundStyle(Astra.Color.ink)
         if !loaded {
           ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
         } else if items.isEmpty {

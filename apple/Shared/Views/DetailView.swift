@@ -135,7 +135,7 @@ struct DetailView: View {
       FormatBadges(item: shown, library: library)
       if let tagline = shown.tagline, !tagline.isEmpty {
         Text(tagline)
-          .font(.system(size: 15, weight: .semibold))
+          .astraFont(size: 15, weight: .semibold)
           .italic()
           .foregroundStyle(Astra.Color.ink.opacity(0.9))
           .lineLimit(2)
@@ -192,7 +192,7 @@ struct DetailView: View {
             .progressViewStyle(.linear)
             .tint(Astra.Color.ink)
           Text(left)
-            .font(.system(size: 12, weight: .medium))
+            .astraFont(size: 12, weight: .medium)
             .monospacedDigit()
             .foregroundStyle(Astra.Color.muted)
         }
@@ -200,13 +200,13 @@ struct DetailView: View {
       }
       if !shown.directors.isEmpty {
         Text("Directed by \(shown.directors.map(\.tag).joined(separator: ", "))")
-          .font(.system(size: 13)).foregroundStyle(Astra.Color.muted).lineLimit(1)
+          .astraFont(size: 13).foregroundStyle(Astra.Color.muted).lineLimit(1)
       }
       if notOnServer {
-        Text("Not on your Plex server.").font(.system(size: 13)).foregroundStyle(Astra.Color.muted)
+        Text("Not on your Plex server.").astraFont(size: 13).foregroundStyle(Astra.Color.muted)
       }
       if let error {
-        Text(error).font(.system(size: 13)).foregroundStyle(Astra.Color.muted)
+        Text(error).astraFont(size: 13).foregroundStyle(Astra.Color.muted)
       }
     }
     .padding(.leading, leading)
@@ -292,7 +292,7 @@ struct DetailView: View {
       }
       HStack(spacing: Astra.Spacing.m) {
         Text(selectedSeason?.title ?? "Episodes")
-          .font(Astra.Font.rowTitle)
+          .astraFont(.rowTitle)
           .foregroundStyle(Astra.Color.ink)
           .lineLimit(1)
         if let selectedSeason, seasons.count > 1 {
@@ -316,7 +316,7 @@ struct DetailView: View {
 
   private var castRow: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Cast").font(Astra.Font.rowTitle).foregroundStyle(Astra.Color.ink).padding(.leading, leading)
+      Text("Cast").astraFont(.rowTitle).foregroundStyle(Astra.Color.ink).padding(.leading, leading)
       ScrollView(.horizontal) {
         LazyHStack(alignment: .top, spacing: 16) {
           ForEach(Array(shown.roles.prefix(20).enumerated()), id: \.offset) { _, role in
@@ -325,10 +325,10 @@ struct DetailView: View {
                 .frame(width: 84, height: 84)
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Astra.Color.hairline))
-              Text(role.tag).font(.system(size: 12, weight: .semibold)).foregroundStyle(Astra.Color.ink)
+              Text(role.tag).astraFont(size: 12, weight: .semibold).foregroundStyle(Astra.Color.ink)
                 .lineLimit(1)
               if let character = role.role {
-                Text(character).font(.system(size: 11)).foregroundStyle(Astra.Color.muted).lineLimit(1)
+                Text(character).astraFont(size: 11).foregroundStyle(Astra.Color.muted).lineLimit(1)
               }
             }
             .frame(width: 96)
@@ -412,9 +412,9 @@ struct EpisodeCard: View {
           .pressable(hoverScale: 1.03)
         HStack(spacing: 8) {
           if let index = item.index {
-            Text("\(index).").font(.system(size: 13, weight: .bold)).foregroundStyle(Astra.Color.muted)
+            Text("\(index).").astraFont(size: 13, weight: .bold).foregroundStyle(Astra.Color.muted)
           }
-          Text(item.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Astra.Color.ink).lineLimit(1)
+          Text(item.title).astraFont(size: 13, weight: .semibold).foregroundStyle(Astra.Color.ink).lineLimit(1)
           Spacer(minLength: 0)
           if let duration = item.durationLabel {
             Text(duration).font(.system(size: 12)).foregroundStyle(Astra.Color.muted)
@@ -423,7 +423,7 @@ struct EpisodeCard: View {
           Color.clear.frame(width: 30, height: 1)
         }
         if let summary = item.summary, !summary.isEmpty {
-          Text(summary).font(.system(size: 12)).foregroundStyle(Astra.Color.muted).lineLimit(2)
+          Text(summary).astraFont(size: 12).foregroundStyle(Astra.Color.muted).lineLimit(2)
         }
       }
       .frame(width: width, alignment: .leading)
@@ -491,7 +491,7 @@ struct DetailMetaLine: View {
       item.genres.prefix(2).map(\.tag).joined(separator: ", ").nilIfEmpty,
     ].compactMap { $0 }
     Text(parts.joined(separator: "  •  "))
-      .font(.system(size: 15, weight: .medium))
+      .astraFont(size: 15, weight: .medium)
       .foregroundStyle(Astra.Color.ink.opacity(0.9))
       .lineLimit(1)
   }
@@ -568,7 +568,7 @@ struct ExpandableSummary: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text(text)
-        .font(.system(size: 14.5))
+        .astraFont(size: 14.5)
         .lineSpacing(4)
         .foregroundStyle(Astra.Color.ink.opacity(0.85))
         .lineLimit(expanded ? nil : 4)
@@ -581,7 +581,7 @@ struct ExpandableSummary: View {
           HStack(spacing: 4) {
             Text(expanded ? "Less" : "More")
             Image(systemName: "chevron.down")
-              .font(.system(size: 10, weight: .bold))
+              .astraFont(size: 10, weight: .bold)
               .rotationEffect(.degrees(expanded ? 180 : 0))
           }
           .font(.system(size: 14, weight: .semibold))

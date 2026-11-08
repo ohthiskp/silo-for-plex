@@ -35,7 +35,7 @@ struct RootView: View {
           Spacer()
           HStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Astra.Color.ink)
-            Text(error).font(.system(size: 13, weight: .medium)).foregroundStyle(Astra.Color.ink)
+            Text(error).astraFont(size: 13, weight: .medium).foregroundStyle(Astra.Color.ink)
             Button {
               app.player.lastError = nil
               app.downloads.lastError = nil
@@ -65,6 +65,9 @@ struct RootView: View {
       }
     #endif
     .astraAnimation(Astra.Motion.page, value: app.player.isActive)
+    // Text grows with Text Size (KP, 2026-11-08) up to the largest standard
+    // size; the accessibility sizes would break the fixed-height rows and bars.
+    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     .onChange(of: app.phase, initial: true) { _, phase in updateLoader(for: phase) }
     .task(id: loader) {
       // "Connected" stays up briefly, then the app fades in.
@@ -151,7 +154,7 @@ struct ErrorView: View {
     VStack(spacing: 20) {
       AstraLogo().frame(width: 72, height: 72)
       Text(message)
-        .font(.system(size: 15))
+        .astraFont(size: 15)
         .foregroundStyle(Astra.Color.ink)
         .multilineTextAlignment(.center)
         .frame(maxWidth: 420)
@@ -191,7 +194,7 @@ struct ServerHealthBanner: View {
           Image(systemName: health.state == .authRequired ? "person.crop.circle.badge.exclamationmark" : "wifi.exclamationmark")
             .font(.system(size: 13, weight: .semibold))
           Text(message)
-            .font(.system(size: 12.5, weight: .medium))
+            .astraFont(size: 12.5, weight: .medium)
             .lineLimit(2)
             .fixedSize(horizontal: false, vertical: true)
           if health.state == .authRequired {

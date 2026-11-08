@@ -66,8 +66,8 @@ struct EmptyState: View {
   var body: some View {
     VStack(spacing: Astra.Spacing.s) {
       Image(systemName: symbol).font(.system(size: 34, weight: .light)).foregroundStyle(Astra.Color.muted)
-      Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Astra.Color.ink)
-      Text(message).font(Astra.Font.meta).foregroundStyle(Astra.Color.muted).multilineTextAlignment(.center)
+      Text(title).astraFont(size: 17, weight: .semibold).foregroundStyle(Astra.Color.ink)
+      Text(message).astraFont(.meta).foregroundStyle(Astra.Color.muted).multilineTextAlignment(.center)
         .frame(maxWidth: 380)
       if let action {
         Button(action.title, action: action.run)
@@ -213,7 +213,7 @@ struct SearchView: View {
         Image(systemName: "magnifyingglass").foregroundStyle(Astra.Color.muted)
         TextField("Movies, shows and people", text: $query)
           .textFieldStyle(.plain)
-          .font(.system(size: 18))
+          .astraFont(size: 18)
           .focused($focused)
           .submitLabel(.search)
           .onSubmit { remember(query) }
@@ -324,7 +324,7 @@ struct SearchView: View {
   }
 
   private func sectionTitle(_ text: String) -> some View {
-    Text(text).font(Astra.Font.rowTitle).foregroundStyle(Astra.Color.ink).padding(.top, 6)
+    Text(text).astraFont(.rowTitle).foregroundStyle(Astra.Color.ink).padding(.top, 6)
   }
 
   // MARK: Results
@@ -381,8 +381,8 @@ struct SearchView: View {
         .frame(width: 64, height: 80)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
       VStack(alignment: .leading, spacing: 4) {
-        Text(person.name).font(.system(size: 24, weight: .bold)).foregroundStyle(Astra.Color.ink)
-        Text(person.role).font(.system(size: 14)).foregroundStyle(Astra.Color.muted)
+        Text(person.name).astraFont(size: 24, weight: .bold).foregroundStyle(Astra.Color.ink)
+        Text(person.role).astraFont(size: 14).foregroundStyle(Astra.Color.muted)
       }
     }
     if !creditsLoaded {
@@ -462,11 +462,11 @@ private struct PersonCircle: View {
         .clipShape(Circle())
         .overlay(Circle().stroke(Astra.Color.hairline))
       Text(person.name)
-        .font(.system(size: 13, weight: .semibold))
+        .astraFont(size: 13, weight: .semibold)
         .foregroundStyle(Astra.Color.ink)
         .lineLimit(1)
       Text(person.role)
-        .font(.system(size: 11))
+        .astraFont(size: 11)
         .foregroundStyle(Astra.Color.muted)
         .lineLimit(1)
     }
@@ -532,7 +532,7 @@ struct NetworkDiagnosticsView: View {
         TimelineView(.periodic(from: .now, by: 2)) { _ in
           let events = Array(NetworkLog.shared.recent.suffix(60).reversed())
           if events.isEmpty {
-            Text("No requests yet.").font(Astra.Font.meta).foregroundStyle(Astra.Color.muted)
+            Text("No requests yet.").astraFont(.meta).foregroundStyle(Astra.Color.muted)
           }
           ForEach(events) { event in
             VStack(alignment: .leading, spacing: 2) {

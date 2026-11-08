@@ -74,7 +74,7 @@ struct SettingsView: View {
         Section {
         } header: {
           Text("Settings")
-            .font(Astra.Font.display(Astra.Layout.pageTitleSize))
+            .astraFont(.display(Astra.Layout.pageTitleSize))
             .foregroundStyle(Astra.Color.ink)
             .textCase(nil)
         }
@@ -95,7 +95,7 @@ struct SettingsView: View {
                   .fill(app.health?.state == .connected ? Astra.Color.ink : Astra.Color.muted)
                   .frame(width: 7, height: 7)
                 Text(app.health?.state.title ?? "Plex Media Server")
-                  .font(Astra.Font.meta)
+                  .astraFont(.meta)
                   .foregroundStyle(Astra.Color.muted)
               }
             }
@@ -171,10 +171,10 @@ struct SettingsRow: View {
       SettingsIcon(symbol: pane.symbol)
       VStack(alignment: .leading, spacing: 2) {
         Text(pane.title)
-          .font(.system(size: 16, weight: .semibold))
+          .astraFont(size: 16, weight: .semibold)
           .foregroundStyle(Astra.Color.ink)
         Text(pane.subtitle)
-          .font(.system(size: 13))
+          .astraFont(size: 13)
           .foregroundStyle(Astra.Color.muted)
       }
     }
@@ -285,7 +285,7 @@ struct TabsSettings: View {
         ForEach(tabs) { tab in
           HStack(spacing: 14) {
             SettingsIcon(symbol: tab.symbol)
-            Text(tab.title).font(.system(size: 16, weight: .semibold))
+            Text(tab.title).astraFont(size: 16, weight: .semibold)
             Spacer()
             if !TabLayout.required.contains(tab) {
               Button {
@@ -313,7 +313,7 @@ struct TabsSettings: View {
             } label: {
               HStack(spacing: 14) {
                 SettingsIcon(symbol: tab.symbol)
-                Text(tab.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Astra.Color.ink)
+                Text(tab.title).astraFont(size: 16, weight: .semibold).foregroundStyle(Astra.Color.ink)
                 Spacer()
                 Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(Astra.Color.ink)
               }
@@ -501,7 +501,7 @@ struct AboutSettings: View {
         Text(
           "Astra is free software under the GNU General Public License, version 3. "
             + "Playback uses mpv and FFmpeg (LGPL/GPL); Mac updates use Sparkle (MIT).")
-          .font(Astra.Font.meta)
+          .astraFont(.meta)
           .foregroundStyle(Astra.Color.muted)
         if let url = URL(string: "https://www.gnu.org/licenses/gpl-3.0.html") {
           Link("GNU GPL v3", destination: url)

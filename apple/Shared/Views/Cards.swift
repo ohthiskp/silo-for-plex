@@ -10,7 +10,7 @@ struct ContentRow<Content: View>: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text(title)
-        .font(Astra.Font.rowTitle)
+        .astraFont(.rowTitle)
         .foregroundStyle(Astra.Color.ink)
         .lineLimit(1)
         .padding(.leading, leading)
@@ -58,11 +58,11 @@ struct ArtCard: View {
             RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))
           .pressable()
         Text(item.displayTitle)
-          .font(Astra.Font.card)
+          .astraFont(.card)
           .foregroundStyle(Astra.Color.ink)
           .lineLimit(1)
         if let sub = item.episodeLabel ?? item.year.map(String.init) {
-          Text(sub).font(.system(size: 12)).foregroundStyle(Astra.Color.muted).lineLimit(1)
+          Text(sub).astraFont(size: 12).foregroundStyle(Astra.Color.muted).lineLimit(1)
         }
       }
       .frame(width: width, alignment: .leading)
@@ -98,13 +98,13 @@ struct ContinueCard: View {
         LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .center, endPoint: .bottom)
         VStack(alignment: .leading, spacing: 6) {
           Text(item.displayTitle)
-            .font(.system(size: 17, weight: .bold))
+            .astraFont(size: 17, weight: .bold)
             .foregroundStyle(.white)
             .lineLimit(1)
           if let sub = [item.episodeLabel, item.type == .episode ? item.title : nil].compactMap({ $0 }).joined(
             separator: "  ·  "
           ).nilIfEmpty {
-            Text(sub).font(.system(size: 13.5, weight: .medium)).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
+            Text(sub).astraFont(size: 13.5, weight: .medium).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
           }
           ProgressBar(value: item.progress ?? 0)
         }
@@ -166,9 +166,9 @@ struct PosterCard: View {
           .overlay(
             RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))
           .pressable()
-        Text(item.displayTitle).font(Astra.Font.card).foregroundStyle(Astra.Color.ink).lineLimit(1)
+        Text(item.displayTitle).astraFont(.card).foregroundStyle(Astra.Color.ink).lineLimit(1)
         if let year = item.year {
-          Text(String(year)).font(.system(size: 12)).foregroundStyle(Astra.Color.muted)
+          Text(String(year)).astraFont(size: 12).foregroundStyle(Astra.Color.muted)
         }
       }
       .frame(width: width, alignment: .leading)

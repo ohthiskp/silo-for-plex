@@ -31,6 +31,8 @@ enum Astra {
     static let hairline = SwiftUI.Color.white.opacity(0.09)
   }
 
+  /// Fixed-size fonts. Text in views uses `.astraFont(_:)`, the same sizes
+  /// scaled with Text Size; these stay for places that must not grow.
   enum Font {
     /// Large titles set as text: Apple's system font, bold (KP: no Didot).
     static func display(_ size: CGFloat) -> SwiftUI.Font {
@@ -268,5 +270,51 @@ extension View {
   /// `.transition(_:)` that becomes a plain fade when Reduce Motion is on.
   func astraTransition(_ transition: AnyTransition) -> some View {
     modifier(AstraTransitionModifier(transition: transition))
+  }
+}
+
+// MARK: - Dynamic Type
+
+/// A system font that grows with the iPhone's Text Size setting and is
+/// exactly `size` at the default setting, so the default look never changes
+/// (KP, 2026-11-08). The Mac has no Text Size setting and keeps `size`.
+private struct ScaledSystemFont: ViewModifier {
+  @ScaledMetric private var size: CGFloat
+  private let weight: SwiftUI.Font.Weight
+  private let design: SwiftUI.Font.Design
+
+  init(size: CGFloat, weight: SwiftUI.Font.Weight, design: SwiftUI.Font.Design) {
+    _size = ScaledMetric(wrappedValue: size, relativeTo: .body)
+    self.weight = weight
+    self.design = design
+  }
+
+  func body(content: Content) -> some View {
+    content.font(.system(size: size, weight: weight, design: design))
+  }
+}
+
+/// `Astra.Font`'s text tokens, scaled with Text Size (`astraFont(_:)`).
+enum AstraTextStyle {
+  case rowTitle, meta, card
+  case display(CGFloat)
+}
+
+extension View {
+  /// Text that follows Text Size; the same as `.font(.system(size:weight:design:))` at the default.
+  func astraFont(
+    size: CGFloat, weight: SwiftUI.Font.Weight = .regular, design: SwiftUI.Font.Design = .default
+  ) -> some View {
+    modifier(ScaledSystemFont(size: size, weight: weight, design: design))
+  }
+
+  /// `Astra.Font.rowTitle` / `meta` / `card` / `display(_:)`, scaled with Text Size.
+  func astraFont(_ style: AstraTextStyle) -> some View {
+    switch style {
+    case .rowTitle: astraFont(size: 19, weight: .bold)
+    case .meta: astraFont(size: 14, weight: .medium)
+    case .card: astraFont(size: 13, weight: .medium)
+    case .display(let size): astraFont(size: size, weight: .bold)
+    }
   }
 }

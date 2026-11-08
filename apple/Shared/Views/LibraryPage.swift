@@ -104,7 +104,7 @@ struct CountBadge: View {
 
   var body: some View {
     Text("\(count)")
-      .font(.system(size: 11, weight: .bold))
+      .astraFont(size: 11, weight: .bold)
       .monospacedDigit()
       .foregroundStyle(.black)
       .padding(.horizontal, 5)
@@ -136,7 +136,7 @@ struct WatchlistContent: View {
           VStack(alignment: .leading, spacing: 12) {
             if let error = app.watchlistError {
               Text("Showing your saved Watchlist. \(error)")
-                .font(Astra.Font.meta)
+                .astraFont(.meta)
                 .foregroundStyle(Astra.Color.muted)
             }
             grid(items)

@@ -50,7 +50,7 @@ struct LoadingView: View {
     VStack(spacing: 8) {
       if let serverName, !serverName.isEmpty {
         Text(serverName)
-          .font(.system(size: 17, weight: .semibold))
+          .astraFont(size: 17, weight: .semibold)
           .foregroundStyle(Astra.Color.ink)
           .lineLimit(1)
       }
@@ -63,7 +63,7 @@ struct LoadingView: View {
           ProgressView().controlSize(.mini).tint(Astra.Color.muted)
         }
         Text(connected ? "Connected" : "Connecting…")
-          .font(Astra.Font.meta)
+          .astraFont(.meta)
           .contentTransition(.opacity)
       }
       .foregroundStyle(connected ? Astra.Color.ink : Astra.Color.muted)

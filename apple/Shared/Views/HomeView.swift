@@ -113,7 +113,7 @@ struct HomeView: View {
           } else {
             // The technical reason is in Settings → About → Diagnostics.
             Text("Some rows didn't load yet. Astra is trying again.")
-              .font(Astra.Font.meta)
+              .astraFont(.meta)
               .foregroundStyle(Astra.Color.muted)
               .padding(.leading, leading)
           }
@@ -314,7 +314,7 @@ struct TopTenRow: View {
     VStack(alignment: .leading, spacing: 12) {
       HStack(alignment: .firstTextBaseline, spacing: Astra.Spacing.s) {
         Text(title)
-          .font(Astra.Font.rowTitle)
+          .astraFont(.rowTitle)
           .foregroundStyle(Astra.Color.ink)
           .lineLimit(1)
         Spacer(minLength: 8)
@@ -391,7 +391,7 @@ struct ShelfRow: View {
       VStack(alignment: .leading, spacing: 12) {
         HStack(alignment: .firstTextBaseline, spacing: Astra.Spacing.s) {
           Text(title)
-            .font(Astra.Font.rowTitle)
+            .astraFont(.rowTitle)
             .foregroundStyle(Astra.Color.ink)
             .lineLimit(1)
           Spacer(minLength: 8)
