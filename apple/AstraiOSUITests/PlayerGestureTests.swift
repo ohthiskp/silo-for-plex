@@ -73,8 +73,12 @@ final class PlayerGestureTests: XCTestCase {
     sleep(5)
     let before = showing(close)
     point(0.3, 0.35).tap()
-    sleep(2)
-    let after = showing(close)
+    // The controls fade; give the change up to 5 s instead of one fixed look.
+    var after = showing(close)
+    for _ in 0..<10 where after == before {
+      usleep(500_000)
+      after = showing(close)
+    }
     shot("after-single-tap")
     XCTAssertNotEqual(before, after, "A single tap didn't show or hide the controls (before: \(before))")
   }
