@@ -1827,3 +1827,41 @@ final class PendingTimelinesTests: XCTestCase {
     XCTAssertTrue(PendingTimelines.load(from: defaults).isEmpty)
   }
 }
+
+final class TokenStoreTests: XCTestCase {
+  private func tempURL() -> URL {
+    FileManager.default.temporaryDirectory
+      .appendingPathComponent("astra-token-\(UUID().uuidString)/Credentials/test.token")
+  }
+
+  func testFileStoreRoundTripsAndClears() {
+    let store = FileTokenStore(url: tempURL())
+    XCTAssertNil(store.load())
+    XCTAssertTrue(store.save("abc"))
+    XCTAssertEqual(store.load(), "abc")
+    XCTAssertTrue(store.save("def"))
+    XCTAssertEqual(store.load(), "def")
+    store.clear()
+    XCTAssertNil(store.load())
+  }
+
+  func testFileStoreIsPrivateToTheUser() throws {
+    let url = tempURL()
+    XCTAssertTrue(FileTokenStore(url: url).save("secret"))
+    let file = try FileManager.default.attributesOfItem(atPath: url.path)
+    let folder = try FileManager.default.attributesOfItem(atPath: url.deletingLastPathComponent().path)
+    XCTAssertEqual((file[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+    XCTAssertEqual((folder[.posixPermissions] as? NSNumber)?.intValue, 0o700)
+    // No temporary copies left beside it.
+    let names = try FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path)
+    XCTAssertEqual(names, ["test.token"])
+  }
+
+  func testSaveReportsFailure() {
+    let store = MemoryTokenStore()
+    XCTAssertTrue(store.save("a"))
+    store.failsSaving = true
+    XCTAssertFalse(store.save("b"))
+    XCTAssertEqual(store.load(), "a")
+  }
+}
