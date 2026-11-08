@@ -91,15 +91,19 @@ struct PlayerOverlay: View {
         .allowsHitTesting(visible)
 
       // Astra 4.0: Next Episode in the last 15 s of an episode, tap only.
-      NextEpisodeButton(player: player)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        #if os(macOS)
-          .padding(.trailing, 28)
-          .padding(.bottom, 150)
-        #else
-          .padding(.trailing, 24)
-          .padding(.bottom, 110)
-        #endif
+      // Only in the tree for an episode with a next one, so it never sits
+      // over the swipe and tap areas otherwise.
+      if player.upNext != nil {
+        NextEpisodeButton(player: player)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+          #if os(macOS)
+            .padding(.trailing, 28)
+            .padding(.bottom, 150)
+          #else
+            .padding(.trailing, 24)
+            .padding(.bottom, 110)
+          #endif
+      }
 
       if loaderInRing {
         // iPhone with controls showing: the play button's ring shows loading.
