@@ -10,6 +10,8 @@ struct DownloadButton: View {
   var round = false
   /// A capsule as wide as it's allowed, beside Resume on Details (KP's mockup).
   var wide = false
+  /// A round glass icon with a short label under it (iPhone Details, KP's mockup).
+  var labeled = false
 
   @Environment(AppModel.self) private var app
   @State private var confirmDelete = false
@@ -36,6 +38,14 @@ struct DownloadButton: View {
             .frame(maxWidth: .infinity)
         }
         .astraSecondaryButton()
+      } else if labeled {
+        #if os(iOS)
+          Button(action: tap) { PhoneActionLabel(title: shortTitle) { icon } }
+            .buttonStyle(PhoneActionButtonStyle())
+        #else
+          Button(action: tap) { icon }
+            .modifier(ActionButtonShape(round: true))
+        #endif
       } else if round {
         Button(action: tap) { icon }
           .modifier(ActionButtonShape(round: true))
@@ -81,6 +91,17 @@ struct DownloadButton: View {
     case .failed: "Retry Download"
     case .queued: "Waiting…"
     case .downloading(let fraction): "Downloading \(Int(fraction * 100))%"
+    case .done: "Downloaded"
+    }
+  }
+
+  /// Fits under a round button: "Download", "Waiting", "42%", "Downloaded".
+  private var shortTitle: String {
+    switch state {
+    case .none: "Download"
+    case .failed: "Retry"
+    case .queued: "Waiting"
+    case .downloading(let fraction): "\(Int(fraction * 100))%"
     case .done: "Downloaded"
     }
   }

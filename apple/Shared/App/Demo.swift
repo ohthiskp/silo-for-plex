@@ -54,7 +54,22 @@ enum Demo {
   typealias JSON = [String: Any]
 
   nonisolated(unsafe) static let movies: [JSON] = [
-    movie("101", "Dune: Part Two", 2024, 693134, "Science Fiction", 9960, "4k"),
+    // Filled out like a real title, so the Details screenshot shows every part
+    // of KP's mockup: progress, two genres, a director, cast and a long synopsis.
+    movie("101", "Dune: Part Two", 2024, 693134, "Science Fiction", 9960, "4k").merging([
+      "viewOffset": 1_500_000,
+      "Genre": [["tag": "Science Fiction"], ["tag": "Adventure"]],
+      "summary": "Follow the mythic journey of Paul Atreides as he unites with Chani and the Fremen while on a "
+        + "path of revenge against the conspirators who destroyed his family. Facing a choice between the love "
+        + "of his life and the fate of the known universe, Paul endeavors to prevent a terrible future only he "
+        + "can foresee.",
+      "Director": [["tag": "Denis Villeneuve"]],
+      "Role": [
+        ["tag": "Timothée Chalamet", "role": "Paul Atreides"], ["tag": "Zendaya", "role": "Chani"],
+        ["tag": "Rebecca Ferguson", "role": "Jessica"], ["tag": "Josh Brolin", "role": "Gurney Halleck"],
+        ["tag": "Austin Butler", "role": "Feyd-Rautha"],
+      ],
+    ]) { $1 },
     movie("102", "Oppenheimer", 2023, 872585, "Drama", 10800, "4k"),
     movie("103", "Interstellar", 2014, 157336, "Science Fiction", 10140, "4k"),
     movie("104", "Inception", 2010, 27205, "Action", 8880, "1080"),
