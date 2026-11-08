@@ -203,7 +203,10 @@ jobs:
 
       - name: Remove temporary signing
         if: always()
-        run: python3 tool/astra/asc_tv_signing.py cleanup || true
+        # A failed clean-up shows as a warning (the upload already happened); the next
+        # run's setup removes what's left.
+        continue-on-error: true
+        run: python3 tool/astra/asc_tv_signing.py cleanup
 
       - name: Remove API key
         if: always()
