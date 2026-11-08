@@ -165,12 +165,17 @@ final class AppModel {
         phase = .waitingForApproval(code: pin.code, url: url)
         Self.open(url)
         let token = try await account.waitForToken(pin)
+        // A failed save (logged by the store) only means signing in again next launch.
         tokens.save(token)
         accountToken = token
         await loadServers(token: token, autoSelect: true)
-      } catch is CancellationError {
-        phase = .signedOut
       } catch {
+        // Cancel already set .signedOut. A request in flight ends with
+        // URLError(.cancelled), not CancellationError, so check the task itself.
+        if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+          if !Task.isCancelled { phase = .signedOut }
+          return
+        }
         phase = .failed(error.localizedDescription)
       }
     }
@@ -215,8 +220,10 @@ final class AppModel {
     watchlistGeneration += 1
     let watchlistURL = Self.watchlistURL
     onWatchlistDisk { try? FileManager.default.removeItem(at: watchlistURL) }
-    // The saved library lists go too, so nothing of the account stays on disk.
-    try? FileManager.default.removeItem(at: LibraryStore.indexFolder)
+    // The saved library lists go too, so nothing of the account stays on disk
+    // (off the main thread: a big library's lists take a moment to delete).
+    let indexFolder = LibraryStore.indexFolder
+    Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: indexFolder) }
     phase = .signedOut
   }
 
@@ -226,7 +233,11 @@ final class AppModel {
     phase = .connecting("Plex")
     do {
       guard try await account.validate(token: token) else {
+        // plex.tv ended the sign-in: forget the server's token and address too.
         tokens.clear()
+        serverTokens.clear()
+        SavedConnection.clear()
+        UserDefaults.standard.removeObject(forKey: Self.serverKey)
         phase = .signedOut
         return
       }
@@ -412,12 +423,13 @@ final class AppModel {
 
   /// The Plex Watchlist, newest first: the saved copy at once (nil until
   /// there is one), then plex.tv's answer. Shown even when the server is down.
-  private(set) var watchlistItems: [PlexMetadata]? = WatchlistSnapshot.load(from: AppModel.watchlistURL)?.items
+  private(set) var watchlistItems: [PlexMetadata]? = AppModel.savedWatchlist
   /// Why the last refresh failed; the saved list stays on screen.
   private(set) var watchlistError: String?
   /// TMDB keys of the titles on the Plex Watchlist, for the + / ✓ buttons.
-  private(set) var watchlistKeys: Set<String> =
-    Set((WatchlistSnapshot.load(from: AppModel.watchlistURL)?.items ?? []).compactMap(\.tmdbKey))
+  private(set) var watchlistKeys: Set<String> = Set((AppModel.savedWatchlist ?? []).compactMap(\.tmdbKey))
+  /// The saved Watchlist, read from disk once at launch (it was decoded twice).
+  nonisolated private static let savedWatchlist = WatchlistSnapshot.load(from: AppModel.watchlistURL)?.items
   @ObservationIgnored private var watchlistRefresh: Task<Void, Never>?
   @ObservationIgnored private var watchlistRefreshedAt: Date?
   /// Bumped on sign-out, so a Watchlist read that started before it is dropped.
