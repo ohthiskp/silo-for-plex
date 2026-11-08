@@ -439,6 +439,9 @@ final class DownloadStore {
 
   private func finish(_ job: Job, error: Error?) {
     let wasCancelled = !jobs.contains { $0.id == job.id }
+    // A retry measures its speed afresh (the old sample's byte count is higher
+    // than a restarted download's, so no speed showed until it caught up).
+    speedSamples[job.id] = nil
     jobs.removeAll { $0.id == job.id }
     defer { saveQueue() }
     if let error {
@@ -525,8 +528,9 @@ final class DownloadSession: NSObject, URLSessionDownloadDelegate, @unchecked Se
     config.timeoutIntervalForRequest = 60
     config.timeoutIntervalForResource = 60 * 60 * 24
     config.allowsCellularAccess = true
-    // Two downloads at a time, four connections each.
-    config.httpMaximumConnectionsPerHost = 8
+    // Two downloads at a time, eight connections each (DownloadStore.segmentCount):
+    // with only 8 here the second download's connections queued behind the first.
+    config.httpMaximumConnectionsPerHost = 16
     let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     // Transfers left from an earlier launch have nobody waiting for them; the
     // saved queue starts them again, so stop the leftovers.

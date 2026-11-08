@@ -30,6 +30,9 @@ struct PlayerOverlay: View {
     @AppStorage(Preferences.skipSecondsKey) private var skipSeconds = 10
     /// Where the visible controls are (window coordinates); taps there belong to them.
     @State private var controlFrames: [String: CGRect] = [:]
+    /// The Next Episode button while it shows (it shows with the controls hidden
+    /// too): a tap on it must not also show or hide the controls or double-tap skip.
+    @State private var nextEpisodeFrame: CGRect?
   #endif
   #if os(macOS)
     // Astra: the control panel can be dragged anywhere over the video (KP, 2026-11-07).
@@ -61,7 +64,7 @@ struct PlayerOverlay: View {
         // half skips forward 10 s, on the left half back 10 s (KP, 2026-11-07).
         // UIKit recognizers, so the single tap reliably waits for a double.
         PlayerTapSurface(
-          blocked: visible ? Array(controlFrames.values) : [],
+          blocked: (visible ? Array(controlFrames.values) : []) + [nextEpisodeFrame].compactMap { $0 },
           onTap: { visible ? hide() : poke() },
           onDoubleTap: { forward in doubleTapSkip(forward: forward) },
           onSwipe: { right, delta in if swipeGestures { swipeLevel(right: right, delta: delta) } },
@@ -93,7 +96,7 @@ struct PlayerOverlay: View {
       // Only in the tree for an episode with a next one, so it never sits
       // over the swipe and tap areas otherwise.
       if showNextEpisode, player.upNext != nil {
-        NextEpisodeButton(player: player)
+        NextEpisodeButton(player: player, onFrame: onNextEpisodeFrame)
           #if os(macOS)
             .padding(.trailing, 28)
             .padding(.bottom, 150)
@@ -694,6 +697,14 @@ struct PlayerOverlay: View {
     if on { Label(title, systemImage: "checkmark") } else { Text(title) }
   }
 
+  private var onNextEpisodeFrame: (CGRect?) -> Void {
+    #if os(iOS)
+      { nextEpisodeFrame = $0 }
+    #else
+      { _ in }
+    #endif
+  }
+
   /// Shows the chrome and schedules it to hide again.
   private func poke() {
     lastPoke = Date()
@@ -1204,6 +1215,9 @@ private struct PlayerAtmosTag: View {
 /// unless it is tapped. It reads the position itself, so only it redraws.
 struct NextEpisodeButton: View {
   let player: PlayerController
+  /// iPhone: where the button is while shown (nil once it goes), so the
+  /// player's window-wide tap recognizers leave taps on it alone.
+  var onFrame: (CGRect?) -> Void = { _ in }
 
   private var shown: Bool {
     guard player.upNext != nil, player.duration > 0, player.hasFirstFrame else { return false }
@@ -1236,6 +1250,8 @@ struct NextEpisodeButton: View {
         .buttonStyle(.plain)
           .accessibilityIdentifier("next-episode")
           .accessibilityHint(player.upNext?.displayTitle ?? "")
+          .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { onFrame($0) }
+          .onDisappear { onFrame(nil) }
           .transition(.opacity.combined(with: .scale(scale: 0.95)))
         }
       }
