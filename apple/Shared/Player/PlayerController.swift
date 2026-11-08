@@ -84,6 +84,8 @@ final class PlayerController {
   /// the last seconds need no network. Nil for movies and the last episode.
   private(set) var upNext: PlexMetadata?
   @ObservationIgnored private var reporter: Task<Void, Never>?
+  /// Lock screen, Control Center, headphones and media keys.
+  @ObservationIgnored private let nowPlaying = NowPlaying()
   @ObservationIgnored private lazy var bridge = MpvDelegateBridge(owner: self)
 
   /// "4K UHD" or "HD" for the frames mpv is actually decoding, never the
@@ -265,6 +267,16 @@ final class PlayerController {
 
     isActive = true
     startReporting()
+    nowPlaying.begin(
+      title: source.title, subtitle: source.subtitle, duration: duration,
+      artwork: server?.imageURL(item.grandparentThumb ?? item.thumb, width: 600, height: 900),
+      handlers: .init(
+        play: { [weak self] in self?.setPaused(false) },
+        pause: { [weak self] in self?.setPaused(true) },
+        toggle: { [weak self] in self?.togglePause() },
+        skip: { [weak self] in self?.seek(by: $0) },
+        seek: { [weak self] in self?.seek(to: $0) }
+      ))
     watchForStall(source)
     findUpNext(after: item, library: library, source: source)
   }
@@ -305,6 +317,7 @@ final class PlayerController {
     reporter?.cancel()
     reporter = nil
     report(.stopped)
+    nowPlaying.end()
     #if os(iOS)
       pip?.teardown()
       pip = nil
@@ -365,6 +378,11 @@ final class PlayerController {
       core.setPaused(value)
     #endif
     report(value ? .paused : .playing)
+    updateNowPlaying()
+  }
+
+  private func updateNowPlaying() {
+    nowPlaying.update(position: position, duration: duration, playing: !paused && !buffering)
   }
 
   func seek(by seconds: Double) {
@@ -450,12 +468,22 @@ final class PlayerController {
   fileprivate func propertyChanged(_ name: String, _ value: Any?) {
     switch name {
     case "time-pos": if let v = value as? Double { position = v }
-    case "duration": if let v = value as? Double, v > 0 { duration = v }
-    case "pause": if let v = value as? Bool, !isEcho("pause") { paused = v }
+    case "duration":
+      if let v = value as? Double, v > 0 {
+        duration = v
+        updateNowPlaying()
+      }
+    case "pause":
+      if let v = value as? Bool, !isEcho("pause") {
+        paused = v
+        updateNowPlaying()
+      }
     case "volume": if let v = value as? Double, !isEcho("volume") { volume = v }
     case "mute": if let v = value as? Bool, !isEcho("mute") { muted = v }
     case "speed": if let v = value as? Double { speed = v }
-    case "paused-for-cache": buffering = (value as? Bool) ?? false
+    case "paused-for-cache":
+      buffering = (value as? Bool) ?? false
+      updateNowPlaying()
     case "width":
       videoWidth = (value as? Double) ?? 0
       fitWindowToVideo()
@@ -478,6 +506,7 @@ final class PlayerController {
       // The first frame is decoded and on screen (also after every seek).
       buffering = false
       hasFirstFrame = true
+      updateNowPlaying()
     case "end-file":
       if let reason = data?["reason"] as? String, reason == "error" {
         lastError = (data?["message"] as? String) ?? "This file couldn't be played."
