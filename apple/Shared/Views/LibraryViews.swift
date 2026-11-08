@@ -334,7 +334,7 @@ struct SearchView: View {
     let found = shownPeople
     let done = searched && peopleSearched
     if !done && titles.isEmpty && found.isEmpty {
-      ProgressView().controlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 40)
+      ProgressView().astraControlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 40)
     } else if titles.isEmpty && found.isEmpty {
       EmptyState(
         symbol: "magnifyingglass", title: "No results",

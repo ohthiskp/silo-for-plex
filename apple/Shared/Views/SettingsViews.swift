@@ -125,7 +125,10 @@ struct SettingsView: View {
     Group {
       switch pane {
       case .appearance: AppearanceSettings()
-      case .tabs: TabsSettings()
+      case .tabs:
+        #if os(iOS)
+          TabsSettings()
+        #endif
       case .playback: PlaybackSettings()
       case .library: LibrarySettings()
       case .downloads: DownloadSettings()
@@ -272,6 +275,7 @@ struct ColorSwatches: View {
   }
 }
 
+#if os(iOS)
 // MARK: - Tabs
 
 /// The iPhone's bottom bar: drag to reorder, switch tabs on or off.
@@ -334,6 +338,7 @@ struct TabsSettings: View {
     #endif
   }
 }
+#endif
 
 // MARK: - Playback
 

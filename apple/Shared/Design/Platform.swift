@@ -98,3 +98,25 @@ extension PlatformImage {
     #endif
   }
 }
+
+// MARK: - tvOS
+
+/// The size of a spinner or control. tvOS has no control sizes, so it keeps the system one there.
+enum AstraControlSize {
+  case mini, small, regular, large
+}
+
+extension View {
+  @ViewBuilder func astraControlSize(_ size: AstraControlSize) -> some View {
+    #if os(tvOS)
+      self
+    #else
+      switch size {
+      case .mini: controlSize(.mini)
+      case .small: controlSize(.small)
+      case .regular: controlSize(.regular)
+      case .large: controlSize(.large)
+      }
+    #endif
+  }
+}

@@ -38,9 +38,15 @@ enum Astra {
     static func display(_ size: CGFloat) -> SwiftUI.Font {
       .system(size: size, weight: .bold)
     }
-    static let rowTitle = SwiftUI.Font.system(size: 19, weight: .bold)
-    static let meta = SwiftUI.Font.system(size: 14, weight: .medium)
-    static let card = SwiftUI.Font.system(size: 13, weight: .medium)
+    #if os(tvOS)
+      static let rowTitle = SwiftUI.Font.system(size: 30, weight: .bold)
+      static let meta = SwiftUI.Font.system(size: 22, weight: .medium)
+      static let card = SwiftUI.Font.system(size: 21, weight: .medium)
+    #else
+      static let rowTitle = SwiftUI.Font.system(size: 19, weight: .bold)
+      static let meta = SwiftUI.Font.system(size: 14, weight: .medium)
+      static let card = SwiftUI.Font.system(size: 13, weight: .medium)
+    #endif
   }
 
   /// Motion tokens. Everything animates opacity and transform, never layout.
@@ -76,6 +82,21 @@ enum Astra {
       static let posterMinWidth: CGFloat = 160
       static let titleSize: CGFloat = 52
       static let pageTitleSize: CGFloat = 38
+    #elseif os(tvOS)
+      // Apple TV (1920 × 1080 pt, seen from the sofa): about 1.5× the Mac. The
+      // system safe area already keeps 60 pt top/bottom and 80 pt left/right.
+      static let leading: CGFloat = 140
+      static let heroHeight: CGFloat = 760
+      static let detailHeaderHeight: CGFloat = 760
+      static let heroShare: CGFloat = 0.8
+      static let artCard = CGSize(width: 360, height: 203)
+      static let continueCard = CGSize(width: 520, height: 293)
+      static let episodeCard = CGSize(width: 420, height: 236)
+      static let posterMinWidth: CGFloat = 230
+      static let titleSize: CGFloat = 76
+      static let pageTitleSize: CGFloat = 57
+      /// Text in pages (`astraFont`) is this much larger than on the Mac and iPhone.
+      static let textScale: CGFloat = 1.6
     #else
       static let leading: CGFloat = 20
       static let heroHeight: CGFloat = 560
@@ -104,6 +125,9 @@ enum Astra {
     #if os(macOS)
       static let pageTop: CGFloat = 24
       static let pageTrailing: CGFloat = 40
+    #elseif os(tvOS)
+      static let pageTop: CGFloat = 30
+      static let pageTrailing: CGFloat = 80
     #else
       static let pageTop: CGFloat = 8
       static let pageTrailing: CGFloat = 20
@@ -112,11 +136,21 @@ enum Astra {
 
   /// The docked Mac sidebar's geometry; pages start to the right of it.
   enum Sidebar {
-    static let margin: CGFloat = 14
-    static let collapsedWidth: CGFloat = 62
+    #if os(tvOS)
+      // Apple TV: the same sidebar, sized for the remote's focus (KP, 2026-11-08).
+      static let margin: CGFloat = 20
+      static let collapsedWidth: CGFloat = 96
+    #else
+      static let margin: CGFloat = 14
+      static let collapsedWidth: CGFloat = 62
+    #endif
     /// While the pointer is over it (icons plus names, KP 2026-11-08). Pages keep
     /// `contentInset`: the expanded sidebar floats over them.
-    static let expandedWidth: CGFloat = 190
+    #if os(tvOS)
+      static let expandedWidth: CGFloat = 300
+    #else
+      static let expandedWidth: CGFloat = 190
+    #endif
     static let gap: CGFloat = 28
     static let contentInset: CGFloat = margin + collapsedWidth + gap
   }
@@ -284,7 +318,11 @@ private struct ScaledSystemFont: ViewModifier {
   private let design: SwiftUI.Font.Design
 
   init(size: CGFloat, weight: SwiftUI.Font.Weight, design: SwiftUI.Font.Design) {
-    _size = ScaledMetric(wrappedValue: size, relativeTo: .body)
+    #if os(tvOS)
+      _size = ScaledMetric(wrappedValue: size * Astra.Layout.textScale, relativeTo: .body)
+    #else
+      _size = ScaledMetric(wrappedValue: size, relativeTo: .body)
+    #endif
     self.weight = weight
     self.design = design
   }

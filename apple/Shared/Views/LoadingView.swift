@@ -60,7 +60,7 @@ struct LoadingView: View {
             .font(.system(size: 13, weight: .semibold))
             .transition(.opacity)
         } else {
-          ProgressView().controlSize(.mini).tint(Astra.Color.muted)
+          ProgressView().astraControlSize(.mini).tint(Astra.Color.muted)
         }
         Text(connected ? "Connected" : "Connecting…")
           .astraFont(.meta)

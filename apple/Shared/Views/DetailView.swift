@@ -84,14 +84,16 @@ struct DetailView: View {
             Image(systemName: "xmark")
           }
           .astraIconButton(size: 36, variant: .clear)
-          .keyboardShortcut(isActive ? .cancelAction : nil)
+          #if !os(tvOS)
+            .keyboardShortcut(isActive ? .cancelAction : nil)
+          #endif
           .help("Close (Esc)")
           .accessibilityLabel("Close")
         }
         .padding(.trailing, 18)
         .padding(.top, 18)
       }
-    #else
+    #elseif os(iOS)
       // iPhone keeps the system back button (Liquid Glass on iOS 26) and swipe-back.
       .toolbarBackground(.hidden, for: .navigationBar)
       .navigationBarTitleDisplayMode(.inline)
@@ -153,7 +155,9 @@ struct DetailView: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(SolidCapsuleButtonStyle())
-        .keyboardShortcut(isActive ? .defaultAction : nil)
+        #if !os(tvOS)
+          .keyboardShortcut(isActive ? .defaultAction : nil)
+        #endif
         .disabled(shown.isCatalogOnly || !app.canPlay(shown))
 
         if shown.type != .collection, !shown.isCatalogOnly {

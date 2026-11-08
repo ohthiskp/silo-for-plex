@@ -147,7 +147,7 @@ struct WatchlistContent: View {
           symbol: "exclamationmark.triangle", title: "Couldn't load your Watchlist", message: error,
           action: ("Try Again", { Task { await app.refreshWatchlist(force: true) } }))
       } else {
-        ProgressView().controlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 60)
+        ProgressView().astraControlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 60)
       }
     }
     // Once per appearance; the + / ✓ buttons update the list locally.
@@ -159,7 +159,8 @@ struct WatchlistContent: View {
   }
 
   @ViewBuilder private func grid(_ items: [PlexMetadata]) -> some View {
-    #if os(macOS)
+    // Big screens (Mac, Apple TV): adaptive columns sized by Astra.Layout.posterMinWidth.
+    #if os(macOS) || os(tvOS)
       LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
         ForEach(items) { PosterCard(library: library, item: $0) }
       }

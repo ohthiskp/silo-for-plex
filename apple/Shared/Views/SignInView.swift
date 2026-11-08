@@ -31,7 +31,7 @@ struct SignInView: View {
               .astraSecondaryButton()
           }
           .astraGlassGroup(spacing: 12)
-          ProgressView().controlSize(.small).padding(.top, 6)
+          ProgressView().astraControlSize(.small).padding(.top, 6)
         }
         .astraTransition(.opacity.combined(with: .scale(scale: 0.98)))
       default:
@@ -41,7 +41,9 @@ struct SignInView: View {
             .foregroundStyle(Astra.Color.muted)
           Button("Sign in with Plex") { app.signIn() }
             .astraPrimaryButton()
-            .keyboardShortcut(.defaultAction)
+            #if !os(tvOS)
+              .keyboardShortcut(.defaultAction)
+            #endif
         }
         .transition(.opacity)
       }
@@ -98,7 +100,7 @@ struct ServerRow: View {
         }
         Spacer()
         if connecting {
-          ProgressView().controlSize(.small)
+          ProgressView().astraControlSize(.small)
         } else if current {
           Image(systemName: "checkmark").foregroundStyle(Astra.Color.ink)
         } else {
@@ -126,7 +128,7 @@ struct ServerSwitchSheet: View {
     VStack(spacing: 20) {
       Text("Change Server").astraDisplay(26, tracking: 4)
       if state.loadingList {
-        ProgressView().controlSize(.regular).frame(height: 62)
+        ProgressView().astraControlSize(.regular).frame(height: 62)
       } else {
         VStack(spacing: 10) {
           ForEach(state.servers) { server in

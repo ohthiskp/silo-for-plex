@@ -126,7 +126,7 @@ struct HomeView: View {
     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewport = $0 }
     .overlay {
       if library.isLoadingHome || (library.isLoadingService && !library.homeHasSections) {
-        ProgressView().controlSize(.large)
+        ProgressView().astraControlSize(.large)
       }
     }
     .refreshable { await library.loadHome() }
@@ -496,6 +496,8 @@ struct HeroInfo: View {
 
   #if os(macOS)
     static let titleBox: CGFloat = 130
+  #elseif os(tvOS)
+    static let titleBox: CGFloat = 180
   #else
     static let titleBox: CGFloat = 96
   #endif
@@ -679,7 +681,9 @@ struct WatchlistButton: View {
         .contentTransition(.symbolEffect(.replace))
     }
     .astraIconButton(size: size, variant: variant)
-    .sensoryFeedback(.success, trigger: on)
+    #if !os(tvOS)
+      .sensoryFeedback(.success, trigger: on)
+    #endif
     .help(on ? "Remove from Watchlist" : "Add to Watchlist")
     .accessibilityLabel(on ? "Remove from Watchlist" : "Add to Watchlist")
     .task { await app.loadWatchlistIfNeeded() }
@@ -724,7 +728,9 @@ struct WatchlistButton: View {
           .padding(.bottom, 6)
         }
       }
-      .sensoryFeedback(.selection, trigger: position)
+      #if !os(tvOS)
+        .sensoryFeedback(.selection, trigger: position)
+      #endif
     }
 
     private func page(_ item: PlexMetadata) -> some View {

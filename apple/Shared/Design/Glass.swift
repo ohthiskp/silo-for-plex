@@ -118,7 +118,9 @@ struct Pressable: ViewModifier {
       .shadow(color: .black.opacity(hovering ? 0.45 : 0), radius: 18, y: 10)
       .scaleEffect(reduceMotion ? 1 : (hovering ? hoverScale : 1))
       .astraAnimation(Astra.Motion.base, value: hovering)
-      .onHover { hovering = $0 }
+      #if !os(tvOS)
+        .onHover { hovering = $0 }
+      #endif
   }
 }
 
