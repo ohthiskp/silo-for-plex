@@ -1445,6 +1445,21 @@ final class HomeSectionsTests: XCTestCase {
     XCTAssertEqual(HomeSections.ranked([tmdb(1), tmdb(3), tmdb(2), tmdb(3)], index: index).map(\.ratingKey), ["three", "two"])
   }
 
+  func testCatalogKeepsEveryTitleInOrder() {
+    func tmdb(_ id: Int) -> TMDBItem { TMDBItem(tmdbID: id, kind: .movie, title: "\(id)") }
+    let index = ["movie:2": item("two")]
+    let shown = HomeSections.catalog([tmdb(1), tmdb(2), tmdb(1), tmdb(3)], index: index)
+    XCTAssertEqual(shown.count, 3)
+    XCTAssertTrue(shown[0].isCatalogOnly)
+    XCTAssertEqual(shown[1].ratingKey, "two")
+    XCTAssertTrue(shown[2].isCatalogOnly)
+  }
+
+  func testUniqueKeepsCatalogTitles() {
+    let shown = HomeSections.unique([item("a"), item("tmdb:movie:9"), item("a")])
+    XCTAssertEqual(shown.map(\.ratingKey), ["a", "tmdb:movie:9"])
+  }
+
   func testGreatsFromLibraryStable() {
     let items = [
       item("b", year: 1990, rating: 9.0), item("a", year: 1972, rating: 9.0), item("low", rating: 6.0),

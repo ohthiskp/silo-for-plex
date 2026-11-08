@@ -260,14 +260,15 @@ final class LibraryStore {
     // Which index these rows are matched with (-1: none yet).
     let usedVersion = !index.isEmpty && index.count == libraryIndex?.count ? indexVersion : -1
     func shown(_ item: TMDBItem) -> PlexMetadata { index[item.id] ?? item.asMetadata }
-    // Astra 4.0 (KP: Plex titles only): every section is the service's
-    // TMDB list kept in its order, with only the titles on the server.
+    // KP (2026-11-08, "bring back cineby"): every section is the service's
+    // whole TMDB list in its order; titles on the server play, the rest
+    // show with Play greyed.
     func list(_ suffix: String) -> [PlexMetadata] {
-      HomeSections.playable((lists.first { $0.0.id.hasSuffix(suffix) }?.1 ?? []).map(shown))
+      HomeSections.unique((lists.first { $0.0.id.hasSuffix(suffix) }?.1 ?? []).map(shown))
     }
     let popular = list(".trending")
     // Every list's titles, in row order, so both Movies and Series fill to 10.
-    let pool = HomeSections.playable(lists.flatMap { $0.1.map(shown) })
+    let pool = HomeSections.unique(lists.flatMap { $0.1.map(shown) })
     let topTen = (
       movies: TrendingHero.serviceTopTen(
         trending: trending.filter { $0.kind == .movie }, service: pool.filter { $0.type == .movie }),
@@ -277,7 +278,7 @@ final class LibraryStore {
     // Newest first by release / first-air date (TMDB already sorted them so).
     let recent = HomeSections.shelf(Array(list(".new").prefix(40)))
     let greats = HomeSections.shelf(Array(list(".top").prefix(40)))
-    // The hero: this service's titles trending now, on the server only.
+    // The hero: this service's titles trending now.
     let picks = TrendingHero.pick(trending: trending, service: popular, currentYear: Self.currentYear)
     let hero = await loadInFull(Array(picks.prefix(6))).filter { $0.backdrop != nil }
     guard !isClosed else { return }
@@ -358,13 +359,13 @@ final class LibraryStore {
     }
     let trending = tmdb == nil ? [] : await loadWeekTrending()
     func picks(_ index: [String: PlexMetadata]) async -> [PlexMetadata] {
-      await loadInFull(TrendingHero.pick(trending: trending, index: index, limit: 6)).filter { $0.backdrop != nil }
+      await loadInFull(TrendingHero.today(trending: trending, index: index, limit: 6)).filter { $0.backdrop != nil }
     }
     var shown = await picks(libraryIndex ?? [:])
     if shown.isEmpty { shown = await pickHero(from: hubs) }
     guard isCurrent() else { return }
     if !shown.isEmpty || hero.isEmpty { hero = shown }
-    topTen = Self.playableTopTen(trending, libraryIndex ?? [:])
+    topTen = TrendingHero.topTen(trending: trending, index: libraryIndex ?? [:])
     topTenAll = TrendingHero.today(trending: trending, index: libraryIndex ?? [:], limit: 10)
     isLoadingHero = false
     // Once the library index is ready, the titles on the server become playable.
@@ -373,7 +374,7 @@ final class LibraryStore {
     let matched = await picks(index)
     guard isCurrent(), !matched.isEmpty else { return }
     hero = matched
-    topTen = Self.playableTopTen(trending, index)
+    topTen = TrendingHero.topTen(trending: trending, index: index)
     topTenAll = TrendingHero.today(trending: trending, index: index, limit: 10)
   }
 
@@ -422,10 +423,10 @@ final class LibraryStore {
   /// Rebuilds the hero and the Top 10 from a new trending list.
   private func showTrending(_ trending: [TMDBItem]) async {
     let index = libraryIndex ?? [:]
-    let shown = await loadInFull(TrendingHero.pick(trending: trending, index: index, limit: 6)).filter { $0.backdrop != nil }
+    let shown = await loadInFull(TrendingHero.today(trending: trending, index: index, limit: 6)).filter { $0.backdrop != nil }
     guard !isClosed else { return }
     if !shown.isEmpty { hero = shown }
-    topTen = Self.playableTopTen(trending, index)
+    topTen = TrendingHero.topTen(trending: trending, index: index)
     topTenAll = TrendingHero.today(trending: trending, index: index, limit: 10)
   }
 
@@ -944,7 +945,7 @@ final class LibraryStore {
     let rated = await loadTopRated()
     guard isCurrent() else { return }
     func greats(_ kind: TMDBItem.Kind, _ items: [PlexMetadata]) -> [PlexMetadata] {
-      let ranked = HomeSections.ranked(rated.filter { $0.kind == kind }, index: index)
+      let ranked = HomeSections.catalog(rated.filter { $0.kind == kind }, index: index)
       return ranked.count >= 5 ? ranked : HomeSections.greatsFromLibrary(items)
     }
     forYouGreats = HomeShelf(movies: greats(.movie, movies), shows: greats(.tv, shows))

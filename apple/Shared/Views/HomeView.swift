@@ -98,7 +98,7 @@ struct HomeView: View {
         } else if let service = library.selectedService, !library.isLoadingService, !library.homeHasSections {
           EmptyState(
             symbol: "tv", title: "Nothing from \(service.label)",
-            message: "None of the popular titles on \(service.label) are on your Plex server.")
+            message: "TMDB returned no titles for \(service.label). Try again in a moment.")
         }
 
         if library.selectedService == nil, let error = library.homeError {

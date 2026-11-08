@@ -26,6 +26,25 @@ public enum HomeSections {
     return items.filter { !$0.isCatalogOnly && seen.insert($0.tmdbKey ?? $0.ratingKey).inserted }
   }
 
+  /// Every title once, Plex or not (KP, 2026-11-08: "bring back cineby"):
+  /// streaming pages list the service's whole popular catalogue.
+  public static func unique(_ items: [PlexMetadata]) -> [PlexMetadata] {
+    var seen = Set<String>()
+    return items.filter { seen.insert($0.tmdbKey ?? $0.ratingKey).inserted }
+  }
+
+  /// A ranked TMDB list in its own order, each title once: the server's item
+  /// when it has it (so it plays), else the TMDB title (Play greyed).
+  public static func catalog(_ ranked: [TMDBItem], index: [String: PlexMetadata], limit: Int = 20) -> [PlexMetadata] {
+    var seen = Set<String>()
+    var out: [PlexMetadata] = []
+    for item in ranked where out.count < limit {
+      guard seen.insert(item.id).inserted else { continue }
+      out.append(index[item.id] ?? item.asMetadata)
+    }
+    return out
+  }
+
   /// A release date: Plex's `originallyAvailableAt` (a movie's release, a
   /// show's first air date), else 1 January of its year. Nil with neither.
   public static func releaseDate(_ item: PlexMetadata) -> Date? {
