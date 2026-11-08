@@ -5,8 +5,13 @@ import SwiftUI
 /// The Apple TV app uses the shared root: launch screen with the server name,
 /// sign-in, server choice, then `MainView` below (KP, 2026-11-08).
 struct TVRootView: View {
+  @Environment(AppModel.self) private var app
+
   var body: some View {
     RootView()
+      // The player draws under this window; play() needs it before the
+      // player's own host is on screen.
+      .background(WindowAccessor { app.player.window = $0 })
   }
 }
 

@@ -6,13 +6,17 @@ import SwiftUI
 /// the bottom right, captions and quality (Auto / HD / 4K between the original
 /// files on the server, never a transcode).
 ///
-/// Remote: Select or Play/Pause pauses and plays, left and right skip 10 s,
-/// Menu hides the controls and then closes the player. Any press shows the
-/// controls; they fade after a few seconds of playing.
+/// The remote comes from `TVPlayerHost` (playback): click or Play/Pause plays
+/// and pauses, left / right skip 10 s, a swipe scrubs, Menu hides the controls
+/// and then closes the player. It is on while focus is on the timeline; on the
+/// captions, quality or Next Episode button, clicks go to that button. Any
+/// press shows the controls; they fade after a few seconds of playing.
 struct PlayerOverlay: View {
   @Environment(AppModel.self) private var app
   @AppStorage(Preferences.nextEpisodeKey) private var showNextEpisode = true
   @State private var visible = true
+  /// The time a swipe is scrubbing to, from the host; nil when not scrubbing.
+  @State private var scrubbing: Double?
   /// Bumped on every press; the hide timer restarts from it.
   @State private var activity = 0
   @FocusState private var focus: Field?
@@ -21,6 +25,18 @@ struct PlayerOverlay: View {
   private var player: PlayerController { app.player }
 
   var body: some View {
+    TVPlayerHost(
+      player: player,
+      controlsVisible: $visible,
+      scrubbing: $scrubbing,
+      remoteEnabled: focus == .bar || focus == nil,
+      poke: poke
+    ) {
+      controls
+    }
+  }
+
+  private var controls: some View {
     ZStack(alignment: .bottom) {
       Color.clear
 
@@ -45,24 +61,21 @@ struct PlayerOverlay: View {
     }
     .astraAnimation(Astra.Motion.base, value: visible)
     .astraAnimation(Astra.Motion.fast, value: player.buffering)
-    .onPlayPauseCommand {
-      player.togglePause()
-      poke()
-    }
+    // Menu on a button (where the host's remote is off) goes back to the timeline.
     .onExitCommand {
-      if visible && !player.paused {
-        visible = false
-      } else {
-        player.close()
-      }
+      if focus != .bar { focus = .bar }
     }
     .onAppear {
       focus = .bar
       poke()
     }
+    .onChange(of: visible) {
+      // Hidden controls keep focus on the timeline, so the remote stays live.
+      if !visible { focus = .bar } else { activity &+= 1 }
+    }
     .task(id: activity) {
       try? await Task.pause(5)
-      guard !Task.isCancelled, !player.paused, focus == .bar || focus == nil else { return }
+      guard !Task.isCancelled, !player.paused, scrubbing == nil, focus == .bar || focus == nil else { return }
       visible = false
     }
   }
@@ -102,15 +115,11 @@ struct PlayerOverlay: View {
         captionsMenu
         qualityMenu
       }
+      // Hidden buttons can't take focus.
+      .disabled(!visible)
 
-      TVScrubBar(player: player) {
-        if visible { player.togglePause() }
-        poke()
-      } onSkip: { seconds in
-        player.seek(by: seconds)
-        poke()
-      }
-      .focused($focus, equals: .bar)
+      TVScrubBar(player: player, scrubbing: scrubbing)
+        .focused($focus, equals: .bar)
     }
     .padding(.horizontal, 90)
     .padding(.bottom, 60)
@@ -172,36 +181,32 @@ struct PlayerOverlay: View {
   }
 }
 
-/// The white timeline with the time played and the time left. With focus,
-/// Select plays or pauses and left / right skip 10 s.
+/// The white timeline with the time played and the time left. It holds focus
+/// while the remote drives playback; the host does the clicks and swipes.
 private struct TVScrubBar: View {
   let player: PlayerController
-  var onSelect: () -> Void
-  var onSkip: (Double) -> Void
+  var scrubbing: Double?
 
   var body: some View {
-    Button(action: onSelect) {
-      TVScrubBarLabel(player: player)
+    Button {} label: {
+      TVScrubBarLabel(player: player, scrubbing: scrubbing)
     }
     .buttonStyle(TVBareButtonStyle())
-    .onMoveCommand { direction in
-      switch direction {
-      case .left: onSkip(-10)
-      case .right: onSkip(10)
-      default: break
-      }
-    }
     .accessibilityLabel(player.paused ? "Play" : "Pause")
-    .accessibilityValue(TVScrubBarLabel.clock(player.position))
+    .accessibilityValue(TVScrubBarLabel.clock(scrubbing ?? player.position))
   }
 }
 
 private struct TVScrubBarLabel: View {
   let player: PlayerController
+  var scrubbing: Double?
   @Environment(\.isFocused) private var focused
 
+  /// While scrubbing, the bar and clock show where a click will jump to.
+  private var time: Double { scrubbing ?? player.position }
+
   private var fraction: Double {
-    player.duration > 0 ? min(1, max(0, player.position / player.duration)) : 0
+    player.duration > 0 ? min(1, max(0, time / player.duration)) : 0
   }
 
   var body: some View {
@@ -218,10 +223,10 @@ private struct TVScrubBarLabel: View {
           if player.paused {
             Image(systemName: "pause.fill").font(.system(size: 20, weight: .bold))
           }
-          Text(Self.clock(player.position))
+          Text(Self.clock(time))
         }
         Spacer()
-        Text("-" + Self.clock(max(0, player.duration - player.position)))
+        Text("-" + Self.clock(max(0, player.duration - time)))
       }
       .font(.system(size: 24, weight: .semibold))
       .monospacedDigit()
