@@ -529,7 +529,7 @@ struct HeroInfo: View {
       .buttonStyle(.plain)
       .accessibilityLabel("\(item.displayTitle), Details")
       // KP's mockup (2026-11-08): no summary; "year · runtime · rating",
-      // the 4K / Dolby Vision / Atmos pills, then Play and Details.
+      // the 4K / Dolby Vision / Atmos pills, then Play and +.
       VStack(alignment: .leading, spacing: 8) {
         DetailMetaLine(item: item, library: library, showsGenres: false, fontSize: 14.5)
         FormatBadges(item: item)
@@ -551,15 +551,10 @@ struct HeroInfo: View {
         // Apple TV: focus starts on Play, not on the sidebar.
         .tvLaunchFocus(item.id, when: playable)
         .help(library.availability(of: item) == .notOnServer ? "Not on your Plex server" : "")
-        // KP's mockup (2026-11-08): a glass Details button where the + was;
-        // + Watchlist is on the Details screen.
-        Button {
-          openItem(item)
-        } label: {
-          Label("Details", systemImage: "info.circle")
-        }
-        .astraSecondaryButton()
-        .tvLaunchFocus(item.id, when: !playable)
+        // KP (2026-11-08): no Details button; the round grey glass + adds
+        // the title to the Plex Watchlist. Tapping the logo opens Details.
+        WatchlistButton(item: item)
+          .tvLaunchFocus(item.id, when: !playable)
       }
       .astraGlassGroup(spacing: 12)
       .padding(.top, 6)
