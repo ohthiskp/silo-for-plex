@@ -525,7 +525,7 @@ final class PlayerController {
     guard let selection, let server = playbackServer else { return }
     selectionApplied = true
     for external in selection.externals {
-      let url = server.baseURL.appending(plexPath: external.key).absoluteString
+      let url = server.url(forKey: external.key).absoluteString
       externalStreamIDs[url] = external.streamID
       // The token travels in mpv's http-header-fields, as for the video.
       core.command(["sub-add", url, external.selected ? "select" : "auto", external.title, external.language ?? ""])

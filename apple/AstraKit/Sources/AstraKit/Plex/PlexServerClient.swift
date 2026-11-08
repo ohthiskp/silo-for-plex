@@ -174,6 +174,10 @@ public struct PlexServerClient: Sendable {
     try await send("/library/parts/\(partID)", query: query, method: "PUT")
   }
 
+  /// The server URL for a Plex path such as a sidecar subtitle's
+  /// "/library/streams/<id>" (no token: it travels in headers).
+  public func url(forKey key: String) -> URL { baseURL.appending(plexPath: key) }
+
   public func reportTimeline(_ report: TimelineReport) async throws {
     try await send("/:/timeline", query: report.queryItems)
   }
