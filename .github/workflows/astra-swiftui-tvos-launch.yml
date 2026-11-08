@@ -1,0 +1,122 @@
+name: Astra SwiftUI Apple TV launch check
+run-name: SwiftUI Apple TV launch check ${{ github.sha }}
+
+# Builds the SwiftUI Apple TV app for the tvOS simulator, launches it, prints
+# any crash report, then takes demo screenshots (Shared/App/Demo.swift, launch
+# arguments -AstraDemo YES …) so the TV layout and focus states can be checked
+# by eye without an Apple TV. Screenshots are printed into the log as small
+# JPEGs (ASTRA-SHOT-BEGIN … END) and uploaded as the "tvos-launch" artifact.
+on:
+  push:
+    branches: [claude/project-thread-otuzui]
+    paths:
+      - "apple/**"
+      - ".github/workflows/astra-swiftui-tvos-launch.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astra-swiftui-tvos-launch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  launch:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            apple/.build/SourcePackages
+          key: astra-swiftui-tvos-sim-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apple/project.yml') }}
+
+      - name: Build for the simulator
+        working-directory: apple
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          set -o pipefail
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild build \
+            -project Astra.xcodeproj -scheme AstraTV -configuration Release \
+            -destination 'generic/platform=tvOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            TMDB_TOKEN="$TMDB_TOKEN" \
+            | tee "$RUNNER_TEMP/build.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name "Astra.app" -maxdepth 2 | head -1)
+          test -n "$APP" || { tail -80 "$RUNNER_TEMP/build.log"; exit 1; }
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Launch and watch for a crash
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];c=[x for k,v in d.items() if "tvOS" in k for x in v if "Apple TV" in x["name"]];print(next((x["udid"] for x in c if "4K" in x["name"]), c[0]["udid"]))')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP"
+          BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          echo "BID=$BID" >> "$GITHUB_ENV"
+          xcrun simctl spawn "$UDID" log stream --level error --predicate 'process == "Astra"' > "$RUNNER_TEMP/app.log" 2>&1 &
+          PID=$(xcrun simctl launch "$UDID" "$BID" | awk '{print $NF}')
+          echo "Launched pid $PID"
+          sleep 20
+          xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/screen.png" || true
+          echo "--- errors"; tail -60 "$RUNNER_TEMP/app.log" || true
+          REPORTS=$(find ~/Library/Logs/DiagnosticReports -name "Astra*" -newer "$APP" 2>/dev/null)
+          if [ -n "$REPORTS" ]; then
+            for r in $REPORTS; do echo "--- $r"; head -150 "$r"; done
+            echo "::error::Astra crashed in the Apple TV simulator"
+            exit 1
+          fi
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo "::error::Astra is not running after 20 s"
+            exit 1
+          fi
+          echo "Astra is still running after 20 s."
+
+      - name: Demo screenshots
+        if: success()
+        run: |
+          mkdir -p "$RUNNER_TEMP/shots"
+          shot() {
+            name=$1; shift
+            xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$BID" -AstraDemo YES "$@" > /dev/null
+            sleep 25
+            xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shots/$name.png" || true
+          }
+          # The same launch arguments as the iPhone check; screens the TV
+          # shell doesn't have yet show its placeholder.
+          shot home
+          shot search -AstraDemoTab search
+          shot libraries -AstraDemoTab libraries
+          shot details-movie -AstraDemoOpen 101
+          ls -la "$RUNNER_TEMP/shots"
+          for f in "$RUNNER_TEMP"/shots/*.png; do
+            sips -s format jpeg -s formatOptions 55 -Z 1280 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "ASTRA-SHOT-BEGIN tv-$(basename "${f%.png}")"
+            base64 -i "${f%.png}.jpg" | fold -w 4000
+            echo "ASTRA-SHOT-END"
+          done
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: tvos-launch
+          path: |
+            ${{ runner.temp }}/screen.png
+            ${{ runner.temp }}/app.log
+            ${{ runner.temp }}/shots
+            ${{ runner.temp }}/build.log
