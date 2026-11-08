@@ -176,6 +176,7 @@ final class DownloadStore {
           jobs.append(Job(record: made.record, partKey: made.partKey, serverID: serverID))
           jobClients[made.record.ratingKey] = client
           Task { await saveImage(for: full, record: made.record) }
+          Task { await saveSubtitles(for: full, record: made.record, partKey: made.partKey, client: client) }
         }
         saveQueue()
         pump()
@@ -233,6 +234,7 @@ final class DownloadStore {
     guard let record = index.remove(ratingKey) else { return cancel(ratingKey) }
     try? FileManager.default.removeItem(at: fileURL(record))
     if let image = imageURL(record) { try? FileManager.default.removeItem(at: image) }
+    removeSubtitles(record)
     save()
   }
 
@@ -428,6 +430,7 @@ final class DownloadStore {
   private func removeParts(_ record: DownloadRecord) {
     let destination = fileURL(record)
     for i in 0..<Self.segmentCount { try? FileManager.default.removeItem(at: partURL(destination, i)) }
+    removeSubtitles(record)
   }
 
   /// Free space on the downloads volume, as the system counts it for files the person asked for.
@@ -511,6 +514,28 @@ final class DownloadStore {
       saved.imageName = image.lastPathComponent
       index.upsert(saved)
       save()
+    }
+  }
+
+  /// The file's sidecar subtitles (Plex's external .srt and friends), saved
+  /// beside the video so they play offline too. Small files, one request each.
+  private func saveSubtitles(for item: PlexMetadata, record: DownloadRecord, partKey: String, client: PlexServerClient) async {
+    guard let part = item.media.flatMap(\.parts).first(where: { $0.key == partKey }) else { return }
+    for external in StreamSelection(part: part).externals {
+      guard let name = SidecarSubtitle.fileName(for: external, videoFileName: record.fileName) else { continue }
+      var request = PlaybackResolver.downloadRequest(partKey: external.key, client: client)
+      request.timeoutInterval = 30
+      guard let (data, response) = try? await URLSession.shared.data(for: request),
+        (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty
+      else { continue }
+      try? data.write(to: folder.appendingPathComponent(name), options: .atomic)
+    }
+  }
+
+  private func removeSubtitles(_ record: DownloadRecord) {
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+    for name in SidecarSubtitle.files(of: record.fileName, in: names) {
+      try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
     }
   }
 

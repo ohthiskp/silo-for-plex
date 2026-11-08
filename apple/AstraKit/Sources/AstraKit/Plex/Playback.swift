@@ -238,3 +238,95 @@ public struct PendingTimelines: Codable, Sendable, Equatable {
     }
   }
 }
+
+/// Plex's audio and subtitle choice for one file, and its sidecar subtitle
+/// files, so the player starts on the tracks Plex has selected (the same
+/// ones every Plex app uses) and offers the external subtitles too.
+public struct StreamSelection: Equatable, Sendable {
+  public struct External: Equatable, Sendable {
+    public var streamID: Int
+    public var key: String
+    public var title: String
+    public var language: String?
+    public var codec: String?
+    public var selected: Bool
+  }
+
+  /// Container index (mpv `ff-index`) of the selected audio track.
+  public var audioIndex: Int?
+  /// Container index of the selected embedded subtitle.
+  public var subtitleIndex: Int?
+  /// Plex has a subtitle selected (embedded or external). When false the
+  /// Settings → Subtitles preference decides.
+  public var hasSubtitleChoice: Bool
+  public var externals: [External]
+  /// Plex stream ids by kind and container index, to save a choice back.
+  public var audioIDs: [Int: Int]
+  public var subtitleIDs: [Int: Int]
+
+  public init(part: PlexPart) {
+    let audio = part.streams.filter { $0.streamType == 2 }
+    let subs = part.streams.filter { $0.streamType == 3 }
+    audioIndex = audio.first { $0.selected == true }?.index
+    let chosenSub = subs.first { $0.selected == true }
+    subtitleIndex = chosenSub?.key == nil ? chosenSub?.index : nil
+    hasSubtitleChoice = chosenSub != nil
+    externals = subs.compactMap { stream in
+      guard let key = stream.key, stream.index == nil else { return nil }
+      return External(
+        streamID: stream.id, key: key,
+        title: stream.displayTitle ?? stream.language ?? "External",
+        language: stream.languageCode, codec: stream.codec, selected: stream.selected == true)
+    }
+    var audioIDs: [Int: Int] = [:]
+    for stream in audio { if let index = stream.index { audioIDs[index] = stream.id } }
+    var subtitleIDs: [Int: Int] = [:]
+    for stream in subs { if let index = stream.index, stream.key == nil { subtitleIDs[index] = stream.id } }
+    self.audioIDs = audioIDs
+    self.subtitleIDs = subtitleIDs
+  }
+
+  /// Nothing to apply: no streams were listed for the file.
+  public var isEmpty: Bool { audioIndex == nil && !hasSubtitleChoice && externals.isEmpty }
+}
+
+/// Sidecar subtitles saved beside a download: "<video file>.<stream id>.<language>.<ext>",
+/// with "forced"-style flags left out. mpv loads them as external tracks.
+public enum SidecarSubtitle {
+  public static let extensions: Set<String> = ["srt", "ass", "ssa", "vtt", "smi", "sub", "idx", "sup"]
+
+  /// The file name for `external` beside `videoFileName`; nil when its format can't be saved alone.
+  public static func fileName(for external: StreamSelection.External, videoFileName: String) -> String? {
+    let ext = fileExtension(codec: external.codec)
+    guard extensions.contains(ext) else { return nil }
+    let language = (external.language ?? "und").filter { $0.isLetter }.lowercased()
+    let flag = external.selected ? ".default" : ""
+    return "\(videoFileName).\(external.streamID).\(language.isEmpty ? "und" : language)\(flag).\(ext)"
+  }
+
+  /// "subrip" → "srt", "webvtt" → "vtt"; anything else as named.
+  public static func fileExtension(codec: String?) -> String {
+    switch codec?.lowercased() {
+    case "subrip", "srt", nil: "srt"
+    case "webvtt", "vtt": "vtt"
+    case "pgs", "hdmv_pgs_subtitle": "sup"
+    case let other?: other
+    }
+  }
+
+  /// The saved sidecars of `videoFileName` among `names` (a folder listing).
+  public static func files(of videoFileName: String, in names: [String]) -> [String] {
+    names.filter { name in
+      name.hasPrefix(videoFileName + ".")
+        && extensions.contains((name as NSString).pathExtension.lowercased())
+    }.sorted()
+  }
+
+  /// "eng" from "Movie.mkv.123.eng.default.srt"; whether it was Plex's choice.
+  public static func describe(_ name: String, videoFileName: String) -> (language: String?, selected: Bool) {
+    let rest = name.dropFirst(videoFileName.count + 1).split(separator: ".").map(String.init)
+    // [streamID, language, ("default")?, ext]
+    let language = rest.count >= 3 ? rest[1] : nil
+    return (language == "und" ? nil : language, rest.contains("default"))
+  }
+}

@@ -48,10 +48,29 @@ public struct PlexStream: Codable, Sendable, Hashable, Identifiable {
   public var key: String?
   public var DOVIPresent: Bool?
   public var colorTrc: String?
+  /// The stream's position in the file (FFmpeg's index; mpv's `ff-index`).
+  /// Nil for a sidecar subtitle, which has a `key` instead.
+  public var index: Int?
 
   enum CodingKeys: String, CodingKey {
     case id, streamType, codec, displayTitle, extendedDisplayTitle, language, languageCode, selected, `default`,
-      forced, key, DOVIPresent, colorTrc
+      forced, key, DOVIPresent, colorTrc, index
+  }
+
+  public init(
+    id: Int, streamType: Int, codec: String? = nil, displayTitle: String? = nil, language: String? = nil,
+    languageCode: String? = nil, selected: Bool? = nil, forced: Bool? = nil, key: String? = nil, index: Int? = nil
+  ) {
+    self.id = id
+    self.streamType = streamType
+    self.codec = codec
+    self.displayTitle = displayTitle
+    self.language = language
+    self.languageCode = languageCode
+    self.selected = selected
+    self.forced = forced
+    self.key = key
+    self.index = index
   }
 
   public init(from decoder: Decoder) throws {
@@ -69,6 +88,7 @@ public struct PlexStream: Codable, Sendable, Hashable, Identifiable {
     key = try c.decodeIfPresent(String.self, forKey: .key)
     DOVIPresent = try c.decodeLenientBool(.DOVIPresent)
     colorTrc = try c.decodeIfPresent(String.self, forKey: .colorTrc)
+    index = try c.decodeLenientInt(.index)
   }
 }
 

@@ -212,6 +212,7 @@ final class PlayerController {
     self.library = library
     playbackServer = server
     loadThumbnails(for: source, local: local != nil)
+    prepareStreams(for: item, source: source, local: local != nil, library: library)
 
     title = source.title
     subtitle = source.subtitle
@@ -397,11 +398,118 @@ final class PlayerController {
   func selectAudio(_ id: Int) {
     audioId = id
     core?.setProperty("aid", value: String(id))
+    saveStreamChoice(audio: plexAudioID(forTrack: id))
   }
 
   func selectSubtitle(_ id: Int?) {
     subtitleId = id
     core?.setProperty("sid", value: id.map(String.init) ?? "no")
+    // 0 is Plex's "no subtitles".
+    saveStreamChoice(subtitle: id.map { plexSubtitleID(forTrack: $0) } ?? 0)
+  }
+
+  // MARK: - Audio and subtitle tracks from Plex
+
+  /// What mpv lists for one track (by "audio:<id>" / "sub:<id>").
+  private struct TrackInfo {
+    var ffIndex: Int?
+    var externalFile: String?
+  }
+
+  @ObservationIgnored private var selection: StreamSelection?
+  @ObservationIgnored private var selectionApplied = false
+  @ObservationIgnored private var trackInfo: [String: TrackInfo] = [:]
+  /// Sidecar subtitle URL (or saved file path) → its Plex stream id.
+  @ObservationIgnored private var externalStreamIDs: [String: Int] = [:]
+  /// A download's saved sidecar subtitles: path, language, Plex's choice.
+  @ObservationIgnored private var localSidecars: [(path: String, language: String?, selected: Bool)] = []
+
+  /// Reads Plex's track choice and sidecar subtitles for the file about to
+  /// play. A Home or season listing often leaves the streams out, so they
+  /// are read from the title's details then.
+  private func prepareStreams(for item: PlexMetadata, source: PlaybackSource, local: Bool, library: LibraryStore) {
+    selection = nil
+    selectionApplied = false
+    trackInfo = [:]
+    externalStreamIDs = [:]
+    localSidecars = []
+    if local {
+      let folder = source.url.deletingLastPathComponent()
+      let name = source.url.lastPathComponent
+      let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+      localSidecars = SidecarSubtitle.files(of: name, in: names).map { file in
+        let described = SidecarSubtitle.describe(file, videoFileName: name)
+        return (folder.appendingPathComponent(file).path, described.language, described.selected)
+      }
+      return
+    }
+    if !source.part.streams.isEmpty {
+      selection = StreamSelection(part: source.part)
+      return
+    }
+    let started = source.url
+    Task { [weak self] in
+      guard let full = try? await library.details(item.ratingKey) else { return }
+      let part = full.media.flatMap(\.parts).first { $0.id == source.part.id && !$0.streams.isEmpty }
+      guard let self, let part, self.source?.url == started else { return }
+      self.selection = StreamSelection(part: part)
+      self.applyStreamsIfReady()
+    }
+  }
+
+  /// Once mpv has listed the file's tracks: adds the sidecar subtitles and
+  /// switches to the tracks Plex has selected. Once per file.
+  private func applyStreamsIfReady() {
+    guard !selectionApplied, let core, !trackInfo.isEmpty else { return }
+    if !localSidecars.isEmpty {
+      selectionApplied = true
+      for sidecar in localSidecars {
+        let title = sidecar.language.map { Locale.current.localizedString(forLanguageCode: $0) ?? $0 } ?? "External"
+        core.command(["sub-add", sidecar.path, sidecar.selected ? "select" : "auto", title, sidecar.language ?? ""])
+      }
+      return
+    }
+    guard let selection, let server = playbackServer else { return }
+    selectionApplied = true
+    for external in selection.externals {
+      let url = server.baseURL.appending(plexPath: external.key).absoluteString
+      externalStreamIDs[url] = external.streamID
+      // The token travels in mpv's http-header-fields, as for the video.
+      core.command(["sub-add", url, external.selected ? "select" : "auto", external.title, external.language ?? ""])
+    }
+    if let index = selection.audioIndex, let id = trackID("audio", ffIndex: index) {
+      audioId = id
+      core.setProperty("aid", value: String(id))
+    }
+    if let index = selection.subtitleIndex, let id = trackID("sub", ffIndex: index) {
+      subtitleId = id
+      core.setProperty("sid", value: String(id))
+    }
+  }
+
+  private func trackID(_ type: String, ffIndex: Int) -> Int? {
+    trackInfo.first { $0.key.hasPrefix(type + ":") && $0.value.ffIndex == ffIndex }
+      .flatMap { Int($0.key.dropFirst(type.count + 1)) }
+  }
+
+  private func plexAudioID(forTrack id: Int) -> Int? {
+    guard let index = trackInfo["audio:\(id)"]?.ffIndex else { return nil }
+    return selection?.audioIDs[index]
+  }
+
+  private func plexSubtitleID(forTrack id: Int) -> Int? {
+    guard let info = trackInfo["sub:\(id)"] else { return nil }
+    if let file = info.externalFile { return externalStreamIDs[file] }
+    return info.ffIndex.flatMap { selection?.subtitleIDs[$0] }
+  }
+
+  /// A track picked in the player is saved on the server as the file's
+  /// choice, like any Plex app does, so it is used next time. Streaming only.
+  private func saveStreamChoice(audio: Int? = nil, subtitle: Int?? = .none) {
+    guard currentMediaID != nil, let server = playbackServer, let part = source?.part, part.id > 0 else { return }
+    let subtitleID: Int? = subtitle ?? nil
+    guard audio != nil || subtitleID != nil else { return }
+    Task { try? await server.setStreams(partID: part.id, audio: audio, subtitle: subtitleID) }
   }
 
   func setVolume(_ value: Double) {
@@ -561,9 +669,12 @@ final class PlayerController {
   private func updateTracks(_ list: [Any]) {
     var audio: [Track] = []
     var subs: [Track] = []
+    trackInfo = [:]
     for case let entry as [String: Any] in list {
       guard let id = (entry["id"] as? Int) ?? (entry["id"] as? Int64).map(Int.init), let type = entry["type"] as? String
       else { continue }
+      let ffIndex = (entry["ff-index"] as? Int) ?? (entry["ff-index"] as? Int64).map(Int.init)
+      trackInfo["\(type):\(id)"] = TrackInfo(ffIndex: ffIndex, externalFile: entry["external-filename"] as? String)
       let lang = (entry["lang"] as? String).map { Locale.current.localizedString(forLanguageCode: $0) ?? $0 }
       let label = [entry["title"] as? String, lang].compactMap { $0 }.first ?? "Track \(id)"
       if type == "audio" { audio.append(Track(id: id, title: label)) }
@@ -571,6 +682,7 @@ final class PlayerController {
     }
     audioTracks = audio
     subtitleTracks = subs
+    applyStreamsIfReady()
   }
 
   // MARK: - Plex progress

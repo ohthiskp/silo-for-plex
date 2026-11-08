@@ -164,6 +164,16 @@ public struct PlexServerClient: Sendable {
 
   /// Reports playback progress. Plex marks the item watched itself once the
   /// reported time passes its watched threshold (90% by default).
+  /// Saves the audio and subtitle choice for a file on the server (Plex's
+  /// own per-file selection, which every Plex app then uses). Subtitle 0 is
+  /// "none"; nil leaves that kind as it is.
+  public func setStreams(partID: Int, audio: Int? = nil, subtitle: Int? = nil) async throws {
+    var query: [URLQueryItem] = [.init(name: "allParts", value: "1")]
+    if let audio { query.append(.init(name: "audioStreamID", value: String(audio))) }
+    if let subtitle { query.append(.init(name: "subtitleStreamID", value: String(subtitle))) }
+    try await send("/library/parts/\(partID)", query: query, method: "PUT")
+  }
+
   public func reportTimeline(_ report: TimelineReport) async throws {
     try await send("/:/timeline", query: report.queryItems)
   }

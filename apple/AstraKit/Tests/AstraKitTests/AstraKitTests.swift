@@ -1908,3 +1908,47 @@ final class NetworkLogRedactionTests: XCTestCase {
     XCTAssertEqual(NetworkLog.redactNested("/x?mytoken=1"), "/x?mytoken=1")
   }
 }
+
+/// Playback audit: Plex's track choice and sidecar subtitles reach the player.
+final class StreamSelectionTests: XCTestCase {
+  private let part = PlexPart(
+    id: 9, key: "/library/parts/9/file.mkv",
+    streams: [
+      PlexStream(id: 1, streamType: 1, index: 0),
+      PlexStream(id: 2, streamType: 2, codec: "truehd", languageCode: "eng", index: 1),
+      PlexStream(id: 3, streamType: 2, codec: "ac3", languageCode: "jpn", selected: true, index: 2),
+      PlexStream(id: 4, streamType: 3, codec: "pgs", languageCode: "eng", index: 3),
+      PlexStream(
+        id: 5, streamType: 3, codec: "srt", displayTitle: "English (SRT External)", languageCode: "eng",
+        selected: true, key: "/library/streams/5"),
+    ])
+
+  func testReadsPlexsChoiceAndSidecars() {
+    let selection = StreamSelection(part: part)
+    XCTAssertEqual(selection.audioIndex, 2)
+    XCTAssertNil(selection.subtitleIndex, "the selected subtitle is the external one")
+    XCTAssertTrue(selection.hasSubtitleChoice)
+    XCTAssertEqual(selection.externals.map(\.streamID), [5])
+    XCTAssertEqual(selection.externals.first?.selected, true)
+    XCTAssertEqual(selection.audioIDs, [1: 2, 2: 3])
+    XCTAssertEqual(selection.subtitleIDs, [3: 4])
+  }
+
+  func testNoStreamsLeavesSettingsInCharge() {
+    let selection = StreamSelection(part: PlexPart(id: 1))
+    XCTAssertTrue(selection.isEmpty)
+    XCTAssertFalse(selection.hasSubtitleChoice)
+  }
+
+  func testSidecarNamesRoundTrip() throws {
+    let external = try XCTUnwrap(StreamSelection(part: part).externals.first)
+    let name = try XCTUnwrap(SidecarSubtitle.fileName(for: external, videoFileName: "123.mkv"))
+    XCTAssertEqual(name, "123.mkv.5.eng.default.srt")
+    let described = SidecarSubtitle.describe(name, videoFileName: "123.mkv")
+    XCTAssertEqual(described.language, "eng")
+    XCTAssertTrue(described.selected)
+    XCTAssertEqual(
+      SidecarSubtitle.files(of: "123.mkv", in: ["123.mkv", name, "1234.mkv.1.eng.srt", "123.jpg"]), [name])
+    XCTAssertEqual(SidecarSubtitle.fileExtension(codec: "subrip"), "srt")
+  }
+}
