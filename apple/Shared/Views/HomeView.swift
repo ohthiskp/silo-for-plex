@@ -603,7 +603,7 @@ struct HeroInfo: View {
         // On the service but not on the Plex server: nothing to play.
         // Greyed only once it's known the title isn't on the server, never
         // while the library is still loading.
-        .disabled(library.availability(of: item) == .notOnServer)
+        .disabled(library.availability(of: item) == .notOnServer || !app.canPlay(item))
         .help(library.availability(of: item) == .notOnServer ? "Not on your Plex server" : "")
         WatchlistButton(item: item)
       }

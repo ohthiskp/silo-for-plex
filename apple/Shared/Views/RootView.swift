@@ -118,6 +118,12 @@ struct RootView: View {
         // old server (its section keys, rows or scroll state) carries over.
         MainView(library: library)
           .id(library.generation)
+          // Astra 4.0: a small banner while the server can't stream.
+          .overlay(alignment: .top) {
+            if let health = app.health, !app.player.isActive {
+              ServerHealthBanner(health: health)
+            }
+          }
           .sheet(
             isPresented: Binding(
               get: { app.serverSwitch != nil }, set: { if !$0 { app.cancelServerSwitch() } })
@@ -155,5 +161,55 @@ struct ErrorView: View {
     .padding(.horizontal, Astra.Spacing.l)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Astra.Color.bg.ignoresSafeArea())
+  }
+}
+
+/// Astra 4.0 (KP, 2026-11-08): a small glass banner at the top while the
+/// server is confirmed unavailable, the sign-in was rejected, or there's no
+/// network. Cached rows and artwork stay; downloads still play.
+struct ServerHealthBanner: View {
+  let health: ServerHealthMonitor
+  @Environment(AppModel.self) private var app
+
+  private var message: String? {
+    switch health.state {
+    case .offline: AppModel.unavailableMessage
+    case .authRequired: "Plex needs you to sign in again before anything can stream."
+    case .networkUnavailable: "You're offline. Downloaded titles still play."
+    case .connected, .checking, .degraded: nil
+    }
+  }
+
+  var body: some View {
+    ZStack {
+      if let message {
+        HStack(spacing: 10) {
+          Image(systemName: health.state == .authRequired ? "person.crop.circle.badge.exclamationmark" : "wifi.exclamationmark")
+            .font(.system(size: 13, weight: .semibold))
+          Text(message)
+            .font(.system(size: 12.5, weight: .medium))
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+          if health.state == .authRequired {
+            Button("Sign In") { app.signOut() }
+              .font(.system(size: 12.5, weight: .semibold))
+              .buttonStyle(.plain)
+          } else if health.state == .offline {
+            Button("Retry") { health.checkNow() }
+              .font(.system(size: 12.5, weight: .semibold))
+              .buttonStyle(.plain)
+          }
+        }
+        .foregroundStyle(Astra.Color.ink)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 560)
+        .astraGlass(in: Capsule())
+        .padding(.top, 8)
+        .padding(.horizontal, 16)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+      }
+    }
+    .animation(Astra.Motion.page, value: health.state)
   }
 }

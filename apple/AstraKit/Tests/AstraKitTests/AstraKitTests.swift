@@ -1459,3 +1459,43 @@ final class HomeSectionsTests: XCTestCase {
     XCTAssertEqual(shelf.items(series: true).map(\.ratingKey), ["s"])
   }
 }
+
+final class ServerHealthTests: XCTestCase {
+  func testOneFailureIsDegradedTwoIsOffline() {
+    var tracker = ServerHealthTracker()
+    tracker.recordFailure(.unreachable, at: Date())
+    XCTAssertEqual(tracker.state, .degraded)
+    XCTAssertTrue(tracker.state.allowsStreaming)
+    tracker.recordFailure(.unreachable, at: Date())
+    XCTAssertEqual(tracker.state, .offline)
+    XCTAssertFalse(tracker.state.allowsStreaming)
+    tracker.recordSuccess(at: Date())
+    XCTAssertEqual(tracker.state, .connected)
+    XCTAssertEqual(tracker.failures, 0)
+  }
+
+  func testAuthIsNotOfflineAndNeedsAPerson() {
+    var tracker = ServerHealthTracker()
+    tracker.recordFailure(.unauthorized, at: Date())
+    XCTAssertEqual(tracker.state, .authRequired)
+    XCTAssertNil(tracker.nextCheck)
+  }
+
+  func testBackoffDoublesAndCaps() {
+    var tracker = ServerHealthTracker()
+    var delays: [TimeInterval] = []
+    for _ in 0..<8 {
+      tracker.recordFailure(.server, at: Date())
+      delays.append(tracker.nextCheck ?? -1)
+    }
+    XCTAssertEqual(Array(delays.prefix(4)), [10, 20, 40, 80])
+    XCTAssertEqual(delays.last, ServerHealthTracker.maxRetry)
+  }
+
+  func testClassify() {
+    XCTAssertEqual(ProbeFailure.classify(PlexError.unauthorized), .unauthorized)
+    XCTAssertEqual(ProbeFailure.classify(URLError(.notConnectedToInternet)), .network)
+    XCTAssertEqual(ProbeFailure.classify(URLError(.timedOut)), .unreachable)
+    XCTAssertEqual(ProbeFailure.classify(PlexError.http(500)), .server)
+  }
+}

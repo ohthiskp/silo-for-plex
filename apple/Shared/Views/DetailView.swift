@@ -21,6 +21,7 @@ struct DetailView: View {
   @State private var scrolled: CGFloat = 0
 
   @Environment(\.playItem) private var playItem
+  @Environment(AppModel.self) private var app
   @Environment(\.contentLeading) private var leading
   @Environment(\.closeCard) private var closeCard
   /// False for a card under the top one: its keyboard shortcuts are off.
@@ -126,7 +127,7 @@ struct DetailView: View {
         }
         .buttonStyle(SolidCapsuleButtonStyle())
         .keyboardShortcut(isActive ? .defaultAction : nil)
-        .disabled(shown.isCatalogOnly)
+        .disabled(shown.isCatalogOnly || !app.canPlay(shown))
 
         if shown.type != .collection, !shown.isCatalogOnly {
           DownloadButton(item: shown, wide: true)

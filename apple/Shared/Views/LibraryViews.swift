@@ -529,8 +529,13 @@ struct SettingsView: View {
       } footer: {
         Text("Astra always plays the original file. When a title has several versions, this picks which one.")
       }
-      Section("Plex") {
-        LabeledContent("Server", value: app.server?.serverName ?? "Not connected")
+      // Astra 4.0 (KP, 2026-11-08): Sources, with each server's health.
+      Section("Sources") {
+        LabeledContent("Name", value: app.server?.serverName ?? "Not connected")
+        LabeledContent("Type", value: "Plex Media Server")
+        if let health = app.health {
+          SourceHealthRow(health: health)
+        }
         LabeledContent("Address", value: app.server?.baseURL.host() ?? "—")
         Button("Change Server…") { Task { await app.chooseServer() } }
         Button("Sign Out", role: .destructive) { app.signOut() }
@@ -559,6 +564,31 @@ struct SettingsView: View {
     let short = info["CFBundleShortVersionString"] as? String ?? ""
     let build = info["CFBundleVersion"] as? String ?? ""
     return build.isEmpty ? short : "\(short) (\(build))"
+  }
+}
+
+/// Settings → Sources: connection status, when it was last checked, Retry.
+struct SourceHealthRow: View {
+  let health: ServerHealthMonitor
+
+  var body: some View {
+    LabeledContent("Status") {
+      HStack(spacing: 6) {
+        Circle()
+          .fill(health.state == .connected ? Astra.Color.ink : Astra.Color.muted)
+          .frame(width: 7, height: 7)
+        Text(health.state.title)
+      }
+    }
+    LabeledContent("Last Checked") {
+      if let at = health.lastChecked {
+        Text(at, style: .relative) + Text(" ago")
+      } else {
+        Text("—")
+      }
+    }
+    Button("Retry Connection") { health.checkNow() }
+      .disabled(health.state == .checking)
   }
 }
 

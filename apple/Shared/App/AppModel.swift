@@ -204,6 +204,8 @@ final class AppModel {
     server = nil
     serverID = nil
     library = nil
+    health?.stop()
+    health = nil
     watchlistItems = nil
     watchlistKeys = []
     watchlistRefreshedAt = nil
@@ -298,6 +300,15 @@ final class AppModel {
 
   /// The connected server's session, kept so the library can be rebuilt.
   @ObservationIgnored private var session: ServerSession?
+  /// Astra 4.0: the connected server's health (nil before a server is chosen).
+  private(set) var health: ServerHealthMonitor?
+
+  /// Whether `item` can play now: its download is here, or the server isn't
+  /// confirmed unreachable (KP: don't keep trying to play while it's offline).
+  func canPlay(_ item: PlexMetadata) -> Bool {
+    if downloads.source(for: item) != nil { return true }
+    return health?.state.allowsStreaming ?? true
+  }
 
   /// Settings → Content → Library Quality changed: Home, the tabs and search
   /// are rebuilt with the new choice (each choice keeps its own saved index).
@@ -318,6 +329,10 @@ final class AppModel {
     server = session.client
     serverID = session.serverID
     library = store
+    health?.stop()
+    let monitor = ServerHealthMonitor(client: session.client)
+    health = monitor
+    if !Demo.isOn { monitor.start() }
     downloads.attach(store, serverID: session.serverID)
     player.server = session.client
     serverSwitch = nil
@@ -337,13 +352,22 @@ final class AppModel {
         if let local = downloads.source(for: resolved) {
           return try player.play(resolved, library: library, local: local)
         }
+        // Astra 4.0: no streaming attempt while the server is confirmed down.
+        if let health, !health.state.allowsStreaming {
+          player.lastError = Self.unavailableMessage
+          return
+        }
         let playable = try await library.playable(for: resolved)
         try player.play(playable, library: library, local: downloads.source(for: playable))
       } catch {
         player.lastError = error.localizedDescription
+        health?.requestFailed(error)
       }
     }
   }
+
+  static let unavailableMessage =
+    "Your media server is unavailable. You can still browse, but streaming is temporarily unavailable."
 
   /// Plays a downloaded file from disk, resuming where Plex says when the server answers.
   func playDownload(_ record: DownloadRecord) {
