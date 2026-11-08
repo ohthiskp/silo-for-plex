@@ -23,6 +23,15 @@ struct DownloadButton: View {
   }
 
   var body: some View {
+    // Apple TV has no downloads (KP, 2026-11-08): the button isn't drawn.
+    #if os(tvOS)
+      EmptyView()
+    #else
+      content
+    #endif
+  }
+
+  private var content: some View {
     Group {
       if compact {
         Button(action: tap) { icon.font(.system(size: 15, weight: .semibold)) }

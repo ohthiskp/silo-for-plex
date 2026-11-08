@@ -225,6 +225,11 @@ struct ItemMenu: ViewModifier {
 struct ItemMenuItems: View {
   var library: LibraryStore
   var item: PlexMetadata
+  #if os(tvOS)
+    private static let isTV = true
+  #else
+    private static let isTV = false
+  #endif
   var inContinueWatching = false
   /// Details and Play are left out on the Details page itself (it has its own Play).
   var onDetails = false
@@ -258,7 +263,8 @@ struct ItemMenuItems: View {
       }
       let isGroup = item.type == .show || item.type == .season
       let downloadState = isGroup ? app.downloads.state(forEpisodesOf: item) : app.downloads.state(for: item.ratingKey)
-      if item.type != .collection, downloadState == .none {
+      // Apple TV has no downloads (KP, 2026-11-08).
+      if !Self.isTV, item.type != .collection, downloadState == .none {
         Button { app.downloads.download(item) } label: { Label("Download", systemImage: "arrow.down.circle") }
       }
       if item.type == .episode {
