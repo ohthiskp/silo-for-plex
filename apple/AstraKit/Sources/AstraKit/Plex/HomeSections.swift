@@ -40,7 +40,7 @@ public enum HomeSections {
     var out: [PlexMetadata] = []
     for item in ranked where out.count < limit {
       guard seen.insert(item.id).inserted else { continue }
-      out.append(index[item.id] ?? item.asMetadata)
+      out.append(index.match(item) ?? item.asMetadata)
     }
     return out
   }
@@ -80,7 +80,7 @@ public enum HomeSections {
     var seen = Set<String>()
     var out: [PlexMetadata] = []
     for item in ranked where out.count < limit {
-      guard let match = index[item.id], seen.insert(item.id).inserted else { continue }
+      guard let match = index.match(item), seen.insert(item.id).inserted else { continue }
       out.append(match)
     }
     return out

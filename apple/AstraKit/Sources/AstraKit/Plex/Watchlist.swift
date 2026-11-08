@@ -31,7 +31,7 @@ public enum WatchlistMatch {
     var seen = Set<String>()
     return items.compactMap { item in
       guard let key = item.tmdbKey, seen.insert(key).inserted else { return nil }
-      if let onServer = index[key] { return onServer }
+      if let onServer = index.match(item) { return onServer }
       var catalog = item
       catalog.ratingKey = "tmdb:\(key)"
       return catalog

@@ -896,8 +896,8 @@ final class LibraryIndexerTests: XCTestCase {
     XCTAssertEqual(back.tmdbKey, "movie:949")
     XCTAssertEqual(back.genres.map(\.tag), ["Crime"])
     XCTAssertTrue(back.roles.isEmpty)
-    XCTAssertTrue(loaded.isFresh(now: saved.addingTimeInterval(3600)))
-    XCTAssertFalse(loaded.isFresh(now: saved.addingTimeInterval(7 * 3600)))
+    XCTAssertTrue(loaded.isFresh(now: saved.addingTimeInterval(20 * 60)))
+    XCTAssertFalse(loaded.isFresh(now: saved.addingTimeInterval(3600)))
   }
 
   /// A failed page used to leave an empty index cached for good, so every
@@ -1566,5 +1566,42 @@ final class PreferencesTests: XCTestCase {
     }
     let index = DownloadIndex(records: [record("1", 1_000), record("2", nil), record("3", 2_500)])
     XCTAssertEqual(index.totalBytes, 3_500)
+  }
+}
+
+final class LibraryMatchTests: XCTestCase {
+  private func movie(_ key: String, _ title: String, year: Int?, tmdb: Int? = nil) -> PlexMetadata {
+    var item = PlexMetadata(ratingKey: key, type: .movie, title: title)
+    item.year = year
+    if let tmdb { item.guids = [PlexGuid(id: "tmdb://\(tmdb)")] }
+    return item
+  }
+
+  func testMatchesByTitleWhenTheTMDBIdIsDifferent() {
+    // The server's copy carries another TMDB id than the trending list.
+    let index = LibraryMatch.withAliases(["movie:1": movie("42", "Project Hail Mary", year: 2026, tmdb: 1)])
+    let trending = TMDBItem(tmdbID: 687163, kind: .movie, title: "Project Hail Mary", year: 2026)
+    XCTAssertEqual(index.match(trending)?.ratingKey, "42")
+  }
+
+  func testMatchesTitlesWithoutATMDBGuidAndAYearApart() {
+    let raw = [LibraryMatch.titlePrefix + "movie:projecthailmary:2025": movie("7", "Project Hail Mary", year: 2025)]
+    let index = LibraryMatch.withAliases(raw)
+    let trending = TMDBItem(tmdbID: 687163, kind: .movie, title: "Project Hail Mary", year: 2026)
+    XCTAssertEqual(index.match(trending)?.ratingKey, "7")
+    XCTAssertNil(index.match(TMDBItem(tmdbID: 5, kind: .movie, title: "Project Hail Mary", year: 2020)))
+    XCTAssertNil(index.match(TMDBItem(tmdbID: 5, kind: .tv, title: "Project Hail Mary", year: 2026)))
+  }
+
+  func testTitleKeyIgnoresCaseAccentsAndLeadingThe() {
+    XCTAssertEqual(
+      LibraryMatch.titleKey(kind: "movie", title: "The Pokémon Movie: Mewtwo!", year: 1999),
+      LibraryMatch.titleKey(kind: "movie", title: "pokemon movie mewtwo", year: 1999))
+  }
+
+  func testLibraryItemsLeaveAliasesOut() {
+    let index = LibraryMatch.withAliases(["movie:1": movie("1", "Dune", year: 2021, tmdb: 1)])
+    XCTAssertEqual(index.count, 2)
+    XCTAssertEqual(index.libraryItems.map(\.ratingKey), ["1"])
   }
 }

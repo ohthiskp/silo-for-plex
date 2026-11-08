@@ -95,7 +95,12 @@ public enum LibraryIndexer {
     }
     var index: [String: PlexMetadata] = [:]
     for item in perSection.joined() {
-      if let key = item.tmdbKey, index[key] == nil { index[key] = item.slimmed }
+      if let key = item.tmdbKey {
+        if index[key] == nil { index[key] = item.slimmed }
+      } else if let title = item.titleMatchKey, index[LibraryMatch.titlePrefix + title] == nil {
+        // No TMDB guid: still in the index, found by title and year.
+        index[LibraryMatch.titlePrefix + title] = item.slimmed
+      }
     }
     return index
   }
@@ -168,7 +173,7 @@ public struct LibraryIndexSnapshot: Codable, Sendable {
   }
 
   /// Older than this, the saved index is used but read again in the background.
-  public static let freshFor: TimeInterval = 6 * 3600
+  public static let freshFor: TimeInterval = 30 * 60
 
   public func isFresh(now: Date = Date()) -> Bool { now.timeIntervalSince(savedAt) < Self.freshFor }
 }

@@ -259,7 +259,7 @@ final class LibraryStore {
   ) async {
     // Which index these rows are matched with (-1: none yet).
     let usedVersion = !index.isEmpty && index.count == libraryIndex?.count ? indexVersion : -1
-    func shown(_ item: TMDBItem) -> PlexMetadata { index[item.id] ?? item.asMetadata }
+    func shown(_ item: TMDBItem) -> PlexMetadata { index.match(item) ?? item.asMetadata }
     // KP (2026-11-08, "bring back cineby"): every section is the service's
     // whole TMDB list in its order; titles on the server play, the rest
     // show with Play greyed.
@@ -484,7 +484,7 @@ final class LibraryStore {
       return (items, false)
     }
     indexBuild = task
-    let shared = Task { try await task.value.items }
+    let shared = Task { LibraryMatch.withAliases(try await task.value.items) }
     indexTask = shared
     defer { indexTask = nil }
     // Not cancelled with the caller: other tabs may be waiting on the same read.
@@ -492,7 +492,7 @@ final class LibraryStore {
     guard !isClosed else { return result.items }
     setLibraryIndex(result.items)
     if result.stale { refreshLibraryIndex(client: client, sections: sections, url: url) }
-    return result.items
+    return libraryIndex ?? result.items
   }
 
   /// Bumped whenever the index changes; a service built with an older one is rebuilt.
@@ -501,7 +501,9 @@ final class LibraryStore {
   @ObservationIgnored private var serviceIndexVersion: [String: Int] = [:]
 
   private func setLibraryIndex(_ index: [String: PlexMetadata]) {
-    libraryIndex = index
+    // Title-and-year aliases, so titles with a missing or different TMDB id still match.
+    let aliased = LibraryMatch.withAliases(index)
+    libraryIndex = aliased
     if !indexReady { indexReady = true }
     indexVersion += 1
     // Tabs already built with an older (or no) index get matched again.
@@ -510,7 +512,7 @@ final class LibraryStore {
       let trending = trendingTask
       spawn { [weak self] in
         guard let self else { return }
-        await self.publishService(service, lists: lists, index: index, trending: await trending?.value ?? [])
+        await self.publishService(service, lists: lists, index: aliased, trending: await trending?.value ?? [])
       }
     }
   }
@@ -546,7 +548,7 @@ final class LibraryStore {
   func onServer(_ items: [TMDBItem]) async -> [PlexMetadata] {
     let index = (try? await loadLibraryIndex()) ?? [:]
     var seen = Set<String>()
-    return shown(items.compactMap { index[$0.id] }.filter { seen.insert($0.ratingKey).inserted })
+    return shown(items.compactMap { index.match($0) }.filter { seen.insert($0.ratingKey).inserted })
   }
 
   /// Every TMDB title, as this server's item where it has it, else as a
@@ -557,14 +559,14 @@ final class LibraryStore {
     if libraryIndex == nil { spawn { [weak self] in _ = try? await self?.loadLibraryIndex() } }
     let index = libraryIndex ?? [:]
     var seen = Set<String>()
-    return items.filter { seen.insert($0.id).inserted }.map { index[$0.id] ?? $0.asMetadata }
+    return items.filter { seen.insert($0.id).inserted }.map { index.match($0) ?? $0.asMetadata }
   }
 
   func withServer(_ items: [TMDBItem]) async -> [PlexMetadata] {
     let index = (try? await loadLibraryIndex()) ?? [:]
     var seen = Set<String>()
     return items.filter { seen.insert($0.id).inserted }.map { item in
-      index[item.id] ?? item.asMetadata
+      index.match(item) ?? item.asMetadata
     }
   }
 
@@ -589,7 +591,7 @@ final class LibraryStore {
     guard item.isCatalogOnly else { return .playable }
     _ = indexReady
     guard let index = libraryIndex else { return .checking }
-    if let key = item.tmdbKey, index[key] != nil { return .playable }
+    if index.match(item) != nil { return .playable }
     return .notOnServer
   }
 
@@ -608,7 +610,7 @@ final class LibraryStore {
   /// it, then containing it. Empty until the index has loaded.
   func localSearch(_ text: String, limit: Int = 30) -> [PlexMetadata] {
     guard let libraryIndex else { return [] }
-    return LocalSearch.rank(Array(libraryIndex.values), text: text, limit: limit)
+    return LocalSearch.rank(libraryIndex.libraryItems, text: text, limit: limit)
   }
 
   /// `first` then whatever `more` adds, each title once (by TMDB id, else rating key).
@@ -937,7 +939,7 @@ final class LibraryStore {
   /// Watched and Hidden Gems are no longer on Home (`ForYou` still has them).
   private func buildForYou(isCurrent: @escaping () -> Bool) async {
     guard let index = try? await loadLibraryIndex(), !index.isEmpty, isCurrent() else { return }
-    let library = Array(index.values)
+    let library = index.libraryItems
     let movies = library.filter { $0.type == .movie }
     let shows = library.filter { $0.type == .show }
     forYouRecent = HomeShelf(
