@@ -417,6 +417,12 @@ struct DetailView: View {
       var key = refresh ? (item?.ratingKey ?? seed.ratingKey) : seed.ratingKey
       if key.hasPrefix("tmdb:") {
         // A title from a streaming tab: find it on the server, else show TMDB's details.
+        // The library index usually knows at once: show the server's copy
+        // (Play enabled) while its full details load (KP, 2026-11-08: 8 s
+        // before a title on Plex could be played).
+        if !refresh, let quick = library.indexMatch(seed) {
+          astraWithAnimation(Astra.Motion.base) { item = quick }
+        }
         do {
           key = try await library.resolve(seed).ratingKey
         } catch LibraryStore.CatalogError.notOnServer {
