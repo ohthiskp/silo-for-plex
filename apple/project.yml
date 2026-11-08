@@ -27,7 +27,8 @@ packages:
   # In-app updates on Mac (MIT).
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    majorVersion: 2.6.4
+    # Exact: Sparkle installs updates, so it only changes on purpose (security review 2026-11-08).
+    exactVersion: 2.6.4
 
 targets:
   AstraMac:

@@ -209,7 +209,14 @@ final class AppModel {
     watchlistItems = nil
     watchlistKeys = []
     watchlistRefreshedAt = nil
-    try? FileManager.default.removeItem(at: Self.watchlistURL)
+    // A Watchlist read still in flight must not save the old account's list.
+    watchlistRefresh?.cancel()
+    watchlistRefresh = nil
+    watchlistGeneration += 1
+    let watchlistURL = Self.watchlistURL
+    Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: watchlistURL) }
+    // The saved library lists go too, so nothing of the account stays on disk.
+    try? FileManager.default.removeItem(at: LibraryStore.indexFolder)
     phase = .signedOut
   }
 
@@ -411,6 +418,8 @@ final class AppModel {
     Set((WatchlistSnapshot.load(from: AppModel.watchlistURL)?.items ?? []).compactMap(\.tmdbKey))
   @ObservationIgnored private var watchlistRefresh: Task<Void, Never>?
   @ObservationIgnored private var watchlistRefreshedAt: Date?
+  /// Bumped on sign-out, so a Watchlist read that started before it is dropped.
+  @ObservationIgnored private var watchlistGeneration = 0
 
   nonisolated static var watchlistURL: URL {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -432,10 +441,11 @@ final class AppModel {
       return
     }
     let account = account
+    let generation = watchlistGeneration
     let task = Task { @MainActor [weak self] in
       do {
         let list = try await account.watchlist(token: accountToken)
-        guard let self else { return }
+        guard let self, !Task.isCancelled, generation == self.watchlistGeneration else { return }
         self.setWatchlist(list)
         self.watchlistError = nil
         self.watchlistRefreshedAt = Date()
@@ -467,7 +477,6 @@ final class AppModel {
   func toggleWatchlist(_ item: PlexMetadata) async {
     guard let accountToken, let key = item.tmdbKey else { return }
     let adding = !watchlistKeys.contains(key)
-    let before = watchlistItems
     if adding { watchlistKeys.insert(key) } else { watchlistKeys.remove(key) }
     // The Watchlist page changes at once too, with no refetch.
     watchlistItems = WatchlistMatch.toggled(watchlistItems ?? [], item, adding: adding)
@@ -483,7 +492,8 @@ final class AppModel {
       if let list = watchlistItems { setWatchlist(list) }
     } catch {
       if adding { watchlistKeys.remove(key) } else { watchlistKeys.insert(key) }
-      watchlistItems = before
+      // Undo only this change, so a refresh that landed meanwhile is kept.
+      if let list = watchlistItems { watchlistItems = WatchlistMatch.toggled(list, item, adding: !adding) }
       player.lastError = "Couldn't update your Watchlist: \(PlexError.describe(error))"
     }
   }

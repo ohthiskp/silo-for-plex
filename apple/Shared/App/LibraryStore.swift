@@ -1009,12 +1009,20 @@ final class LibraryStore {
       let sections = CinebyTrending.sections(html)
       func items(_ keywords: [String]) async -> [TMDBItem] {
         let entries = Array((CinebyTrending.section(sections, matching: keywords) ?? []).prefix(40))
+        // At most 8 TMDB lookups at a time, so TMDB doesn't answer 429.
         return await withTaskGroup(of: (Int, TMDBItem?).self) { group in
-          for (i, entry) in entries.enumerated() {
-            group.addTask { (i, (try? await tmdb.item(id: entry.tmdbID, kind: entry.kind)) ?? entry.item) }
-          }
+          var next = 0, finished = 0
           var out: [Int: TMDBItem] = [:]
-          for await (i, item) in group { if let item { out[i] = item } }
+          repeat {
+            while next < entries.count, next < finished + 8 {
+              let i = next, entry = entries[i]
+              next += 1
+              group.addTask { (i, (try? await tmdb.item(id: entry.tmdbID, kind: entry.kind)) ?? entry.item) }
+            }
+            guard let result = await group.next() else { break }
+            finished += 1
+            if let item = result.1 { out[result.0] = item }
+          } while true
           return entries.indices.compactMap { out[$0] }
         }
       }
