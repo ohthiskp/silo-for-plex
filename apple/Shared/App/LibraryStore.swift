@@ -793,7 +793,27 @@ final class LibraryStore {
 
   private func resolveUncached(_ item: PlexMetadata) async throws -> PlexMetadata {
     // The library index already knows: no search needed (by TMDB id, or title and year).
-    if let hit = libraryIndex?.match(item) { return hit }
+    // The saved index loads in a moment, so wait for it rather than search.
+    let index = (try? await loadLibraryIndex()) ?? libraryIndex
+    if let hit = index?.match(item) { return hit }
+    // Not in the index: not on the server. Before, every title missing from
+    // the index waited on a server search (about 8 s over a remote
+    // connection, KP 2026-11-08) before Details said so. The search still
+    // runs, in the background, in case the title was added since the index
+    // was read: a match is remembered for the next open (and the index
+    // re-read clears remembered misses).
+    if let index, !index.isEmpty {
+      spawn { [weak self] in
+        guard let self, let match = try? await self.searchMatch(item) else { return }
+        self.resolveCache[item.ratingKey] = .some(match.ratingKey)
+      }
+      throw CatalogError.notOnServer(item.title)
+    }
+    return try await searchMatch(item)
+  }
+
+  /// Finds `item` on the server by searching its title.
+  private func searchMatch(_ item: PlexMetadata) async throws -> PlexMetadata {
     let tmdbID = item.guids.first?.id
     // A failed search (server slow or still connecting) is not "not on the
     // server": it throws, isn't remembered, and the next open asks again.
