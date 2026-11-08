@@ -224,6 +224,8 @@ final class AppModel {
     // (off the main thread: a big library's lists take a moment to delete).
     let indexFolder = LibraryStore.indexFolder
     Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: indexFolder) }
+    // Cached artwork and the per-server image tokens go too (security review).
+    ImagePipeline.shared.clearCache()
     phase = .signedOut
   }
 
