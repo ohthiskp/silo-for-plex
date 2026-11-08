@@ -339,6 +339,8 @@ final class AppModel {
     health?.stop()
     let monitor = ServerHealthMonitor(client: session.client)
     health = monitor
+    // Details skips the Plex search while the server is down (shows "Couldn't check your server").
+    store.serverReachable = { [weak monitor] in monitor?.state.allowsStreaming ?? true }
     if !Demo.isOn { monitor.start() }
     downloads.attach(store, serverID: session.serverID)
     player.server = session.client
