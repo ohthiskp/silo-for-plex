@@ -115,7 +115,9 @@ struct SettingsView: View {
       }
     }
     .formStyle(.grouped)
-    .scrollContentBackground(.hidden)
+    #if !os(tvOS)
+      .scrollContentBackground(.hidden)
+    #endif
     // Same background as every Settings page (it showed the system grey before).
     .background(Astra.Color.bg.ignoresSafeArea())
     .settingsBottomRoom()
@@ -192,7 +194,9 @@ private struct SettingsForm<Content: View>: View {
   var body: some View {
     Form { content }
       .formStyle(.grouped)
-      .scrollContentBackground(.hidden)
+      #if !os(tvOS)
+        .scrollContentBackground(.hidden)
+      #endif
       .background(Astra.Color.bg.ignoresSafeArea())
       .settingsBottomRoom()
   }

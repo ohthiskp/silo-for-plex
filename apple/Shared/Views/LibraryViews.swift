@@ -527,8 +527,18 @@ struct NetworkDiagnosticsView: View {
   @State private var expanded = false
 
   var body: some View {
-    DisclosureGroup("Diagnostics", isExpanded: $expanded) {
-      if expanded {
+    #if os(tvOS)
+      // Apple TV has no disclosure groups: a button shows or hides the list.
+      Button(expanded ? "Hide Requests" : "Show Requests") { expanded.toggle() }
+      if expanded { requests }
+    #else
+      DisclosureGroup("Diagnostics", isExpanded: $expanded) {
+        if expanded { requests }
+      }
+    #endif
+  }
+
+  private var requests: some View {
         TimelineView(.periodic(from: .now, by: 2)) { _ in
           let events = Array(NetworkLog.shared.recent.suffix(60).reversed())
           if events.isEmpty {
@@ -554,7 +564,5 @@ struct NetworkDiagnosticsView: View {
             #endif
           }
         }
-      }
-    }
   }
 }
