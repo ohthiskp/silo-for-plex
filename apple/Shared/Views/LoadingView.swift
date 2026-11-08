@@ -1,11 +1,15 @@
 import SwiftUI
 
-/// The launch screen: only Astra's mark, in white and grey, no text. While
-/// Astra connects the speed lines draw in and the mark breathes; when the
-/// server answers it lights up fully and settles.
+/// The launch screen: Astra's mark in white and grey. While Astra connects
+/// the speed lines draw in and the mark breathes; when the server answers it
+/// lights up fully and settles. Below it, the server's name and
+/// "Connecting…", then a checkmark and "Connected" (KP, 2026-11-08: so it
+/// never looks like a blank wait).
 struct LoadingView: View {
   /// True once the server answered.
   var connected: Bool
+  /// The server being connected to ("Omega"); nil before one is chosen.
+  var serverName: String? = nil
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var start = Date()
@@ -26,12 +30,46 @@ struct LoadingView: View {
       .shadow(color: .white.opacity(connected ? 0.25 : 0), radius: 24)
       .animation(.easeOut(duration: 0.5), value: connected)
       .opacity(appeared ? 1 : 0)
+      // Under the mark, so the mark stays exactly centred.
+      .overlay(alignment: .bottom) { status.offset(y: 84) }
     }
     .ignoresSafeArea()
     .onAppear {
       withAnimation(.easeOut(duration: 0.5)) { appeared = true }
     }
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(connected ? "Connected" : "Connecting")
+    .accessibilityLabel(accessibilityText)
+  }
+
+  private var accessibilityText: String {
+    let state = connected ? "Connected" : "Connecting"
+    return serverName.map { "\(state) to \($0)" } ?? state
+  }
+
+  private var status: some View {
+    VStack(spacing: 8) {
+      if let serverName, !serverName.isEmpty {
+        Text(serverName)
+          .font(.system(size: 17, weight: .semibold))
+          .foregroundStyle(Astra.Color.ink)
+          .lineLimit(1)
+      }
+      HStack(spacing: 6) {
+        if connected {
+          Image(systemName: "checkmark.circle.fill")
+            .font(.system(size: 13, weight: .semibold))
+            .transition(.opacity)
+        } else {
+          ProgressView().controlSize(.mini).tint(Astra.Color.muted)
+        }
+        Text(connected ? "Connected" : "Connecting…")
+          .font(Astra.Font.meta)
+          .contentTransition(.opacity)
+      }
+      .foregroundStyle(connected ? Astra.Color.ink : Astra.Color.muted)
+      .animation(.easeOut(duration: 0.3), value: connected)
+    }
+    .fixedSize()
+    .opacity(appeared ? 1 : 0)
   }
 }

@@ -91,7 +91,8 @@ transitions into fades only when the setting is on.
   Always the original file; Auto / HD / 4K only picks between existing versions.
 - **Settings:** a server card, then Appearance, Navigation (iPhone), Playback, Library, Downloads,
   then Sources and About.
-- **Loading screen:** logo only, no text.
+- **Loading screen:** the logo, and under it the server name with "Connecting…", then a checkmark and
+  "Connected" before Home (KP, 2026-11-08). White and grey only.
 
 The legacy Flutter app's tokens (`lib/astra/`) predate these rules and still contain violet; they are not
 the reference.

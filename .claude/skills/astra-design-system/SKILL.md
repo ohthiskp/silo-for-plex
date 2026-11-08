@@ -50,7 +50,8 @@ Source of truth, in order: KP's latest instruction → the mockups in `docs/desi
   badge row starts with the grey content-rating pill, then plain "HDR", official Dolby Vision / Atmos logos.
 - **Long-press a title:** Details, Play, Download, Mark watched/unwatched, Go to season/show.
 - **Search:** TMDB only, popularity-ranked, spinner while loading.
-- **Loading screen:** the logo only, no text.
+- **Loading screen:** the logo, then the server name ("Omega") with "Connecting…", then a checkmark and
+  "Connected" before Home (KP, 2026-11-08). White and grey only.
 - **iPhone player:** landscape only, Infuse layout (incl. progress bar), double-tap skip (10 s default),
   no ring around Play; swipe left = brightness, right = volume (toggle in Settings). **Mac player:** a click
   on the picture only toggles the controls. **Next Episode:** tap-only glass button in the last 15 s, no autoplay.

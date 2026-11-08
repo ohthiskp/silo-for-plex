@@ -8,6 +8,8 @@ struct RootView: View {
   private enum Loader { case hidden, loading, connected }
   /// The launch screen stays up briefly after connecting to say "Connected".
   @State private var loader: Loader = .loading
+  /// The last server's name ("Omega"), read once for the launch screen.
+  @State private var savedServerName = SavedConnection.load()?.serverName
 
   var body: some View {
     ZStack {
@@ -98,7 +100,8 @@ struct RootView: View {
 
   @ViewBuilder private var content: some View {
     if loader != .hidden {
-      LoadingView(connected: loader == .connected)
+      // The saved server's name shows at once, before it answers.
+      LoadingView(connected: loader == .connected, serverName: app.server?.serverName ?? savedServerName)
         .transition(.opacity)
     } else {
       phaseContent
