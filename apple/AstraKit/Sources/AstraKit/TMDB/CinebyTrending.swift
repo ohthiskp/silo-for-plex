@@ -182,3 +182,42 @@ public struct TrendingSnapshot: Codable, Sendable {
     return details.filter { keep.contains($0.key) }
   }
 }
+
+/// Astra (media audit, 2026-11-08): cineby's For You rows (Recently Released,
+/// All-Time Greats) saved on the device, so For You opens with them instead
+/// of showing TMDB's rows and swapping a few seconds later, and a launch
+/// doesn't make up to 80 TMDB lookups. Refreshed in the background.
+public struct CinebyRowsSnapshot: Codable, Sendable {
+  public var savedAt: Date
+  public var recent: [TMDBItem]
+  public var greats: [TMDBItem]
+
+  public init(savedAt: Date, recent: [TMDBItem], greats: [TMDBItem]) {
+    self.savedAt = savedAt
+    self.recent = recent
+    self.greats = greats
+  }
+
+  public var isEmpty: Bool { recent.isEmpty && greats.isEmpty }
+
+  /// Every saved title by id, so a refresh only looks up titles new on the page.
+  public var known: [String: TMDBItem] {
+    Dictionary((recent + greats).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+  }
+
+  public static func url(in folder: URL) -> URL { folder.appendingPathComponent("CinebyRows.json") }
+
+  public static func load(from url: URL) -> CinebyRowsSnapshot? {
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(CinebyRowsSnapshot.self, from: data)
+  }
+
+  public func save(to url: URL) throws {
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try JSONEncoder().encode(self).write(to: url, options: .atomic)
+  }
+
+  /// These rows change slowly: newer than this, no refresh at all.
+  public static let freshFor: TimeInterval = 6 * 3600
+  public func isFresh(now: Date = Date()) -> Bool { now.timeIntervalSince(savedAt) < Self.freshFor }
+}

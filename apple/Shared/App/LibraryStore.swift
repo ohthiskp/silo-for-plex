@@ -112,6 +112,7 @@ final class LibraryStore {
     indexTask?.cancel()
     refreshTask?.cancel()
     indexBuild?.cancel()
+    cinebyRowsRefresh?.cancel()
     trendingRefresh?.cancel()
     background.values.forEach { $0.cancel() }
     background.removeAll()
@@ -1017,6 +1018,8 @@ final class LibraryStore {
     // cineby's rows replace them when its page has them (KP: "from cineby"),
     // and setLibraryIndex matches them again when the index is read or changes.
     if libraryIndex == nil { spawn { [weak self] in _ = try? await self?.loadLibraryIndex() } }
+    // The saved cineby rows (a quick disk read) are in the first publish.
+    await primeCinebyRows()
     await publishForYou(isCurrent: isCurrent)
     let rows = await loadCinebyRows()
     guard !rows.recent.isEmpty || !rows.greats.isEmpty else { return }
@@ -1056,41 +1059,88 @@ final class LibraryStore {
   @ObservationIgnored private var recentTask: Task<[TMDBItem], Never>?
   @ObservationIgnored private var cinebyRowsTask: Task<(recent: [TMDBItem], greats: [TMDBItem]), Never>?
 
+  nonisolated static var cinebyRowsURL: URL { CinebyRowsSnapshot.url(in: indexFolder.deletingLastPathComponent()) }
+  @ObservationIgnored private var cinebyRowsRefresh: Task<Void, Never>?
+
+  /// The saved cineby rows, read from disk before For You's first publish so
+  /// the page opens with them (no swap from TMDB's rows). A stale copy is
+  /// shown and refreshed behind.
+  private func primeCinebyRows() async {
+    guard let tmdb, cinebyRows == nil, cinebyRowsTask == nil else { return }
+    let url = Self.cinebyRowsURL
+    let saved = await Task.detached(priority: .userInitiated) { CinebyRowsSnapshot.load(from: url) }.value
+    guard let saved, !saved.isEmpty, cinebyRows == nil, cinebyRowsTask == nil else { return }
+    let rows = (recent: saved.recent, greats: saved.greats)
+    cinebyRows = rows
+    cinebyRowsTask = Task { rows }
+    if !saved.isFresh() { refreshCinebyRows(tmdb: tmdb, saved: saved) }
+  }
+
+  /// Reads cineby's rows again behind the saved ones; For You updates when they differ.
+  private func refreshCinebyRows(tmdb: TMDBClient, saved: CinebyRowsSnapshot) {
+    guard cinebyRowsRefresh == nil else { return }
+    cinebyRowsRefresh = Task { [weak self] in
+      let fresh = await Task.detached(priority: .utility) { await Self.fetchCinebyRows(tmdb: tmdb, saved: saved) }.value
+      guard let self, !self.isClosed else { return }
+      self.cinebyRowsRefresh = nil
+      guard !(fresh.recent.isEmpty && fresh.greats.isEmpty),
+        fresh.recent.map(\.id) != saved.recent.map(\.id) || fresh.greats.map(\.id) != saved.greats.map(\.id)
+      else { return }
+      self.cinebyRows = fresh
+      self.cinebyRowsTask = Task { fresh }
+      await self.publishForYou { [weak self] in self.map { !$0.isClosed } ?? false }
+    }
+  }
+
   /// Cineby's Recently Released and All-Time Greats style rows (by their
-  /// headings), as TMDB titles, read once a session. Empty when the page
+  /// headings), as TMDB titles: the saved copy when there is one (see
+  /// `primeCinebyRows`), else read once a session. Empty when the page
   /// can't be read or has no such row.
   private func loadCinebyRows() async -> (recent: [TMDBItem], greats: [TMDBItem]) {
     guard let tmdb else { return ([], []) }
     if let cinebyRowsTask { return await cinebyRowsTask.value }
-    let task = Task.detached(priority: .utility) { () -> (recent: [TMDBItem], greats: [TMDBItem]) in
-      guard let html = try? await CinebyTrending.fetchHTML() else { return ([], []) }
-      let sections = CinebyTrending.sections(html)
-      func items(_ keywords: [String]) async -> [TMDBItem] {
-        let entries = Array((CinebyTrending.section(sections, matching: keywords) ?? []).prefix(40))
-        // At most 8 TMDB lookups at a time, so TMDB doesn't answer 429.
-        return await withTaskGroup(of: (Int, TMDBItem?).self) { group in
-          var next = 0, finished = 0
-          var out: [Int: TMDBItem] = [:]
-          repeat {
-            while next < entries.count, next < finished + 8 {
-              let i = next, entry = entries[i]
-              next += 1
-              group.addTask { (i, (try? await tmdb.item(id: entry.tmdbID, kind: entry.kind)) ?? entry.item) }
-            }
-            guard let result = await group.next() else { break }
-            finished += 1
-            if let item = result.1 { out[result.0] = item }
-          } while true
-          return entries.indices.compactMap { out[$0] }
-        }
-      }
-      return (await items(CinebyTrending.recentKeywords), await items(CinebyTrending.greatsKeywords))
-    }
+    let task = Task.detached(priority: .utility) { await Self.fetchCinebyRows(tmdb: tmdb, saved: nil) }
     // Kept even when empty: a page without these rows isn't read again this session.
     cinebyRowsTask = task
     let result = await task.value
     cinebyRows = result
     return result
+  }
+
+  /// Reads cineby's page, looks up only the titles `saved` doesn't already
+  /// have (8 at a time, so TMDB doesn't answer 429), and saves the rows.
+  private nonisolated static func fetchCinebyRows(
+    tmdb: TMDBClient, saved: CinebyRowsSnapshot?
+  ) async -> (recent: [TMDBItem], greats: [TMDBItem]) {
+    guard let html = try? await CinebyTrending.fetchHTML() else { return ([], []) }
+    let sections = CinebyTrending.sections(html)
+    let known = saved?.known ?? [:]
+    func items(_ keywords: [String]) async -> [TMDBItem] {
+      let entries = Array((CinebyTrending.section(sections, matching: keywords) ?? []).prefix(40))
+      return await withTaskGroup(of: (Int, TMDBItem?).self) { group in
+        var next = 0, finished = 0
+        var out: [Int: TMDBItem] = [:]
+        for (i, entry) in entries.enumerated() {
+          if let hit = known[entry.id], hit.year != nil { out[i] = hit }
+        }
+        let missing = entries.indices.filter { out[$0] == nil }
+        repeat {
+          while next < missing.count, next < finished + 8 {
+            let i = missing[next], entry = entries[i]
+            next += 1
+            group.addTask { (i, (try? await tmdb.item(id: entry.tmdbID, kind: entry.kind)) ?? entry.item) }
+          }
+          guard let result = await group.next() else { break }
+          finished += 1
+          if let item = result.1 { out[result.0] = item }
+        } while true
+        return entries.indices.compactMap { out[$0] }
+      }
+    }
+    let rows = (recent: await items(CinebyTrending.recentKeywords), greats: await items(CinebyTrending.greatsKeywords))
+    let snapshot = CinebyRowsSnapshot(savedAt: Date(), recent: rows.recent, greats: rows.greats)
+    if !snapshot.isEmpty { try? snapshot.save(to: cinebyRowsURL) }
+    return rows
   }
 
   /// TMDB's popular titles released in the last four months, movies and

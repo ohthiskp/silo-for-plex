@@ -1768,6 +1768,21 @@ final class CinebySectionsTests: XCTestCase {
     XCTAssertNil(CinebyTrending.section(sections, matching: ["anime"]))
   }
 
+  func testCinebyRowsSnapshotRoundTripsAndAges() throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("astra-\(UUID().uuidString)/CinebyRows.json")
+    let movie = TMDBItem(tmdbID: 1, kind: .movie, title: "One", year: 2025)
+    let show = TMDBItem(tmdbID: 2, kind: .tv, title: "Two", year: 1999)
+    let saved = CinebyRowsSnapshot(savedAt: Date(timeIntervalSince1970: 1000), recent: [movie], greats: [show, movie])
+    try saved.save(to: url)
+    let loaded = try XCTUnwrap(CinebyRowsSnapshot.load(from: url))
+    XCTAssertEqual(loaded.recent.map(\.id), ["movie:1"])
+    XCTAssertEqual(loaded.greats.map(\.id), ["tv:2", "movie:1"])
+    XCTAssertEqual(Set(loaded.known.keys), ["movie:1", "tv:2"])
+    XCTAssertTrue(loaded.isFresh(now: Date(timeIntervalSince1970: 1000 + 3600)))
+    XCTAssertFalse(loaded.isFresh(now: Date(timeIntervalSince1970: 1000 + CinebyRowsSnapshot.freshFor + 1)))
+    XCTAssertTrue(CinebyRowsSnapshot(savedAt: Date(), recent: [], greats: []).isEmpty)
+  }
+
   func testSkipsAStreamingServicesOwnRows() {
     let html = """
       <h2>New on Netflix</h2><a href="/tv/7"></a>
