@@ -790,7 +790,18 @@ final class LibraryStore {
     // server": it throws, isn't remembered, and the next open asks again.
     // Before, a pre-cache that ran while the server was connecting marked
     // hero and Top Trending titles missing for the whole session (KP, 2026-11-08).
-    let results = try await search(item.title).filter { $0.type == item.type }
+    // Astra 4.0 (QA P2-2): with the server known to be down, don't search at
+    // all; a failed search says the server couldn't be checked, never a raw
+    // network error and never "not on your server".
+    guard serverReachable() else { throw CatalogError.serverUnavailable(item.title) }
+    let results: [PlexMetadata]
+    do {
+      results = try await search(item.title).filter { $0.type == item.type }
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      throw CatalogError.serverUnavailable(item.title)
+    }
     // The same title rules as the library index ("Fire & Ash" is "Fire and
     // Ash", accents and punctuation ignored, a year either side).
     var found: [String: PlexMetadata] = [:]
@@ -807,11 +818,18 @@ final class LibraryStore {
     return match
   }
 
+  /// Whether the server can be asked right now. AppModel points it at
+  /// `ServerHealthMonitor` (`state.allowsStreaming`); true until it does.
+  @ObservationIgnored var serverReachable: @MainActor () -> Bool = { true }
+
   enum CatalogError: LocalizedError {
     case notOnServer(String)
+    /// The search couldn't reach the server; not remembered, asked again next time.
+    case serverUnavailable(String)
     var errorDescription: String? {
       switch self {
       case .notOnServer(let title): "“\(title)” isn't on your Plex server."
+      case .serverUnavailable: "Couldn't check your server. Try again when it's back."
       }
     }
   }

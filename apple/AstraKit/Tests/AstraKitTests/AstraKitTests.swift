@@ -1706,4 +1706,16 @@ final class CinebySectionsTests: XCTestCase {
       CinebyTrending.section(sections, matching: CinebyTrending.recentKeywords)?.map(\.id), ["tv:4", "movie:5"])
     XCTAssertNil(CinebyTrending.section(sections, matching: ["anime"]))
   }
+
+  func testSkipsAStreamingServicesOwnRows() {
+    let html = """
+      <h2>New on Netflix</h2><a href="/tv/7"></a>
+      <h2>Best of Prime Video</h2><a href="/movie/8/watch"></a>
+      <h2>Latest Movies</h2><a href="/movie/5/watch"></a>
+      <h2>All-Time Greats</h2><a href="/movie/3/watch"></a>
+      """
+    let sections = CinebyTrending.sections(html)
+    XCTAssertEqual(CinebyTrending.section(sections, matching: CinebyTrending.recentKeywords)?.map(\.id), ["movie:5"])
+    XCTAssertEqual(CinebyTrending.section(sections, matching: CinebyTrending.greatsKeywords)?.map(\.id), ["movie:3"])
+  }
 }

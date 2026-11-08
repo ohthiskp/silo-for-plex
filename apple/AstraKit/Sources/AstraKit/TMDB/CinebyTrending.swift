@@ -104,15 +104,24 @@ public enum CinebyTrending {
   }
 
   /// The first row whose heading contains one of `keywords` (any case).
+  /// A streaming service's own row ("New on Netflix", "Best of Prime Video")
+  /// is never For You's: those titles belong to that service's tab.
   public static func section(_ sections: [(title: String, entries: [Entry])], matching keywords: [String]) -> [Entry]? {
     sections.first { section in
       let title = section.title.lowercased()
+      guard !serviceWords.contains(where: { title.contains($0) }) else { return false }
       return keywords.contains { title.contains($0) }
     }?.entries
   }
 
+  /// Words that mark a heading as one streaming service's row.
+  static let serviceWords = [
+    "netflix", "prime video", "amazon", "disney", "hbo", "max original", "hulu", "apple tv", "paramount", "peacock",
+    "crunchyroll",
+  ]
+
   /// Headings that mean Recently Released, and All-Time Greats.
-  public static let recentKeywords = ["recent", "new release", "latest", "just released", "now playing", "in theater", "new movies", "new shows", "new on"]
+  public static let recentKeywords = ["recent", "new release", "latest", "just released", "now playing", "in theater", "new movies", "new shows"]
   public static let greatsKeywords = ["top rated", "top-rated", "all-time", "all time", "greatest", "best of", "classic", "acclaimed", "highest rated"]
 
   public static func fetchHTML(transport: HTTPTransport = URLSessionTransport()) async throws -> String {
