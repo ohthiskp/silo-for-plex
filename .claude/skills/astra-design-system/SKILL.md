@@ -25,8 +25,9 @@ Source of truth, in order: KP's latest instruction → the mockups in `docs/desi
   never on artwork, rows or the hero image.
 
 ## Screens and KP's rules (current as of 2026-11-08; KP's latest message still wins)
-- **Mac sidebar:** Home, Library, Search, Settings. Icons only; a click lights the icon at once; no hover
-  expand, no sliding indicator, no animation. Library = Libraries (smaller Movies / Shows switch),
+- **Mac sidebar:** Home, Library, Search, Settings. Icons only; expands on HOVER to icons plus names
+  (KP, 2026-11-08, replaces the old no-hover rule), floating over the page; a click lights the icon at
+  once; no sliding indicator. Library = Libraries (smaller Movies / Shows switch),
   Watchlist, Downloads. The Mac matches the iPhone.
 - **iPhone tab bar:** Astra's wide Liquid Glass bar (52 pt, darker glass) with a draggable lens. Default
   Home, Search, Library; Settings → Navigation reorders and adds Watchlist / Downloads / Settings, max 5;

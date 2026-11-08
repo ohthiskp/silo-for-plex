@@ -152,20 +152,25 @@ struct MainView: View {
 
 // MARK: - Sidebar
 
-/// Icon-only Liquid Glass sidebar. Astra (KP, 2026-11-07): no sliding pill;
-/// a click lights the chosen icon at once, with no animation.
+/// Liquid Glass sidebar: icons only, and icons plus names while the pointer
+/// is over it (KP, 2026-11-08). It floats over the page, so expanding never
+/// moves the content. Astra (KP, 2026-11-07): no sliding pill; a click lights
+/// the chosen icon at once, with no animation.
 struct Sidebar: View {
   @Binding var selection: SidebarItem
   var choose: (SidebarItem) -> Void
   @Environment(AppModel.self) private var app
+  @State private var expanded = false
 
   private static let spacing: CGFloat = Astra.Spacing.xs
+  /// The collapsed bar is a capsule; the same radius keeps its ends round when it widens.
+  private static let shape = RoundedRectangle(cornerRadius: Astra.Sidebar.collapsedWidth / 2, style: .continuous)
 
   var body: some View {
     VStack(spacing: Self.spacing) {
       ForEach(SidebarItem.allCases) { item in
         SidebarButton(
-          symbol: item.symbol, title: item.title, selected: selection == item,
+          symbol: item.symbol, title: item.title, selected: selection == item, expanded: expanded,
           count: item == .library ? app.downloads.jobs.count : 0
         ) {
           choose(item)
@@ -173,51 +178,69 @@ struct Sidebar: View {
         .keyboardShortcut(item.shortcut, modifiers: .command)
       }
     }
-    .transaction { $0.animation = nil }
+    // Selection changes light at once; only the hover expand animates.
+    .transaction(value: selection) { $0.animation = nil }
     .padding(9)
-    .frame(width: Astra.Sidebar.collapsedWidth)
+    .frame(width: expanded ? Astra.Sidebar.expandedWidth : Astra.Sidebar.collapsedWidth, alignment: .leading)
     // Clear glass with a light edge, like the player's panel (KP's reference card).
-    .astraGlass(in: Capsule(), variant: .clear)
-    .astraGlassEdge(Capsule())
+    .astraGlass(in: Self.shape, variant: .clear)
+    .astraGlassEdge(Self.shape)
+    .contentShape(Self.shape)
+    .onHover { hovering in astraWithAnimation(Astra.Motion.base) { expanded = hovering } }
     .frame(maxHeight: .infinity)
   }
 }
 
-/// One sidebar button: a 44 pt icon. Its colour comes only from `selected`.
+/// One sidebar button: a 44 pt icon, with its name beside it when the sidebar
+/// is expanded. Its colour comes only from `selected`.
 struct SidebarButton: View {
   var symbol: String
   var title: String
   var selected: Bool
+  var expanded = false
   /// Astra (KP, 2026-11-07): Library shows how many downloads are running, like the iPhone tab.
   var count = 0
   var action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      Image(systemName: symbol)
-        .font(.system(size: 17, weight: .semibold))
-        .frame(width: 44, height: 44)
-        .foregroundStyle(selected ? Astra.Color.onTheme : Astra.Color.muted)
-        // A white fill (Settings → Appearance → Theme), not glass: it sits on the sidebar's glass.
-        .background { if selected { Capsule().fill(Astra.Color.theme) } }
-        .overlay(alignment: .topTrailing) {
-          if count > 0 {
-            Text("\(count)")
-              .font(.system(size: 10, weight: .bold))
-              .monospacedDigit()
-              .foregroundStyle(Astra.Color.onAccent)
-              .padding(.horizontal, 5)
-              .frame(minWidth: 16, minHeight: 16)
-              .background(Capsule().fill(Astra.Color.accent))
-              .overlay(Capsule().stroke(Color.black.opacity(0.25)))
-              .offset(x: 2, y: 2)
-              .astraTransition(.scale.combined(with: .opacity))
+      HStack(spacing: 4) {
+        Image(systemName: symbol)
+          .font(.system(size: 17, weight: .semibold))
+          .frame(width: 44, height: 44)
+          .overlay(alignment: .topTrailing) {
+            if count > 0 {
+              Text("\(count)")
+                .font(.system(size: 10, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(Astra.Color.onAccent)
+                .padding(.horizontal, 5)
+                .frame(minWidth: 16, minHeight: 16)
+                .background(Capsule().fill(Astra.Color.accent))
+                .overlay(Capsule().stroke(Color.black.opacity(0.25)))
+                .offset(x: 2, y: 2)
+                .astraTransition(.scale.combined(with: .opacity))
+            }
           }
+          .astraAnimation(.snappy(duration: 0.2), value: count)
+        if expanded {
+          Text(title)
+            .font(.system(size: 14, weight: .semibold))
+            .lineLimit(1)
+            .fixedSize()
+            .transition(.opacity)
+          Spacer(minLength: 0)
         }
-        .astraAnimation(.snappy(duration: 0.2), value: count)
-        .contentShape(Capsule())
+      }
+      .frame(width: expanded ? nil : 44, height: 44)
+      .frame(maxWidth: expanded ? .infinity : nil, alignment: .leading)
+      .foregroundStyle(selected ? Astra.Color.onTheme : Astra.Color.muted)
+      // A white fill (Settings → Appearance → Theme), not glass: it sits on the sidebar's glass.
+      .background { if selected { Capsule().fill(Astra.Color.theme) } }
+      .contentShape(Capsule())
     }
     .buttonStyle(SidebarButtonStyle())
+    .help(title)
     .accessibilityLabel(count > 0 ? "\(title), \(count)" : title)
     .accessibilityAddTraits(selected ? .isSelected : [])
   }

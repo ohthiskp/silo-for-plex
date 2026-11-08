@@ -112,6 +112,9 @@ enum Astra {
   enum Sidebar {
     static let margin: CGFloat = 14
     static let collapsedWidth: CGFloat = 62
+    /// While the pointer is over it (icons plus names, KP 2026-11-08). Pages keep
+    /// `contentInset`: the expanded sidebar floats over them.
+    static let expandedWidth: CGFloat = 190
     static let gap: CGFloat = 28
     static let contentInset: CGFloat = margin + collapsedWidth + gap
   }

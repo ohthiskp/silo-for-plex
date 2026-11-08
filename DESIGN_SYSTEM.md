@@ -60,8 +60,8 @@ transitions into fades only when the setting is on.
 | Settings | `settings.png` | Settings views in `Shared/Views/` |
 
 ## Behaviour rules (KP's current rules, 2026-11-08)
-- **Mac sidebar:** Home, Library, Search, Settings. Icons only, a click lights the chosen icon at once,
-  no hover expand and no sliding indicator or animation. Library holds Libraries (with a smaller
+- **Mac sidebar:** Home, Library, Search, Settings. Icons only; it expands on hover to icons plus names
+  (KP, 2026-11-08), floating over the page. A click lights the chosen icon at once, no sliding indicator. Library holds Libraries (with a smaller
   Movies / Shows switch), Watchlist and Downloads. The Mac matches the iPhone.
 - **iPhone tab bar:** Astra's own wide Liquid Glass bar (52 pt, darker glass) with a draggable lens.
   Default tabs Home, Search, Library. Settings → Navigation reorders them and adds Watchlist,
