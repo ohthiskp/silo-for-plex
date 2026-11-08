@@ -17,9 +17,22 @@ public struct HomeShelf: Sendable, Equatable {
   public var isEmpty: Bool { movies.isEmpty && shows.isEmpty }
 
   public func items(series: Bool) -> [PlexMetadata] { series ? shows : movies }
+
+  /// The shelf without titles whose key is in `taken` (KP: no title in two rows).
+  public func excluding(_ taken: Set<String>) -> HomeShelf {
+    HomeShelf(
+      movies: movies.filter { !taken.contains(HomeSections.key($0)) },
+      shows: shows.filter { !taken.contains(HomeSections.key($0)) })
+  }
+
+  /// Every title's dedupe key.
+  public var keys: Set<String> { Set((movies + shows).map(HomeSections.key)) }
 }
 
 public enum HomeSections {
+  /// What makes two titles the same across rows: type and TMDB id, else the Plex key.
+  public static func key(_ item: PlexMetadata) -> String { item.tmdbKey ?? item.ratingKey }
+
   /// Only titles on the server (no TMDB-only titles on Home), each once.
   public static func playable(_ items: [PlexMetadata]) -> [PlexMetadata] {
     var seen = Set<String>()

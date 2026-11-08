@@ -1445,6 +1445,17 @@ final class HomeSectionsTests: XCTestCase {
     XCTAssertEqual(HomeSections.ranked([tmdb(1), tmdb(3), tmdb(2), tmdb(3)], index: index).map(\.ratingKey), ["three", "two"])
   }
 
+  func testShelfExcludingDropsTitlesInOtherRows() {
+    let a = PlexMetadata(ratingKey: "1", type: .movie, title: "A")
+    let b = PlexMetadata(ratingKey: "2", type: .movie, title: "B")
+    let c = PlexMetadata(ratingKey: "3", type: .show, title: "C")
+    let shelf = HomeShelf(movies: [a, b], shows: [c])
+    let trimmed = shelf.excluding([HomeSections.key(a), HomeSections.key(c)])
+    XCTAssertEqual(trimmed.movies.map(\.ratingKey), ["2"])
+    XCTAssertTrue(trimmed.shows.isEmpty)
+    XCTAssertEqual(shelf.keys.count, 3)
+  }
+
   func testCatalogKeepsEveryTitleInOrder() {
     func tmdb(_ id: Int) -> TMDBItem { TMDBItem(tmdbID: id, kind: .movie, title: "\(id)") }
     let index = ["movie:2": item("two")]

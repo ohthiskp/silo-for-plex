@@ -163,15 +163,19 @@ final class LibraryStore {
   var homeContinueWatching: [PlexMetadata] { continueWatching }
 
   /// Astra 4.0: Recently Released for the current tab (release dates, newest first).
+  /// Titles already in Top Trending are left out (KP: no title in two rows).
   var homeRecent: HomeShelf {
-    guard let selectedService else { return forYouRecent }
-    return serviceContent[selectedService.id]?.recent ?? .empty
+    let shelf = selectedService.map { serviceContent[$0.id]?.recent ?? .empty } ?? forYouRecent
+    let split = homeTopTenSplit
+    return shelf.excluding(Set((split.movies + split.shows).map(HomeSections.key)))
   }
 
-  /// Astra 4.0: All-Time Greats for the current tab.
+  /// Astra 4.0: All-Time Greats for the current tab, without titles in Top
+  /// Trending or Recently Released.
   var homeGreats: HomeShelf {
-    guard let selectedService else { return forYouGreats }
-    return serviceContent[selectedService.id]?.greats ?? .empty
+    let shelf = selectedService.map { serviceContent[$0.id]?.greats ?? .empty } ?? forYouGreats
+    let split = homeTopTenSplit
+    return shelf.excluding(Set((split.movies + split.shows).map(HomeSections.key)).union(homeRecent.keys))
   }
 
   /// Whether the current tab has anything below Continue Watching.
@@ -967,30 +971,44 @@ final class LibraryStore {
   /// Watched and Hidden Gems are no longer on Home (`ForYou` still has them).
   private func buildForYou(isCurrent: @escaping () -> Bool) async {
     // KP (2026-11-08, "For You still doesn't have the sections"): never wait
-    // on the library. TMDB's lists show at once; titles on the server play.
+    // on the library or on cineby. TMDB's lists show as soon as they arrive,
+    // cineby's rows replace them when its page has them (KP: "from cineby"),
+    // and everything is matched again once the library index is in, so
+    // titles on the server play.
+    async let cineby = loadCinebyRows()
     async let recentTMDB = loadRecentReleases()
     async let ratedTMDB = loadTopRated()
-    // KP (2026-11-08: "no, from cineby"): cineby's own rows first, when its
-    // page has them; TMDB fills in when it doesn't or can't be read.
-    async let cineby = loadCinebyRows()
-    let index = (try? await loadLibraryIndex()) ?? libraryIndex ?? [:]
+    var recent = await recentTMDB
+    var rated = await ratedTMDB
+    guard isCurrent() else { return }
+    publishForYou(recent: recent, rated: rated, index: libraryIndex ?? [:])
+    let rows = await cineby
+    if !rows.recent.isEmpty { recent = rows.recent }
+    if !rows.greats.isEmpty { rated = rows.greats }
+    guard isCurrent() else { return }
+    if !rows.recent.isEmpty || !rows.greats.isEmpty {
+      publishForYou(recent: recent, rated: rated, index: libraryIndex ?? [:])
+    }
+    let before = libraryIndex?.count
+    guard let index = try? await loadLibraryIndex(), index.count != before || before == nil, isCurrent() else { return }
+    publishForYou(recent: recent, rated: rated, index: index)
+  }
+
+  /// For You's Recently Released and All-Time Greats from ranked TMDB lists,
+  /// falling back to the library's own when a list has fewer than 5.
+  private func publishForYou(recent: [TMDBItem], rated: [TMDBItem], index: [String: PlexMetadata]) {
     let library = index.libraryItems
     let movies = library.filter { $0.type == .movie }
     let shows = library.filter { $0.type == .show }
-    let rows = await cineby
-    let recent = rows.recent.isEmpty ? await recentTMDB : rows.recent
-    guard isCurrent() else { return }
     func recentShelf(_ kind: TMDBItem.Kind, _ items: [PlexMetadata]) -> [PlexMetadata] {
       let fromTMDB = HomeSections.catalog(recent.filter { $0.kind == kind }, index: index)
       return fromTMDB.count >= 5 ? fromTMDB : HomeSections.recentlyReleased(items)
     }
-    forYouRecent = HomeShelf(movies: recentShelf(.movie, movies), shows: recentShelf(.tv, shows))
-    let rated = rows.greats.isEmpty ? await ratedTMDB : rows.greats
-    guard isCurrent() else { return }
     func greats(_ kind: TMDBItem.Kind, _ items: [PlexMetadata]) -> [PlexMetadata] {
       let ranked = HomeSections.catalog(rated.filter { $0.kind == kind }, index: index)
       return ranked.count >= 5 ? ranked : HomeSections.greatsFromLibrary(items)
     }
+    forYouRecent = HomeShelf(movies: recentShelf(.movie, movies), shows: recentShelf(.tv, shows))
     forYouGreats = HomeShelf(movies: greats(.movie, movies), shows: greats(.tv, shows))
   }
 
@@ -1028,10 +1046,9 @@ final class LibraryStore {
       }
       return (await items(CinebyTrending.recentKeywords), await items(CinebyTrending.greatsKeywords))
     }
+    // Kept even when empty: a page without these rows isn't read again this session.
     cinebyRowsTask = task
-    let result = await task.value
-    if result.recent.isEmpty && result.greats.isEmpty { cinebyRowsTask = nil }
-    return result
+    return await task.value
   }
 
   /// TMDB's popular titles released in the last four months, movies and
