@@ -95,7 +95,6 @@ struct PlayerOverlay: View {
       // over the swipe and tap areas otherwise.
       if player.upNext != nil {
         NextEpisodeButton(player: player)
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
           #if os(macOS)
             .padding(.trailing, 28)
             .padding(.bottom, 150)
@@ -1180,10 +1179,15 @@ struct NextEpisodeButton: View {
   }
 
   var body: some View {
-    ZStack {
-      if shown {
-        Button {
-          player.playUpNext()
+    // Spacers place it bottom right without anything that catches touches
+    // around it (the right-side swipe stays free).
+    VStack(spacing: 0) {
+      Spacer(minLength: 0)
+      HStack(spacing: 0) {
+        Spacer(minLength: 0)
+        if shown {
+          Button {
+            player.playUpNext()
         } label: {
           HStack(spacing: 8) {
             Text("Next Episode")
@@ -1197,9 +1201,10 @@ struct NextEpisodeButton: View {
           .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("next-episode")
-        .accessibilityHint(player.upNext?.displayTitle ?? "")
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+          .accessibilityIdentifier("next-episode")
+          .accessibilityHint(player.upNext?.displayTitle ?? "")
+          .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        }
       }
     }
     .animation(Astra.Motion.base, value: shown)
