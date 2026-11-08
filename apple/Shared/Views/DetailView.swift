@@ -130,7 +130,7 @@ struct DetailView: View {
         .disabled(shown.isCatalogOnly || !app.canPlay(shown))
 
         if shown.type != .collection, !shown.isCatalogOnly {
-          DownloadButton(item: shown, wide: true)
+          DownloadButton(item: shown, round: true)
         }
 
         if !shown.isCatalogOnly {

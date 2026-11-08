@@ -505,6 +505,8 @@ final class LibraryStore {
     // Title-and-year aliases, so titles with a missing or different TMDB id still match.
     let aliased = LibraryMatch.withAliases(index)
     libraryIndex = aliased
+    // Titles remembered as missing get another look with the new index.
+    resolveCache = resolveCache.filter { $0.value != nil }
     if !indexReady { indexReady = true }
     indexVersion += 1
     // Tabs already built with an older (or no) index get matched again.
@@ -760,10 +762,14 @@ final class LibraryStore {
   }
 
   private func resolveUncached(_ item: PlexMetadata) async throws -> PlexMetadata {
-    // The library index already knows: no search needed.
-    if let key = item.tmdbKey, let hit = libraryIndex?[key] { return hit }
+    // The library index already knows: no search needed (by TMDB id, or title and year).
+    if let hit = libraryIndex?.match(item) { return hit }
     let tmdbID = item.guids.first?.id
-    let results = ((try? await search(item.title)) ?? []).filter { $0.type == item.type }
+    // A failed search (server slow or still connecting) is not "not on the
+    // server": it throws, isn't remembered, and the next open asks again.
+    // Before, a pre-cache that ran while the server was connecting marked
+    // hero and Top Trending titles missing for the whole session (KP, 2026-11-08).
+    let results = try await search(item.title).filter { $0.type == item.type }
     let title = item.title.lowercased()
     let match =
       results.first { $0.guids.contains { $0.id == tmdbID } }
