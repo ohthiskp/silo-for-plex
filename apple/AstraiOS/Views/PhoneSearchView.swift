@@ -353,8 +353,8 @@ private struct ResultRow: View {
       }
       .astraIconButton(size: 40, variant: .clear)
       // Not on the server: Play greyed out (KP).
-      .disabled(item.isCatalogOnly)
-      .opacity(item.isCatalogOnly ? 0.35 : 1)
+      .disabled(library.availability(of: item) == .notOnServer)
+      .opacity(library.availability(of: item) == .notOnServer ? 0.35 : 1)
       .accessibilityLabel("Play \(item.displayTitle)")
     }
     .padding(10)

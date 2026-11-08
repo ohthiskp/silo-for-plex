@@ -1380,3 +1380,35 @@ final class UpNextTests: XCTestCase {
     XCTAssertEqual(UpNext.first(of: [ep("b", 2), ep("a", 1)])?.ratingKey, "a")
   }
 }
+
+final class WatchlistTests: XCTestCase {
+  private func titled(_ key: String, tmdb: Int?) -> PlexMetadata {
+    var item = PlexMetadata(ratingKey: key, type: .movie, title: key)
+    if let tmdb { item.guids = [PlexGuid(id: "tmdb://\(tmdb)")] }
+    return item
+  }
+
+  func testMatchPrefersServerCopyAndDedupes() {
+    let onServer = titled("srv-1", tmdb: 1)
+    let list = [titled("cat-1", tmdb: 1), titled("cat-2", tmdb: 2), titled("cat-2b", tmdb: 2), titled("x", tmdb: nil)]
+    let shown = WatchlistMatch.match(list, index: ["movie:1": onServer])
+    XCTAssertEqual(shown.map(\.ratingKey), ["srv-1", "tmdb:movie:2"])
+  }
+
+  func testToggleAddsToFrontAndRemoves() {
+    let a = titled("a", tmdb: 1)
+    let b = titled("b", tmdb: 2)
+    XCTAssertEqual(WatchlistMatch.toggled([a], b, adding: true).map(\.ratingKey), ["b", "a"])
+    XCTAssertEqual(WatchlistMatch.toggled([b, a], b, adding: false).map(\.ratingKey), ["a"])
+    XCTAssertEqual(WatchlistMatch.toggled([a], a, adding: true).map(\.ratingKey), ["a"])
+  }
+
+  func testSnapshotRoundTrip() throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("astra-watchlist-\(UUID()).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try WatchlistSnapshot(savedAt: Date(timeIntervalSince1970: 5), items: [titled("a", tmdb: 1)]).save(to: url)
+    let loaded = try XCTUnwrap(WatchlistSnapshot.load(from: url))
+    XCTAssertEqual(loaded.items.map(\.ratingKey), ["a"])
+    XCTAssertEqual(loaded.savedAt, Date(timeIntervalSince1970: 5))
+  }
+}

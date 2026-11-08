@@ -543,8 +543,10 @@ struct HeroInfo: View {
         }
         .buttonStyle(SolidCapsuleButtonStyle())
         // On the service but not on the Plex server: nothing to play.
-        .disabled(item.isCatalogOnly)
-        .help(item.isCatalogOnly ? "Not on your Plex server" : "")
+        // Greyed only once it's known the title isn't on the server, never
+        // while the library is still loading.
+        .disabled(library.availability(of: item) == .notOnServer)
+        .help(library.availability(of: item) == .notOnServer ? "Not on your Plex server" : "")
         WatchlistButton(item: item)
       }
       .astraGlassGroup(spacing: 12)

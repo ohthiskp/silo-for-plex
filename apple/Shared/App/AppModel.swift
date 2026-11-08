@@ -204,6 +204,10 @@ final class AppModel {
     server = nil
     serverID = nil
     library = nil
+    watchlistItems = nil
+    watchlistKeys = []
+    watchlistRefreshedAt = nil
+    try? FileManager.default.removeItem(at: Self.watchlistURL)
     phase = .signedOut
   }
 
@@ -371,28 +375,67 @@ final class AppModel {
     }
   }
 
-  /// The account's Plex Watchlist (Home's bookmark button).
-  func watchlist() async throws -> [PlexMetadata] {
-    guard let accountToken else { throw PlexError.notSignedIn }
-    let list = try await account.watchlist(token: accountToken)
-    watchlistKeys = Set(list.compactMap(\.tmdbKey))
-    watchlistLoaded = true
-    return list
-  }
+  // MARK: - Watchlist (Astra 4.0)
 
+  /// The Plex Watchlist, newest first: the saved copy at once (nil until
+  /// there is one), then plex.tv's answer. Shown even when the server is down.
+  private(set) var watchlistItems: [PlexMetadata]? = WatchlistSnapshot.load(from: AppModel.watchlistURL)?.items
+  /// Why the last refresh failed; the saved list stays on screen.
+  private(set) var watchlistError: String?
   /// TMDB keys of the titles on the Plex Watchlist, for the + / ✓ buttons.
-  private(set) var watchlistKeys: Set<String> = []
-  @ObservationIgnored private var watchlistLoaded = false
+  private(set) var watchlistKeys: Set<String> =
+    Set((WatchlistSnapshot.load(from: AppModel.watchlistURL)?.items ?? []).compactMap(\.tmdbKey))
+  @ObservationIgnored private var watchlistRefresh: Task<Void, Never>?
+  @ObservationIgnored private var watchlistRefreshedAt: Date?
+
+  nonisolated static var watchlistURL: URL {
+    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+      ?? FileManager.default.temporaryDirectory
+    return base.appendingPathComponent("Astra/Watchlist.json")
+  }
 
   func isOnWatchlist(_ item: PlexMetadata) -> Bool {
     item.tmdbKey.map(watchlistKeys.contains) ?? false
   }
 
+  /// Reads the Watchlist from plex.tv. Callers share one request; within
+  /// 30 s of the last one nothing is sent unless `force`.
+  func refreshWatchlist(force: Bool = false) async {
+    if let running = watchlistRefresh { return await running.value }
+    if !force, let at = watchlistRefreshedAt, Date().timeIntervalSince(at) < 30 { return }
+    guard let accountToken else {
+      watchlistError = PlexError.describe(PlexError.notSignedIn)
+      return
+    }
+    let account = account
+    let task = Task { @MainActor [weak self] in
+      do {
+        let list = try await account.watchlist(token: accountToken)
+        guard let self else { return }
+        self.setWatchlist(list)
+        self.watchlistError = nil
+        self.watchlistRefreshedAt = Date()
+      } catch {
+        self?.watchlistError = PlexError.describe(error)
+      }
+    }
+    watchlistRefresh = task
+    await task.value
+    watchlistRefresh = nil
+  }
+
   /// Reads the Watchlist once so the + buttons know what's already on it.
   func loadWatchlistIfNeeded() async {
-    guard !watchlistLoaded else { return }
-    watchlistLoaded = true
-    _ = try? await watchlist()
+    guard watchlistRefreshedAt == nil else { return }
+    await refreshWatchlist()
+  }
+
+  private func setWatchlist(_ list: [PlexMetadata]) {
+    watchlistItems = list
+    watchlistKeys = Set(list.compactMap(\.tmdbKey))
+    let snapshot = WatchlistSnapshot(savedAt: Date(), items: list)
+    let url = Self.watchlistURL
+    Task.detached(priority: .utility) { try? snapshot.save(to: url) }
   }
 
   /// Astra (KP, 2026-11-07): the + adds to the Plex Watchlist, ✓ takes it
@@ -400,7 +443,10 @@ final class AppModel {
   func toggleWatchlist(_ item: PlexMetadata) async {
     guard let accountToken, let key = item.tmdbKey else { return }
     let adding = !watchlistKeys.contains(key)
+    let before = watchlistItems
     if adding { watchlistKeys.insert(key) } else { watchlistKeys.remove(key) }
+    // The Watchlist page changes at once too, with no refetch.
+    watchlistItems = WatchlistMatch.toggled(watchlistItems ?? [], item, adding: adding)
     do {
       guard let catalog = try await account.catalogKey(for: item, token: accountToken) else {
         throw PlexError.invalidResponse
@@ -410,8 +456,10 @@ final class AppModel {
       } else {
         try await account.removeFromWatchlist(catalogKey: catalog, token: accountToken)
       }
+      if let list = watchlistItems { setWatchlist(list) }
     } catch {
       if adding { watchlistKeys.remove(key) } else { watchlistKeys.insert(key) }
+      watchlistItems = before
       player.lastError = "Couldn't update your Watchlist: \(PlexError.describe(error))"
     }
   }

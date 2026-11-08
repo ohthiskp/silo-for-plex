@@ -116,51 +116,58 @@ struct CountBadge: View {
 }
 
 /// The Plex Watchlist as a poster grid, without a page or title.
+/// Astra 4.0 (KP, 2026-11-08): the saved list shows at once, matched to the
+/// server from memory; plex.tv is asked behind it. A spinner only when there
+/// is nothing saved yet, and it always ends (list, empty state or error).
 struct WatchlistContent: View {
   var library: LibraryStore
 
   @Environment(AppModel.self) private var app
-  @State private var items: [PlexMetadata] = []
-  @State private var loaded = false
-  @State private var error: String?
 
   var body: some View {
     Group {
-      if !loaded {
-        ProgressView().controlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 60)
-      } else if let error {
+      if let saved = app.watchlistItems {
+        let items = library.matchWatchlist(saved)
+        if items.isEmpty {
+          EmptyState(
+            symbol: "bookmark", title: "Your Watchlist is empty",
+            message: "Use + on any title to add it to your Plex Watchlist.")
+        } else {
+          VStack(alignment: .leading, spacing: 12) {
+            if let error = app.watchlistError {
+              Text("Showing your saved Watchlist. \(error)")
+                .font(Astra.Font.meta)
+                .foregroundStyle(Astra.Color.muted)
+            }
+            grid(items)
+          }
+        }
+      } else if let error = app.watchlistError {
         EmptyState(
           symbol: "exclamationmark.triangle", title: "Couldn't load your Watchlist", message: error,
-          action: ("Try Again", { Task { await load() } }))
-      } else if items.isEmpty {
-        EmptyState(
-          symbol: "bookmark", title: "Your Watchlist is empty",
-          message: "Use + on any title to add it to your Plex Watchlist.")
+          action: ("Try Again", { Task { await app.refreshWatchlist(force: true) } }))
       } else {
-        #if os(macOS)
-          LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
-            ForEach(items) { PosterCard(library: library, item: $0) }
-          }
-        #else
-          LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 14) {
-            ForEach(items) { PosterCard(library: library, item: $0, width: 108) }
-          }
-        #endif
+        ProgressView().controlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 60)
       }
     }
-    // Added or removed with + elsewhere: read it again.
-    .task(id: app.watchlistKeys) { await load() }
+    // Once per appearance; the + / ✓ buttons update the list locally.
+    .task {
+      async let index: Void = library.warmLibraryIndex()
+      await app.refreshWatchlist()
+      await index
+    }
   }
 
-  private func load() async {
-    do {
-      let list = try await app.watchlist()
-      items = await library.matchWatchlist(list)
-      error = nil
-    } catch {
-      self.error = PlexError.describe(error)
-    }
-    loaded = true
+  @ViewBuilder private func grid(_ items: [PlexMetadata]) -> some View {
+    #if os(macOS)
+      LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
+        ForEach(items) { PosterCard(library: library, item: $0) }
+      }
+    #else
+      LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 14) {
+        ForEach(items) { PosterCard(library: library, item: $0, width: 108) }
+      }
+    #endif
   }
 }
 

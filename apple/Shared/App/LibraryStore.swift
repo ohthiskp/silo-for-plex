@@ -70,6 +70,8 @@ final class LibraryStore {
   @ObservationIgnored private var serviceTask: Task<Void, Never>?
   /// Every movie and show on the server by TMDB key ("movie:603"), built once, on first use.
   @ObservationIgnored private var libraryIndex: [String: PlexMetadata]?
+  /// Observed stand-in for `libraryIndex`: flips when an index is in memory.
+  private(set) var indexReady = false
   /// The read in progress; every service waiting for the index shares it.
   @ObservationIgnored private var indexTask: Task<[String: PlexMetadata], Error>?
   /// The first read of the index; cancelled by `close()`.
@@ -480,6 +482,7 @@ final class LibraryStore {
 
   private func setLibraryIndex(_ index: [String: PlexMetadata]) {
     libraryIndex = index
+    if !indexReady { indexReady = true }
     indexVersion += 1
     // Tabs already built with an older (or no) index get matched again.
     for (id, version) in serviceIndexVersion where version != indexVersion {
@@ -547,15 +550,32 @@ final class LibraryStore {
 
   /// Watchlist items (from Plex's catalog) as this server's items where it has
   /// them, else as catalog titles that open with Play greyed out.
-  func matchWatchlist(_ items: [PlexMetadata]) async -> [PlexMetadata] {
-    let index = (try? await loadLibraryIndex()) ?? [:]
-    return items.compactMap { item in
-      guard let key = item.tmdbKey else { return nil }
-      if let onServer = index[key] { return onServer }
-      var catalog = item
-      catalog.ratingKey = "tmdb:\(key)"
-      return catalog
-    }
+  /// Astra 4.0: Watchlist titles matched to the server with what is already
+  /// in memory, never waiting on the network. Re-runs when the index arrives
+  /// (`indexReady` is observed).
+  func matchWatchlist(_ items: [PlexMetadata]) -> [PlexMetadata] {
+    _ = indexReady
+    return WatchlistMatch.match(items, index: libraryIndex ?? [:])
+  }
+
+  /// Astra 4.0 (KP: hero Play greyed when playable): whether Play can work.
+  /// A streaming-list title counts as playable as soon as the library index
+  /// has it, and is only "not on server" once the index has loaded without
+  /// it. While the index is still loading, Play stays enabled (a tap looks
+  /// the title up).
+  enum PlayAvailability { case playable, checking, notOnServer }
+
+  func availability(of item: PlexMetadata) -> PlayAvailability {
+    guard item.isCatalogOnly else { return .playable }
+    _ = indexReady
+    guard let index = libraryIndex else { return .checking }
+    if let key = item.tmdbKey, index[key] != nil { return .playable }
+    return .notOnServer
+  }
+
+  /// Starts reading the library index (saved copy first) if nothing has yet.
+  func warmLibraryIndex() async {
+    _ = try? await loadLibraryIndex()
   }
 
   /// Search, with one copy of each title.
@@ -697,6 +717,8 @@ final class LibraryStore {
   }
 
   private func resolveUncached(_ item: PlexMetadata) async throws -> PlexMetadata {
+    // The library index already knows: no search needed.
+    if let key = item.tmdbKey, let hit = libraryIndex?[key] { return hit }
     let tmdbID = item.guids.first?.id
     let results = ((try? await search(item.title)) ?? []).filter { $0.type == item.type }
     let title = item.title.lowercased()
