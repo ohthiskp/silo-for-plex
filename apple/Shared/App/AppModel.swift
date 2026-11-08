@@ -226,6 +226,7 @@ final class AppModel {
     Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: indexFolder) }
     // Cached artwork and the per-server image tokens go too (security review).
     ImagePipeline.shared.clearCache()
+    LibraryStore.clearSavedContinueWatching()
     phase = .signedOut
   }
 
