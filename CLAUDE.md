@@ -79,7 +79,10 @@ Hard rules:
 
 - No purple or violet anywhere. Only Apple's official Liquid Glass.
 - Always play original files: never transcode or downscale; quality picks between existing versions.
-- Mac sidebar = Home, Movies, Shows, Downloads, Search, Settings; icons only, click to expand.
+- Navigation = Home, Library (Libraries / Watchlist / Downloads), Search, Settings; Mac sidebar icons only,
+  no hover expand, no sliding indicator. iPhone tabs are customizable (Home and Library always stay).
+- Home (4.0): Hero, Continue Watching, Top Trending, Recently Released, All-Time Greats, each with its own
+  Movies | Series switch; full cineby/TMDB lists (titles not on Plex show greyed Play); no View All.
 - One hero at a time; no duplicate titles across rows; streaming switcher is a top glass pill.
 - Details opens as a stacked card with an X. Long-press a title for Details/Play/Download/Mark/Go to.
 - iPhone player is landscape, Infuse-style, double-tap ±10 s, swipe left side = brightness and
