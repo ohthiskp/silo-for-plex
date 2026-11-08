@@ -57,3 +57,21 @@ public enum PlayerGeometry {
       height: limit(offset.height, low: area.minY - panel.minY, high: area.maxY - panel.maxY))
   }
 }
+
+/// Apple TV: scrubbing with a swipe on the Siri Remote's touch surface.
+/// A swipe across the whole surface moves 10% of the film, at least two
+/// minutes and at most ten, like the system player; the result stays inside
+/// the film.
+public enum RemoteScrub {
+  /// Seconds a full-width swipe covers for a film of `duration` seconds.
+  public static func span(duration: Double) -> Double {
+    min(600, max(120, duration * 0.1))
+  }
+
+  /// Where a scrub that started at `start` is, after a swipe of
+  /// `fraction` of the surface's width (negative is back).
+  public static func target(start: Double, fraction: Double, duration: Double) -> Double {
+    let moved = start + fraction * span(duration: duration)
+    return duration > 0 ? min(max(0, moved), duration) : max(0, moved)
+  }
+}
