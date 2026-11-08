@@ -214,7 +214,7 @@ final class AppModel {
     watchlistRefresh = nil
     watchlistGeneration += 1
     let watchlistURL = Self.watchlistURL
-    Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: watchlistURL) }
+    onWatchlistDisk { try? FileManager.default.removeItem(at: watchlistURL) }
     // The saved library lists go too, so nothing of the account stays on disk.
     try? FileManager.default.removeItem(at: LibraryStore.indexFolder)
     phase = .signedOut
@@ -469,7 +469,19 @@ final class AppModel {
     watchlistKeys = Set(list.compactMap(\.tmdbKey))
     let snapshot = WatchlistSnapshot(savedAt: Date(), items: list)
     let url = Self.watchlistURL
-    Task.detached(priority: .utility) { try? snapshot.save(to: url) }
+    onWatchlistDisk { try? snapshot.save(to: url) }
+  }
+
+  /// Every Watchlist.json write on one chain, in the order made, so a delete
+  /// on sign-out always wins over an earlier save.
+  @ObservationIgnored private var watchlistDisk: Task<Void, Never>?
+
+  private func onWatchlistDisk(_ work: @escaping @Sendable () -> Void) {
+    let previous = watchlistDisk
+    watchlistDisk = Task.detached(priority: .utility) {
+      await previous?.value
+      work()
+    }
   }
 
   /// Astra (KP, 2026-11-07): the + adds to the Plex Watchlist, ✓ takes it
