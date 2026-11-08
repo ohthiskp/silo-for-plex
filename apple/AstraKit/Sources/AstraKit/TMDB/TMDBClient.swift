@@ -197,6 +197,11 @@ public struct TMDBClient: Sendable {
     try await list("/discover/\(request.kind.rawValue)", request.query(service: service), kind: request.kind)
   }
 
+  /// Discover across everything, not one service (For You's rows).
+  public func discover(_ request: DiscoverRequest) async throws -> [TMDBItem] {
+    try await list("/discover/\(request.kind.rawValue)", request.query(service: nil), kind: request.kind)
+  }
+
   /// Search: titles and people for `text`, best matches first (see `SearchRank`).
   public func searchMulti(_ text: String) async throws -> (items: [TMDBItem], people: [TMDBPerson]) {
     let data = try await get("/search/multi", ["query": text, "include_adult": "false"])
@@ -477,7 +482,11 @@ public enum TrendingHero {
 
 /// One TMDB discover query for a streaming service's row.
 public struct DiscoverRequest: Sendable, Hashable {
-  public enum Order: Sendable, Hashable { case popular, newest, topRated }
+  public enum Order: Sendable, Hashable {
+    case popular, newest, topRated
+    /// Released in the last four months, most popular first (For You's Recently Released).
+    case recent
+  }
 
   public var kind: TMDBItem.Kind
   public var order: Order
@@ -492,13 +501,13 @@ public struct DiscoverRequest: Sendable, Hashable {
     self.page = page
   }
 
-  func query(service: StreamingService, today: Date = Date()) -> [String: String] {
-    var query = [
-      "with_watch_providers": service.providerFilter,
-      "watch_region": TMDBClient.region,
-      "with_watch_monetization_types": "flatrate",
-      "page": String(page),
-    ]
+  func query(service: StreamingService?, today: Date = Date()) -> [String: String] {
+    var query = ["page": String(page)]
+    if let service {
+      query["with_watch_providers"] = service.providerFilter
+      query["watch_region"] = TMDBClient.region
+      query["with_watch_monetization_types"] = "flatrate"
+    }
     let dateField = kind == .movie ? "primary_release_date" : "first_air_date"
     switch order {
     case .popular:
@@ -508,6 +517,11 @@ public struct DiscoverRequest: Sendable, Hashable {
       query["\(dateField).lte"] = Self.day.string(from: today)
       // Skips placeholders and obscure uploads with no audience yet.
       query["vote_count.gte"] = "15"
+    case .recent:
+      query["sort_by"] = "popularity.desc"
+      query["\(dateField).lte"] = Self.day.string(from: today)
+      query["\(dateField).gte"] = Self.day.string(from: today.addingTimeInterval(-120 * 86_400))
+      query["vote_count.gte"] = "20"
     case .topRated:
       query["sort_by"] = "vote_average.desc"
       query["vote_count.gte"] = kind == .tv ? "200" : "500"

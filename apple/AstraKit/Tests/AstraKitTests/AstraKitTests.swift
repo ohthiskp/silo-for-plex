@@ -1641,3 +1641,21 @@ final class ConnectionKindTests: XCTestCase {
     XCTAssertEqual(ConnectionKind.classify(URL(string: "https://172-40-1-1.abc.plex.direct:32400")!), .remote)
   }
 }
+
+final class CinebySectionsTests: XCTestCase {
+  func testSplitsRowsByHeading() {
+    let html = """
+      <a href="/movie/9/watch">x</a>
+      <h2 class="t">Trending <span>Now</span></h2><a href="/movie/1/watch"></a><a href="/tv/2"></a>
+      <h2>Top Rated Movies</h2><a href="/movie/3/watch"></a>
+      <h3>New Releases</h3><a href="/tv/4/"></a><a href="/movie/5/watch"></a>
+      <h2>Empty</h2>
+      """
+    let sections = CinebyTrending.sections(html)
+    XCTAssertEqual(sections.map(\.title), ["Trending Now", "Top Rated Movies", "New Releases"])
+    XCTAssertEqual(CinebyTrending.section(sections, matching: CinebyTrending.greatsKeywords)?.map(\.id), ["movie:3"])
+    XCTAssertEqual(
+      CinebyTrending.section(sections, matching: CinebyTrending.recentKeywords)?.map(\.id), ["tv:4", "movie:5"])
+    XCTAssertNil(CinebyTrending.section(sections, matching: ["anime"]))
+  }
+}

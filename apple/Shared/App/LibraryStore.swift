@@ -806,6 +806,8 @@ final class LibraryStore {
         await self.showTrending(saved.items)
       }
     }
+    // Recently Released and All-Time Greats don't wait for the server's rows.
+    spawn { [weak self] in await self?.buildForYou(isCurrent: isCurrent) }
     async let continueTask = client.continueWatching()
     async let hubsTask = client.homeHubs()
     async let sectionsTask = client.librarySections()
@@ -857,7 +859,6 @@ final class LibraryStore {
       if !hubsFailed || hubs.isEmpty { hubs = rows.hubs }
       isLoadingHome = false
       await loadHero(fallback: rows.hubs, isCurrent: isCurrent)
-      await buildForYou(isCurrent: isCurrent)
     }
     isLoadingHome = false
     spawn { [weak self] in
@@ -959,13 +960,26 @@ final class LibraryStore {
   /// TMDB isn't there or too few match). Recommended For You, Because You
   /// Watched and Hidden Gems are no longer on Home (`ForYou` still has them).
   private func buildForYou(isCurrent: @escaping () -> Bool) async {
-    guard let index = try? await loadLibraryIndex(), !index.isEmpty, isCurrent() else { return }
+    // KP (2026-11-08, "For You still doesn't have the sections"): never wait
+    // on the library. TMDB's lists show at once; titles on the server play.
+    async let recentTMDB = loadRecentReleases()
+    async let ratedTMDB = loadTopRated()
+    // KP (2026-11-08: "no, from cineby"): cineby's own rows first, when its
+    // page has them; TMDB fills in when it doesn't or can't be read.
+    async let cineby = loadCinebyRows()
+    let index = (try? await loadLibraryIndex()) ?? libraryIndex ?? [:]
     let library = index.libraryItems
     let movies = library.filter { $0.type == .movie }
     let shows = library.filter { $0.type == .show }
-    forYouRecent = HomeShelf(
-      movies: HomeSections.recentlyReleased(movies), shows: HomeSections.recentlyReleased(shows))
-    let rated = await loadTopRated()
+    let rows = await cineby
+    let recent = rows.recent.isEmpty ? await recentTMDB : rows.recent
+    guard isCurrent() else { return }
+    func recentShelf(_ kind: TMDBItem.Kind, _ items: [PlexMetadata]) -> [PlexMetadata] {
+      let fromTMDB = HomeSections.catalog(recent.filter { $0.kind == kind }, index: index)
+      return fromTMDB.count >= 5 ? fromTMDB : HomeSections.recentlyReleased(items)
+    }
+    forYouRecent = HomeShelf(movies: recentShelf(.movie, movies), shows: recentShelf(.tv, shows))
+    let rated = rows.greats.isEmpty ? await ratedTMDB : rows.greats
     guard isCurrent() else { return }
     func greats(_ kind: TMDBItem.Kind, _ items: [PlexMetadata]) -> [PlexMetadata] {
       let ranked = HomeSections.catalog(rated.filter { $0.kind == kind }, index: index)
@@ -975,6 +989,60 @@ final class LibraryStore {
   }
 
   @ObservationIgnored private var topRatedTask: Task<[TMDBItem], Never>?
+  @ObservationIgnored private var recentTask: Task<[TMDBItem], Never>?
+  @ObservationIgnored private var cinebyRowsTask: Task<(recent: [TMDBItem], greats: [TMDBItem]), Never>?
+
+  /// Cineby's Recently Released and All-Time Greats style rows (by their
+  /// headings), as TMDB titles, read once a session. Empty when the page
+  /// can't be read or has no such row.
+  private func loadCinebyRows() async -> (recent: [TMDBItem], greats: [TMDBItem]) {
+    guard let tmdb else { return ([], []) }
+    if let cinebyRowsTask { return await cinebyRowsTask.value }
+    let task = Task.detached(priority: .utility) { () -> (recent: [TMDBItem], greats: [TMDBItem]) in
+      guard let html = try? await CinebyTrending.fetchHTML() else { return ([], []) }
+      let sections = CinebyTrending.sections(html)
+      func items(_ keywords: [String]) async -> [TMDBItem] {
+        let entries = Array((CinebyTrending.section(sections, matching: keywords) ?? []).prefix(40))
+        return await withTaskGroup(of: (Int, TMDBItem?).self) { group in
+          for (i, entry) in entries.enumerated() {
+            group.addTask { (i, (try? await tmdb.item(id: entry.tmdbID, kind: entry.kind)) ?? entry.item) }
+          }
+          var out: [Int: TMDBItem] = [:]
+          for await (i, item) in group { if let item { out[i] = item } }
+          return entries.indices.compactMap { out[$0] }
+        }
+      }
+      return (await items(CinebyTrending.recentKeywords), await items(CinebyTrending.greatsKeywords))
+    }
+    cinebyRowsTask = task
+    let result = await task.value
+    if result.recent.isEmpty && result.greats.isEmpty { cinebyRowsTask = nil }
+    return result
+  }
+
+  /// TMDB's popular titles released in the last four months, movies and
+  /// shows, two pages each, read once a session.
+  private func loadRecentReleases() async -> [TMDBItem] {
+    guard let tmdb else { return [] }
+    if let recentTask { return await recentTask.value }
+    let task = Task.detached(priority: .utility) { () -> [TMDBItem] in
+      let requests = (1...2).flatMap { page in
+        [DiscoverRequest(.movie, .recent, page: page), DiscoverRequest(.tv, .recent, page: page)]
+      }
+      return await withTaskGroup(of: (Int, [TMDBItem]).self) { group in
+        for (i, request) in requests.enumerated() {
+          group.addTask { (i, (try? await tmdb.discover(request)) ?? []) }
+        }
+        var byIndex: [Int: [TMDBItem]] = [:]
+        for await (i, items) in group { byIndex[i] = items }
+        return requests.indices.flatMap { byIndex[$0] ?? [] }
+      }
+    }
+    recentTask = task
+    let result = await task.value
+    if result.isEmpty { recentTask = nil }
+    return result
+  }
 
   /// TMDB's all-time top rated movies and shows, five pages each, read once a session.
   private func loadTopRated() async -> [TMDBItem] {

@@ -75,6 +75,47 @@ public enum CinebyTrending {
 
   /// Reads the page. Throws on a network error or a non-200 answer.
   public static func fetch(transport: HTTPTransport = URLSessionTransport()) async throws -> [Entry] {
+    parse(try await fetchHTML(transport: transport))
+  }
+
+  /// The page's rows by their headings ("Trending", "Top Rated"…), each with
+  /// its titles in order. Links before the first heading are left out.
+  public static func sections(_ html: String) -> [(title: String, entries: [Entry])] {
+    let heading = try! NSRegularExpression(
+      pattern: #"<h[1-6][^>]*>(.*?)</h[1-6]>"#, options: [.dotMatchesLineSeparators, .caseInsensitive])
+    let tags = try! NSRegularExpression(pattern: #"<[^>]+>"#)
+    let full = NSRange(html.startIndex..., in: html)
+    let matches = heading.matches(in: html, range: full)
+    var out: [(String, [Entry])] = []
+    for (i, match) in matches.enumerated() {
+      guard let inner = Range(match.range(at: 1), in: html) else { continue }
+      let raw = String(html[inner])
+      let title = decodeEntities(
+        tags.stringByReplacingMatches(in: raw, range: NSRange(raw.startIndex..., in: raw), withTemplate: "")
+      ).trimmingCharacters(in: .whitespacesAndNewlines)
+      let start = match.range.location + match.range.length
+      let end = i + 1 < matches.count ? matches[i + 1].range.location : full.length
+      guard !title.isEmpty, end > start, let body = Range(NSRange(location: start, length: end - start), in: html)
+      else { continue }
+      let entries = parse(String(html[body]))
+      if !entries.isEmpty { out.append((title, entries)) }
+    }
+    return out
+  }
+
+  /// The first row whose heading contains one of `keywords` (any case).
+  public static func section(_ sections: [(title: String, entries: [Entry])], matching keywords: [String]) -> [Entry]? {
+    sections.first { section in
+      let title = section.title.lowercased()
+      return keywords.contains { title.contains($0) }
+    }?.entries
+  }
+
+  /// Headings that mean Recently Released, and All-Time Greats.
+  public static let recentKeywords = ["recent", "new release", "latest", "just released", "now playing", "in theater", "new movies", "new shows", "new on"]
+  public static let greatsKeywords = ["top rated", "top-rated", "all-time", "all time", "greatest", "best of", "classic", "acclaimed", "highest rated"]
+
+  public static func fetchHTML(transport: HTTPTransport = URLSessionTransport()) async throws -> String {
     var request = URLRequest(url: pageURL)
     request.timeoutInterval = 8
     // The page is served to browsers; a plain client gets a challenge page.
@@ -84,7 +125,7 @@ public enum CinebyTrending {
     request.setValue("text/html", forHTTPHeaderField: "Accept")
     let (data, response) = try await transport.send(request)
     guard response.statusCode == 200 else { throw PlexError.http(response.statusCode) }
-    return parse(String(decoding: data, as: UTF8.self))
+    return String(decoding: data, as: UTF8.self)
   }
 
   /// Cineby's titles first, then `fill` (TMDB trending) for anything it
