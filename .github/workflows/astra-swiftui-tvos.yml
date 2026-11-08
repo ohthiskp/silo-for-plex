@@ -1,1 +1,200 @@
-PLACEHOLDER
+name: Astra SwiftUI Apple TV (TestFlight)
+run-name: SwiftUI Apple TV TestFlight ${{ github.sha }}
+
+# Archives the native SwiftUI Apple TV app (apple/, target AstraTV), signs it
+# with KP's team through the App Store Connect API key, and uploads it to
+# TestFlight (internal testing) under the same app record as the Flutter Apple
+# TV builds (com.ohthiskp.astra), replacing them: MARKETING_VERSION 3.1.0 is
+# above Flutter's 3.0.0, so TestFlight shows it as the newest.
+# Release rule (KP, latest): ship as soon as astra-swiftui-macos is green on the
+# SwiftUI branch; the session starts this run with the Mac and iPhone ones.
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: "App Store Connect app to upload to"
+        default: com.ohthiskp.astra
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astra-swiftui-tvos
+  cancel-in-progress: false
+
+env:
+  # KP's existing TestFlight app (the Flutter build used it first).
+  BUNDLE_ID: ${{ inputs.bundle_id || 'com.ohthiskp.astra' }}
+
+jobs:
+  testflight:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Check Apple secrets
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          for n in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 APPLE_TEAM_ID; do
+            [ -n "${!n}" ] || missing="$missing $n"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Add these repository secrets first:$missing"
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Test AstraKit
+        working-directory: apple/AstraKit
+        run: swift test
+
+      - name: Write API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          python3 -m pip install --quiet --break-system-packages pyjwt cryptography 2>/dev/null || python3 -m pip install --quiet pyjwt cryptography
+          mkdir -p "$RUNNER_TEMP/asc"
+          # Same clean-up of the pasted key as astra-ios.yml.
+          python3 - "$RUNNER_TEMP/asc/AuthKey.p8" <<'PY'
+          import base64, os, re, sys
+          raw = os.environ["ASC_KEY_P8"]
+          raw = raw.replace("–", "-").replace("—", "-").replace("−", "-").replace("\r", "")
+          body = re.sub(r"-+\s*(BEGIN|END)[A-Z ]*PRIVATE KEY\s*-+", "", raw)
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", body)
+          der = base64.b64decode(body)
+          lines = [body[i:i + 64] for i in range(0, len(body), 64)]
+          pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
+          try:
+              from cryptography.hazmat.primitives import serialization as ser
+              key = ser.load_pem_private_key(pem.encode(), None)
+              pem = key.private_bytes(ser.Encoding.PEM, ser.PrivateFormat.PKCS8, ser.NoEncryption()).decode()
+          except Exception as e:
+              print(f"::warning::Couldn't normalise the key ({type(e).__name__}); using it as pasted.")
+          open(sys.argv[1], "w").write(pem)
+          PY
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> "$GITHUB_ENV"
+          echo "KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')" >> "$GITHUB_ENV"
+          echo "ISSUER_ID=$(printf '%s' "$ASC_ISSUER_ID" | tr -d '[:space:]' | tr 'A-F' 'a-f')" >> "$GITHUB_ENV"
+          echo "TEAM_ID=$(printf '%s' "$APPLE_TEAM_ID" | tr -d '[:space:]')" >> "$GITHUB_ENV"
+
+      - name: Check the App Store Connect listing
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          PLATFORM: IOS
+        run: python3 tool/astra/asc_preflight.py
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            apple/.build/SourcePackages
+          key: astra-swiftui-tvos-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apple/project.yml') }}
+
+      # A distribution certificate and App Store profile made for this run and
+      # revoked at the end, as the Apple TV workflow does. Xcode's automatic
+      # signing made a new development certificate on every run and hit the
+      # account's limit.
+      - name: Temporary App Store signing (certificate + profile)
+        env:
+          ASTRA_SIGNING_PLATFORM: TVOS
+          ASTRA_SIGNING_TARGETS: ${{ env.BUNDLE_ID }}=AstraTV
+        run: python3 tool/astra/asc_tv_signing.py setup
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: |
+          brew install xcodegen
+          PROFILE=$(python3 -c 'import json,os;print(list(json.load(open(os.environ["RUNNER_TEMP"]+"/tv_signing.json"))["profiles"].values())[0]["name"])')
+          echo "PROFILE_NAME=$PROFILE" >> "$GITHUB_ENV"
+          # The Apple TV target only (not its packages): this upload's bundle ID and manual signing.
+          python3 - "$BUNDLE_ID" "$PROFILE" "$TEAM_ID" <<'PY'
+          import sys
+          bundle, profile, team = sys.argv[1:]
+          text = open("project.yml").read()
+          old = "        PRODUCT_BUNDLE_IDENTIFIER: app.astra.swiftui.tv\n"
+          assert old in text
+          new = (f"        PRODUCT_BUNDLE_IDENTIFIER: {bundle}\n"
+                 f"        DEVELOPMENT_TEAM: {team}\n"
+                 f"        CODE_SIGN_IDENTITY: Apple Distribution\n"
+                 f"        PROVISIONING_PROFILE_SPECIFIER: \"{profile}\"\n")
+          text = text.replace(old, new)
+          # The target's own 'CODE_SIGN_STYLE: Automatic' becomes Manual for this build.
+          head, sep, tail = text.partition(new)
+          tail = tail.replace("        CODE_SIGN_STYLE: Automatic\n", "        CODE_SIGN_STYLE: Manual\n", 1)
+          open("project.yml", "w").write(head + sep + tail)
+          PY
+          grep -n "PROVISIONING_PROFILE_SPECIFIER\|CODE_SIGN_STYLE: Manual" project.yml
+          xcodegen generate
+
+      - name: Archive (signed with your team)
+        working-directory: apple
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          set -o pipefail
+          # UTC timestamp: always above the Flutter app's build numbers (1000 + run).
+          BUILD=$(date -u +%Y%m%d%H%M)
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          xcodebuild archive \
+            -project Astra.xcodeproj -scheme AstraTV -configuration Release \
+            -destination 'generic/platform=tvOS' \
+            -archivePath "$RUNNER_TEMP/AstraTV.xcarchive" \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -skipPackagePluginValidation \
+            CURRENT_PROJECT_VERSION="$BUILD" \
+            TMDB_TOKEN="$TMDB_TOKEN" \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)" || true
+          test -d "$RUNNER_TEMP/AstraTV.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
+
+      - name: Upload to TestFlight
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key><dict><key>${BUNDLE_ID}</key><string>${PROFILE_NAME}</string></dict>
+            <key>uploadSymbols</key><false/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>testFlightInternalTestingOnly</key><true/>
+          </dict></plist>
+          EOF
+          sed -i '' 's/^          //' "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/AstraTV.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+          echo "### Uploaded SwiftUI Astra for Apple TV (build $BUILD) to TestFlight as $BUNDLE_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "Apple processes it for 5–30 minutes, then it appears in the TestFlight app." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary signing
+        if: always()
+        # A failed clean-up shows as a warning (the upload already happened); the next
+        # run's setup removes what's left.
+        continue-on-error: true
+        run: python3 tool/astra/asc_tv_signing.py cleanup
+
+      - name: Remove API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"
