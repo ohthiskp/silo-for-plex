@@ -161,8 +161,12 @@ private struct ContentLeadingKey: EnvironmentKey {
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
-    accentHex = defaults.string(forKey: Preferences.accentKey).flatMap(RGBHex.init(string:)) ?? AccentPreset.white.hex
-    themeHex = defaults.string(forKey: Preferences.themeKey).flatMap(RGBHex.init(string:)) ?? AccentPreset.white.hex
+    // Presets only (KP, 2026-11-08): a custom colour saved by an older build falls back to white,
+    // so nothing can be purple or too dark to read on the glass.
+    accentHex = defaults.string(forKey: Preferences.accentKey).flatMap(RGBHex.init(string:))
+      .flatMap { AccentPreset.matching($0)?.hex } ?? AccentPreset.white.hex
+    themeHex = defaults.string(forKey: Preferences.themeKey).flatMap(RGBHex.init(string:))
+      .flatMap { AccentPreset.matching($0)?.hex } ?? AccentPreset.white.hex
   }
 
   var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
@@ -175,11 +179,6 @@ private struct ContentLeadingKey: EnvironmentKey {
     } else {
       defaults.set(hex.string, forKey: Preferences.themeKey)
     }
-  }
-
-  func setTheme(_ color: SwiftUI.Color) {
-    let resolved = color.resolve(in: EnvironmentValues())
-    setTheme(RGBHex(red: Double(resolved.red), green: Double(resolved.green), blue: Double(resolved.blue)))
   }
 
   var onAccent: SwiftUI.Color { accentHex.prefersDarkText ? .black : .white }
@@ -195,12 +194,6 @@ private struct ContentLeadingKey: EnvironmentKey {
     } else {
       defaults.set(hex.string, forKey: Preferences.accentKey)
     }
-  }
-
-  /// The accent from a ColorPicker, in sRGB.
-  func setAccent(_ color: SwiftUI.Color) {
-    let resolved = color.resolve(in: EnvironmentValues())
-    setAccent(RGBHex(red: Double(resolved.red), green: Double(resolved.green), blue: Double(resolved.blue)))
   }
 }
 

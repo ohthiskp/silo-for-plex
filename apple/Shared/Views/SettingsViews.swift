@@ -219,8 +219,7 @@ struct AppearanceSettings: View {
     SettingsForm {
       Section {
         ColorSwatches(
-          selected: appearance.accentHex, set: { appearance.setAccent($0) },
-          color: Binding(get: { appearance.accent }, set: { appearance.setAccent($0) }))
+          selected: appearance.accentHex, set: { appearance.setAccent($0) })
       } header: {
         Text("Accent Colour")
       } footer: {
@@ -228,8 +227,7 @@ struct AppearanceSettings: View {
       }
       Section {
         ColorSwatches(
-          selected: appearance.themeHex, set: { appearance.setTheme($0) },
-          color: Binding(get: { appearance.theme }, set: { appearance.setTheme($0) }))
+          selected: appearance.themeHex, set: { appearance.setTheme($0) })
       } header: {
         Text("Theme Colour")
       } footer: {
@@ -247,11 +245,11 @@ struct AppearanceSettings: View {
   }
 }
 
-/// Astra's presets (no purple) in a row, plus a picker for any colour.
+/// Astra's presets in a row. Presets only, so no purple and nothing too dark
+/// to read on the glass (KP, 2026-11-08).
 struct ColorSwatches: View {
   var selected: RGBHex
   var set: (RGBHex) -> Void
-  var color: Binding<Color>
 
   var body: some View {
     HStack(spacing: 10) {
@@ -269,8 +267,6 @@ struct ColorSwatches: View {
         .accessibilityAddTraits(isOn ? .isSelected : [])
       }
       Spacer(minLength: 0)
-      ColorPicker("Custom", selection: color, supportsOpacity: false)
-        .labelsHidden()
     }
     .padding(.vertical, 6)
   }
