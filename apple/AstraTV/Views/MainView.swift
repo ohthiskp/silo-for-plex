@@ -90,11 +90,11 @@ struct MainView: View {
       .frame(width: Astra.Sidebar.expandedWidth * 2.4)
       .frame(maxHeight: .infinity)
       .ignoresSafeArea()
-      .opacity(sidebarFocus != nil ? 1 : 0)
+      .opacity(sidebarOpen ? 1 : 0)
       .allowsHitTesting(false)
-      .astraAnimation(Astra.Motion.base, value: sidebarFocus != nil)
+      .astraAnimation(Astra.Motion.base, value: sidebarOpen)
 
-      TVSidebar(selection: section, focus: $sidebarFocus) { picked in
+      TVSidebar(selection: section, focus: $sidebarFocus, expandable: !showingDetails) { picked in
         if !opened.contains(picked) { opened.append(picked) }
         if picked == section {
           // Selecting the open page again goes back to its first screen.
@@ -124,6 +124,11 @@ struct MainView: View {
       }
     }
   }
+
+  /// Details is a stacked card over the page: the sidebar stays icons only
+  /// there, so it never covers the title, meta line or Play (KP, 2026-11-08).
+  private var showingDetails: Bool { !(paths[section] ?? []).isEmpty }
+  private var sidebarOpen: Bool { sidebarFocus != nil && !showingDetails }
 
   private func focusHero() {
     guard !startedOnHero, section == .home, paths[.home]?.isEmpty ?? true,
@@ -177,9 +182,11 @@ extension Demo {
 struct TVSidebar: View {
   var selection: TVSection
   var focus: FocusState<TVSection?>.Binding
+  /// False over Details: icons only, even with focus.
+  var expandable = true
   var choose: (TVSection) -> Void
 
-  private var expanded: Bool { focus.wrappedValue != nil }
+  private var expanded: Bool { expandable && focus.wrappedValue != nil }
   private static let shape = RoundedRectangle(cornerRadius: Astra.Sidebar.collapsedWidth / 2, style: .continuous)
 
   var body: some View {

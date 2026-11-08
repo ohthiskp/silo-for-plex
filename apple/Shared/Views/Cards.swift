@@ -91,9 +91,10 @@ struct ContinueCard: View {
       openItem(item)
     } label: {
       ZStack(alignment: .bottomLeading) {
-        if item.type == .episode {
+        if item.type == .episode, item.thumb != nil {
           RemoteImage(url: library.imageURL(item.thumb, width: width, height: height))
         } else {
+          // Movies, and an episode without its own still: the (show's) backdrop.
           ArtworkImage(library: library, item: item, kind: .backdrop, width: width, height: height)
         }
         LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .center, endPoint: .bottom)
