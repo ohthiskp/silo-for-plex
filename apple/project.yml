@@ -7,6 +7,7 @@ options:
   deploymentTarget:
     macOS: "14.0"
     iOS: "18.0"
+    tvOS: "26.0"
   createIntermediateGroups: true
   developmentLanguage: en
 
@@ -160,6 +161,65 @@ targets:
         CODE_SIGN_STYLE: Automatic
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
 
+  # Apple TV (KP, 2026-11-08): the same Shared code and AstraKit as Mac and
+  # iPhone, with its own shell in AstraTV/. Shared/Views and the touch player
+  # overlay join once Design has gated them for tvOS (focus, no drag gestures).
+  AstraTV:
+    type: application
+    platform: tvOS
+    sources:
+      - path: AstraTV
+      - path: Shared
+        excludes:
+          - "Views/**"
+          - "Player/PlayerOverlay.swift"
+      # The Flutter Apple TV app's mpv core, used unchanged (read-only here): the
+      # iOS layer host compiles for tvOS too, as tvos/scripts/wire_mpv.rb wires it.
+      - path: ../shared/apple/MpvPlayer/MpvPlayerCoreBase.swift
+        group: MpvShared
+      - path: ../ios/Runner/MpvPlayer/MpvPlayerCore.swift
+        group: MpvShared
+      - path: ../ios/Runner/MpvPlayer/MpvPipController.swift
+        group: MpvShared
+      # The Apple TV icon (layered brand assets) and launch image from the Flutter TV app.
+      - path: ../tvos/Runner/Assets.xcassets
+        group: Resources
+        buildPhase: resources
+    dependencies:
+      - package: AstraKit
+      - package: MPVKit
+        product: MPVKit
+    info:
+      path: AstraTV/Resources/Info.plist
+      properties:
+        CFBundleName: Astra
+        CFBundleDisplayName: Astra
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIBackgroundModes: [audio]
+        UIUserInterfaceStyle: Dark
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
+        NSBonjourServices: [_plexmediasvr._tcp]
+        ITSAppUsesNonExemptEncryption: false
+        AstraTMDBToken: $(TMDB_TOKEN)
+    settings:
+      base:
+        PRODUCT_NAME: Astra
+        PRODUCT_BUNDLE_IDENTIFIER: app.astra.swiftui.tv
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME: LaunchImage
+        TARGETED_DEVICE_FAMILY: "3"
+        # Above the Flutter Apple TV builds (3.0.0) in the same TestFlight app,
+        # as the iPhone app does.
+        MARKETING_VERSION: "3.1.0"
+        CODE_SIGN_STYLE: Automatic
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+
   # Astra: UI tests for the iPhone player's gestures (run by the launch-check workflow).
   AstraiOSUITests:
     type: bundle.ui-testing
@@ -187,6 +247,14 @@ schemes:
       config: Release
       targets:
         - AstraiOSUITests
+    archive:
+      config: Release
+  AstraTV:
+    build:
+      targets:
+        AstraTV: all
+    run:
+      config: Debug
     archive:
       config: Release
   AstraMac:
