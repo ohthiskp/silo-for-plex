@@ -664,6 +664,8 @@ struct RatingBadge: View {
 struct WatchlistButton: View {
   var item: PlexMetadata
   var size: CGFloat = 50
+  /// Regular glass on the hero; clear on Details, like its Download and Watched buttons.
+  var variant: AstraGlassVariant = .regular
 
   @Environment(AppModel.self) private var app
 
@@ -676,7 +678,7 @@ struct WatchlistButton: View {
         .font(.system(size: 19, weight: .semibold))
         .contentTransition(.symbolEffect(.replace))
     }
-    .astraIconButton(size: size, variant: .regular)
+    .astraIconButton(size: size, variant: variant)
     .sensoryFeedback(.success, trigger: on)
     .help(on ? "Remove from Watchlist" : "Add to Watchlist")
     .accessibilityLabel(on ? "Remove from Watchlist" : "Add to Watchlist")

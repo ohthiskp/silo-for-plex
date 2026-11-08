@@ -70,16 +70,24 @@ struct DetailView: View {
     .background(Astra.Color.bg.ignoresSafeArea())
     #if os(macOS)
       .overlay(alignment: .topTrailing) {
-        // Astra: details are a card on the Mac; X closes it (Esc too).
-        Button {
-          if let closeCard { closeCard() } else if !path.isEmpty { path.removeLast() }
-        } label: {
-          Image(systemName: "xmark")
+        HStack(spacing: 10) {
+          // KP (2026-11-08): ••• beside the X with the title's actions.
+          if !shown.isCatalogOnly {
+            moreMenu
+              .menuStyle(.button)
+              .astraIconButton(size: 36, variant: .clear)
+          }
+          // Astra: details are a card on the Mac; X closes it (Esc too).
+          Button {
+            if let closeCard { closeCard() } else if !path.isEmpty { path.removeLast() }
+          } label: {
+            Image(systemName: "xmark")
+          }
+          .astraIconButton(size: 36, variant: .clear)
+          .keyboardShortcut(isActive ? .cancelAction : nil)
+          .help("Close (Esc)")
+          .accessibilityLabel("Close")
         }
-        .astraIconButton(size: 36, variant: .clear)
-        .keyboardShortcut(isActive ? .cancelAction : nil)
-        .help("Close (Esc)")
-        .accessibilityLabel("Close")
         .padding(.trailing, 18)
         .padding(.top, 18)
       }
@@ -87,8 +95,27 @@ struct DetailView: View {
       // iPhone keeps the system back button (Liquid Glass on iOS 26) and swipe-back.
       .toolbarBackground(.hidden, for: .navigationBar)
       .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        // KP (2026-11-08): ••• top right with the title's actions (the bar gives it its glass).
+        if !shown.isCatalogOnly {
+          ToolbarItem(placement: .topBarTrailing) { moreMenu }
+        }
+      }
     #endif
     .task(id: seed.ratingKey) { await load() }
+  }
+
+  /// The ••• menu: Mark Watched / Unwatched, Download, Go to Season / Show,
+  /// the same actions as a long-press on a title.
+  private var moreMenu: some View {
+    Menu {
+      ItemMenuItems(library: library, item: shown, onDetails: true)
+    } label: {
+      Image(systemName: "ellipsis")
+    }
+    .menuIndicator(.hidden)
+    .help("More")
+    .accessibilityLabel("More")
   }
 
   // MARK: Header
@@ -131,6 +158,11 @@ struct DetailView: View {
 
         if shown.type != .collection, !shown.isCatalogOnly {
           DownloadButton(item: shown, round: true)
+        }
+
+        // KP (2026-11-08): the round + Watchlist button next to Download, as on the hero.
+        if shown.tmdbKey != nil, shown.type == .movie || shown.type == .show {
+          WatchlistButton(item: shown, size: 46, variant: .clear)
         }
 
         if !shown.isCatalogOnly {
