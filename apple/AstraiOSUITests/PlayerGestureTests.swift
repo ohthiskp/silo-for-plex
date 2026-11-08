@@ -59,14 +59,22 @@ final class PlayerGestureTests: XCTestCase {
     XCTAssertTrue(found, "No +10 s badge when the controls were showing")
   }
 
+  /// Whether `element` is on screen and tappable. Hidden controls can leave
+  /// the button with no valid frame, and `isHittable` then fails the test
+  /// ("Failed to determine hittability") instead of returning false.
+  private func showing(_ element: XCUIElement) -> Bool {
+    guard element.exists, !element.frame.isEmpty, element.frame.minX.isFinite else { return false }
+    return element.isHittable
+  }
+
   func testSingleTapTogglesControls() {
     let close = app.buttons["Close Player"]
     // The controls hide by themselves after a few seconds of playback.
     sleep(5)
-    let before = close.isHittable
+    let before = showing(close)
     point(0.3, 0.35).tap()
     sleep(2)
-    let after = close.isHittable
+    let after = showing(close)
     shot("after-single-tap")
     XCTAssertNotEqual(before, after, "A single tap didn't show or hide the controls (before: \(before))")
   }
