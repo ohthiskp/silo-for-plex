@@ -4,9 +4,11 @@ run-name: SwiftUI iPhone TestFlight ${{ github.sha }}
 # Archives the native SwiftUI iPhone app (apple/, target AstraiOS), signs it
 # with KP's team through the App Store Connect API key, and uploads it to
 # TestFlight (internal testing). Uses the same secrets as astra-ios.yml.
-# KP (2026-11-07): uploads only when KP says "send it", after seeing the
-# simulator screenshots from the launch check. Run it from the Actions tab
-# (or the session dispatches it on KP's word).
+# Release rule (KP, latest): ship every change as soon as astra-swiftui-macos is
+# green on the SwiftUI branch, and always ship Mac and iPhone together. The
+# session starts this run and "Astra SwiftUI release" (Mac) together, on the
+# same commit, right after CI passes. (It is dispatched rather than run on
+# push so a red commit is never uploaded.)
 on:
   workflow_dispatch:
     inputs:

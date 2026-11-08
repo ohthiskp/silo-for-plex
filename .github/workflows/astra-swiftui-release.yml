@@ -3,8 +3,10 @@ run-name: SwiftUI Mac release ${{ github.sha }}
 
 # Builds the SwiftUI Mac app, publishes it as a GitHub release and updates the
 # in-app update feed (branch appcast-swiftui, read by Sparkle in the app).
-# KP (2026-11-07): runs only when KP says "send it", after seeing the
-# screenshots; run it by hand from the Actions tab.
+# Release rule (KP, latest): ship every change as soon as astra-swiftui-macos is
+# green on the SwiftUI branch, and always ship Mac and iPhone together. The
+# session starts this run and "Astra SwiftUI iPhone (TestFlight)" together, on
+# the same commit, right after CI passes.
 on:
   workflow_dispatch:
 
@@ -100,7 +102,7 @@ jobs:
           for attempt in 1 2 3 4; do
             if gh release create "$TAG" Astra-SwiftUI.zip \
               --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-              --title "Astra SwiftUI ${{ steps.ver.outputs.name }} (build ${{ steps.ver.outputs.build }})" \
+              --title "Astra for Mac build ${{ steps.ver.outputs.build }}" \
               --notes "Download **Astra-SwiftUI.zip**, unzip it and move Astra into Applications. Already have a build with updates? It updates itself from inside the app (Astra → Check for Updates…)."; then
               break
             fi
