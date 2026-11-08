@@ -10,6 +10,10 @@ struct SignInView: View {
 
       switch app.phase {
       case .waitingForApproval(let code, let url):
+        #if os(tvOS)
+          // Apple TV: no browser, so a short code for plex.tv/link and a QR code (KP, 2026-11-08).
+          TVSignInCode(code: code, url: url)
+        #else
         VStack(spacing: 16) {
           Text("Finish signing in on the Plex page that just opened.")
             .astraFont(size: 15)
@@ -23,7 +27,9 @@ struct SignInView: View {
             .lineLimit(1)
             .tracking(8)
             .foregroundStyle(Astra.Color.ink)
-            .textSelection(.enabled)
+            #if !os(tvOS)
+              .textSelection(.enabled)
+            #endif
           HStack(spacing: 12) {
             Button("Open Plex Again") { AppModel.open(url) }
               .astraSecondaryButton()
@@ -34,6 +40,7 @@ struct SignInView: View {
           ProgressView().astraControlSize(.small).padding(.top, 6)
         }
         .astraTransition(.opacity.combined(with: .scale(scale: 0.98)))
+        #endif
       default:
         VStack(spacing: 14) {
           Text("Your Plex library, made cinematic.")

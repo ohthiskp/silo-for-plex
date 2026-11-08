@@ -170,9 +170,6 @@ targets:
     sources:
       - path: AstraTV
       - path: Shared
-        excludes:
-          - "Views/**"
-          - "Player/PlayerOverlay.swift"
       # The Flutter Apple TV app's mpv core, used unchanged (read-only here): the
       # iOS layer host compiles for tvOS too, as tvos/scripts/wire_mpv.rb wires it.
       - path: ../shared/apple/MpvPlayer/MpvPlayerCoreBase.swift

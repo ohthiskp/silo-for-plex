@@ -172,8 +172,8 @@ struct WatchlistContent: View {
   }
 }
 
-#if os(macOS)
-  /// The Mac Library page, laid out like the iPhone Library tab: a title,
+#if os(macOS) || os(tvOS)
+  /// The Mac (and Apple TV) Library page, laid out like the iPhone Library tab: a title,
   /// Libraries · Watchlist · Downloads, and Movies | Shows inside Libraries.
   struct LibraryPage: View {
     var library: LibraryStore

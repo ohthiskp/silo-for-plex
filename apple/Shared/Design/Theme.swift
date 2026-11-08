@@ -82,6 +82,8 @@ enum Astra {
       static let posterMinWidth: CGFloat = 160
       static let titleSize: CGFloat = 52
       static let pageTitleSize: CGFloat = 38
+      /// Buttons and small controls; 1 on Mac and iPhone.
+      static let controlScale: CGFloat = 1
     #elseif os(tvOS)
       // Apple TV (1920 × 1080 pt, seen from the sofa): about 1.5× the Mac. The
       // system safe area already keeps 60 pt top/bottom and 80 pt left/right.
@@ -97,6 +99,8 @@ enum Astra {
       static let pageTitleSize: CGFloat = 57
       /// Text in pages (`astraFont`) is this much larger than on the Mac and iPhone.
       static let textScale: CGFloat = 1.6
+      /// Buttons, chips and small cards are this much larger, for focus from the sofa.
+      static let controlScale: CGFloat = 1.5
     #else
       static let leading: CGFloat = 20
       static let heroHeight: CGFloat = 560
@@ -108,6 +112,7 @@ enum Astra {
       static let posterMinWidth: CGFloat = 104
       static let titleSize: CGFloat = 38
       static let pageTitleSize: CGFloat = 30
+      static let controlScale: CGFloat = 1
       /// Space a scrolling page leaves at its bottom for the floating tab bar
       /// (52 pt bar + insets, `WideTabBar`) plus a little air.
       static let tabBarRoom: CGFloat = 80

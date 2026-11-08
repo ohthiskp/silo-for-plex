@@ -249,7 +249,7 @@ struct ServicePill: View {
   private var chips: some View {
     HStack(spacing: 2) {
       chip(nil, label: "For You") {
-        Text("For You").font(.system(size: 14, weight: .bold))
+        Text("For You").font(.system(size: 14 * Astra.Layout.controlScale, weight: .bold))
       }
       ForEach(StreamingService.all) { service in
         chip(service, label: service.label) {
@@ -257,12 +257,14 @@ struct ServicePill: View {
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
-            .frame(height: service.logoHeight * 0.92)
+            .frame(height: service.logoHeight * 0.92 * Astra.Layout.controlScale)
         }
       }
     }
     .padding(5)
     .astraAnimation(.snappy(duration: 0.22), value: library.selectedService)
+    // Apple TV: the switcher is its own block, reached by moving up from the hero.
+    .tvFocusSection()
   }
 
   private func chip<Label: View>(_ service: StreamingService?, label: String, @ViewBuilder content: () -> Label)
@@ -274,8 +276,8 @@ struct ServicePill: View {
     } label: {
       content()
         .foregroundStyle(selected ? Color.black : Color.white.opacity(0.9))
-        .padding(.horizontal, 14)
-        .frame(height: 34)
+        .padding(.horizontal, 14 * Astra.Layout.controlScale)
+        .frame(height: 34 * Astra.Layout.controlScale)
         .background {
           if selected {
             Capsule().fill(.white).matchedGeometryEffect(id: "chip", in: selection)
@@ -334,6 +336,7 @@ struct TopTenRow: View {
       }
       .scrollIndicators(.never)
       .scrollClipDisabled()
+      .tvFocusSection()
     }
   }
 }
@@ -415,6 +418,7 @@ struct ShelfRow: View {
           }
           .scrollIndicators(.never)
           .scrollClipDisabled()
+          .tvFocusSection()
           // Each kind keeps its own scroll position.
           .id(series)
         }
@@ -429,7 +433,7 @@ struct TopTenCard: View {
   var library: LibraryStore
   var item: PlexMetadata
   var rank: Int
-  var width: CGFloat = 112
+  var width: CGFloat = 112 * Astra.Layout.controlScale
 
   @Environment(\.openItem) private var openItem
 

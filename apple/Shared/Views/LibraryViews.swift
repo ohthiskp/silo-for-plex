@@ -549,7 +549,9 @@ struct NetworkDiagnosticsView: View {
               }
             }
             .font(.system(size: 11))
-            .textSelection(.enabled)
+            #if !os(tvOS)
+              .textSelection(.enabled)
+            #endif
           }
         }
       }

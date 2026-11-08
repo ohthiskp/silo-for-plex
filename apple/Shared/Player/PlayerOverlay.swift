@@ -1,3 +1,7 @@
+// Mac and iPhone player chrome. Apple TV has its own (AstraTV/Views/TVPlayerOverlay.swift),
+// following docs/design/appletv-player.png.
+#if !os(tvOS)
+
 import AstraKit
 import SwiftUI
 import Observation
@@ -1267,3 +1271,5 @@ struct NextEpisodeButton: View {
     .astraAnimation(Astra.Motion.base, value: shown)
   }
 }
+
+#endif

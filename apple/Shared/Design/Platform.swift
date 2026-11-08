@@ -120,3 +120,15 @@ extension View {
     #endif
   }
 }
+
+extension View {
+  /// Apple TV: a row (or bar) the focus engine treats as one block, so up and
+  /// down move between rows instead of jumping diagonally. Nothing elsewhere.
+  @ViewBuilder func tvFocusSection() -> some View {
+    #if os(tvOS)
+      focusSection()
+    #else
+      self
+    #endif
+  }
+}

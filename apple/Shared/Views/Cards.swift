@@ -24,6 +24,7 @@ struct ContentRow<Content: View>: View {
       .scrollIndicators(.never)
       // Hover scale and shadow draw past the row instead of being clipped.
       .scrollClipDisabled()
+      .tvFocusSection()
     }
   }
 }

@@ -124,11 +124,40 @@ struct Pressable: ViewModifier {
   }
 }
 
+/// Apple TV: what has focus lifts toward you with a soft shadow and a touch of
+/// light, like tvOS's own cards. Nothing changes on Mac or iPhone.
+struct TVFocusLift: ViewModifier {
+  var scale: CGFloat = 1.08
+  #if os(tvOS)
+    @Environment(\.isFocused) private var focused
+  #endif
+
+  func body(content: Content) -> some View {
+    #if os(tvOS)
+      content
+        .scaleEffect(focused ? scale : 1)
+        .brightness(focused ? 0.06 : 0)
+        .shadow(color: .black.opacity(focused ? 0.55 : 0), radius: focused ? 26 : 0, y: focused ? 18 : 0)
+        .astraAnimation(Astra.Motion.base, value: focused)
+    #else
+      content
+    #endif
+  }
+}
+
+extension View {
+  /// The Apple TV focus lift (`TVFocusLift`); a no-op elsewhere.
+  func tvFocusLift(_ scale: CGFloat = 1.08) -> some View {
+    modifier(TVFocusLift(scale: scale))
+  }
+}
+
 /// Cards: plain label, a small press-in, and the whole card is the hit area.
 struct AstraCardButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .contentShape(Rectangle())
+      .tvFocusLift()
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
       .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
   }
@@ -156,11 +185,12 @@ struct GlassIconButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.system(size: size * 0.42, weight: .semibold))
+      .font(.system(size: size * Astra.Layout.controlScale * 0.42, weight: .semibold))
       .foregroundStyle(.white)
-      .frame(width: size, height: size)
+      .frame(width: size * Astra.Layout.controlScale, height: size * Astra.Layout.controlScale)
       .contentShape(Circle())
       .astraGlass(in: Circle(), variant: variant, interactive: true)
+      .tvFocusLift(1.12)
       .scaleEffect(configuration.isPressed ? 0.94 : 1)
       .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
   }
@@ -173,11 +203,12 @@ struct PlayButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.system(size: 15, weight: .semibold))
+      .font(.system(size: 15 * Astra.Layout.controlScale, weight: .semibold))
       .foregroundStyle(.black)
-      .padding(.horizontal, 26)
-      .frame(height: 48)
+      .padding(.horizontal, 26 * Astra.Layout.controlScale)
+      .frame(height: 48 * Astra.Layout.controlScale)
       .background(Capsule().fill(.white))
+      .tvFocusLift(1.06)
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
       .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
       .contentShape(Capsule())
@@ -188,11 +219,12 @@ struct PlayButtonStyle: ButtonStyle {
 struct FallbackGlassButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.system(size: 15, weight: .semibold))
+      .font(.system(size: 15 * Astra.Layout.controlScale, weight: .semibold))
       .foregroundStyle(Astra.Color.ink)
-      .padding(.horizontal, 22)
-      .frame(height: 48)
+      .padding(.horizontal, 22 * Astra.Layout.controlScale)
+      .frame(height: 48 * Astra.Layout.controlScale)
       .astraGlass(in: Capsule())
+      .tvFocusLift(1.06)
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
       .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
       .contentShape(Capsule())
@@ -223,19 +255,20 @@ struct ClearGlassButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.system(size: 15, weight: .semibold))
+      .font(.system(size: 15 * Astra.Layout.controlScale, weight: .semibold))
       .foregroundStyle(.white)
       .labelStyle(.titleAndIcon)
       // A label never wraps onto two lines.
       .lineLimit(1)
       .fixedSize(horizontal: false, vertical: true)
-      .padding(.horizontal, 22)
-      .frame(height: 46)
+      .padding(.horizontal, 22 * Astra.Layout.controlScale)
+      .frame(height: 46 * Astra.Layout.controlScale)
       .contentShape(Capsule())
       .shadow(color: .black.opacity(0.35), radius: 3)
       .astraGlass(
         in: Capsule(), variant: .clear, interactive: true, tint: prominent ? (accent?.opacity(0.6) ?? .white.opacity(0.22)) : nil)
       .astraGlassEdge(Capsule(), strength: prominent ? 1 : 0.8)
+      .tvFocusLift(1.06)
       .scaleEffect(configuration.isPressed ? 0.96 : 1)
       .opacity(isEnabled ? 1 : 0.45)
       .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)

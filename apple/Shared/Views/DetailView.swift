@@ -604,11 +604,12 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.system(size: 16, weight: .semibold))
+      .font(.system(size: 16 * Astra.Layout.controlScale, weight: .semibold))
       .foregroundStyle(Color.black)
-      .padding(.horizontal, 22)
-      .frame(height: 50)
+      .padding(.horizontal, 22 * Astra.Layout.controlScale)
+      .frame(height: 50 * Astra.Layout.controlScale)
       .background(Capsule().fill(Astra.Color.ink.opacity(isEnabled ? 1 : 0.35)))
+      .tvFocusLift(1.06)
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
       .astraAnimation(.snappy(duration: 0.15), value: configuration.isPressed)
       .contentShape(Capsule())
