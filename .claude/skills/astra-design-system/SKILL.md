@@ -9,12 +9,13 @@ Source of truth, in order: KP's latest instruction → the mockups in `docs/desi
 
 ## Tokens (`apple/Shared/Design/Theme.swift`)
 - Colour: `Astra.Color.bg` #0A0A0B, `surface` #161618, `surface2` #1E1E21, `ink` #F5F5F7, `muted` (ink 62%),
-  `accent` = white, `hairline` = white 9%. Colour on screen comes from artwork, not from the chrome.
+  `accent` and `theme` = white by default (user-set in Settings → Appearance), `hairline` = white 9%. Colour on screen comes from artwork, not from the chrome.
 - **No purple or violet anywhere** (selection, progress, timeline, buttons, focus). Grep before finishing.
   The only colour exception is brand-coloured streaming-provider logos.
 - Type: `Astra.Font` — system font, bold display weights. No Didot or decorative faces.
-- Motion: `Astra.Motion` fast 150 ms, base 250, page 380, hero 600. Animate opacity/transform only;
-  honour Reduce Motion. Everything should feel smooth and calm, never Plezy-like snaps.
+- Motion: `Astra.Motion` fast 150 ms, base 250, page 380, hero 600. Animate opacity/transform only.
+  Reduce Motion: always use `astraWithAnimation`, `.astraAnimation(_:value:)` and `.astraTransition(_:)`
+  (Theme.swift), never plain `withAnimation` / `.animation` / moving `.transition`. Everything should feel smooth and calm, never Plezy-like snaps.
 - Layout/spacing: `Astra.Layout` (per platform, see `Platform.swift`) and `Astra.Spacing`. Add tokens, not literals.
 
 ## Liquid Glass
@@ -23,26 +24,38 @@ Source of truth, in order: KP's latest instruction → the mockups in `docs/desi
 - Glass lives on the floating layer (sidebar, tab bar, streaming switcher, player controls, menus);
   never on artwork, rows or the hero image.
 
-## Screens and KP's rules
-- **Mac sidebar:** exactly Home, Movies, Shows, Downloads, Search, Settings. Icons only, click to expand
-  (no hover expand), one sliding selection indicator.
-- **Streaming switcher:** centered glass pill along the top; must not overlap the hero title.
-  Provider order: Netflix, Apple TV+, Prime Video, Disney+, HBO Max, Hulu.
-- **For You (Home), in this order:** hero of up to 5 trending titles that are on the server, changed by
-  the user only (no auto-advance) → Continue Watching → Top 10 with ranks over the posters (library
-  titles only) → Recommended For You → Because You Watched → Hidden Gems. Never Plex's Recently Added.
-  The logic is in AstraKit `Plex/ForYou.swift`.
-- **Home:** one hero at a time (cineby trending), never glitchy; Continue Watching, then numbered Top 10
-  with a Movies/Series pill; no title appears twice across rows (dedupe by type + TMDB id).
-  Continue Watching is the same on every tab; tapping a card opens Details (only Play plays).
-- **Streaming tabs:** full TMDB lists; titles on Plex are marked; others show a greyed-out Play.
-- **Details:** opens as a card stacked over the page, with an X to close.
+## Screens and KP's rules (current as of 2026-11-08; KP's latest message still wins)
+- **Mac sidebar:** Home, Library, Search, Settings. Icons only; a click lights the icon at once; no hover
+  expand, no sliding indicator, no animation. Library = Libraries (smaller Movies / Shows switch),
+  Watchlist, Downloads. The Mac matches the iPhone.
+- **iPhone tab bar:** Astra's wide Liquid Glass bar (52 pt, darker glass) with a draggable lens. Default
+  Home, Search, Library; Settings → Navigation reorders and adds Watchlist / Downloads / Settings, max 5;
+  Home and Library can't be removed. Tapping Home returns to For You.
+- **Streaming switcher:** centered glass pill along the top, clear of the hero title. For You, Netflix,
+  Apple TV+, Prime Video, Disney+, HBO Max, Hulu.
+- **Home (For You and every service share one layout), exactly five sections:** Hero → Continue Watching →
+  Top Trending (Movies | Series) → Recently Released (Movies | Series) → All-Time Greats (Movies | Series).
+  Each switch has its own state. "Top Trending" everywhere (never "Top 10"); no View All buttons.
+  No title twice across rows (dedupe by type + TMDB id, `LibraryStore.homeRecent/homeGreats`).
+- **Sources (KP, 2026-11-08 "bring back cineby"):** For You's hero, Top Trending, Recently Released and
+  All-Time Greats come from cineby.tech, filled from TMDB. Service pages show the full TMDB lists.
+  Plex titles play; others show Play greyed. Never filter Home to Plex-only.
+- **Hero:** one title at a time, never glitchy; swipe follows the finger, stretching-pill dots, no arrows,
+  no auto-advance. White Apple TV-style Play + round grey glass "+" (Plex Watchlist); a tap elsewhere opens Details.
+- **Top Trending card:** Netflix-style big outlined rank beside the poster.
+- **Continue Watching:** same on every tab; card tap opens Details, only Play plays; red
+  "Remove from Continue Watching" at the bottom of its menu.
+- **Details:** card stacked over the page with an X; logo left (KP's mockup); backdrop stays still;
+  badge row starts with the grey content-rating pill, then plain "HDR", official Dolby Vision / Atmos logos.
 - **Long-press a title:** Details, Play, Download, Mark watched/unwatched, Go to season/show.
+- **Search:** TMDB only, popularity-ranked, spinner while loading.
 - **Loading screen:** the logo only, no text.
-- **iPhone player:** landscape only, Infuse layout (incl. progress bar), double-tap ±10 s, no ring
-  around Play; swipe up/down on the left = brightness, right = volume, with a glass level bar.
-- **iPhone tab bar:** Liquid Glass with a lens you can drag between tabs, like Apple's (KP, 2026-11-07).
-- **Library quality:** HD/4K setting lives in Settings > Content; lists show one version per title.
+- **iPhone player:** landscape only, Infuse layout (incl. progress bar), double-tap skip (10 s default),
+  no ring around Play; swipe left = brightness, right = volume (toggle in Settings). **Mac player:** a click
+  on the picture only toggles the controls. **Next Episode:** tap-only glass button in the last 15 s, no autoplay.
+- **Quality:** always the original file; Auto / HD / 4K picks between versions on the server.
+- **Settings:** server card, then Appearance, Navigation (iPhone only), Playback, Library, Downloads,
+  then Sources and About. Same Astra background on every page.
 
 ## Checking your work
 - Compare with the matching image in `docs/design/` and list differences.

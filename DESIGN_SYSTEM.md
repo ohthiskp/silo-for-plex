@@ -16,7 +16,8 @@ The chrome is neutral white and grey; colour comes from the artwork. **No purple
 | `surface2` | `#1E1E21` | Sheets, menus |
 | `ink` | `#F5F5F7` | Primary text |
 | `muted` | ink @ 62% | Secondary text |
-| `accent` | white | Selection, progress, timeline, focus |
+| `accent` | white by default | Progress, switches, selected chips (Settings → Appearance → Accent) |
+| `theme` | white by default | Settings icons, the lit tab, the Mac sidebar pill (Settings → Appearance → Theme) |
 | `hairline` | white @ 9% | Borders, dividers |
 
 ## Type (`Astra.Font`)
@@ -41,8 +42,10 @@ No blur-and-gradient imitations.
 | base | 250 | ease-out cubic | Hover, chips |
 | page | 380 | ease-in-out cubic | Pages, sheets, menus |
 | hero | 600 | ease-in-out cubic | Hero crossfade, card → details |
-`Astra.Motion.resolved(_:reduceMotion:)` turns motion into fades for Reduce Motion. Animate opacity and
-transform, not layout. The goal is "very smooth": nothing should snap or flicker.
+Animate opacity and transform, not layout. The goal is "very smooth": nothing should snap or flicker.
+Reduce Motion: use `astraWithAnimation`, `.astraAnimation(_:value:)` and `.astraTransition(_:)` (Theme.swift)
+instead of the plain SwiftUI calls. They route through `Astra.Motion.resolved` and turn moving or scaling
+transitions into fades only when the setting is on.
 
 ## Screens
 | Screen | Mockup | Implementation |
@@ -56,12 +59,39 @@ transform, not layout. The goal is "very smooth": nothing should snap or flicker
 | Details | `details.png` | `Shared/Views/DetailView.swift` (stacked card with an X) |
 | Settings | `settings.png` | Settings views in `Shared/Views/` |
 
-## Behaviour rules
-- Mac sidebar: Home, Movies, Shows, Downloads, Search, Settings; icons only; click to expand; one sliding indicator.
-- One hero at a time; Continue Watching then numbered Top 10; no duplicate titles across rows.
-- Streaming switcher: centered glass pill at the top, clear of the hero title.
-- Long-press a title: Details, Play, Download, Mark watched/unwatched, Go to season/show.
-- Loading screen: logo only, no text.
+## Behaviour rules (KP's current rules, 2026-11-08)
+- **Mac sidebar:** Home, Library, Search, Settings. Icons only, a click lights the chosen icon at once,
+  no hover expand and no sliding indicator or animation. Library holds Libraries (with a smaller
+  Movies / Shows switch), Watchlist and Downloads. The Mac matches the iPhone.
+- **iPhone tab bar:** Astra's own wide Liquid Glass bar (52 pt, darker glass) with a draggable lens.
+  Default tabs Home, Search, Library. Settings → Navigation reorders them and adds Watchlist,
+  Downloads or Settings, up to five. Home and Library can't be removed. Tapping Home returns to For You.
+- **Streaming switcher:** a centered glass pill at the top, clear of the hero title: For You, Netflix,
+  Apple TV+, Prime Video, Disney+, HBO Max, Hulu.
+- **Home (For You and every service, one shared layout), exactly five sections:** Hero, Continue Watching,
+  Top Trending (Movies | Series), Recently Released (Movies | Series), All-Time Greats (Movies | Series).
+  Each switch keeps its own choice. No View All buttons. No title appears twice across rows
+  (dedupe by type + TMDB id).
+- **Sources ("bring back cineby", KP 2026-11-08):** For You's hero, Top Trending, Recently Released and
+  All-Time Greats follow cineby.tech, filled from TMDB. Service pages show the service's full TMDB
+  lists. Titles on Plex play; titles not on Plex show Play greyed out. Never filter Home to Plex-only.
+- **Hero:** one title at a time, never glitchy; changed by swiping only (the swipe follows the finger),
+  stretching-pill dots, no arrows. White Apple TV-style Play plus a round grey glass "+" (Plex Watchlist).
+  A tap elsewhere opens Details.
+- **Top Trending:** Netflix-style big outlined rank number beside each poster.
+- **Continue Watching:** a card tap opens Details; only its Play plays. The menu ends with a red
+  "Remove from Continue Watching".
+- **Details:** a card stacked over the page with an X; logo left (KP's mockup); the backdrop stays still;
+  content rating pill first in the badge row, a plain "HDR" badge, official Dolby Vision and Atmos logos.
+- **Long-press a title:** Details, Play, Download, Mark watched/unwatched, Go to season/show.
+- **Search:** TMDB only, most popular first, spinner while loading.
+- **Player:** iPhone landscape only, Infuse layout, double-tap skips (10 s default), swipe left side =
+  brightness and right side = volume (toggle in Settings). Mac: a click on the picture only shows or hides
+  the controls. Next Episode is a tap-only glass button in the last 15 s; nothing autoplays.
+  Always the original file; Auto / HD / 4K only picks between existing versions.
+- **Settings:** a server card, then Appearance, Navigation (iPhone), Playback, Library, Downloads,
+  then Sources and About.
+- **Loading screen:** logo only, no text.
 
 The legacy Flutter app's tokens (`lib/astra/`) predate these rules and still contain violet; they are not
 the reference.
