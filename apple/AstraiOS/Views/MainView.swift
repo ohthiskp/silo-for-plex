@@ -8,66 +8,72 @@ struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
 
-  enum TabID: Hashable { case home, search, libraries }
+  typealias TabID = PhoneTab
 
-  @State private var tab: TabID = {
-    switch Demo.tab {
-    case "search": .search
-    case "libraries": .libraries
-    default: .home
-    }
-  }()
-  @State private var homePath: [Route] = Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
-  @State private var searchPath: [Route] = []
-  @State private var librariesPath: [Route] = []
+  /// Settings → Navigation (Astra 4.0): which tabs the bar shows.
+  @AppStorage(TabLayout.storageKey) private var storedTabs = ""
+  @State private var tab: TabID = Demo.tab.flatMap(PhoneTab.init(rawValue:)) ?? .home
+  @State private var paths: [TabID: [Route]] = [
+    .home: Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
+  ]
+
+  private var tabs: [TabID] { TabLayout.tabs(from: storedTabs) }
+
+  private func path(_ id: TabID) -> Binding<[Route]> {
+    Binding(get: { paths[id] ?? [] }, set: { paths[id] = $0 })
+  }
 
   var body: some View {
     // Astra (KP, 2026-11-07): Apple's floating tab bar was too narrow with
     // three tabs, so the system bar is hidden and a wide Liquid Glass bar
     // with large buttons (KP's mockup) sits at the bottom instead.
     TabView(selection: $tab) {
-      Tab("Home", systemImage: "house.fill", value: TabID.home) {
-        stack($homePath) { HomeView(library: library) }
-          .toolbar(.hidden, for: .tabBar)
-      }
-      Tab("Search", systemImage: "magnifyingglass", value: TabID.search) {
-        stack($searchPath) { PhoneSearchView(library: library) }
-          .toolbar(.hidden, for: .tabBar)
-      }
-      Tab("Library", systemImage: "square.stack.fill", value: TabID.libraries) {
-        stack($librariesPath) { LibrariesView(library: library) }
-          .toolbar(.hidden, for: .tabBar)
+      ForEach(tabs) { id in
+        Tab(id.title, systemImage: id.symbol, value: id) {
+          stack(path(id)) { page(id) }
+            .toolbar(.hidden, for: .tabBar)
+        }
       }
     }
     // Astra: an overlay, not a safe-area inset, so pages scroll underneath
     // and the glass shows them through it (KP: "why isn't it Liquid Glass").
     // Pages leave room at their bottom for it.
     .overlay(alignment: .bottom) {
-      WideTabBar(selection: tab, downloads: app.downloads.jobs.count) { picked in
+      WideTabBar(tabs: tabs, selection: tab, downloads: app.downloads.jobs.count) { picked in
         // Astra (KP, 2026-11-07): tapping Home always lands on For You.
         if picked == .home, library.selectedService != nil { library.select(nil) }
         if picked == tab {
           // Tapping the open tab again goes back to its first page.
-          switch picked {
-          case .home: homePath.removeAll()
-          case .search: searchPath.removeAll()
-          case .libraries: librariesPath.removeAll()
-          }
+          paths[picked] = []
         } else {
           tab = picked
         }
       }
     }
+    // A tab turned off in Settings while open: back to Home.
+    .onChange(of: storedTabs) { if !tabs.contains(tab) { tab = .home } }
     .environment(\.playItem) { app.play($0) }
     .onAppear {
+      if !tabs.contains(tab) { tab = .home }
       // The title's chevron in the player opens its details in the current tab.
       app.player.openDetails = { item in
-        switch tab {
-        case .home: homePath.append(.details(item))
-        case .search: searchPath.append(.details(item))
-        case .libraries: librariesPath.append(.details(item))
-        }
+        paths[tab, default: []].append(.details(item))
       }
+    }
+  }
+
+  @ViewBuilder private func page(_ id: TabID) -> some View {
+    switch id {
+    case .home: HomeView(library: library)
+    case .search: PhoneSearchView(library: library)
+    case .libraries: LibrariesView(library: library)
+    case .downloads: DownloadsView()
+    case .watchlist:
+      AstraPage {
+        AstraSectionHeader(title: "Watchlist")
+        WatchlistContent(library: library)
+      }
+      .refreshable { await app.refreshWatchlist(force: true) }
     }
   }
 
@@ -94,6 +100,7 @@ struct MainView: View {
 /// the finger, then settles on the tab it is let go over (like Apple's own
 /// tab bar on iOS 26).
 struct WideTabBar: View {
+  var tabs: [MainView.TabID] = TabLayout.defaultTabs
   var selection: MainView.TabID
   /// Running and waiting downloads, shown on Libraries (where Downloads lives).
   var downloads = 0
@@ -103,11 +110,7 @@ struct WideTabBar: View {
   @State private var dragX: CGFloat?
   @State private var dragged = false
 
-  private let items: [(MainView.TabID, String, String)] = [
-    (.home, "Home", "house.fill"),
-    (.search, "Search", "magnifyingglass"),
-    (.libraries, "Library", "square.stack.fill"),
-  ]
+  private var items: [(MainView.TabID, String, String)] { tabs.map { ($0, $0.title, $0.symbol) } }
   private static let inset: CGFloat = 5
   private static let height: CGFloat = 52
 
@@ -138,7 +141,8 @@ struct WideTabBar: View {
             VStack(spacing: 4) {
               Image(systemName: symbol).font(.system(size: 20, weight: .semibold))
                 .overlay(alignment: .topTrailing) {
-                  if id == .libraries, downloads > 0 {
+                  // On Downloads when it is a tab, else on Library (where Downloads lives).
+                  if downloads > 0, id == (tabs.contains(.downloads) ? .downloads : .libraries) {
                     CountBadge(count: downloads).offset(x: 12, y: -8)
                   }
                 }

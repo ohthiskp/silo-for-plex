@@ -506,6 +506,7 @@ struct SettingsView: View {
   @AppStorage(Preferences.qualityBadgesKey) private var qualityBadges = true
   @AppStorage(Preferences.ratingsKey) private var ratings = true
   @AppStorage(Preferences.wifiOnlyKey) private var wifiOnly = false
+  @AppStorage(TabLayout.storageKey) private var storedTabs = ""
 
   // Astra 4.0 (KP, 2026-11-08): Appearance, Playback, Library, Sources,
   // Downloads, About.
@@ -519,6 +520,29 @@ struct SettingsView: View {
       } footer: {
         Text("The accent colours selection and progress. Service accents tint a streaming service's Home page in its colour.")
       }
+      #if os(iOS)
+        // Astra 4.0: which tabs the bottom bar shows (Home always; up to four).
+        Section {
+          let tabs = TabLayout.tabs(from: storedTabs)
+          ForEach(PhoneTab.allCases) { tab in
+            Toggle(
+              isOn: Binding(
+                get: { tabs.contains(tab) },
+                set: { storedTabs = TabLayout.stored(TabLayout.toggled(tabs, tab, on: $0)) })
+            ) {
+              Label(tab.title, systemImage: tab.symbol)
+            }
+            .tint(Astra.Color.switchOn)
+            .disabled(tab == .home || (!tabs.contains(tab) && tabs.count >= TabLayout.maximum))
+          }
+          Button("Reset to Default") { storedTabs = "" }
+            .disabled(tabs == TabLayout.defaultTabs)
+        } header: {
+          Text("Navigation")
+        } footer: {
+          Text("Tabs in the bottom bar. Home is always there; up to four tabs.")
+        }
+      #endif
       Section {
         Picker("Preferred Quality", selection: $quality) {
           ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }

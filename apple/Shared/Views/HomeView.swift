@@ -291,12 +291,10 @@ struct ServicePill: View {
 
 /// "Top 10 This Week" (KP's mockup, 2026-11-07): one row of movies and series
 /// in trending order, each poster with its big rank number laid over the
-/// artwork's top-left corner, and View All on the right, like the streaming
-/// apps. Titles not on the server open their details with Play greyed out.
+/// artwork's top-left corner, like the streaming apps. Titles not on the server open their details with Play greyed out.
 struct TopTenRow: View {
   var library: LibraryStore
   @Environment(\.contentLeading) private var leading
-  @State private var showAll = false
   /// Astra (KP, 2026-11-07): Movies / Series, on For You and every service.
   @AppStorage("astra.home.topTenSeries") private var series = false
 
@@ -305,8 +303,8 @@ struct TopTenRow: View {
     return Array((series ? split.shows : split.movies).prefix(10))
   }
   private var title: String {
-    // Astra 4.0: TMDB trending, not the service's own viewing figures.
-    library.selectedService.map { "Top 10 Trending on \($0.label)" } ?? "Top 10 This Week"
+    // KP (2026-11-08): "Top Trending" on For You and every service.
+    "Top Trending"
   }
 
   var body: some View {
@@ -317,19 +315,8 @@ struct TopTenRow: View {
           .foregroundStyle(Astra.Color.ink)
           .lineLimit(1)
         Spacer(minLength: 8)
+        // KP (2026-11-08): no View All on the Top 10.
         KindSwitch(series: $series)
-        Button {
-          showAll = true
-        } label: {
-          HStack(spacing: 4) {
-            Text("View All")
-            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
-          }
-          .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(Astra.Color.ink)
-          .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
       }
       .padding(.leading, leading)
       .padding(.trailing, Astra.Spacing.pageTrailing)
@@ -344,9 +331,6 @@ struct TopTenRow: View {
       }
       .scrollIndicators(.never)
       .scrollClipDisabled()
-    }
-    .navigationDestination(isPresented: $showAll) {
-      TopTenList(library: library, items: items, title: title)
     }
   }
 }

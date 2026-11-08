@@ -1605,3 +1605,25 @@ final class LibraryMatchTests: XCTestCase {
     XCTAssertEqual(index.libraryItems.map(\.ratingKey), ["1"])
   }
 }
+
+final class TabLayoutTests: XCTestCase {
+  func testDefaultIsHomeSearchLibrary() {
+    XCTAssertEqual(TabLayout.tabs(from: ""), [.home, .search, .libraries])
+    XCTAssertEqual(TabLayout.tabs(from: "nonsense"), [.home, .search, .libraries])
+  }
+
+  func testSavedTabsKeepHomeAndTheBarOrder() {
+    XCTAssertEqual(TabLayout.tabs(from: "libraries,watchlist"), [.home, .watchlist, .libraries])
+    XCTAssertEqual(TabLayout.tabs(from: "home,search,watchlist,downloads,libraries").count, TabLayout.maximum)
+  }
+
+  func testToggling() {
+    let base = TabLayout.defaultTabs
+    XCTAssertEqual(TabLayout.toggled(base, .watchlist, on: true), [.home, .search, .watchlist, .libraries])
+    XCTAssertEqual(TabLayout.toggled(base, .home, on: false), base)
+    XCTAssertEqual(TabLayout.toggled(base, .search, on: false), [.home, .libraries])
+    let full = TabLayout.toggled(base, .watchlist, on: true)
+    XCTAssertEqual(TabLayout.toggled(full, .downloads, on: true), full)
+    XCTAssertEqual(TabLayout.stored(base), "home,search,libraries")
+  }
+}

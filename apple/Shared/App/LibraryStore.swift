@@ -473,13 +473,14 @@ final class LibraryStore {
     // Set before any await, so every caller shares this one read.
     let client = client
     let sections = filter.indexSections(allSections)
+    let quality = libraryQuality
     let url = indexURL
     let task = Task.detached(priority: .userInitiated) { () throws -> (items: [String: PlexMetadata], stale: Bool) in
       // The saved copy first: tabs open at once.
       if let saved = LibraryIndexSnapshot.load(from: url), !saved.items.isEmpty {
         return (saved.items, !saved.isFresh())
       }
-      let items = try await LibraryIndexer.build(client: client, sections: sections)
+      let items = try await Self.buildIndex(client: client, sections: sections, quality: quality)
       try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
       return (items, false)
     }
@@ -520,8 +521,9 @@ final class LibraryStore {
   /// Reads the library again in the background and saves it; open tabs are
   /// matched again with it. A failure keeps the saved one.
   private func refreshLibraryIndex(client: PlexServerClient, sections: [PlexLibrarySection], url: URL) {
+    let quality = libraryQuality
     let task = Task.detached(priority: .utility) {
-      let items = try await LibraryIndexer.build(client: client, sections: sections)
+      let items = try await Self.buildIndex(client: client, sections: sections, quality: quality)
       try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
       return items
     }
@@ -530,6 +532,25 @@ final class LibraryStore {
       guard let fresh = try? await task.value, let self, !self.isClosed else { return }
       self.setLibraryIndex(fresh)
     }
+  }
+
+  /// Reads the library. Asked before the server's sections were known (a
+  /// streaming tab or Search can start first), it reads them itself: an
+  /// index built from no sections was empty, which left For You without
+  /// Recently Released and All-Time Greats and marked every Search result
+  /// "not on the server" (KP, 2026-11-08). An empty result is an error, never
+  /// saved or shown.
+  nonisolated private static func buildIndex(
+    client: PlexServerClient, sections: [PlexLibrarySection], quality: LibraryQuality
+  ) async throws -> [String: PlexMetadata] {
+    var wanted = sections
+    if wanted.isEmpty {
+      let all = try await client.librarySections()
+      wanted = LibraryFilter(quality: quality, sections: all).indexSections(all)
+    }
+    let items = try await LibraryIndexer.build(client: client, sections: wanted)
+    guard !items.isEmpty else { throw URLError(.zeroByteResource) }
+    return items
   }
 
   /// One saved index per server and Library Quality ("-v2": items carry their library).
