@@ -65,7 +65,17 @@ public final class NetworkLog: @unchecked Sendable {
       secret.contains($0.name.lowercased()) ? URLQueryItem(name: $0.name, value: "•••") : $0
     }
     let query = parts.percentEncodedQuery.map { "?\($0)" } ?? ""
-    return parts.percentEncodedPath + query
+    return redactNested(parts.percentEncodedPath + query)
+  }
+
+  /// Secrets inside other values, such as a photo transcode's
+  /// `url=/library/…/thumb%3FX-Plex-Token%3Dabc` (encoded once or twice).
+  private static let nestedSecret = try! NSRegularExpression(
+    pattern: #"(?i)(?:(?<=[?&/])|(?<=%3F)|(?<=%26)|(?<=%253F)|(?<=%2526))(x-plex-token|access_token|api_key|token)(=|%3D|%253D)(.*?)(?=&|%26|%2526|#|$)"#)
+
+  static func redactNested(_ text: String) -> String {
+    nestedSecret.stringByReplacingMatches(
+      in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "$1$2•••")
   }
 }
 

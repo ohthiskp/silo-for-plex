@@ -1865,3 +1865,24 @@ final class TokenStoreTests: XCTestCase {
     XCTAssertEqual(store.load(), "a")
   }
 }
+
+final class NetworkLogRedactionTests: XCTestCase {
+  func testTokensInsideNestedURLsAreHidden() {
+    let url = URL(
+      string:
+        "http://10.0.0.2:32400/photo/:/transcode?width=300&url=%2Flibrary%2Fmetadata%2F1%2Fthumb%3FX-Plex-Token%3Dsecret1%26a%3D1&X-Plex-Token=secret2"
+    )!
+    let path = NetworkLog.redactedPath(url)
+    XCTAssertFalse(path.contains("secret1"), path)
+    XCTAssertFalse(path.contains("secret2"), path)
+    XCTAssertTrue(path.contains("width=300"), path)
+    XCTAssertTrue(path.contains("%26a%3D1"), path)
+  }
+
+  func testDoubleEncodedAndPlainPathsAreHandled() {
+    XCTAssertFalse(NetworkLog.redactNested("/x?u=%2Fy%253FX-Plex-Token%253Dsecret3").contains("secret3"))
+    XCTAssertEqual(NetworkLog.redactNested("/library/sections?type=1"), "/library/sections?type=1")
+    // "token" only as a whole name, not inside another word.
+    XCTAssertEqual(NetworkLog.redactNested("/x?mytoken=1"), "/x?mytoken=1")
+  }
+}
