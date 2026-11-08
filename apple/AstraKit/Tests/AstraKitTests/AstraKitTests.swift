@@ -1713,6 +1713,28 @@ final class LibraryMatchTests: XCTestCase {
   }
 }
 
+final class ContinueWatchingSnapshotTests: XCTestCase {
+  func testRoundTripKeepsProgressAndRemoveAllClearsEveryServer() throws {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent("astra-cw-\(UUID().uuidString)")
+    var episode = PlexMetadata(ratingKey: "9", type: .episode, title: "Pilot")
+    episode.viewOffset = 600_000
+    episode.duration = 3_000_000
+    let a = ContinueWatchingSnapshot.url(serverID: "abc/123", in: folder)
+    let b = ContinueWatchingSnapshot.url(serverID: "other", in: folder)
+    XCTAssertEqual(a.lastPathComponent, "ContinueWatching-abc_123.json")
+    try ContinueWatchingSnapshot(savedAt: Date(), items: [episode]).save(to: a)
+    try ContinueWatchingSnapshot(savedAt: Date(), items: []).save(to: b)
+    let loaded = try XCTUnwrap(ContinueWatchingSnapshot.load(from: a))
+    XCTAssertEqual(loaded.items.first?.ratingKey, "9")
+    XCTAssertEqual(loaded.items.first?.viewOffset, 600_000)
+    try Data("keep".utf8).write(to: folder.appendingPathComponent("Trending.json"))
+    ContinueWatchingSnapshot.removeAll(in: folder)
+    XCTAssertNil(ContinueWatchingSnapshot.load(from: a))
+    XCTAssertNil(ContinueWatchingSnapshot.load(from: b))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent("Trending.json").path))
+  }
+}
+
 final class TabLayoutTests: XCTestCase {
   func testDefaultIsHomeSearchLibrary() {
     XCTAssertEqual(TabLayout.tabs(from: ""), [.home, .search, .libraries])

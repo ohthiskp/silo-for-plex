@@ -37,7 +37,15 @@ final class LibraryStore {
   var filter: LibraryFilter { LibraryFilter(quality: libraryQuality, sections: allSections) }
   /// The libraries the Movies and Shows tabs browse.
   var sections: [PlexLibrarySection] { filter.browseSections(allSections) }
-  private(set) var isLoadingHome = false
+  /// True while the For You rows are being asked for.
+  private var homeRowsLoading = false
+  /// The centred spinner: only while For You has nothing at all to show.
+  /// Saved Continue Watching, hero and For You rows mean no spinner
+  /// (KP, 2026-11-08: no buffer in the middle of Home).
+  var isLoadingHome: Bool {
+    homeRowsLoading && hubs.isEmpty && continueWatching.isEmpty && hero.isEmpty && !isLoadingHero
+      && forYouRecent.isEmpty && forYouGreats.isEmpty
+  }
   /// True while the For You hero's trending titles are being matched to the server.
   private(set) var isLoadingHero = false
   private(set) var homeError: String?
@@ -117,7 +125,7 @@ final class LibraryStore {
     background.values.forEach { $0.cancel() }
     background.removeAll()
     loadingServiceID = nil
-    isLoadingHome = false
+    homeRowsLoading = false
   }
 
   /// The TMDB read token the build put in Info.plist (`TMDB_TOKEN` build setting).
@@ -843,7 +851,7 @@ final class LibraryStore {
     let token = homeGeneration.next()
     let isCurrent = { [weak self] in self.map { !$0.isClosed && $0.homeGeneration.isCurrent(token) } ?? false }
     // The spinner only covers an empty page; a reload keeps the rows on screen.
-    isLoadingHome = hubs.isEmpty && continueWatching.isEmpty
+    homeRowsLoading = true
     homeError = nil
     // A saved streaming service loads alongside, not after, the For You rows.
     if let service = selectedService, serviceContent[service.id] == nil, loadingServiceID == nil {
@@ -864,8 +872,28 @@ final class LibraryStore {
     async let continueTask = client.continueWatching()
     async let hubsTask = client.homeHubs()
     async let sectionsTask = client.librarySections()
+    // Astra (KP, 2026-11-08): the saved Continue Watching shows before Plex
+    // answers (a quick disk read, while the requests above are in flight).
+    if continueWatching.isEmpty {
+      let url = continueURL
+      let saved = await Task.detached(priority: .userInitiated) { ContinueWatchingSnapshot.load(from: url) }.value
+      if let saved, !saved.items.isEmpty, continueWatching.isEmpty, isCurrent() { continueWatching = saved.items }
+    }
 
-    let loadedContinue = (try? await continueTask) ?? []
+    // A failed request keeps the row on screen (saved or earlier), never empties it.
+    var loadedContinue: [PlexMetadata] = []
+    var continueLoaded = false
+    do {
+      loadedContinue = try await continueTask
+      continueLoaded = true
+    } catch {}
+    guard isCurrent() else { return }
+    // Shown as soon as it arrives, not after the slower home rows. It claims
+    // its titles first in the page-wide de-duplication either way.
+    if continueLoaded {
+      var dedup = HomeDeduplicator()
+      setContinueWatching(dedup.filter(filter.apply(loadedContinue, swap: false)))
+    }
     let loadedSections = (try? await sectionsTask) ?? []
     guard isCurrent() else { return }
     // Movies and Shows keep working even when the Home rows fail.
@@ -907,13 +935,13 @@ final class LibraryStore {
           filter.apply((try? await client.hubItems(key: key, start: start)) ?? [], twins: twins)
         })
       guard isCurrent() else { return }
-      continueWatching = rows.continueWatching
+      if continueLoaded || !rows.continueWatching.isEmpty { setContinueWatching(rows.continueWatching) }
       // A failed reload keeps the rows already on screen.
       if !hubsFailed || hubs.isEmpty { hubs = rows.hubs }
-      isLoadingHome = false
+      homeRowsLoading = false
       await loadHero(fallback: rows.hubs, isCurrent: isCurrent)
     }
-    isLoadingHome = false
+    homeRowsLoading = false
     spawn { [weak self] in
       guard let self else { return }
       await prefetchArtwork(hero + continueWatching + hubs.flatMap(\.items))
@@ -1342,13 +1370,40 @@ final class LibraryStore {
   /// failure it comes back.
   func removeFromContinueWatching(_ item: PlexMetadata) async {
     let before = continueWatching
-    continueWatching.removeAll { $0.ratingKey == item.ratingKey }
+    setContinueWatching(continueWatching.filter { $0.ratingKey != item.ratingKey })
     do {
       try await client.removeFromContinueWatching(ratingKey: item.ratingKey)
     } catch {
-      continueWatching = before
+      setContinueWatching(before)
       homeError = describe(error)
     }
+  }
+
+  // MARK: Saved Continue Watching
+
+  /// This server's saved row (see `ContinueWatchingSnapshot`).
+  private var continueURL: URL {
+    ContinueWatchingSnapshot.url(serverID: serverID, in: Self.indexFolder.deletingLastPathComponent())
+  }
+
+  /// The last save; each new one waits for it, so saves land in order.
+  @ObservationIgnored private var continueSave: Task<Void, Never>?
+
+  /// Shows the row and saves it for the next launch (off the main thread).
+  private func setContinueWatching(_ items: [PlexMetadata]) {
+    continueWatching = items
+    let url = continueURL
+    let snapshot = ContinueWatchingSnapshot(savedAt: Date(), items: items)
+    let previous = continueSave
+    continueSave = Task.detached(priority: .utility) {
+      await previous?.value
+      try? snapshot.save(to: url)
+    }
+  }
+
+  /// Sign-out: deletes every server's saved Continue Watching row.
+  nonisolated static func clearSavedContinueWatching() {
+    ContinueWatchingSnapshot.removeAll(in: indexFolder.deletingLastPathComponent())
   }
 
   /// Called when the player closes, so Continue Watching shows the new position.

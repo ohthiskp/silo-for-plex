@@ -45,3 +45,43 @@ public enum WatchlistMatch {
     return adding ? [item] + rest : rest
   }
 }
+
+/// Astra (KP, 2026-11-08: "is there any way to get the continue watching
+/// instantly?"): the last Continue Watching row from each server, saved on
+/// the device so Home opens with it while Plex is asked; the fresh row
+/// replaces it quietly. Deleted on sign-out.
+public struct ContinueWatchingSnapshot: Codable, Sendable {
+  public var savedAt: Date
+  public var items: [PlexMetadata]
+
+  public init(savedAt: Date, items: [PlexMetadata]) {
+    self.savedAt = savedAt
+    self.items = items
+  }
+
+  /// "ContinueWatching-<server id>.json" in `folder`.
+  public static func url(serverID: String, in folder: URL) -> URL {
+    let safe = serverID.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) ? String($0) : "_" }.joined()
+    return folder.appendingPathComponent("\(prefix)\(safe).json")
+  }
+
+  static let prefix = "ContinueWatching-"
+
+  public static func load(from url: URL) -> ContinueWatchingSnapshot? {
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(ContinueWatchingSnapshot.self, from: data)
+  }
+
+  public func save(to url: URL) throws {
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try JSONEncoder().encode(self).write(to: url, options: .atomic)
+  }
+
+  /// Deletes every server's saved row in `folder` (sign-out).
+  public static func removeAll(in folder: URL) {
+    let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+    for file in files where file.lastPathComponent.hasPrefix(prefix) && file.pathExtension == "json" {
+      try? FileManager.default.removeItem(at: file)
+    }
+  }
+}

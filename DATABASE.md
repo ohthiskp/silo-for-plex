@@ -11,7 +11,7 @@ There is no SQLite database. Data lives in three places:
 |---|---|---|
 | Keychain | Plex account token | AstraKit `Storage/TokenStore.swift` (`KeychainTokenStore`; `MemoryTokenStore` in tests) |
 | UserDefaults | Chosen server, selected streaming service, library quality (`LibraryQuality.stored`), playback quality, Plex client identifier, UI state via `@AppStorage` (`astra.libraries.*`, `astra.search.recent`, `player.panelX`), demo flags (`AstraDemo*`) | `AppModel.swift`, `LibraryStore.swift`, `LibraryQuality.swift`, `Playback.swift`, `PlexClientInfo.swift`, views |
-| JSON files in Application Support | Server session cache `<server>.json`; cineby/TMDB trending `Trending.json`; cineby's For You rows `CinebyRows.json` (refreshed after 6 h); downloads `index.json` (finished) and `queue.json` (pending) plus the downloaded original files | `ServerSession.swift`, `CinebyTrending.swift`, `Shared/App/DownloadStore.swift`, `LibraryStore.swift` |
+| JSON files in Application Support | Server session cache `<server>.json`; cineby/TMDB trending `Trending.json`; cineby's For You rows `CinebyRows.json` (refreshed after 6 h); the last Continue Watching row per server `ContinueWatching-<server id>.json` (shown at launch, replaced by Plex's answer, deleted on sign-out); downloads `index.json` (finished) and `queue.json` (pending) plus the downloaded original files | `ServerSession.swift`, `CinebyTrending.swift`, `Shared/App/DownloadStore.swift`, `LibraryStore.swift` |
 
 In memory only: TMDB responses and images (`RemoteImage.swift`).
 
