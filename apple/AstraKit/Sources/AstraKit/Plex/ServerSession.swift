@@ -105,6 +105,24 @@ public enum LibraryIndexer {
     return index
   }
 
+  /// `index` with `items` added (a section's newest titles, read in one quick
+  /// request): a saved index from before a title was added still finds it,
+  /// without waiting for the whole library to be read again (KP, 2026-11-08:
+  /// new titles on Plex took 8 s to open). Keys as in `build`; an item
+  /// already in the index under the same key is replaced by the newer copy.
+  /// `items` must already carry their `librarySectionID`.
+  public static func merging(_ index: [String: PlexMetadata], _ items: [PlexMetadata]) -> [String: PlexMetadata] {
+    var out = index
+    for item in items {
+      if let key = item.tmdbKey {
+        out[key] = item.slimmed
+      } else if let title = item.titleMatchKey {
+        out[LibraryMatch.titlePrefix + title] = item.slimmed
+      }
+    }
+    return out
+  }
+
   /// One section's items in order, `parallel` pages per round, until a short page.
   static func items(
     in section: PlexLibrarySection, client: PlexServerClient, pageSize: Int, parallel: Int

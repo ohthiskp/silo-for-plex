@@ -508,6 +508,7 @@ final class LibraryStore {
     guard !isClosed else { return result.items }
     setLibraryIndex(result.items)
     if result.stale { refreshLibraryIndex(client: client, sections: sections, url: url) }
+    topUpLibraryIndex(client: client, sections: sections, url: url)
     return libraryIndex ?? result.items
   }
 
@@ -546,6 +547,43 @@ final class LibraryStore {
         let trending = await weekTrendingTask.value
         guard let self, !trending.isEmpty else { return }
         await self.showTrending(trending)
+      }
+    }
+  }
+
+  /// Adds each library's 100 newest titles to the index, one quick request
+  /// per library, so a title added since the saved index was read is found
+  /// at once (KP, 2026-11-08: new titles took 8 s to open because only the
+  /// slow server search found them). The full re-read still runs when the
+  /// saved index is old.
+  private func topUpLibraryIndex(client: PlexServerClient, sections: [PlexLibrarySection], url: URL) {
+    spawn { [weak self] in
+      let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
+      guard !wanted.isEmpty else { return }
+      let newest = await withTaskGroup(of: [PlexMetadata].self) { group in
+        for section in wanted {
+          group.addTask {
+            let items = (try? await client.libraryItems(sectionKey: section.key, sort: "addedAt:desc", size: 100)) ?? []
+            return items.map {
+              var item = $0
+              if item.librarySectionID == nil { item.librarySectionID = Int(section.key) }
+              return item
+            }
+          }
+        }
+        var all: [PlexMetadata] = []
+        for await items in group { all += items }
+        return all
+      }
+      guard let self, !self.isClosed, !newest.isEmpty, let current = self.libraryIndex else { return }
+      let base = current.filter { !$0.key.hasPrefix(LibraryMatch.aliasPrefix) }
+      let merged = LibraryIndexer.merging(base, newest)
+      // Nothing new: leave the index (and every row matched with it) alone.
+      let known = Set(base.values.map(\.ratingKey))
+      guard newest.contains(where: { !known.contains($0.ratingKey) }) else { return }
+      self.setLibraryIndex(LibraryMatch.withAliases(merged))
+      Task.detached(priority: .utility) {
+        try? LibraryIndexSnapshot(savedAt: LibraryIndexSnapshot.load(from: url)?.savedAt ?? Date(), items: merged).save(to: url)
       }
     }
   }

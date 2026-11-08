@@ -901,6 +901,24 @@ final class ServerSessionTests: XCTestCase {
 }
 
 final class LibraryIndexerTests: XCTestCase {
+  /// KP (2026-11-08): titles added after the saved index was read took 8 s
+  /// to open. The newest titles are merged in and then matched at once.
+  func testMergingAddsNewTitlesAndTheyMatch() {
+    var old = PlexMetadata(ratingKey: "1", type: .movie, title: "Old", year: 2020)
+    old.guids = [PlexGuid(id: "tmdb://10")]
+    var new = PlexMetadata(ratingKey: "2", type: .movie, title: "Hope", year: 2026)
+    new.guids = [PlexGuid(id: "tmdb://20")]
+    let noGuid = PlexMetadata(ratingKey: "3", type: .movie, title: "Home Movie", year: 2026)
+    let base = LibraryIndexer.merging([:], [old])
+    let merged = LibraryMatch.withAliases(LibraryIndexer.merging(base, [new, noGuid]))
+    XCTAssertEqual(merged.match(old)?.ratingKey, "1")
+    var catalog = PlexMetadata(ratingKey: "tmdb:movie:20", type: .movie, title: "Hope", year: 2026)
+    catalog.guids = [PlexGuid(id: "tmdb://20")]
+    XCTAssertEqual(merged.match(catalog)?.ratingKey, "2")
+    let byTitle = PlexMetadata(ratingKey: "tmdb:movie:99", type: .movie, title: "Home Movie", year: 2026)
+    XCTAssertEqual(merged.match(byTitle)?.ratingKey, "3")
+  }
+
   private func client(_ transport: FakeTransport) -> PlexServerClient {
     PlexServerClient(
       baseURL: URL(string: "https://server.test:32400")!, token: "tok", serverName: "Home", info: testInfo,
