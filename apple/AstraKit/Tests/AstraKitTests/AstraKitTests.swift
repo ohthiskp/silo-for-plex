@@ -217,6 +217,19 @@ final class AccountTests: XCTestCase {
     XCTAssertEqual(request.value(forHTTPHeaderField: "X-Plex-Token"), "tok")
   }
 
+  func testLinkPinsAreShortAndStrongPinsStayTheDefaultOffTV() async throws {
+    let transport = FakeTransport { _ in (201, Data(#"{"id":7,"code":"AB12"}"#.utf8)) }
+    let client = PlexAccountClient(info: testInfo, transport: transport)
+    let link = try await client.createPin(style: .link)
+    XCTAssertEqual(link.code, "AB12")
+    _ = try await client.createPin()
+    let strong = transport.requests.map { URLComponents(url: $0.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "strong" }?.value }
+    XCTAssertEqual(strong, ["false", "true"])
+    XCTAssertEqual(transport.requests.first?.httpMethod, "POST")
+    XCTAssertEqual(PlexAccountClient.PinStyle.platformDefault, .strong)
+    XCTAssertEqual(PlexAccountClient.linkURL.absoluteString, "https://plex.tv/link")
+  }
+
   func testAuthURLCarriesClientAndCode() {
     let client = PlexAccountClient(info: testInfo, transport: FakeTransport { _ in (200, Data()) })
     let url = client.authURL(for: PlexPin(id: 1, code: "ABCD"))
