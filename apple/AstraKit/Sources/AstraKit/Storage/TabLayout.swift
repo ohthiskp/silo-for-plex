@@ -1,7 +1,7 @@
 import Foundation
 
 /// Settings → Navigation (Astra 4.0, KP 2026-11-08): which tabs the iPhone's
-/// bottom bar shows. Home is always there; up to four tabs in all; the
+/// bottom bar shows. Home and Library are always there; up to five tabs in all; the
 /// default is Home, Search and Library.
 public enum PhoneTab: String, CaseIterable, Sendable, Identifiable {
   case home, search, watchlist, downloads, libraries, settings
