@@ -51,7 +51,11 @@ public enum ProbeFailure: Sendable, Equatable {
     }
     if let url = error as? URLError {
       switch url.code {
-      case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .internationalRoamingOff:
+      // Only "this device has no network". `.networkConnectionLost` is the server
+      // dropping the connection (a sleeping or restarting Plex server): that's
+      // unreachable, which retries, not "No network", which waits for a path change
+      // that never comes because the device's network is fine.
+      case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff:
         return .network
       case .userAuthenticationRequired: return .unauthorized
       default: return .unreachable
@@ -69,6 +73,10 @@ public struct ServerHealthTracker: Sendable, Equatable {
   public private(set) var failures = 0
   public private(set) var lastChecked: Date?
   public private(set) var lastError: String?
+  /// The system's path monitor said the network is gone: it re-checks when the
+  /// network is back, so no timer runs. A probe that only *reports* no network
+  /// (VPN, Local Network permission, captive portal) keeps retrying instead.
+  public private(set) var waitingForNetwork = false
 
   public static let failuresForOffline = 2
   /// While connected, a light check this often (no aggressive polling).
@@ -80,6 +88,7 @@ public struct ServerHealthTracker: Sendable, Equatable {
 
   public mutating func checking() {
     if state != .connected { state = .checking }
+    waitingForNetwork = false
   }
 
   public mutating func recordSuccess(at date: Date) {
@@ -87,15 +96,18 @@ public struct ServerHealthTracker: Sendable, Equatable {
     failures = 0
     lastChecked = date
     lastError = nil
+    waitingForNetwork = false
   }
 
   public mutating func recordFailure(_ failure: ProbeFailure, message: String? = nil, at date: Date) {
     lastChecked = date
     lastError = message
+    waitingForNetwork = false
     switch failure {
     case .unauthorized:
       state = .authRequired
     case .network:
+      failures += 1
       state = .networkUnavailable
     case .unreachable, .server:
       failures += 1
@@ -107,6 +119,7 @@ public struct ServerHealthTracker: Sendable, Equatable {
   public mutating func networkLost(at date: Date) {
     state = .networkUnavailable
     lastChecked = date
+    waitingForNetwork = true
   }
 
   /// Seconds until the next automatic check; nil when only a person can fix it.
@@ -114,9 +127,9 @@ public struct ServerHealthTracker: Sendable, Equatable {
     switch state {
     case .connected: Self.connectedInterval
     case .authRequired: nil
-    case .networkUnavailable: nil  // the path monitor re-checks when it's back
+    case .networkUnavailable where waitingForNetwork: nil  // the path monitor re-checks when it's back
     case .checking: Self.firstRetry
-    case .degraded, .offline:
+    case .degraded, .offline, .networkUnavailable:
       min(Self.maxRetry, Self.firstRetry * pow(2, Double(max(0, failures - 1))))
     }
   }

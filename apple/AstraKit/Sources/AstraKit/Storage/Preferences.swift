@@ -25,7 +25,10 @@ public struct RGBHex: Sendable, Equatable, Hashable {
   public init?(string: String) {
     var text = string.trimmingCharacters(in: .whitespaces)
     if text.hasPrefix("#") { text.removeFirst() }
-    guard text.count == 6, let number = UInt32(text, radix: 16) else { return nil }
+    // `UInt32(_:radix:)` also takes a leading "+", so check the digits first.
+    guard text.count == 6, text.allSatisfy(\.isHexDigit), let number = UInt32(text, radix: 16) else {
+      return nil
+    }
     self.init(number)
   }
 

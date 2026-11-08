@@ -1512,6 +1512,28 @@ final class ServerHealthTests: XCTestCase {
     XCTAssertEqual(ProbeFailure.classify(URLError(.notConnectedToInternet)), .network)
     XCTAssertEqual(ProbeFailure.classify(URLError(.timedOut)), .unreachable)
     XCTAssertEqual(ProbeFailure.classify(PlexError.http(500)), .server)
+    // The server hanging up is not "this device has no network".
+    XCTAssertEqual(ProbeFailure.classify(URLError(.networkConnectionLost)), .unreachable)
+  }
+
+  func testNoNetworkFromAProbeKeepsRetrying() {
+    var tracker = ServerHealthTracker()
+    tracker.recordFailure(.network, at: Date())
+    XCTAssertEqual(tracker.state, .networkUnavailable)
+    XCTAssertEqual(tracker.nextCheck, ServerHealthTracker.firstRetry)
+    tracker.recordFailure(.network, at: Date())
+    XCTAssertEqual(tracker.nextCheck, ServerHealthTracker.firstRetry * 2)
+  }
+
+  func testNoNetworkFromThePathMonitorWaitsForIt() {
+    var tracker = ServerHealthTracker()
+    tracker.recordSuccess(at: Date())
+    tracker.networkLost(at: Date())
+    XCTAssertEqual(tracker.state, .networkUnavailable)
+    XCTAssertNil(tracker.nextCheck)
+    tracker.checking()
+    XCTAssertEqual(tracker.state, .checking)
+    XCTAssertEqual(tracker.nextCheck, ServerHealthTracker.firstRetry)
   }
 }
 
@@ -1521,6 +1543,7 @@ final class PreferencesTests: XCTestCase {
     XCTAssertEqual(RGBHex(string: "0A84FF")?.string, "0A84FF")
     XCTAssertNil(RGBHex(string: "12345"))
     XCTAssertNil(RGBHex(string: "GGGGGG"))
+    XCTAssertNil(RGBHex(string: "+FFFFF"))
     XCTAssertEqual(RGBHex(red: 1, green: 0.5, blue: -2).string, "FF8000")
   }
 
