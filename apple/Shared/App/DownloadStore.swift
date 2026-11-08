@@ -380,7 +380,11 @@ final class DownloadStore {
     var probe = request
     probe.setValue("bytes=0-0", forHTTPHeaderField: "Range")
     probe.timeoutInterval = 15
-    guard let (_, response) = try? await URLSession.shared.data(for: probe) else { return false }
+    // QA P2-5: read only the answer's headers. A server that ignores Range
+    // answers 200 with the whole file, which `data(for:)` would have read
+    // into memory; the transfer is cancelled as soon as the status is known.
+    guard let (bytes, response) = try? await URLSession.shared.bytes(for: probe) else { return false }
+    bytes.task.cancel()
     return (response as? HTTPURLResponse)?.statusCode == 206
   }
 
