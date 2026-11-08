@@ -204,8 +204,15 @@ public struct SavedConnection: Codable, Sendable, Equatable {
 
   public static let defaultsKey = "astra.plex.savedConnection"
 
+  /// Nil when nothing is saved, or the saved address is plain HTTP across
+  /// the internet (an older build could pick one): the token is never sent
+  /// there, so launch goes through `ConnectionPicker` instead.
   public static func load(from defaults: UserDefaults = .standard) -> SavedConnection? {
-    defaults.data(forKey: defaultsKey).flatMap { try? JSONDecoder().decode(SavedConnection.self, from: $0) }
+    guard let data = defaults.data(forKey: defaultsKey),
+      let saved = try? JSONDecoder().decode(SavedConnection.self, from: data),
+      ConnectionPicker.isSafeForToken(saved.baseURL)
+    else { return nil }
+    return saved
   }
 
   public func save(to defaults: UserDefaults = .standard) {

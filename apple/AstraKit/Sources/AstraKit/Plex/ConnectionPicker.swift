@@ -22,7 +22,19 @@ public struct ConnectionPicker: Sendable {
     self.probeTimeout = probeTimeout
   }
 
-  /// Lower is better.
+  /// Astra (security audit, 2026-11-08): whether the token may be sent to
+  /// this address. HTTPS always; plain HTTP only to a private or loopback
+  /// address on this network (by the address itself, not Plex's `local`
+  /// flag), never across the internet where anyone on the path could read it.
+  public static func isSafeForToken(_ url: URL) -> Bool {
+    switch url.scheme?.lowercased() {
+    case "https": return true
+    case "http": return ConnectionKind.classify(url) == .local && url.port != 8443
+    default: return false
+    }
+  }
+
+  /// Lower is better: local HTTPS, local HTTP, remote HTTPS, relay.
   public static func rank(_ connection: PlexServerResource.Connection) -> Int {
     if connection.relay { return 3 }
     let https = connection.uri.hasPrefix("https")
@@ -41,7 +53,8 @@ public struct ConnectionPicker: Sendable {
 
   public func pick(for server: PlexServerResource, accountToken: String) async throws -> URL {
     let token = server.accessToken ?? accountToken
-    let candidates = Self.ordered(server.connections).compactMap { URL(string: $0.uri) }
+    // Remote plain-HTTP addresses are never probed: the probe carries the token.
+    let candidates = Self.ordered(server.connections).compactMap { URL(string: $0.uri) }.filter(Self.isSafeForToken)
     guard !candidates.isEmpty else { throw PlexError.noReachableConnection(server.name) }
 
     return try await withThrowingTaskGroup(of: (Int, Bool).self) { group in

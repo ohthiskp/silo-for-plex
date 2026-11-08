@@ -141,6 +141,35 @@ final class ConnectionPickerTests: XCTestCase {
     XCTAssertEqual(url.host, "remote.test")
   }
 
+  func testTokenIsNeverSentToRemotePlainHTTP() async throws {
+    XCTAssertTrue(ConnectionPicker.isSafeForToken(URL(string: "https://81-2-3-4.abc.plex.direct:32400")!))
+    XCTAssertTrue(ConnectionPicker.isSafeForToken(URL(string: "http://192.168.1.5:32400")!))
+    XCTAssertTrue(ConnectionPicker.isSafeForToken(URL(string: "http://localhost:32400")!))
+    XCTAssertFalse(ConnectionPicker.isSafeForToken(URL(string: "http://81.2.3.4:32400")!))
+    XCTAssertFalse(ConnectionPicker.isSafeForToken(URL(string: "http://my.server.com:32400")!))
+    // Plex calls an address local, but it is a public one: still not over HTTP.
+    let transport = FakeTransport { _ in (200, Data()) }
+    let server = PlexServerResource(
+      name: "Home", clientIdentifier: "s1", accessToken: "tok",
+      connections: [
+        C(uri: "http://81.2.3.4:32400", local: true, relay: false),
+        C(uri: "https://remote.test:32400", local: false, relay: false),
+      ])
+    let url = try await ConnectionPicker(info: testInfo, transport: transport).pick(for: server, accountToken: "a")
+    XCTAssertEqual(url.host, "remote.test")
+    XCTAssertFalse(transport.requests.contains { $0.url?.scheme == "http" })
+  }
+
+  func testSavedRemotePlainHTTPAddressIsNotResumed() throws {
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: "astra.test.saved.\(UUID().uuidString)"))
+    SavedConnection(serverID: "s", serverName: "S", baseURL: URL(string: "http://81.2.3.4:32400")!, sections: [])
+      .save(to: defaults)
+    XCTAssertNil(SavedConnection.load(from: defaults))
+    SavedConnection(serverID: "s", serverName: "S", baseURL: URL(string: "https://remote.test:32400")!, sections: [])
+      .save(to: defaults)
+    XCTAssertEqual(SavedConnection.load(from: defaults)?.baseURL.host, "remote.test")
+  }
+
   func testNoReachableAddressThrows() async {
     let transport = FakeTransport { _ in (503, Data()) }
     let server = PlexServerResource(
