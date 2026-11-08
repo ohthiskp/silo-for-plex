@@ -274,7 +274,7 @@ struct TabsSettings: View {
             SettingsIcon(symbol: tab.symbol)
             Text(tab.title).font(.system(size: 16, weight: .semibold))
             Spacer()
-            if tab != .home {
+            if !TabLayout.required.contains(tab) {
               Button {
                 storedTabs = TabLayout.stored(TabLayout.toggled(tabs, tab, on: false))
               } label: {
@@ -289,7 +289,7 @@ struct TabsSettings: View {
       } header: {
         Text("In the Tab Bar")
       } footer: {
-        Text("Drag to reorder. Home always stays; up to \(TabLayout.maximum) tabs.")
+        Text("Drag to reorder. Home and Library always stay; up to \(TabLayout.maximum) tabs.")
       }
       let more = PhoneTab.allCases.filter { !tabs.contains($0) }
       if !more.isEmpty {
