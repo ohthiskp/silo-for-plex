@@ -1,5 +1,5 @@
 import AstraKit
-#if os(iOS)
+#if os(iOS) || os(tvOS)
   import AVFoundation
 #endif
 import Foundation
@@ -55,7 +55,7 @@ final class PlayerController {
   var lastError: String?
   /// Opens the details page of what is playing (the title's chevron on iPhone).
   @ObservationIgnored var openDetails: ((PlexMetadata) -> Void)?
-  #if os(iOS)
+  #if os(iOS) || os(tvOS)
     @ObservationIgnored private var pip: PipCoordinator?
   #endif
 
@@ -238,7 +238,7 @@ final class PlayerController {
     core.setProperty("start", value: source.startSeconds > 0 ? String(format: "%.3f", source.startSeconds) : "none")
     core.setProperty("pause", value: "no")
     // A bigger read-ahead buffer, so a remote server's hiccups don't pause playback.
-    #if os(iOS)
+    #if os(iOS) || os(tvOS)
       core.setProperty("demuxer-max-bytes", value: "150MiB")
     #else
       core.setProperty("demuxer-max-bytes", value: "400MiB")
@@ -350,7 +350,7 @@ final class PlayerController {
     reporter = nil
     report(.stopped)
     nowPlaying.end()
-    #if os(iOS)
+    #if os(iOS) || os(tvOS)
       pip?.teardown()
       pip = nil
     #endif
@@ -586,7 +586,7 @@ final class PlayerController {
   static let speeds: [Double] = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
   static var supportsPictureInPicture: Bool {
-    #if os(iOS)
+    #if os(iOS) || os(tvOS)
       PipCoordinator.isSupported
     #else
       true
@@ -596,7 +596,7 @@ final class PlayerController {
   /// iPhone: system Picture in Picture. Mac: a small floating window in the
   /// corner of the screen, above other apps (mpv has no Mac PiP).
   func togglePictureInPicture() {
-    #if os(iOS)
+    #if os(iOS) || os(tvOS)
       pip?.toggle()
     #else
       guard let host else { return }
@@ -619,7 +619,7 @@ final class PlayerController {
 
   /// The window changed size (rotation, split view): resize the video layer.
   func layoutChanged() {
-    #if os(iOS)
+    #if os(iOS) || os(tvOS)
       core?.updateFrame()
     #endif
   }
@@ -774,7 +774,7 @@ final class PlayerController {
   private func observeLifecycle() {
     guard lifecycleObservers.isEmpty else { return }
     let center = NotificationCenter.default
-    #if os(iOS)
+    #if os(iOS) || os(tvOS)
       let background = UIApplication.didEnterBackgroundNotification
       let quit = UIApplication.willTerminateNotification
     #else
@@ -793,7 +793,7 @@ final class PlayerController {
 
   private func reportInBackground() {
     guard isActive else { return }
-    #if os(iOS)
+    #if os(iOS) || os(tvOS)
       // A little time to finish the request if iOS suspends Astra (no PiP, paused).
       let task = UIApplication.shared.beginBackgroundTask(withName: "astra.timeline")
       report(paused ? .paused : .playing) {
