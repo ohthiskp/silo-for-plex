@@ -230,6 +230,14 @@ final class PlayerController {
     core.setProperty("force-media-title", value: source.title)
     core.setProperty("start", value: source.startSeconds > 0 ? String(format: "%.3f", source.startSeconds) : "none")
     core.setProperty("pause", value: "no")
+    // A bigger read-ahead buffer, so a remote server's hiccups don't pause playback.
+    #if os(iOS)
+      core.setProperty("demuxer-max-bytes", value: "150MiB")
+    #else
+      core.setProperty("demuxer-max-bytes", value: "400MiB")
+    #endif
+    core.setProperty("demuxer-max-back-bytes", value: "50MiB")
+    core.setProperty("demuxer-readahead-secs", value: "30")
     // Settings → Playback → Subtitles (Astra 4.0).
     for (name, value) in SubtitlePreference.current().mpvOptions(languages: Locale.preferredLanguages) {
       core.setProperty(name, value: value)
@@ -336,8 +344,17 @@ final class PlayerController {
 
   func togglePause() { setPaused(!paused) }
 
+  /// When Astra last set a property itself: mpv's echo of an older value
+  /// arriving just after is ignored, so the slider and Play/Pause never jump
+  /// back (KP, 2026-11-08: "make playback snappier", "volume instant").
+  @ObservationIgnored private var localSetAt: [String: Date] = [:]
+  private func isEcho(_ name: String) -> Bool {
+    localSetAt[name].map { Date().timeIntervalSince($0) < 0.5 } ?? false
+  }
+
   func setPaused(_ value: Bool) {
     guard let core else { return }
+    localSetAt["pause"] = Date()
     paused = value
     core.setProperty("pause", value: value ? "yes" : "no")
     #if os(macOS)
@@ -367,12 +384,14 @@ final class PlayerController {
 
   func setVolume(_ value: Double) {
     volume = min(100, max(0, value))
+    localSetAt["volume"] = Date()
     core?.setProperty("volume", value: String(format: "%.0f", volume))
     if muted, volume > 0 { setMuted(false) }
   }
 
   func setMuted(_ value: Bool) {
     muted = value
+    localSetAt["mute"] = Date()
     core?.setProperty("mute", value: value ? "yes" : "no")
   }
 
@@ -428,9 +447,9 @@ final class PlayerController {
     switch name {
     case "time-pos": if let v = value as? Double { position = v }
     case "duration": if let v = value as? Double, v > 0 { duration = v }
-    case "pause": if let v = value as? Bool { paused = v }
-    case "volume": if let v = value as? Double { volume = v }
-    case "mute": if let v = value as? Bool { muted = v }
+    case "pause": if let v = value as? Bool, !isEcho("pause") { paused = v }
+    case "volume": if let v = value as? Double, !isEcho("volume") { volume = v }
+    case "mute": if let v = value as? Bool, !isEcho("mute") { muted = v }
     case "speed": if let v = value as? Double { speed = v }
     case "paused-for-cache": buffering = (value as? Bool) ?? false
     case "width":

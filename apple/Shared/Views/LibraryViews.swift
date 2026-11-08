@@ -583,6 +583,9 @@ struct SettingsView: View {
           SourceHealthRow(health: health)
         }
         LabeledContent("Address", value: app.server?.baseURL.host() ?? "—")
+        if let url = app.server?.baseURL {
+          LabeledContent("Connection", value: ConnectionKind.classify(url).title)
+        }
         Button("Change Server…") { Task { await app.chooseServer() } }
         Button("Sign Out", role: .destructive) { app.signOut() }
       }

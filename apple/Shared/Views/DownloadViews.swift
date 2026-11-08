@@ -138,7 +138,8 @@ struct DownloadsContent: View {
     guard let received = job.received, received > 0 else { return "Connecting…" }
     let got = ByteCountFormatter.string(fromByteCount: received, countStyle: .file)
     guard let total = job.record.bytes, total > 0 else { return got }
-    return "\(got) of \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file)) · \(Int(job.fraction * 100))%"
+    let speed = job.speed.map { " · \(ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file))/s" } ?? ""
+    return "\(got) of \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file)) · \(Int(job.fraction * 100))%\(speed)"
   }
 
   var body: some View {

@@ -132,3 +132,18 @@ extension DownloadIndex {
   /// Downloads → Storage Used: the saved files' sizes, as recorded.
   public var totalBytes: Int64 { records.compactMap(\.bytes).reduce(0, +) }
 }
+
+extension Preferences {
+  /// Playback → Gestures: swipe up/down for brightness (left) and volume (right).
+  public static let swipeGesturesKey = "astra.gestures.swipe"
+  /// Playback → Gestures: a two-finger tap plays or pauses.
+  public static let twoFingerPauseKey = "astra.gestures.twoFingerPause"
+  /// Playback → Gestures: seconds a double tap skips (10, 15 or 30).
+  public static let skipSecondsKey = "astra.gestures.skipSeconds"
+  /// Playback → Next Episode button at the end of an episode.
+  public static let nextEpisodeKey = "astra.playback.nextEpisode"
+  /// Appearance → Theme colour: icons and the tab bar, as "RRGGBB".
+  public static let themeKey = "astra.appearance.theme"
+  /// Appearance → Streaming Service Logo Colours (off: plain white logos on glass).
+  public static let serviceLogoColorsKey = "astra.appearance.serviceLogoColors"
+}

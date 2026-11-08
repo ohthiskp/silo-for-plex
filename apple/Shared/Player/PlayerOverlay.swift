@@ -14,6 +14,8 @@ struct PlayerOverlay: View {
   @State private var hideTask: Task<Void, Never>?
   @State private var scrubbing: Double?
   @State private var lastPoke = Date.distantPast
+  /// Settings → Playback → Next Episode button.
+  @AppStorage(Preferences.nextEpisodeKey) private var showNextEpisode = true
   #if os(iOS)
     /// The double-tap skip being shown: which side and the seconds so far.
     @State private var skip: (forward: Bool, seconds: Int)?
@@ -22,6 +24,10 @@ struct PlayerOverlay: View {
     /// The brightness or volume being swiped. Its own observable object, so a
     /// swipe redraws only the level pill, not the whole player.
     @State private var level = LevelState()
+    /// Settings → Playback → Gestures (Astra 4.0).
+    @AppStorage(Preferences.swipeGesturesKey) private var swipeGestures = true
+    @AppStorage(Preferences.twoFingerPauseKey) private var twoFingerPause = true
+    @AppStorage(Preferences.skipSecondsKey) private var skipSeconds = 10
     /// Where the visible controls are (window coordinates); taps there belong to them.
     @State private var controlFrames: [String: CGRect] = [:]
   #endif
@@ -58,21 +64,14 @@ struct PlayerOverlay: View {
           blocked: visible ? Array(controlFrames.values) : [],
           onTap: { visible ? hide() : poke() },
           onDoubleTap: { forward in doubleTapSkip(forward: forward) },
-          onSwipe: { right, delta in swipeLevel(right: right, delta: delta) }
+          onSwipe: { right, delta in if swipeGestures { swipeLevel(right: right, delta: delta) } },
+          // KP (2026-11-08): a two-finger tap plays or pauses.
+          onTwoFingerTap: { if twoFingerPause { player.togglePause() } }
         )
         .ignoresSafeArea()
 
-        if level.shown {
-          HStack {
-            if level.volume { Spacer() }
-            LevelHUD(level: level)
-            if !level.volume { Spacer() }
-          }
-          .padding(.horizontal, 48)
-          .allowsHitTesting(false)
-          .transition(.opacity)
-        }
-
+        // KP (2026-11-08): no separate level pill; a swipe moves the volume
+        // capsule (top right) or the brightness capsule (top left), which show.
         if let skip {
           HStack {
             if skip.forward { Spacer() }
@@ -93,14 +92,15 @@ struct PlayerOverlay: View {
       // Astra 4.0: Next Episode in the last 15 s of an episode, tap only.
       // Only in the tree for an episode with a next one, so it never sits
       // over the swipe and tap areas otherwise.
-      if player.upNext != nil {
+      if showNextEpisode, player.upNext != nil {
         NextEpisodeButton(player: player)
           #if os(macOS)
             .padding(.trailing, 28)
             .padding(.bottom, 150)
           #else
-            .padding(.trailing, 24)
-            .padding(.bottom, 110)
+            // Clear of the captions/quality capsule and the timeline (KP: "spaced better").
+            .padding(.trailing, 20)
+            .padding(.bottom, 132)
           #endif
       }
 
@@ -381,6 +381,10 @@ struct PlayerOverlay: View {
             .astraIconButton(size: 40, variant: .clear)
             .accessibilityLabel("Close Player")
             if PlayerController.supportsPictureInPicture { pipButton(size: 40) }
+            if swipeGestures {
+              PhoneBrightness(level: level, poke: poke)
+                .padding(.leading, 4)
+            }
             Spacer()
             phoneVolume
           }
@@ -493,7 +497,7 @@ struct PlayerOverlay: View {
         Task { @MainActor in
           // The UI tests (demo mode) need longer to read it.
           try? await Task.pause(Demo.isOn ? 4 : 0.5)
-          if level.generation == ended { withAnimation(Astra.Motion.base) { level.shown = false } }
+          if level.generation == ended { level.shown = false }
         }
         return
       }
@@ -502,7 +506,9 @@ struct PlayerOverlay: View {
         level.volume = right
         level.start = right ? (player.muted ? 0 : player.volume / 100) : Double(UIScreen.main.brightness)
         level.value = level.start
-        if !level.shown { withAnimation(.easeOut(duration: 0.12)) { level.shown = true } }
+        if !right { level.brightness = level.start }
+        level.shown = true
+        poke()
         return
       }
       let value = min(1, max(0, level.start + delta))
@@ -511,16 +517,19 @@ struct PlayerOverlay: View {
         if player.muted, value > 0 { player.setMuted(false) }
         player.setVolume(value * 100)
       } else {
+        level.brightness = value
         UIScreen.main.brightness = CGFloat(value)
       }
+      poke()
     }
 
     /// Skips 10 s; quick repeated double taps on the same side add up (10, 20, 30…).
     private func doubleTapSkip(forward: Bool) {
-      player.seek(by: forward ? 10 : -10)
+      let step = max(5, skipSeconds)
+      player.seek(by: Double(forward ? step : -step))
       let now = Date()
       let adds = skip?.forward == forward && now.timeIntervalSince(skipShownAt) < 1
-      withAnimation(Astra.Motion.fast) { skip = (forward, adds ? (skip?.seconds ?? 0) + 10 : 10) }
+      withAnimation(Astra.Motion.fast) { skip = (forward, adds ? (skip?.seconds ?? 0) + step : step) }
       skipShownAt = now
       Task { @MainActor in
         // The UI tests (demo mode) need longer to read the badge.
@@ -958,6 +967,7 @@ extension View {
       .astraGlassEdge(Capsule(), strength: 0.6)
       .accessibilityElement(children: .contain)
       .accessibilityLabel("Volume")
+      .accessibilityIdentifier("astra.level.volume")
     }
 
     private var symbol: String {
@@ -973,31 +983,44 @@ extension View {
     var value = 0.0
     var start = 0.0
     var generation = 0
+    /// The screen's brightness, shown in the top-left capsule.
+    var brightness = Double(UIScreen.main.brightness)
   }
 
-  struct LevelHUD: View {
+  /// Top left: the screen's brightness, laid out like the volume capsule on
+  /// the right ("40%", a short slider, a sun). A swipe on the left moves it.
+  struct PhoneBrightness: View {
     var level: LevelState
-    private var volume: Bool { level.volume }
-    private var value: Double { level.value }
+    var poke: () -> Void
 
     var body: some View {
-      VStack(spacing: 10) {
-        ZStack(alignment: .bottom) {
-          Capsule().fill(.white.opacity(0.18))
-          Capsule().fill(.white).frame(height: max(6, 140 * value))
-        }
-        .frame(width: 6, height: 140)
-        Image(systemName: volume ? (value == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill") : "sun.max.fill")
-          .font(.system(size: 16, weight: .semibold))
-          .foregroundStyle(.white)
+      HStack(spacing: 10) {
+        Image(systemName: "sun.max.fill").font(.system(size: 15, weight: .semibold))
+          .frame(width: 22, height: 26)
+        ScrubBar(
+          fraction: level.brightness, knob: 12, height: 3,
+          onChange: { set($0); poke() },
+          onCommit: { set($0) }
+        )
+        .frame(width: 90)
+        Text("\(Int((level.brightness * 100).rounded()))%")
+          .font(.system(size: 15, weight: .medium).monospacedDigit())
+          .frame(minWidth: 42, alignment: .trailing)
       }
-      .padding(.vertical, 16)
-      .frame(width: 52)
+      .foregroundStyle(.white)
+      .padding(.horizontal, 14)
+      .frame(height: 40)
       .astraGlass(in: Capsule(), variant: .clear)
       .astraGlassEdge(Capsule(), strength: 0.6)
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(volume ? "Volume \(Int(value * 100))%" : "Brightness \(Int(value * 100))%")
-      .accessibilityIdentifier(volume ? "astra.level.volume" : "astra.level.brightness")
+      .accessibilityElement(children: .contain)
+      .accessibilityLabel("Brightness")
+      .accessibilityIdentifier("astra.level.brightness")
+      .onAppear { level.brightness = Double(UIScreen.main.brightness) }
+    }
+
+    private func set(_ value: Double) {
+      level.brightness = min(1, max(0, value))
+      UIScreen.main.brightness = CGFloat(level.brightness)
     }
   }
 
@@ -1012,6 +1035,7 @@ extension View {
     /// it has moved as a fraction of the screen's height (up is positive).
     /// `nil` when the swipe ends.
     var onSwipe: (_ right: Bool, _ delta: Double?) -> Void = { _, _ in }
+    var onTwoFingerTap: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -1027,6 +1051,7 @@ extension View {
       context.coordinator.onTap = onTap
       context.coordinator.onDoubleTap = onDoubleTap
       context.coordinator.onSwipe = onSwipe
+      context.coordinator.onTwoFingerTap = onTwoFingerTap
     }
 
     static func dismantleUIView(_ view: Anchor, coordinator: Coordinator) {
@@ -1047,6 +1072,7 @@ extension View {
       var onTap: () -> Void = {}
       var onDoubleTap: (Bool) -> Void = { _ in }
       var onSwipe: (Bool, Double?) -> Void = { _, _ in }
+      var onTwoFingerTap: () -> Void = {}
       private var recognizers: [UIGestureRecognizer] = []
       private var swipeRight = false
 
@@ -1059,14 +1085,17 @@ extension View {
         // Astra (KP, 2026-11-07): swipe up/down on the left for brightness, on the right for volume.
         let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
         pan.maximumNumberOfTouches = 1
-        for recognizer in [double, single, pan] {
+        let twoFinger = UITapGestureRecognizer(target: self, action: #selector(twoFingerTapped(_:)))
+        twoFinger.numberOfTouchesRequired = 2
+        single.require(toFail: twoFinger)
+        for recognizer in [double, single, pan, twoFinger] {
           // Let SwiftUI see every touch too (buttons, the timeline).
           recognizer.cancelsTouchesInView = false
           recognizer.delaysTouchesEnded = false
           recognizer.delegate = self
           window.addGestureRecognizer(recognizer)
         }
-        recognizers = [double, single, pan]
+        recognizers = [double, single, pan, twoFinger]
         NSLog("Astra gesture: recognizers attached to window %@", String(describing: window))
       }
 
@@ -1107,6 +1136,10 @@ extension View {
         default:
           onSwipe(swipeRight, nil)
         }
+      }
+
+      @objc func twoFingerTapped(_ recognizer: UITapGestureRecognizer) {
+        onTwoFingerTap()
       }
 
       @objc func tapped(_ recognizer: UITapGestureRecognizer) {

@@ -1627,3 +1627,14 @@ final class TabLayoutTests: XCTestCase {
     XCTAssertEqual(TabLayout.stored(base), "home,search,libraries")
   }
 }
+
+final class ConnectionKindTests: XCTestCase {
+  func testClassifiesAddresses() {
+    XCTAssertEqual(ConnectionKind.classify(URL(string: "https://192-168-1-5.abc123.plex.direct:32400")!), .local)
+    XCTAssertEqual(ConnectionKind.classify(URL(string: "http://10.0.0.2:32400")!), .local)
+    XCTAssertEqual(ConnectionKind.classify(URL(string: "https://81-2-3-4.abc123.plex.direct:32400")!), .remote)
+    XCTAssertEqual(ConnectionKind.classify(URL(string: "https://139-5-6-7.abc123.plex.direct:8443")!), .relay)
+    XCTAssertEqual(ConnectionKind.classify(URL(string: "https://172-20-1-1.abc.plex.direct:32400")!), .local)
+    XCTAssertEqual(ConnectionKind.classify(URL(string: "https://172-40-1-1.abc.plex.direct:32400")!), .remote)
+  }
+}

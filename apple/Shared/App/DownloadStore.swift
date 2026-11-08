@@ -26,6 +26,8 @@ final class DownloadStore {
     var fraction: Double = 0
     /// Bytes received so far (shown even when the total is unknown).
     var received: Int64?
+    /// Bytes per second, smoothed; nil until measured.
+    var speed: Double?
     var running = false
     var id: String { record.ratingKey }
   }
@@ -303,7 +305,9 @@ final class DownloadStore {
   }
 
   /// Connections per large download.
-  private static let segmentCount = 4
+  /// Eight: a remote server over the internet sends each connection at its
+  /// own pace, so more connections fill a fast line (KP: "way faster").
+  private static let segmentCount = 8
   @ObservationIgnored private var segmentWritten: [String: [Int: Int64]] = [:]
 
   private func partURL(_ destination: URL, _ i: Int) -> URL {
@@ -412,8 +416,22 @@ final class DownloadStore {
     #endif
   }
 
+  @ObservationIgnored private var speedSamples: [String: (time: Date, bytes: Int64)] = [:]
+
   private func setProgress(_ fraction: Double?, written: Int64, for id: String) {
     guard let i = jobs.firstIndex(where: { $0.id == id }) else { return }
+    // The speed, once a second, smoothed (shown as "4.2 MB/s").
+    let now = Date()
+    if let last = speedSamples[id] {
+      let elapsed = now.timeIntervalSince(last.time)
+      if elapsed >= 1, written >= last.bytes {
+        let rate = Double(written - last.bytes) / elapsed
+        jobs[i].speed = jobs[i].speed.map { $0 * 0.6 + rate * 0.4 } ?? rate
+        speedSamples[id] = (now, written)
+      }
+    } else {
+      speedSamples[id] = (now, written)
+    }
     // Publish whole percents and whole megabytes only, so a fast download doesn't redraw every frame.
     if let fraction, Int(fraction * 100) != Int(jobs[i].fraction * 100) { jobs[i].fraction = fraction }
     if written / 1_000_000 != (jobs[i].received ?? -1) / 1_000_000 { jobs[i].received = written }

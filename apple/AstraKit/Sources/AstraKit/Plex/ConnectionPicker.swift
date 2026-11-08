@@ -76,3 +76,42 @@ public struct ConnectionPicker: Sendable {
     }
   }
 }
+
+/// Settings → Sources → Connection: how Astra reaches the server, read from
+/// its address. Explains slow downloads (KP, 2026-11-08): a relay is capped
+/// by Plex, and a remote server is limited by its own upload speed.
+public enum ConnectionKind: String, Sendable {
+  case local, remote, relay
+
+  public var title: String {
+    switch self {
+    case .local: "Local network"
+    case .remote: "Internet (remote)"
+    case .relay: "Plex Relay (speed-capped)"
+    }
+  }
+
+  /// "192-168-1-5.abc.plex.direct" carries its IP in the name; Plex's relays
+  /// answer on port 8443.
+  public static func classify(_ url: URL) -> ConnectionKind {
+    guard let host = url.host()?.lowercased() else { return .remote }
+    var ip = host
+    if host.hasSuffix(".plex.direct"), let first = host.split(separator: ".").first {
+      ip = first.replacingOccurrences(of: "-", with: ".")
+    }
+    if isPrivate(ip) || host == "localhost" || host.hasSuffix(".local") { return .local }
+    if url.port == 8443 { return .relay }
+    return .remote
+  }
+
+  static func isPrivate(_ ip: String) -> Bool {
+    let parts = ip.split(separator: ".").compactMap { Int($0) }
+    guard parts.count == 4 else { return false }
+    switch (parts[0], parts[1]) {
+    case (10, _), (127, _), (192, 168), (169, 254): return true
+    case (172, 16...31): return true
+    case (100, 64...127): return true  // carrier-grade NAT / Tailscale
+    default: return false
+    }
+  }
+}

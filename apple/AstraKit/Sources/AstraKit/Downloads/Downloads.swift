@@ -219,7 +219,7 @@ public enum DownloadCheck {
 /// aria2 / Tiercel approach), each asking for its own byte range, then joined.
 public enum DownloadSegments {
   /// Files smaller than this download over one connection.
-  public static let minimumBytes: Int64 = 200_000_000
+  public static let minimumBytes: Int64 = 50_000_000
 
   /// `count` contiguous ranges covering `0..<total`, the last taking the remainder.
   public static func ranges(total: Int64, count: Int) -> [ClosedRange<Int64>] {
