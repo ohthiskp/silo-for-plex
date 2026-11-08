@@ -123,12 +123,14 @@ jobs:
           echo "build=$(( 1000 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
 
       - name: Build Flutter app
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
         run: >
           flutter build ios --release --no-codesign
           --build-name=${{ steps.ver.outputs.name }}
           --build-number=${{ steps.ver.outputs.build }}
           --dart-define=SUPPORTER_MODE=unlocked
-          --dart-define=TMDB_TOKEN=${{ secrets.TMDB_TOKEN }}
+          --dart-define=TMDB_TOKEN="$TMDB_TOKEN"
           --dart-define=GIT_COMMIT=${{ github.sha }}
 
       - name: Archive (signed with your team)
