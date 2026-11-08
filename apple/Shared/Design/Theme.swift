@@ -182,38 +182,6 @@ extension View {
   }
 }
 
-/// Settings → Appearance, read wherever a view uses `Astra.Color.accent`;
-/// views redraw when it changes because it is observed.
-@MainActor @Observable final class AstraAppearance {
-  static let shared = AstraAppearance()
-
-  private let defaults: UserDefaults
-  private(set) var accentHex: RGBHex
-
-  init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-    accentHex = defaults.string(forKey: Preferences.accentKey).flatMap(RGBHex.init(string:)) ?? AccentPreset.white.hex
-  }
-
-  var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
-  var onAccent: SwiftUI.Color { accentHex.prefersDarkText ? .black : .white }
-
-  func setAccent(_ hex: RGBHex) {
-    accentHex = hex
-    if hex == AccentPreset.white.hex {
-      defaults.removeObject(forKey: Preferences.accentKey)
-    } else {
-      defaults.set(hex.string, forKey: Preferences.accentKey)
-    }
-  }
-
-  /// The accent from a ColorPicker, in sRGB.
-  func setAccent(_ color: SwiftUI.Color) {
-    let resolved = color.resolve(in: EnvironmentValues())
-    setAccent(RGBHex(red: Double(resolved.red), green: Double(resolved.green), blue: Double(resolved.blue)))
-  }
-}
-
 extension EnvironmentValues {
   /// Astra: Home's accent, the chosen streaming service's brand colour (nil is
   /// the usual white). Tints the main button and progress bars on that page.
