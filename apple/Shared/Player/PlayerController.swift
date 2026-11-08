@@ -613,8 +613,11 @@ final class PlayerController {
     case "playback-restart":
       // The first frame is decoded and on screen (also after every seek).
       buffering = false
+      let wasStarted = hasFirstFrame
       hasFirstFrame = true
       updateNowPlaying()
+      // After a seek: Plex gets the new position now, not up to 10 s later.
+      if wasStarted { reportSoon() }
     case "end-file":
       if let reason = data?["reason"] as? String, reason == "error" {
         lastError = (data?["message"] as? String) ?? "This file couldn't be played."
@@ -687,7 +690,73 @@ final class PlayerController {
 
   // MARK: - Plex progress
 
+  @ObservationIgnored private var lastReportAt = Date.distantPast
+
+  /// A report now, at most one a second (a run of double taps seeks many times).
+  private func reportSoon() {
+    guard Date().timeIntervalSince(lastReportAt) >= 1 else { return }
+    report(paused ? .paused : .playing)
+  }
+
+  @ObservationIgnored private var lifecycleObservers: [NSObjectProtocol] = []
+
+  /// Background and quit: the position reaches Plex then too, not only on
+  /// the 10 s timer. On quit it is also kept on disk first, so it is sent at
+  /// the next launch if the request can't finish in time.
+  private func observeLifecycle() {
+    guard lifecycleObservers.isEmpty else { return }
+    let center = NotificationCenter.default
+    #if os(iOS)
+      let background = UIApplication.didEnterBackgroundNotification
+      let quit = UIApplication.willTerminateNotification
+    #else
+      let background = NSApplication.didResignActiveNotification
+      let quit = NSApplication.willTerminateNotification
+    #endif
+    lifecycleObservers.append(
+      center.addObserver(forName: background, object: nil, queue: .main) { [weak self] _ in
+        MainActor.assumeIsolated { self?.reportInBackground() }
+      })
+    lifecycleObservers.append(
+      center.addObserver(forName: quit, object: nil, queue: .main) { [weak self] _ in
+        MainActor.assumeIsolated { self?.reportOnQuit() }
+      })
+  }
+
+  private func reportInBackground() {
+    guard isActive else { return }
+    #if os(iOS)
+      // A little time to finish the request if iOS suspends Astra (no PiP, paused).
+      let task = UIApplication.shared.beginBackgroundTask(withName: "astra.timeline")
+      report(paused ? .paused : .playing) {
+        if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+      }
+    #else
+      report(paused ? .paused : .playing)
+    #endif
+  }
+
+  private func reportOnQuit() {
+    guard isActive, let server = playbackServer, let source else { return }
+    let report = TimelineReport(
+      ratingKey: source.ratingKey, key: source.metadataKey, state: .stopped, timeMs: Int(position * 1000),
+      durationMs: duration > 0 ? Int(duration * 1000) : source.durationMs)
+    pendingTimelines.record(report, server: server.serverName)
+    pendingTimelines.save()
+    // Up to a second for the request; whatever doesn't make it goes next launch.
+    let done = DispatchSemaphore(value: 0)
+    Task.detached {
+      try? await server.reportTimeline(report)
+      done.signal()
+    }
+    if done.wait(timeout: .now() + 1) == .success {
+      pendingTimelines.superseded(ratingKey: report.ratingKey, server: server.serverName)
+      pendingTimelines.save()
+    }
+  }
+
   private func startReporting() {
+    observeLifecycle()
     reporter?.cancel()
     reporter = Task { [weak self] in
       while !Task.isCancelled {
@@ -698,8 +767,12 @@ final class PlayerController {
     }
   }
 
-  private func report(_ state: TimelineReport.State) {
-    guard let server = playbackServer, let source else { return }
+  private func report(_ state: TimelineReport.State, completion: (@MainActor () -> Void)? = nil) {
+    guard let server = playbackServer, let source else {
+      completion?()
+      return
+    }
+    lastReportAt = Date()
     let report = TimelineReport(
       ratingKey: source.ratingKey, key: source.metadataKey, state: state, timeMs: Int(position * 1000),
       durationMs: duration > 0 ? Int(duration * 1000) : source.durationMs)
@@ -713,6 +786,7 @@ final class PlayerController {
         // sent once it answers, instead of being lost.
         if state == .stopped { self?.keepForLater(report, server: server) }
       }
+      completion?()
     }
   }
 
