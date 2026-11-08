@@ -239,11 +239,21 @@ struct ItemMenuItems: View {
       if !onDetails {
         Button { playItem(item) } label: { Label("Play", systemImage: "play.fill") }
       }
-      let watched = library.isWatched(item)
-      Button {
-        Task { await library.setWatched(item, watched: !watched) }
-      } label: {
-        Label(watched ? "Mark Unwatched" : "Mark Watched", systemImage: watched ? "eye.slash" : "checkmark.circle")
+      if onDetails {
+        // KP (2026-11-08): Details' ••• always offers both.
+        Button { Task { await library.setWatched(item, watched: true) } } label: {
+          Label("Mark as Watched", systemImage: "checkmark.circle")
+        }
+        Button { Task { await library.setWatched(item, watched: false) } } label: {
+          Label("Mark as Unwatched", systemImage: "eye.slash")
+        }
+      } else {
+        let watched = library.isWatched(item)
+        Button {
+          Task { await library.setWatched(item, watched: !watched) }
+        } label: {
+          Label(watched ? "Mark Unwatched" : "Mark Watched", systemImage: watched ? "eye.slash" : "checkmark.circle")
+        }
       }
       let isGroup = item.type == .show || item.type == .season
       let downloadState = isGroup ? app.downloads.state(forEpisodesOf: item) : app.downloads.state(for: item.ratingKey)

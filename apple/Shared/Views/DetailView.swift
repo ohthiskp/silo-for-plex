@@ -8,6 +8,8 @@ struct DetailView: View {
   @Binding var path: [Route]
 
   @State private var item: PlexMetadata?
+  /// The show an episode or season belongs to, for the + Watchlist button.
+  @State private var parentShow: PlexMetadata?
   @State private var seasons: [PlexMetadata] = []
   @State private var selectedSeason: PlexMetadata?
   @State private var episodes: [PlexMetadata] = []
@@ -105,6 +107,18 @@ struct DetailView: View {
       }
     #endif
     .task(id: seed.ratingKey) { await load() }
+    .task(id: shown.ratingKey) {
+      let key = shown.type == .episode ? shown.grandparentRatingKey : shown.type == .season ? shown.parentRatingKey : nil
+      guard let key, parentShow?.ratingKey != key else { return }
+      parentShow = try? await library.details(key)
+    }
+  }
+
+  /// What + Watchlist adds: the title itself, or an episode's or season's show.
+  private var watchlistTarget: PlexMetadata? {
+    if shown.tmdbKey != nil, shown.type == .movie || shown.type == .show { return shown }
+    if shown.type == .episode || shown.type == .season, let show = parentShow, show.tmdbKey != nil { return show }
+    return nil
   }
 
   /// The ••• menu: Mark Watched / Unwatched, Download, Go to Season / Show,
@@ -164,27 +178,11 @@ struct DetailView: View {
           DownloadButton(item: shown, round: true)
         }
 
-        // KP (2026-11-08): the round + Watchlist button next to Download, as on the hero.
-        if shown.tmdbKey != nil, shown.type == .movie || shown.type == .show {
-          WatchlistButton(item: shown, size: 46, variant: .clear)
-        }
-
-        if !shown.isCatalogOnly {
-          Button {
-            let watched = library.isWatched(shown)
-            Task { @MainActor in
-              await library.setWatched(shown, watched: !watched)
-              await load(refresh: true)
-            }
-          } label: {
-            let watched = library.isWatched(shown)
-            Label(watched ? "Watched" : "Mark Watched", systemImage: watched ? "checkmark" : "eye")
-              .labelStyle(WatchedLabelStyle(iconOnly: true))
-              .contentTransition(.symbolEffect(.replace))
-          }
-          .accessibilityLabel(library.isWatched(shown) ? "Watched" : "Mark Watched")
-          .help(library.isWatched(shown) ? "Watched" : "Mark Watched")
-          .modifier(ActionButtonShape(round: true))
+        // KP (2026-11-08): the round + Watchlist button next to Download, as on
+        // the hero, and no Watched button here (Mark Watched / Unwatched are in
+        // the ••• menu). On an episode or season the + adds its show.
+        if let target = watchlistTarget {
+          WatchlistButton(item: target, size: 46, variant: .clear)
         }
       }
       .frame(maxWidth: narrow ? .infinity : 560)
