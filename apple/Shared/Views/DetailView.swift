@@ -65,7 +65,8 @@ struct DetailView: View {
         }
         .padding(.bottom, bottomRoom)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Astra.Color.bg)
+        // iPhone: no flat black under the rows; the frosted artwork shows through (KP, 2026-11-09).
+        .background(narrow ? Color.clear : Astra.Color.bg)
       }
     }
     .scrollIndicators(.never)
@@ -77,7 +78,7 @@ struct DetailView: View {
     }
     // The backdrop runs under the title bar; the back button below stays inside the safe area.
     .ignoresSafeArea(edges: .top)
-    .background(Astra.Color.bg.ignoresSafeArea())
+    .background { pageBackground }
     #if os(macOS)
       .overlay(alignment: .topTrailing) {
         HStack(spacing: 10) {
@@ -155,6 +156,20 @@ struct DetailView: View {
   }
 
   // MARK: Per device
+
+  /// Behind the whole page: a frosted blur of the title's artwork on iPhone
+  /// (KP, 2026-11-09: "liquid frosted glass rather than just completely black"), plain dark elsewhere.
+  @ViewBuilder private var pageBackground: some View {
+    #if os(iOS)
+      if narrow {
+        PhoneFrostedBackground(library: library, item: shown)
+      } else {
+        Astra.Color.bg.ignoresSafeArea()
+      }
+    #else
+      Astra.Color.bg.ignoresSafeArea()
+    #endif
+  }
 
   private var sectionSpacing: CGFloat {
     #if os(iOS)
@@ -729,9 +744,9 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static var tabBarFloor: some View {
       LinearGradient(
         stops: [
-          .init(color: Astra.Color.bg.opacity(0), location: 0),
-          .init(color: Astra.Color.bg.opacity(0.85), location: 0.5),
-          .init(color: Astra.Color.bg, location: 1),
+          .init(color: .black.opacity(0), location: 0),
+          .init(color: .black.opacity(0.5), location: 0.5),
+          .init(color: .black.opacity(0.72), location: 1),
         ], startPoint: .top, endPoint: .bottom
       )
       .frame(height: 120)
@@ -822,14 +837,13 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
           )
           .frame(width: width, height: width * PhoneDetail.backdropShare)
           .clipped()
-          .overlay(Astra.Color.bg.opacity(min(0.6, max(0, scrolled) / 600)))
-          PhoneDetail.backdropFade
-          // The strip above the artwork fades from the page colour into it.
-          LinearGradient(colors: [Astra.Color.bg, Astra.Color.bg.opacity(0)], startPoint: .top, endPoint: .bottom)
-            .frame(height: 60)
-            .frame(maxHeight: .infinity, alignment: .top)
+          PhoneDetail.backdropShade
         }
         .frame(width: width, height: width * PhoneDetail.backdropShare)
+        // Both edges melt into the frosted blur behind the page instead of into black,
+        // and the sharp art dissolves into it as the page scrolls (KP, 2026-11-09).
+        .mask(PhoneDetail.backdropMask)
+        .opacity(max(0, 1 - max(0, scrolled) / 420))
         .padding(.top, PhoneDetail.backdropTop)
         // Held in place while the page rises over it (KP, 2026-11-07).
         .offset(y: max(0, scrolled))
@@ -889,20 +903,61 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
   }
 
   extension PhoneDetail {
-    /// The artwork fades into the page under the logo, darker at the very top for the status bar.
-    static var backdropFade: some View {
-      ZStack {
-        LinearGradient(
-          stops: [
-            .init(color: Astra.Color.bg.opacity(0), location: 0.3),
-            .init(color: Astra.Color.bg.opacity(0.55), location: 0.62),
-            .init(color: Astra.Color.bg.opacity(0.9), location: 0.84),
-            .init(color: Astra.Color.bg, location: 1),
-          ], startPoint: .top, endPoint: .bottom)
-        LinearGradient(
-          colors: [.black.opacity(0.35), .black.opacity(0)], startPoint: .top, endPoint: .init(x: 0.5, y: 0.18))
-      }
+    /// Where the sharp artwork shows: soft at the top edge, fading out under the
+    /// logo and buttons so the frosted blur takes over without a seam.
+    static var backdropMask: some View {
+      LinearGradient(
+        stops: [
+          .init(color: .black.opacity(0), location: 0),
+          .init(color: .black, location: 0.14),
+          .init(color: .black, location: 0.45),
+          .init(color: .black.opacity(0.55), location: 0.7),
+          .init(color: .black.opacity(0), location: 1),
+        ], startPoint: .top, endPoint: .bottom)
+    }
+
+    /// A light shade on the lower artwork so the logo and meta line stay readable.
+    static var backdropShade: some View {
+      LinearGradient(
+        stops: [
+          .init(color: .black.opacity(0), location: 0.35),
+          .init(color: .black.opacity(0.35), location: 1),
+        ], startPoint: .top, endPoint: .bottom
+      )
       .allowsHitTesting(false)
+    }
+  }
+
+  /// The page behind iPhone Details: the title's artwork, heavily blurred and
+  /// dimmed like frosted glass, held still while the page scrolls over it.
+  struct PhoneFrostedBackground: View {
+    var library: LibraryStore
+    var item: PlexMetadata
+
+    var body: some View {
+      GeometryReader { geo in
+        ZStack {
+          Astra.Color.bg
+          // A small image is enough under this much blur, and cheaper to draw.
+          ArtworkImage(library: library, item: item, kind: .heroBackdrop, width: 480, height: 270, placeholder: Color.clear)
+            .frame(width: geo.size.width * 1.4, height: geo.size.height * 1.1)
+            .clipped()
+            .blur(radius: 60, opaque: true)
+            .saturation(1.25)
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+          // Darker toward the bottom so the synopsis and rows read easily.
+          LinearGradient(
+            stops: [
+              .init(color: .black.opacity(0.3), location: 0),
+              .init(color: .black.opacity(0.5), location: 0.45),
+              .init(color: .black.opacity(0.62), location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+        }
+      }
+      .ignoresSafeArea()
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
     }
   }
 
