@@ -14,6 +14,8 @@ struct HomeView: View {
   @State private var showsTopBar = true
   /// The hero title on screen; the frosted page background follows it.
   @State private var heroItem: PlexMetadata?
+  /// Only moved by the CI demo (`-AstraDemoScroll`), to screenshot the rows below the hero.
+  @State private var scrollPosition = ScrollPosition(edge: .top)
 
   private var heroHeight: CGFloat {
     min(Astra.Layout.heroHeight, max(380, viewport * Astra.Layout.heroShare))
@@ -127,6 +129,11 @@ struct HomeView: View {
       .onGeometryChange(for: Bool.self, of: { $0.frame(in: .scrollView).minY > -60 }) { showsTopBar = $0 }
     }
     .scrollIndicators(.never)
+    .scrollPosition($scrollPosition)
+    .task {
+      guard let y = Demo.homeScroll, (try? await Task.pause(12)) != nil else { return }
+      scrollPosition.scrollTo(y: y)
+    }
     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewport = $0 }
     .overlay {
       if library.isLoadingHome || (library.isLoadingService && !library.homeHasSections) {
@@ -158,27 +165,40 @@ struct HomeView: View {
   }
 
   private var topBar: some View {
-    HStack(spacing: Astra.Spacing.s) {
-      if library.tmdb != nil {
-        ServicePill(library: library)
-      } else {
-        Spacer()
-      }
-      // Astra: on iPhone Settings moved to the Libraries tab, and the top right
-      // holds the Plex Watchlist (KP, 2026-11-07).
-      #if os(iOS)
-        Button {
-          showWatchlist = true
-        } label: {
-          Image(systemName: "bookmark")
+    #if os(iOS)
+      // KP's mockup (2026-11-09): the top left stays clear (no logo), the
+      // Plex Watchlist is a round glass button top right, and the streaming
+      // tabs run full width on the line below.
+      VStack(alignment: .leading, spacing: Astra.Spacing.s) {
+        HStack {
+          Spacer()
+          Button {
+            showWatchlist = true
+          } label: {
+            Image(systemName: "bookmark")
+          }
+          .astraIconButton(size: 40, variant: .clear)
+          .accessibilityLabel("Watchlist")
         }
-        .astraIconButton(size: 40, variant: .clear)
-        .accessibilityLabel("Watchlist")
-      #endif
-    }
-    .padding(.top, Astra.Spacing.s)
-    .padding(.leading, leading)
-    .padding(.trailing, Astra.Spacing.pageTrailing)
+        .padding(.trailing, Astra.Spacing.pageTrailing)
+        if library.tmdb != nil {
+          ServicePill(library: library)
+        }
+      }
+      .padding(.top, Astra.Spacing.s)
+      .padding(.leading, leading)
+    #else
+      HStack(spacing: Astra.Spacing.s) {
+        if library.tmdb != nil {
+          ServicePill(library: library)
+        } else {
+          Spacer()
+        }
+      }
+      .padding(.top, Astra.Spacing.s)
+      .padding(.leading, leading)
+      .padding(.trailing, Astra.Spacing.pageTrailing)
+    #endif
   }
 }
 
@@ -217,11 +237,10 @@ struct ServicePill: View {
         .padding(.trailing, 16)
       }
       .scrollIndicators(.never)
-      // Astra: the rail ends (fading out) before the Watchlist button instead
-      // of sliding underneath it.
+      // Astra: the rail fades out at the screen's right edge.
       .mask {
         LinearGradient(
-          stops: [.init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+          stops: [.init(color: .black, location: 0.92), .init(color: .clear, location: 1)],
           startPoint: .leading, endPoint: .trailing)
       }
       .astraAnimation(.snappy(duration: 0.22), value: library.selectedService)
@@ -245,12 +264,19 @@ struct ServicePill: View {
       return Button {
         library.select(service)
       } label: {
+        // KP's mockup (2026-11-09): the chosen tab sits in a glass capsule
+        // with a thin line of its brand colour; the others are bare.
         content()
           .padding(.horizontal, 16)
-          .frame(height: 38)
-          .background { if selected { Capsule().fill(brand.opacity(0.18)) } }
-          .overlay { if selected { Capsule().strokeBorder(brand, lineWidth: 1.5) } }
-          .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+          .frame(height: 36)
+          .opacity(selected ? 1 : 0.72)
+          .background {
+            if selected {
+              Capsule().fill(Astra.Color.ink.opacity(0.14))
+                .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+                .overlay(Capsule().strokeBorder(brand.opacity(0.55), lineWidth: 1))
+            }
+          }
           .contentShape(Capsule())
       }
       .buttonStyle(.plain)
@@ -455,7 +481,7 @@ struct TopTenCard: View {
     Button {
       openItem(item)
     } label: {
-      HStack(alignment: .bottom, spacing: -width * 0.22) {
+      HStack(alignment: .bottom, spacing: -width * 0.26) {
         RankNumber(rank: rank, size: height * 0.86)
         ArtworkImage(library: library, item: item, kind: .poster, width: width, height: height)
           .frame(width: width, height: height)
@@ -473,36 +499,30 @@ struct TopTenCard: View {
   }
 }
 
-/// The big Top 10 rank: solid white with a light outline (the page colour in
-/// the Light theme), sitting on the poster's baseline.
+/// The big Top 10 rank (KP's mockup, 2026-11-09): a solid, condensed
+/// number in a soft grey gradient, standing behind the poster on its
+/// baseline. Uses the page's ink, so it reads in every theme.
 struct RankNumber: View {
   var rank: Int
   var size: CGFloat = 150
 
   var body: some View {
-    let digits = Text("\(rank)")
-      .font(.system(size: size, weight: .black, design: .rounded))
+    Text("\(rank)")
+      .font(.system(size: size, weight: .heavy))
+      .fontWidth(.condensed)
       .monospacedDigit()
-      .tracking(rank >= 10 ? -size * 0.12 : 0)
-    let line = max(1.5, size / 70)
-    ZStack {
-      // An outline from eight offset copies (SwiftUI has no text stroke).
-      ForEach(0..<8, id: \.self) { step in
-        let angle = Double(step) * .pi / 4
-        digits
-          .foregroundStyle(Astra.Color.ink.opacity(0.85))
-          .offset(x: cos(angle) * line, y: sin(angle) * line)
-      }
-      // KP (2026-11-09): solid white numbers in every theme but Light,
-      // where white would vanish into the page.
-      digits.foregroundStyle(AstraAppearance.shared.appTheme == .light ? Astra.Color.bg : .white)
-    }
-    .lineLimit(1)
-    .fixedSize()
-    // The glyphs carry space under the baseline; pull the number down so its
-    // foot lines up with the poster's bottom edge.
-    .padding(.bottom, -size * 0.14)
-    .accessibilityHidden(true)
+      .tracking(rank >= 10 ? -size * 0.08 : 0)
+      .foregroundStyle(
+        LinearGradient(
+          colors: [Astra.Color.ink.opacity(0.42), Astra.Color.ink.opacity(0.12)],
+          startPoint: .top, endPoint: .bottom)
+      )
+      .lineLimit(1)
+      .fixedSize()
+      // The glyphs carry space under the baseline; pull the number down so its
+      // foot lines up with the poster's bottom edge.
+      .padding(.bottom, -size * 0.14)
+      .accessibilityHidden(true)
   }
 }
 
@@ -515,10 +535,13 @@ struct HeroInfo: View {
 
   #if os(macOS)
     static let titleBox: CGFloat = 130
+    static let logoWidth: CGFloat = 400
   #elseif os(tvOS)
     static let titleBox: CGFloat = 180
+    static let logoWidth: CGFloat = 680
   #else
-    static let titleBox: CGFloat = 96
+    static let titleBox: CGFloat = 104
+    static let logoWidth: CGFloat = 300
   #endif
   @Environment(\.openItem) private var openItem
   @Environment(\.playItem) private var playItem
@@ -554,7 +577,8 @@ struct HeroInfo: View {
       Button {
         openItem(item)
       } label: {
-        HeroTitle(library: library, item: item, maxHeight: Self.titleBox)
+        // A wide logo across most of the block, centred over it (KP's mockup).
+        HeroTitle(library: library, item: item, maxWidth: Self.logoWidth, maxHeight: Self.titleBox, alignment: .bottom)
           .frame(maxWidth: .infinity)
           .frame(height: Self.titleBox, alignment: .bottom)
           .contentShape(Rectangle())
@@ -646,25 +670,28 @@ struct HeroTitle: View {
   var item: PlexMetadata
   var maxWidth: CGFloat = 440
   var maxHeight: CGFloat = 140
+  /// The hero centres its logo over the text (KP's mockup, 2026-11-09).
+  var alignment: Alignment = .bottomLeading
 
   @State private var logo: URL?
   @State private var resolved = false
 
   var body: some View {
-    ZStack(alignment: .bottomLeading) {
+    ZStack(alignment: alignment) {
       if let logo {
         RemoteImage(url: logo, contentMode: .fit, placeholder: Color.clear)
-          .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: .bottomLeading)
+          .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
           .shadow(color: .black.opacity(0.5), radius: 14, y: 4)
       } else if resolved {
         Text(item.displayTitle)
           .astraDisplay(Astra.Layout.titleSize, tracking: 10)
           .lineLimit(2)
           .minimumScaleFactor(0.5)
-          .frame(maxWidth: 640, maxHeight: maxHeight, alignment: .bottomLeading)
+          .multilineTextAlignment(alignment == .bottom ? .center : .leading)
+          .frame(maxWidth: 640, maxHeight: maxHeight, alignment: alignment)
       }
     }
-    .frame(minHeight: 44, alignment: .bottomLeading)
+    .frame(minHeight: 44, alignment: alignment)
     .task(id: item.id) {
       logo = await library.artworkURL(for: item, .logo, width: maxWidth, height: maxHeight)
       resolved = true
@@ -842,7 +869,9 @@ struct WatchlistButton: View {
       // artwork, blurred), so there is no edge between hero and rows.
       .mask {
         LinearGradient(
-          stops: [.init(color: .black, location: 0.55), .init(color: .clear, location: 1)],
+          // KP's mockup (2026-11-09): the artwork stays bright behind the
+          // logo and buttons and only fades at the very bottom.
+          stops: [.init(color: .black, location: 0.8), .init(color: .clear, location: 1)],
           startPoint: .top, endPoint: .bottom)
       }
       .clipped()

@@ -96,6 +96,7 @@ jobs:
             xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shots/$name.png" || true
           }
           shot home
+          shot home-rows -AstraDemoScroll 640
           shot search -AstraDemoTab search
           shot search-dune -AstraDemoTab search -AstraDemoQuery dune
           shot libraries -AstraDemoTab libraries
