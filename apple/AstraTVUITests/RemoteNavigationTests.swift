@@ -148,10 +148,10 @@ final class RemoteNavigationTests: XCTestCase {
     sleep(1)
     shot("sidebar-open")
     XCTAssertGreaterThan(netflix.frame.width, collapsed + 40, "Moving left didn't open the sidebar")
-    press(.down)
+    // Choose the service focus landed on, then move back right onto the page.
     press(.select)
-    sleep(3)
-    press(.right, times: 2)
+    sleep(4)
+    press(.right)
     sleep(1)
     shot("sidebar-after-choosing")
     XCTAssertLessThan(netflix.frame.width, collapsed + 20, "The sidebar stayed open after leaving it")
