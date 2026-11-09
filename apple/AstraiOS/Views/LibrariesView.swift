@@ -109,8 +109,9 @@ struct LibraryBrowser: View {
   @State private var sectionKey: String?
   @State private var genre: PlexFilterValue?
   @State private var genres: [PlexFilterValue] = []
-  @State private var only4K = false
-  @State private var onlyHDR = false
+  /// KP (2026-11-09): the 4K and HDR filters made way for a search of this
+  /// library, answered at once from the index on the device.
+  @State private var searchText = ""
   @State private var unwatched = false
   @State private var showSort = false
   @State private var items: [PlexMetadata] = []
@@ -128,8 +129,6 @@ struct LibraryBrowser: View {
     var query: [URLQueryItem] = []
     if let genre { query.append(.init(name: "genre", value: genre.key)) }
     if unwatched { query.append(.init(name: "unwatched", value: "1")) }
-    if isMovies, only4K { query.append(.init(name: "resolution", value: "4k")) }
-    if isMovies, onlyHDR { query.append(.init(name: "hdr", value: "1")) }
     return query
   }
 
@@ -138,7 +137,52 @@ struct LibraryBrowser: View {
     "\(section?.key ?? "")|\(sort.rawValue)|\(filters.map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&"))"
   }
 
+  private var searching: Bool { !searchText.trimmingCharacters(in: .whitespaces).isEmpty }
+
+  /// This library's titles matching the search, from the index (no network).
+  private var matches: [PlexMetadata] {
+    _ = library.indexRevision
+    let sectionID = sections.count > 1 ? section.flatMap { Int($0.key) } : nil
+    return library.shown(
+      library.localSearch(searchText.trimmingCharacters(in: .whitespaces), limit: 300).filter {
+        $0.type.rawValue == kind && (sectionID == nil || $0.librarySectionID == sectionID)
+      }, swap: false)
+  }
+
   var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      LibrarySearchField(text: $searchText, prompt: "Search \(noun)")
+      if searching {
+        searchResults
+      } else {
+        browser
+      }
+    }
+  }
+
+  @ViewBuilder private var searchResults: some View {
+    let found = matches
+    if found.isEmpty {
+      EmptyState(
+        symbol: "magnifyingglass", title: library.indexReady ? "No matches" : "Still reading your library",
+        message: library.indexReady ? "Nothing in \(noun) matches “\(searchText)”." : "Try again in a moment.")
+    } else {
+      Text("\(found.count.formatted()) \(found.count == 1 ? String(noun.dropLast()) : noun)")
+        .astraFont(size: 15, weight: .medium)
+        .foregroundStyle(Astra.Color.muted)
+      if grid {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 12) {
+          ForEach(found) { GridPoster(library: library, item: $0) }
+        }
+      } else {
+        LazyVStack(spacing: 10) {
+          ForEach(found) { ListRow(library: library, item: $0) }
+        }
+      }
+    }
+  }
+
+  @ViewBuilder private var browser: some View {
     VStack(alignment: .leading, spacing: 14) {
       chips
       HStack {
@@ -214,10 +258,6 @@ struct LibraryBrowser: View {
             Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))
           }
           .chip(selected: genre != nil)
-        }
-        if isMovies {
-          Button { only4K.toggle() } label: { Text("4K").chip(selected: only4K) }.buttonStyle(.plain)
-          Button { onlyHDR.toggle() } label: { Text("HDR").chip(selected: onlyHDR) }.buttonStyle(.plain)
         }
         Button { unwatched.toggle() } label: { Text("Unwatched").chip(selected: unwatched) }.buttonStyle(.plain)
         Button {

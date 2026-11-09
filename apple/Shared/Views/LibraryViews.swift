@@ -101,16 +101,29 @@ struct LibraryGridContent: View {
   @State private var loaded = 0
   @State private var loading = false
   @AppStorage("astra.libraries.macSort") private var sort = "addedAt:desc"
+  /// KP (2026-11-09): search this library, answered at once from the index.
+  @State private var searchText = ""
 
   private var sections: [PlexLibrarySection] { library.sections.filter { $0.type == kind } }
   private var section: PlexLibrarySection? {
     sections.first { $0.key == sectionKey } ?? sections.first
   }
   private var noun: String { kind == "show" ? "Shows" : "Movies" }
+  private var searching: Bool { !searchText.trimmingCharacters(in: .whitespaces).isEmpty }
+
+  private var matches: [PlexMetadata] {
+    _ = library.indexRevision
+    let sectionID = sections.count > 1 ? section.flatMap { Int($0.key) } : nil
+    return library.shown(
+      library.localSearch(searchText.trimmingCharacters(in: .whitespaces), limit: 300).filter {
+        $0.type.rawValue == kind && (sectionID == nil || $0.librarySectionID == sectionID)
+      }, swap: false)
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Astra.Spacing.l) {
       HStack(spacing: Astra.Spacing.s) {
+        LibrarySearchField(text: $searchText, prompt: "Search \(noun)")
         if sections.count > 1 {
           Picker("Library", selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 })) {
             ForEach(sections) { Text($0.title).tag($0.key) }
@@ -132,6 +145,17 @@ struct LibraryGridContent: View {
         EmptyState(
           symbol: kind == "show" ? "tv" : "film", title: "No \(noun.lowercased()) library",
           message: "This Plex server has no \(noun.lowercased()) library.")
+      } else if searching {
+        let found = matches
+        if found.isEmpty {
+          EmptyState(
+            symbol: "magnifyingglass", title: library.indexReady ? "No matches" : "Still reading your library",
+            message: library.indexReady ? "Nothing in \(noun) matches “\(searchText)”." : "Try again in a moment.")
+        } else {
+          LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
+            ForEach(found) { PosterCard(library: library, item: $0) }
+          }
+        }
       } else if items.isEmpty && reachedEnd {
         EmptyState(symbol: "square.stack", title: "Nothing here yet", message: "This library is empty.")
       } else {
@@ -189,6 +213,11 @@ struct SearchView: View {
   @State private var person: TMDBPerson?
   @State private var credits: [PlexMetadata] = []
   @State private var creditsLoaded = false
+  /// KP (2026-11-09): 4K, HD, Dolby Atmos, Dolby Vision and Bollywood chips.
+  @State private var filters: Set<SearchFilter> = []
+  @State private var languages: [String: String] = [:]
+  @State private var fullCopies: [String: PlexMetadata] = [:]
+  @State private var verifying = false
   @AppStorage("astra.search.recent") private var recentStore = ""
   @FocusState private var focused: Bool
   @Namespace private var scopePill
@@ -197,12 +226,22 @@ struct SearchView: View {
   private var typed: Bool { query.trimmingCharacters(in: .whitespaces).count >= 2 }
 
   private var shownResults: [PlexMetadata] {
-    switch scope {
-    case .all: results
-    case .movies: results.filter { $0.type == .movie }
-    case .shows: results.filter { $0.type == .show || $0.type == .season || $0.type == .episode }
-    case .people: []
+    let scoped: [PlexMetadata] =
+      switch scope {
+      case .all: results
+      case .movies: results.filter { $0.type == .movie }
+      case .shows: results.filter { $0.type == .show || $0.type == .season || $0.type == .episode }
+      case .people: []
+      }
+    guard !filters.isEmpty else { return scoped }
+    return scoped.filter { item in
+      SearchFilter.matches(
+        fullCopies[item.ratingKey] ?? item, language: item.tmdbKey.flatMap { languages[$0] }, all: filters) == true
     }
+  }
+
+  private var verifyKey: String {
+    "\(filters.map(\.rawValue).sorted())|\(results.map(\.ratingKey).joined(separator: ","))"
   }
 
   private var shownPeople: [TMDBPerson] { scope == .all || scope == .people ? people : [] }
@@ -244,6 +283,7 @@ struct SearchView: View {
       #endif
 
       scopes
+      filterChips
 
       if let person {
         personPage(person)
@@ -258,6 +298,7 @@ struct SearchView: View {
       person = nil
       await runSearch()
     }
+    .task(id: verifyKey) { await readTracks() }
     .task(id: person?.id) {
       credits = []
       creditsLoaded = false
@@ -292,6 +333,32 @@ struct SearchView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(scope == item ? .isSelected : [])
+      }
+    }
+    .tvFocusSection()
+  }
+
+  private var filterChips: some View {
+    HStack(spacing: 8) {
+      ForEach(SearchFilter.allCases) { filter in
+        let on = filters.contains(filter)
+        Button {
+          astraWithAnimation(Astra.Motion.fast) {
+            if on { filters.remove(filter) } else { filters.insert(filter) }
+          }
+        } label: {
+          Text(filter.title)
+            .astraFont(size: 13, weight: .semibold)
+            .foregroundStyle(on ? Color.black : Astra.Color.ink)
+            .padding(.horizontal, 16 * Astra.Layout.controlScale)
+            .frame(height: 30 * Astra.Layout.controlScale)
+            .background { if on { Capsule().fill(.white) } }
+            .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+            .contentShape(Capsule())
+            .tvFocusLift()
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
       }
     }
     .tvFocusSection()
@@ -346,13 +413,17 @@ struct SearchView: View {
   @ViewBuilder private var resultsSection: some View {
     let titles = shownResults
     let found = shownPeople
-    let done = searched && peopleSearched
+    let done = searched && peopleSearched && !verifying
     if !done && titles.isEmpty && found.isEmpty {
       ProgressView().astraControlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 40)
     } else if titles.isEmpty && found.isEmpty {
       EmptyState(
         symbol: "magnifyingglass", title: "No results",
-        message: scope == .people ? "No one matches “\(query)”." : "Nothing matches “\(query)”.")
+        message: scope == .people
+          ? "No one matches “\(query)”."
+          : filters.isEmpty
+            ? "Nothing matches “\(query)”."
+            : "Nothing on your server matches “\(query)” with these filters.")
     } else {
       if !found.isEmpty {
         if scope == .all { sectionTitle("People") }
@@ -430,6 +501,7 @@ struct SearchView: View {
       return
     }
     if let hit = SearchCache.shared[text] {
+      remember(languagesOf: hit.items)
       results = library.withServerNow(hit.items)
       people = hit.people
       searched = true
@@ -449,11 +521,40 @@ struct SearchView: View {
     guard !Task.isCancelled else { return }
     let shownPeople = Array((found?.people ?? []).filter { $0.profilePath != nil }.prefix(12))
     if let found { SearchCache.shared[text] = (found.items, shownPeople) }
+    remember(languagesOf: found?.items ?? [])
     astraWithAnimation(Astra.Motion.base) {
       results = library.withServerNow(found?.items ?? [])
       people = shownPeople
       searched = true
       peopleSearched = true
+    }
+  }
+
+  private func remember(languagesOf items: [TMDBItem]) {
+    for item in items { if let language = item.language { languages[item.id] = language } }
+  }
+
+  /// Atmos and Dolby Vision are in a title's tracks, which only its full
+  /// details have: read them for the server's results (cached, four at a time).
+  private func readTracks() async {
+    guard filters.contains(where: \.needsStreams) else { return }
+    let pending = results.filter { item in
+      !item.isCatalogOnly && fullCopies[item.ratingKey] == nil
+        && SearchFilter.matches(item, language: item.tmdbKey.flatMap { languages[$0] }, all: filters) == nil
+    }
+    guard !pending.isEmpty else { return }
+    verifying = true
+    defer { verifying = false }
+    for start in stride(from: 0, to: pending.count, by: 4) {
+      let batch = pending[start..<min(pending.count, start + 4)]
+      let found = await withTaskGroup(of: PlexMetadata?.self) { group in
+        for item in batch { group.addTask { try? await library.details(item.ratingKey) } }
+        var out: [PlexMetadata] = []
+        for await item in group { if let item { out.append(item) } }
+        return out
+      }
+      guard !Task.isCancelled else { return }
+      for item in found { fullCopies[item.ratingKey] = item }
     }
   }
 

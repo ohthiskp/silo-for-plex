@@ -26,6 +26,13 @@ struct PhoneSearchView: View {
   @State private var searched = false
   @State private var peopleSearched = false
   @State private var person: TMDBPerson?
+  /// KP (2026-11-09): 4K, HD, Dolby Atmos, Dolby Vision and Bollywood chips.
+  @State private var filters: Set<SearchFilter> = []
+  /// TMDB's original language of each result ("movie:603" → "en"), for Bollywood.
+  @State private var languages: [String: String] = [:]
+  /// Full server copies (with audio and video tracks) for Atmos and Dolby Vision.
+  @State private var fullCopies: [String: PlexMetadata] = [:]
+  @State private var verifying = false
   @FocusState private var focused: Bool
   @Namespace private var scopePill
 
@@ -39,8 +46,15 @@ struct PhoneSearchView: View {
       case .people: return false
       case .all: break
       }
-      return true
+      guard !filters.isEmpty else { return true }
+      let copy = fullCopies[item.ratingKey] ?? item
+      return SearchFilter.matches(copy, language: item.tmdbKey.flatMap { languages[$0] }, all: filters) == true
     }
+  }
+
+  /// What the Atmos / Dolby Vision check depends on.
+  private var verifyKey: String {
+    "\(filters.map(\.rawValue).sorted())|\(results.map(\.ratingKey).joined(separator: ","))"
   }
 
   private var shownPeople: [TMDBPerson] { scope == .all || scope == .people ? people : [] }
@@ -53,6 +67,7 @@ struct PhoneSearchView: View {
           .foregroundStyle(Astra.Color.ink)
         field
         scopes
+        filterChips
         if query.trimmingCharacters(in: .whitespaces).count < 2 {
           idle
         } else {
@@ -68,6 +83,7 @@ struct PhoneSearchView: View {
     .astraPageBackground()
     .navigationDestination(item: $person) { PersonView(library: library, person: $0) }
     .task(id: query) { await runSearch() }
+    .task(id: verifyKey) { await readTracks() }
   }
 
   // MARK: Header
@@ -119,6 +135,27 @@ struct PhoneSearchView: View {
         .accessibilityAddTraits(scope == item ? .isSelected : [])
       }
     }
+  }
+
+  private var filterChips: some View {
+    ScrollView(.horizontal) {
+      HStack(spacing: 8) {
+        ForEach(SearchFilter.allCases) { filter in
+          let on = filters.contains(filter)
+          Button {
+            astraWithAnimation(Astra.Motion.fast) {
+              if on { filters.remove(filter) } else { filters.insert(filter) }
+            }
+          } label: {
+            Text(filter.title).searchChip(selected: on)
+          }
+          .buttonStyle(.plain)
+          .accessibilityAddTraits(on ? .isSelected : [])
+        }
+      }
+      .padding(.vertical, 2)
+    }
+    .scrollIndicators(.never)
   }
 
   // MARK: Nothing typed
@@ -175,13 +212,17 @@ struct PhoneSearchView: View {
   @ViewBuilder private var resultsList: some View {
     let titles = shownResults
     let people = shownPeople
-    let done = searched && peopleSearched
+    let done = searched && peopleSearched && !verifying
     if !done && titles.isEmpty && people.isEmpty {
       ProgressView().controlSize(.large).frame(maxWidth: .infinity).padding(.vertical, 40)
     } else if titles.isEmpty && people.isEmpty {
       EmptyState(
         symbol: "magnifyingglass", title: "No results",
-        message: scope == .people ? "No one matches “\(query)”." : "Nothing matches “\(query)”.")
+        message: scope == .people
+          ? "No one matches “\(query)”."
+          : filters.isEmpty
+            ? "Nothing matches “\(query)”."
+            : "Nothing on your server matches “\(query)” with \(filterNames).")
     } else {
       Text("Results (\(titles.count + people.count))")
         .astraFont(size: 15, weight: .semibold)
@@ -232,6 +273,7 @@ struct PhoneSearchView: View {
       return
     }
     if let hit = SearchCache.shared[text] {
+      remember(languagesOf: hit.items)
       results = library.withServerNow(hit.items)
       people = hit.people
       searched = true
@@ -251,11 +293,44 @@ struct PhoneSearchView: View {
     guard !Task.isCancelled else { return }
     let shownPeople = Array((found?.people ?? []).filter { $0.profilePath != nil }.prefix(12))
     if let found { SearchCache.shared[text] = (found.items, shownPeople) }
+    remember(languagesOf: found?.items ?? [])
     astraWithAnimation(Astra.Motion.base) {
       results = library.withServerNow(found?.items ?? [])
       people = shownPeople
       searched = true
       peopleSearched = true
+    }
+  }
+
+  private func remember(languagesOf items: [TMDBItem]) {
+    for item in items { if let language = item.language { languages[item.id] = language } }
+  }
+
+  private var filterNames: String {
+    SearchFilter.allCases.filter(filters.contains).map(\.title).joined(separator: " + ")
+  }
+
+  /// Atmos and Dolby Vision are in a title's tracks, which only its full
+  /// details have: read them for the server's results (cached, four at a time).
+  private func readTracks() async {
+    guard filters.contains(where: \.needsStreams) else { return }
+    let pending = results.filter { item in
+      !item.isCatalogOnly && fullCopies[item.ratingKey] == nil
+        && SearchFilter.matches(item, language: item.tmdbKey.flatMap { languages[$0] }, all: filters) == nil
+    }
+    guard !pending.isEmpty else { return }
+    verifying = true
+    defer { verifying = false }
+    for start in stride(from: 0, to: pending.count, by: 4) {
+      let batch = pending[start..<min(pending.count, start + 4)]
+      let found = await withTaskGroup(of: PlexMetadata?.self) { group in
+        for item in batch { group.addTask { try? await library.details(item.ratingKey) } }
+        var out: [PlexMetadata] = []
+        for await item in group { if let item { out.append(item) } }
+        return out
+      }
+      guard !Task.isCancelled else { return }
+      for item in found { fullCopies[item.ratingKey] = item }
     }
   }
 
