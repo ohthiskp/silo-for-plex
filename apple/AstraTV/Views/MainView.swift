@@ -58,6 +58,9 @@ struct MainView: View {
   @State private var page: TVPage = Demo.tvPage
   @State private var path: [Route] = Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
   @FocusState private var barFocus: TVBarItem?
+  /// The bar can't take focus until the page has had it: launch focus goes to
+  /// the first card, not Search (Silo does the same).
+  @State private var barLocked = true
 
   var body: some View {
     ZStack(alignment: .top) {
@@ -77,6 +80,7 @@ struct MainView: View {
         TVTopBar(page: page, focus: $barFocus) { picked in
           if picked != page { page = picked }
         }
+        .disabled(barLocked)
         .transition(.opacity)
       }
     }
@@ -85,6 +89,10 @@ struct MainView: View {
     .environment(\.playItem) { app.play($0) }
     .onAppear {
       app.player.openDetails = { item in path.append(.details(item)) }
+    }
+    .task {
+      try? await Task.pause(0.8)
+      barLocked = false
     }
   }
 
@@ -104,9 +112,11 @@ struct MainView: View {
     case .search:
       SearchView(library: library)
         .padding(.top, TVMetrics.pageTopInset)
+        .background(Astra.Color.bg.ignoresSafeArea())
     case .settings:
       SettingsView(showsTitle: false)
         .padding(.top, TVMetrics.pageTopInset)
+        .background(Astra.Color.bg.ignoresSafeArea())
     }
   }
 

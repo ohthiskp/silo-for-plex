@@ -154,7 +154,8 @@ struct TVDetailPage: View {
       }
       .buttonStyle(TVPillButtonStyle(width: 340))
       .focused($playFocused)
-      .disabled(shown.isCatalogOnly || notOnServer || !app.canPlay(shown))
+      // A streaming-row title plays once the server copy is found; only "not on your server" greys it.
+      .disabled(notOnServer || !app.canPlay(shown))
 
       if let target = watchlistTarget {
         TVWatchlistCircle(item: target)

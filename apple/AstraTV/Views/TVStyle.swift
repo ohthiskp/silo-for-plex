@@ -24,7 +24,7 @@ enum TVMetrics {
 
   // Home marquee + row band
   static let landingOffset: CGFloat = 56
-  static let marqueeBottomInset: CGFloat = 540
+  static let marqueeBottomInset: CGFloat = 590
   static let marqueeContentWidth: CGFloat = 880
   static let marqueeTitleSize: CGFloat = 84
   static let marqueeMetaSize: CGFloat = 20
@@ -216,7 +216,7 @@ struct TVFormatChips: View {
       .renderingMode(.template)
       .resizable()
       .scaledToFit()
-      .frame(height: fontSize * 0.85)
+      .frame(height: fontSize * 1.1)
   }
 }
 
@@ -236,6 +236,7 @@ enum TVFacts {
 // MARK: - Logo or title
 
 /// The title's logo art, or its name in heavy type while there is none.
+/// The logo hugs the left edge at its own aspect ratio (Silo's title slot).
 struct TVLogoTitle: View {
   var library: LibraryStore
   var item: PlexMetadata
@@ -243,16 +244,20 @@ struct TVLogoTitle: View {
   var maxHeight: CGFloat
   var textSize: CGFloat
 
-  @State private var logo: URL?
+  @State private var logo: PlatformImage?
   @State private var resolved = false
 
   var body: some View {
     ZStack(alignment: .bottomLeading) {
       if let logo {
-        RemoteImage(url: logo, contentMode: .fit, placeholder: Color.clear)
+        Image(platformImage: logo)
+          .resizable()
+          .interpolation(.high)
+          .aspectRatio(contentMode: .fit)
           .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: .bottomLeading)
           .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
           .accessibilityLabel(item.displayTitle)
+          .transition(.opacity)
       } else if resolved {
         Text(item.displayTitle)
           .font(.system(size: textSize, weight: .heavy).leading(.tight))
@@ -263,11 +268,13 @@ struct TVLogoTitle: View {
           .frame(maxWidth: maxWidth, alignment: .leading)
       }
     }
-    .frame(height: maxHeight, alignment: .bottomLeading)
+    .frame(maxWidth: maxWidth, minHeight: maxHeight, maxHeight: maxHeight, alignment: .bottomLeading)
     .task(id: item.id) {
       logo = nil
       resolved = false
-      logo = await library.artworkURL(for: item, .logo, width: maxWidth, height: maxHeight)
+      if let url = await library.artworkURL(for: item, .logo, width: maxWidth, height: maxHeight) {
+        logo = await ImagePipeline.shared.image(for: url)
+      }
       resolved = true
     }
   }
