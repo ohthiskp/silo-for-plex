@@ -490,9 +490,12 @@ enum TVLayout {
   static let sectionSpacing: CGFloat = 56
   static let heroHeight: CGFloat = 900
   /// Home's page edge, clear of the collapsed streaming sidebar on the left.
-  static let homeLeading: CGFloat = 170
-  /// The streaming sidebar's width while it shows only logos.
-  static let sidebarCollapsed: CGFloat = 120
+  static let homeLeading: CGFloat = 150
+  /// The streaming sidebar's circles.
+  static let sidebarCircle: CGFloat = 76
+  /// The top bar, and the space a page leaves above its content for it.
+  static let barHeight: CGFloat = 90
+  static let barSpace: CGFloat = 130
   static let poster: CGFloat = 230
   static let continueCard = CGSize(width: 560, height: 315)
   static let episodeCard = CGSize(width: 480, height: 270)
@@ -505,4 +508,6 @@ extension EnvironmentValues {
   /// The page edge rows and titles line up on: `TVLayout.leading`, or
   /// `TVLayout.homeLeading` on Home beside the streaming sidebar.
   @Entry var tvLeading: CGFloat = TVLayout.leading
+  /// A page tells the top bar it has scrolled down (the bar fades) or back up.
+  @Entry var tvScrolledDown: (Bool) -> Void = { _ in }
 }

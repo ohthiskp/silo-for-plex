@@ -15,34 +15,33 @@ struct TVRootView: View {
   }
 }
 
-/// The Apple TV tabs: the iPhone's three (KP, 2026-11-09: "go based off how
-/// iOS is"). Settings is the gear on Library, as on the iPhone.
+/// The Apple TV pages in the top bar (KP, 2026-11-09, with a reference
+/// picture): the search icon, Home, Movies, Shows and Watchlist centred, and
+/// Settings as a round button at the far right where a profile icon sits.
+/// No logo at the top left.
 enum TVTab: String, CaseIterable, Identifiable {
-  case home, search, library
+  case search, home, movies, shows, watchlist, settings
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
-    case .home: "Home"
     case .search: "Search"
-    case .library: "Library"
+    case .home: "Home"
+    case .movies: "Movies"
+    case .shows: "Shows"
+    case .watchlist: "Watchlist"
+    case .settings: "Settings"
     }
   }
 
-  var symbol: String {
-    switch self {
-    case .home: "house.fill"
-    case .search: "magnifyingglass"
-    case .library: "square.stack.fill"
-    }
-  }
+  /// The centred text items; Search and Settings are icons.
+  static let centre: [TVTab] = [.home, .movies, .shows, .watchlist]
 }
 
-/// Signed in on Apple TV: the system tab bar along the top (Liquid Glass on
-/// tvOS 26) with Home, Search and Library, each its own navigation stack.
-/// Opening a title pushes its Details; Menu goes back, then up to the tab
-/// bar, then out of the app, all handled by tvOS itself.
+/// Signed in on Apple TV: the top bar over the page, each page its own
+/// navigation stack. Opening a title pushes its Details (the bar hides);
+/// Menu goes back, then up to the bar, then out of the app.
 struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
@@ -51,24 +50,45 @@ struct MainView: View {
   @State private var paths: [TVTab: [Route]] = [
     Demo.tvTab: Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
   ]
+  /// The page has scrolled down: the bar fades out of the way.
+  @State private var scrolledDown = false
+  @FocusState private var barFocus: TVTab?
+
+  private var atRoot: Bool { (paths[tab] ?? []).isEmpty }
+  private var barShown: Bool { atRoot && (!scrolledDown || barFocus != nil) }
 
   private func path(_ tab: TVTab) -> Binding<[Route]> {
     Binding(get: { paths[tab] ?? [] }, set: { paths[tab] = $0 })
   }
 
   var body: some View {
-    TabView(selection: $tab) {
+    ZStack(alignment: .top) {
+      // Every page stays alive (its scroll position and stack survive
+      // switching pages); only the chosen one shows and takes focus.
       ForEach(TVTab.allCases) { item in
-        Tab(item.title, systemImage: item.symbol, value: item) {
-          stack(item)
-        }
+        stack(item)
+          .opacity(item == tab ? 1 : 0)
+          .disabled(item != tab)
+          .accessibilityHidden(item != tab)
+      }
+
+      if atRoot {
+        TVTopBar(tab: $tab, focus: $barFocus)
+          .opacity(barShown ? 1 : 0)
+          .animation(.easeInOut(duration: 0.25), value: barShown)
       }
     }
+    // Menu at the top of a page goes up to the bar; on the bar it leaves
+    // the app (nil hands the press to the system). In Details the stack's
+    // own Back runs.
+    .onExitCommand(perform: atRoot && barFocus == nil && !app.player.isActive ? { barFocus = tab } : nil)
+    .onChange(of: tab) { scrolledDown = false }
     // While the player is up, nothing under it can take focus, so the remote
     // (Menu above all) stays with the player.
     .disabled(app.player.isActive)
     .environment(\.playItem) { app.play($0) }
     .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
+    .environment(\.tvScrolledDown) { scrolledDown = $0 }
     .onAppear {
       app.player.openDetails = { item in paths[tab, default: []].append(.details(item)) }
     }
@@ -92,18 +112,110 @@ struct MainView: View {
     case .home: TVHome(library: library)
     case .search:
       SearchView(library: library)
+        .safeAreaPadding(.top, TVLayout.barSpace)
         .astraPageBackground()
-    case .library: TVLibraryPage(library: library)
+    case .movies: TVLibraryGridPage(library: library, kind: "movie")
+    case .shows: TVLibraryGridPage(library: library, kind: "show")
+    case .watchlist: TVWatchlistPage(library: library)
+    case .settings:
+      SettingsView(showsTitle: true)
+        .safeAreaPadding(.horizontal, TVLayout.leading)
+        .safeAreaPadding(.top, TVLayout.barSpace - 40)
+        .astraPageBackground()
     }
   }
 }
 
+/// The top bar from KP's reference: search icon, then Home, Movies, Shows,
+/// Watchlist as text, centred; the Settings circle at the far right.
+/// Selecting an item opens its page; the chosen one sits on a glass pill.
+private struct TVTopBar: View {
+  @Binding var tab: TVTab
+  var focus: FocusState<TVTab?>.Binding
+
+  var body: some View {
+    ZStack {
+      HStack(spacing: 8) {
+        item(.search) {
+          Image(systemName: "magnifyingglass").font(.system(size: 28, weight: .semibold))
+        }
+        ForEach(TVTab.centre) { page in
+          item(page) { Text(page.title).font(.system(size: 29, weight: .semibold)) }
+        }
+      }
+      HStack {
+        Spacer()
+        item(.settings, round: true) {
+          Image(systemName: "gearshape.fill").font(.system(size: 28, weight: .semibold))
+        }
+      }
+    }
+    .padding(.horizontal, TVLayout.leading)
+    .padding(.top, 10)
+    .frame(height: TVLayout.barHeight)
+    .focusSection()
+  }
+
+  private func item<Label: View>(_ page: TVTab, round: Bool = false, @ViewBuilder label: () -> Label) -> some View {
+    Button {
+      tab = page
+    } label: {
+      label()
+        .padding(.horizontal, round ? 0 : 26)
+        .frame(width: round ? 66 : nil, height: 66)
+    }
+    .buttonStyle(TVBarButtonStyle(selected: tab == page, round: round))
+    .focused(focus, equals: page)
+    .accessibilityLabel(page.title)
+    .accessibilityAddTraits(tab == page ? .isSelected : [])
+  }
+}
+
+/// A top-bar item: plain text; the open page on a glass pill; focused white
+/// with black text, a little larger.
+private struct TVBarButtonStyle: ButtonStyle {
+  var selected: Bool
+  var round: Bool
+
+  func makeBody(configuration: Configuration) -> some View {
+    TVBarButtonBody(configuration: configuration, selected: selected, round: round)
+  }
+}
+
+private struct TVBarButtonBody: View {
+  let configuration: ButtonStyleConfiguration
+  var selected: Bool
+  var round: Bool
+  @Environment(\.isFocused) private var focused
+
+  var body: some View {
+    let shape = RoundedRectangle(cornerRadius: 33, style: .continuous)
+    configuration.label
+      .foregroundStyle(focused ? Color.black : (selected || round ? Color.white : Color.white.opacity(0.7)))
+      .background {
+        if focused {
+          shape.fill(.white)
+        } else if selected || round {
+          shape.fill(.white.opacity(0.08)).astraGlass(in: shape, variant: .clear)
+        }
+      }
+      .contentShape(shape)
+      .scaleEffect(configuration.isPressed ? 0.96 : (focused ? 1.08 : 1))
+      .shadow(color: .black.opacity(focused ? 0.3 : 0), radius: 12, y: 5)
+      .focusEffectDisabled()
+      .animation(.easeOut(duration: 0.15), value: focused)
+  }
+}
+
 extension Demo {
-  /// `-AstraDemoTab home|search|libraries|settings` for the TV screenshots.
+  /// `-AstraDemoTab home|search|libraries|movies|shows|watchlist|settings` for the TV screenshots.
   static var tvTab: TVTab {
     switch tab {
     case "search": .search
-    case "libraries", "library", "watchlist", "settings": .library
+    case "libraries", "library", "movies": .movies
+    case "shows": .shows
+    case "watchlist": .watchlist
+    case "settings": .settings
     default: .home
     }
   }

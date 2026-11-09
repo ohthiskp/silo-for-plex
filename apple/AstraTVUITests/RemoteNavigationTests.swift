@@ -44,12 +44,14 @@ final class RemoteNavigationTests: XCTestCase {
     app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
   }
 
+  private static let barItems = ["Search", "Home", "Movies", "Shows", "Watchlist", "Settings"]
+
   /// tvOS starts with focus in the tab bar; move down into the page (it
   /// can take a moment to have something focusable while Home loads).
   private func leaveTabBar() {
     for _ in 0..<8 {
       let label = focusedElement.exists ? focusedElement.label : ""
-      guard label.isEmpty || ["Home", "Search", "Library"].contains(label) else { return }
+      guard label.isEmpty || Self.barItems.contains(label) else { return }
       press(.down)
       sleep(1)
     }
@@ -97,10 +99,11 @@ final class RemoteNavigationTests: XCTestCase {
 
   func testLibraryScrollsAndMenuGoesBack() {
     launch(["-AstraDemoTab", "libraries"])
-    XCTAssertTrue(app.staticTexts["Library"].firstMatch.waitForExistence(timeout: 30), "Library didn't load")
+    XCTAssertTrue(app.buttons["Unwatched"].firstMatch.waitForExistence(timeout: 30), "Movies didn't load")
     sleep(4)
-    // Down through the chips into the grid, and further down its rows.
-    press(.down, times: 4)
+    // Down from the bar through the chips into the grid, and further down its rows.
+    leaveTabBar()
+    press(.down, times: 2)
     shot("library-grid-focused")
     press(.down, times: 2)
     shot("library-scrolled")
@@ -132,29 +135,56 @@ final class RemoteNavigationTests: XCTestCase {
     XCTAssertGreaterThan(homeHero.frame.minY, screen.minY, "Scrolling up didn't return to the hero")
   }
 
-  // MARK: Streaming sidebar
+  // MARK: Streaming sidebar and top bar
 
-  func testStreamingSidebarOpensOnLeft() {
+  func testStreamingCirclesOnTheLeft() {
     launch()
     XCTAssertTrue(homeHero.waitForExistence(timeout: 30), "Home didn't load")
     sleep(4)
-    // Collapsed, an entry is only as wide as its logo; open, it has the name too.
     let netflix = app.buttons["Netflix"].firstMatch
     XCTAssertTrue(netflix.exists, "No Netflix in the sidebar")
-    let collapsed = netflix.frame.width
-    shot("sidebar-collapsed")
+    let size = netflix.frame.size
     leaveTabBar()
     press(.left, times: 2)
     sleep(1)
-    shot("sidebar-open")
-    XCTAssertGreaterThan(netflix.frame.width, collapsed + 40, "Moving left didn't open the sidebar")
-    // Choose the service focus landed on, then move back right onto the page.
+    shot("sidebar-focused")
+    let services = ["For You", "Netflix", "Apple TV+", "Prime Video", "Disney+", "HBO Max", "Hulu"]
+    XCTAssertTrue(services.contains(focusedElement.label), "Moving left didn't reach the streaming circles")
+    // A fixed list: the circles don't grow into a panel.
+    XCTAssertEqual(netflix.frame.width, size.width, accuracy: 30, "The sidebar changed size")
     press(.select)
     sleep(4)
     press(.right)
     sleep(1)
     shot("sidebar-after-choosing")
-    XCTAssertLessThan(netflix.frame.width, collapsed + 20, "The sidebar stayed open after leaving it")
+    XCTAssertFalse(services.contains(focusedElement.label), "Moving right didn't leave the circles")
+  }
+
+  func testTopBarMenuAndSettings() {
+    launch()
+    XCTAssertTrue(homeHero.waitForExistence(timeout: 30), "Home didn't load")
+    sleep(4)
+    leaveTabBar()
+    press(.down)
+    // Menu from the page goes up to the bar.
+    press(.menu)
+    sleep(1)
+    XCTAssertTrue(Self.barItems.contains(focusedElement.label), "Menu didn't go up to the top bar")
+    shot("top-bar-focused")
+    // Right along the bar: Movies, Shows, Watchlist, then Settings at the far right.
+    press(.right, times: 4)
+    XCTAssertEqual(focusedElement.label, "Settings", "Settings isn't at the right end of the bar")
+    press(.select)
+    sleep(3)
+    shot("settings")
+    let appearance = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Appearance")).firstMatch
+    XCTAssertTrue(appearance.waitForExistence(timeout: 10), "Settings didn't open")
+    // And back to Movies.
+    press(.left, times: 3)
+    press(.select)
+    sleep(4)
+    shot("movies")
+    XCTAssertTrue(app.buttons["Unwatched"].firstMatch.waitForExistence(timeout: 10), "Movies didn't open")
   }
 
   // MARK: Player

@@ -1,90 +1,45 @@
 import AstraKit
 import SwiftUI
 
-/// The Apple TV Library tab, the iPhone's made wide (KP, 2026-11-09: "go based
-/// off how iOS is"): a large "Library" title with Settings behind the gear,
-/// Libraries | Watchlist (no Downloads on Apple TV), then Movies | Shows,
-/// the filter chips, the count and six posters across.
-struct TVLibraryPage: View {
+/// Movies or Shows from the top bar: the filter chips, the count and six
+/// posters across, under the bar.
+struct TVLibraryGridPage: View {
   var library: LibraryStore
-
-  @AppStorage("astra.tv.library.segment") private var watchlist = false
-  @AppStorage("astra.library.kind") private var kind: LibraryKind = .movie
-  @State private var showSettings = Demo.tab == "settings"
-
-  init(library: LibraryStore) {
-    self.library = library
-    if Demo.tab == "watchlist" { _watchlist = AppStorage(wrappedValue: true, "astra.tv.library.segment") }
-  }
+  /// "movie" or "show".
+  var kind: String
+  @Environment(\.tvScrolledDown) private var scrolledDown
 
   var body: some View {
     ScrollView(.vertical, showsIndicators: false) {
-      VStack(alignment: .leading, spacing: 30) {
-        HStack(alignment: .center, spacing: 30) {
-          Text("Library")
-            .font(.system(size: 64, weight: .bold))
-            .foregroundStyle(Astra.Color.ink)
-          Spacer()
-          Button {
-            showSettings = true
-          } label: {
-            Image(systemName: "gearshape.fill")
-              .font(.system(size: 30, weight: .semibold))
-              .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)
-          }
-          .buttonStyle(TVGlassButtonStyle(round: true))
-          .accessibilityLabel("Settings")
-        }
-        .focusSection()
-
-        HStack(spacing: 14) {
-          segmentChip("Libraries", symbol: "square.stack.fill", on: !watchlist) { watchlist = false }
-          segmentChip("Watchlist", symbol: "bookmark.fill", on: watchlist) { watchlist = true }
-        }
-        .focusSection()
-
-        if watchlist {
-          TVWatchlistContent(library: library)
-        } else {
-          HStack(spacing: 12) {
-            ForEach(LibraryKind.allCases) { option in
-              Button {
-                withAnimation(.snappy(duration: 0.2)) { kind = option }
-              } label: {
-                Text(option.title)
-                  .font(.system(size: 22, weight: .semibold))
-                  .padding(.horizontal, 26)
-                  .frame(height: 50)
-              }
-              .buttonStyle(TVGlassButtonStyle(chip: true, selected: kind == option))
-            }
-          }
-          .focusSection()
-          TVLibraryBrowser(library: library, kind: kind.rawValue).id(kind.rawValue)
-        }
-      }
-      .padding(.horizontal, TVLayout.leading)
-      .padding(.top, 20)
-      .padding(.bottom, 120)
+      TVLibraryBrowser(library: library, kind: kind)
+        .padding(.horizontal, TVLayout.leading)
+        .padding(.top, TVLayout.barSpace)
+        .padding(.bottom, 120)
     }
     .scrollClipDisabled()
+    .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y > 60 }) { _, down in scrolledDown(down) }
+    .ignoresSafeArea(edges: .top)
     .astraPageBackground()
-    .navigationDestination(isPresented: $showSettings) {
-      SettingsView(showsTitle: true)
-        .safeAreaPadding(.horizontal, TVLayout.leading)
-        .astraPageBackground()
-    }
   }
+}
 
-  private func segmentChip(_ title: String, symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
-    Button(action: action) {
-      Label(title, systemImage: symbol)
-        .font(.system(size: 26, weight: .semibold))
-        .padding(.horizontal, 34)
-        .frame(height: 64)
+/// The Plex Watchlist from the top bar.
+struct TVWatchlistPage: View {
+  var library: LibraryStore
+  @Environment(\.tvScrolledDown) private var scrolledDown
+
+  var body: some View {
+    ScrollView(.vertical, showsIndicators: false) {
+      TVWatchlistContent(library: library)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, TVLayout.leading)
+        .padding(.top, TVLayout.barSpace)
+        .padding(.bottom, 120)
     }
-    .buttonStyle(TVGlassButtonStyle(chip: true, selected: on))
-    .accessibilityAddTraits(on ? .isSelected : [])
+    .scrollClipDisabled()
+    .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y > 60 }) { _, down in scrolledDown(down) }
+    .ignoresSafeArea(edges: .top)
+    .astraPageBackground()
   }
 }
 

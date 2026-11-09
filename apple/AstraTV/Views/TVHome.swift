@@ -13,6 +13,7 @@ struct TVHome: View {
   /// Focus is in the hero's buttons: the hero stops turning by itself.
   @State private var heroFocused = false
   @AppStorage("astra.home.topTenSeries") private var topSeries = false
+  @Environment(\.tvScrolledDown) private var scrolledDown
 
   private var heroItems: [PlexMetadata] { library.homeHero }
   private var current: PlexMetadata? {
@@ -29,11 +30,13 @@ struct TVHome: View {
         .padding(.bottom, 80)
       }
       .scrollClipDisabled()
+      .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y + $0.contentInsets.top > 120 }) { _, down in
+        scrolledDown(down)
+      }
       .environment(\.tvLeading, TVLayout.homeLeading)
       .ignoresSafeArea(edges: .top)
 
-      // KP (2026-11-09): the streaming services down the left, logos only
-      // until focus moves onto them.
+      // KP (2026-11-09): the streaming services as circles down the left.
       TVServiceSidebar(library: library)
     }
     .background { AmbientBackdrop(library: library, item: current) }
@@ -239,100 +242,58 @@ private struct TVDots: View {
 
 // MARK: - Streaming sidebar
 
-/// For You and the streaming services down the left of Home (KP,
-/// 2026-11-09): only the logos while focus is elsewhere; move left onto them
-/// and the sidebar opens on a glass panel with each service's name. The
-/// chosen one is outlined in its brand colour.
+/// For You and the streaming services as floating glass circles down the
+/// left of Home (KP, 2026-11-09): a fixed list, the logo in each; it doesn't
+/// open or grow. The chosen one is ringed in its brand colour.
 private struct TVServiceSidebar: View {
   var library: LibraryStore
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
-  /// The entry with focus, reported by each entry's button style.
-  @State private var focused: String?
-  @Namespace private var scope
-
-  private static let forYou = "for-you"
-  private var expanded: Bool { focused != nil }
-  private var selectedKey: String { library.selectedService?.id ?? Self.forYou }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      row(nil)
-      ForEach(StreamingService.all) { row($0) }
-    }
-    .padding(.vertical, 26)
-    .padding(.horizontal, expanded ? 18 : 0)
-    .background {
-      if expanded {
-        RoundedRectangle(cornerRadius: 40, style: .continuous)
-          .fill(.black.opacity(0.35))
-          .astraGlass(in: RoundedRectangle(cornerRadius: 40, style: .continuous))
-          .transition(.opacity)
-      }
+    VStack(spacing: 16) {
+      circle(nil)
+      ForEach(StreamingService.all) { circle($0) }
     }
     .frame(maxHeight: .infinity, alignment: .center)
-    .focusScope(scope)
     .focusSection()
-    .animation(.snappy(duration: 0.25), value: expanded)
   }
 
-  private func row(_ service: StreamingService?) -> some View {
-    let key = service?.id ?? Self.forYou
-    let selected = key == selectedKey
+  private func circle(_ service: StreamingService?) -> some View {
+    let selected = library.selectedService == service
     let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
     return Button {
       library.select(service)
     } label: {
-      HStack(spacing: 18) {
-        logo(service, brand: brand)
-          .frame(width: TVLayout.sidebarCollapsed - 28, height: 44)
-        if expanded {
-          Text(service?.label ?? "For You")
-            .font(.system(size: 26, weight: .semibold))
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.trailing, 10)
-            .transition(.opacity.combined(with: .move(edge: .leading)))
+      Group {
+        if let service {
+          Image(service.logo)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: TVLayout.sidebarCircle * 0.62, height: min(service.logoHeight * 0.9, 26))
+            .foregroundStyle(brand)
+        } else {
+          Image(systemName: "sparkles")
+            .font(.system(size: 28, weight: .semibold))
+            .foregroundStyle(.white)
         }
       }
-      .padding(.horizontal, 14)
-      .frame(height: 64)
+      .frame(width: TVLayout.sidebarCircle, height: TVLayout.sidebarCircle)
     }
-    .buttonStyle(
-      TVSidebarButtonStyle(selected: selected, brand: brand) { has in
-        if has { focused = key } else if focused == key { focused = nil }
-      }
-    )
-    // Moving onto the sidebar lands on the chosen service.
-    .prefersDefaultFocus(selected, in: scope)
+    .buttonStyle(TVSidebarButtonStyle(selected: selected, brand: brand))
     .accessibilityLabel(service?.label ?? "For You")
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
-
-  @ViewBuilder private func logo(_ service: StreamingService?, brand: Color) -> some View {
-    if let service {
-      Image(service.logo)
-        .renderingMode(.template)
-        .resizable()
-        .scaledToFit()
-        .frame(maxHeight: min(service.logoHeight * 1.1, 34))
-        .foregroundStyle(brand)
-    } else {
-      Image(systemName: "sparkles")
-        .font(.system(size: 28, weight: .semibold))
-        .foregroundStyle(.white)
-    }
-  }
 }
 
-/// A sidebar entry: a glass capsule, lighter and larger when focused; the
-/// chosen service is outlined in its brand colour.
+/// A sidebar circle: clear glass, lighter and larger when focused; the
+/// chosen service ringed in its brand colour.
 private struct TVSidebarButtonStyle: ButtonStyle {
   var selected: Bool
   var brand: Color
-  var onFocus: (Bool) -> Void
 
   func makeBody(configuration: Configuration) -> some View {
-    TVSidebarButtonBody(configuration: configuration, selected: selected, brand: brand, onFocus: onFocus)
+    TVSidebarButtonBody(configuration: configuration, selected: selected, brand: brand)
   }
 }
 
@@ -340,22 +301,20 @@ private struct TVSidebarButtonBody: View {
   let configuration: ButtonStyleConfiguration
   var selected: Bool
   var brand: Color
-  var onFocus: (Bool) -> Void
   @Environment(\.isFocused) private var focused
 
   var body: some View {
     configuration.label
-      .foregroundStyle(.white)
-      .background {
-        Capsule().fill(.white.opacity(focused ? 0.28 : (selected ? 0.12 : 0)))
-      }
-      .astraGlass(in: Capsule(), variant: .clear, interactive: true)
-      .overlay { if selected { Capsule().strokeBorder(brand, lineWidth: 2.5) } }
-      .scaleEffect(configuration.isPressed ? 0.97 : (focused ? 1.06 : 1))
-      .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 14, y: 6)
+      .background { Circle().fill(.black.opacity(focused ? 0.15 : 0.3)) }
+      .background { if focused { Circle().fill(.white.opacity(0.35)) } }
+      .astraGlass(in: Circle(), variant: .clear, interactive: true)
+      .overlay { if selected { Circle().strokeBorder(brand, lineWidth: 3) } }
+      .overlay { if focused { Circle().strokeBorder(.white, lineWidth: 3) } }
+      .contentShape(Circle())
+      .scaleEffect(configuration.isPressed ? 0.95 : (focused ? 1.12 : 1))
+      .shadow(color: .black.opacity(focused ? 0.4 : 0.2), radius: focused ? 16 : 8, y: 6)
       .focusEffectDisabled()
       .animation(.easeOut(duration: 0.15), value: focused)
-      .onChange(of: focused, initial: true) { _, new in onFocus(new) }
   }
 }
 
