@@ -536,27 +536,35 @@ struct HeroInfo: View {
   /// Best copy known: the full one, else the index's match, else the title itself.
   private var shown: PlexMetadata { full ?? library.indexMatch(item) ?? item }
 
+  /// KP's hero mockup (2026-11-09): one block at the left, its logo centred
+  /// over the meta line and buttons; full width on iPhone.
+  #if os(iOS)
+    static let blockWidth: CGFloat = .infinity
+  #elseif os(tvOS)
+    static let blockWidth: CGFloat = 760
+  #else
+    static let blockWidth: CGFloat = 440
+  #endif
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
+    VStack(alignment: .leading, spacing: 14) {
       // Fixed boxes for the title and the meta: every title takes the same
       // height, so the buttons and pager never move when the hero switches.
-      // Tapping the logo opens Details (the Details button became +, KP 2026-11-07).
+      // Tapping the logo opens Details.
       Button {
         openItem(item)
       } label: {
         HeroTitle(library: library, item: item, maxHeight: Self.titleBox)
-          .frame(height: Self.titleBox, alignment: .bottomLeading)
+          .frame(maxWidth: .infinity)
+          .frame(height: Self.titleBox, alignment: .bottom)
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .accessibilityLabel("\(item.displayTitle), Details")
-      // KP's mockup (2026-11-08): no summary; "year · runtime · rating",
-      // the 4K / Dolby Vision / Atmos pills, then Play and +.
-      VStack(alignment: .leading, spacing: 8) {
-        // Genres too when there are no format pills (not on the server),
-        // so the hero never reads as empty.
-        let pills = shown.media.isEmpty == false
-        DetailMetaLine(item: shown, library: library, showsGenres: !pills, fontSize: 14.5)
+      // "2025 · 2h 8m · Sci-Fi [PG-13] [4K]" on one line, as in the mockup.
+      HStack(spacing: 10) {
+        DetailMetaLine(item: shown, library: library, fontSize: 14.5, genreLimit: 1, ratingAfter: true)
+          .layoutPriority(1)
         FormatBadges(item: shown)
       }
       .task(id: item.id) {
@@ -568,13 +576,13 @@ struct HeroInfo: View {
         full = found
       }
       // Same height for every title, so the buttons never move.
-      .frame(height: 52 * Astra.Layout.textScale, alignment: .topLeading)
+      .frame(height: 26 * Astra.Layout.textScale, alignment: .leading)
       HStack(spacing: 12) {
         Button {
           playItem(item)
         } label: {
           Label(item.progress != nil ? "Resume" : "Play", systemImage: "play.fill")
-            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(SolidCapsuleButtonStyle())
         // On the service but not on the Plex server: nothing to play.
@@ -584,14 +592,15 @@ struct HeroInfo: View {
         // Apple TV: focus starts on Play, not on the sidebar.
         .tvLaunchFocus(item.id, when: playable)
         .help(library.availability(of: item) == .notOnServer ? "Not on your Plex server" : "")
-        // KP (2026-11-08): no Details button; the round grey glass + adds
-        // the title to the Plex Watchlist. Tapping the logo opens Details.
+        // KP (2026-11-09): the mockup's Details button is the round glass +
+        // (Plex Watchlist). Tapping the logo opens Details.
         WatchlistButton(item: item)
           .tvLaunchFocus(item.id, when: !playable)
       }
       .astraGlassGroup(spacing: 12)
-      .padding(.top, 6)
+      .padding(.top, 4)
     }
+    .frame(maxWidth: Self.blockWidth, alignment: .leading)
   }
 }
 

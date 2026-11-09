@@ -572,6 +572,10 @@ struct DetailMetaLine: View {
   var showsGenres = true
   var fontSize: CGFloat = 15
   var separator = "  ·  "
+  /// How many genres; the hero shows one (KP's hero mockup, 2026-11-09).
+  var genreLimit = 2
+  /// The hero puts the rating box after the text: "2025 · 2h 8m · Sci-Fi [PG-13]".
+  var ratingAfter = false
 
   @State private var fetchedRating: String?
   @AppStorage(Preferences.ratingsKey) private var showRatings = true
@@ -582,16 +586,16 @@ struct DetailMetaLine: View {
     let parts = [
       item.year.map(String.init),
       item.type == .show ? item.childCount.map { "\($0) Season\($0 == 1 ? "" : "s")" } : item.durationLabel,
-      showsGenres ? item.genres.prefix(2).map(\.tag).joined(separator: ", ").nilIfEmpty : nil,
+      showsGenres ? item.genres.prefix(genreLimit).map(\.tag).joined(separator: ", ").nilIfEmpty : nil,
     ].compactMap { $0 }
+    let rating = showRatings ? item.officialRating ?? fetchedRating : nil
     HStack(spacing: fontSize * 0.6) {
-      if showRatings, let rating = item.officialRating ?? fetchedRating {
-        RatingBox(text: rating, fontSize: fontSize * 0.8)
-      }
+      if !ratingAfter, let rating { RatingBox(text: rating, fontSize: fontSize * 0.8) }
       Text(parts.joined(separator: separator))
         .astraFont(size: fontSize, weight: .medium)
         .foregroundStyle(Astra.Color.ink.opacity(0.9))
         .lineLimit(1)
+      if ratingAfter, let rating { RatingBox(text: rating, fontSize: fontSize * 0.8) }
     }
       .task(id: item.id) {
         fetchedRating = nil
