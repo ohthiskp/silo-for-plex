@@ -109,6 +109,8 @@ struct TVPageBackdrop: View {
   var library: LibraryStore
   var item: PlexMetadata?
   var showsTopScrim = true
+  /// Details uses `.scenery` (TMDB's best text-free shot).
+  var kind: LibraryStore.ArtKind = .heroBackdrop
 
   var body: some View {
     GeometryReader { geo in
@@ -128,7 +130,7 @@ struct TVPageBackdrop: View {
             .overlay(Color.black.opacity(0.35))
 
             ArtworkImage(
-              library: library, item: item, kind: .heroBackdrop, width: art.width, height: art.height,
+              library: library, item: item, kind: kind, width: art.width, height: art.height,
               placeholder: Color.clear
             )
             .frame(width: art.width, height: art.height)
@@ -192,7 +194,7 @@ struct TVFormatChips: View {
   var body: some View {
     HStack(spacing: 10) {
       if showsRating, showRatings, let rating = item.officialRating ?? fallbackRating {
-        TVChip(fontSize: fontSize) { Text(rating) }
+        RatingBox(text: rating, fontSize: fontSize)
       }
       if showQuality, let badge = item.resolutionBadge(for: pick) {
         TVChip(fontSize: fontSize) { Text(badge == "4K UHD" ? "4K" : badge) }

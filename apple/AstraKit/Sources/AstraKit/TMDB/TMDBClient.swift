@@ -109,12 +109,19 @@ public struct TMDBArtwork: Sendable, Hashable {
   public var logoPath: String?
   /// The official US rating: "PG-13", "R", "TV-MA"… (TMDB release dates / content ratings).
   public var certification: String?
+  /// The best-voted text-free wide shot, for the Details page (KP,
+  /// 2026-11-09: "a more cinematic, scenic shot"). Nil when TMDB has none.
+  public var sceneryPath: String?
 
-  public init(posterPath: String?, backdropPath: String?, logoPath: String?, certification: String? = nil) {
+  public init(
+    posterPath: String?, backdropPath: String?, logoPath: String?, certification: String? = nil,
+    sceneryPath: String? = nil
+  ) {
     self.posterPath = posterPath
     self.backdropPath = backdropPath
     self.logoPath = logoPath
     self.certification = certification
+    self.sceneryPath = sceneryPath
   }
 
   /// A full image URL. Sizes: poster w342/w500/w780, backdrop w780/w1280/original, logo w300/w500.
@@ -289,7 +296,18 @@ public struct TMDBClient: Sendable {
     return TMDBArtwork(
       posterPath: raw.poster_path, backdropPath: raw.backdrop_path,
       logoPath: Self.bestLogo(raw.images?.logos ?? [], original: raw.original_language),
-      certification: raw.usCertification)
+      certification: raw.usCertification, sceneryPath: Self.bestScenery(raw.images?.backdrops ?? []))
+  }
+
+  /// The Details backdrop: a text-free backdrop (no title or tagline on it),
+  /// at least 1280 wide, the best voted (ties: more votes, then TMDB's order).
+  static func bestScenery(_ backdrops: [ArtworkRaw.Images.Image]) -> String? {
+    backdrops.enumerated()
+      .filter { $0.element.iso_639_1 == nil && $0.element.file_path != nil && ($0.element.width ?? 1920) >= 1280 }
+      .min { a, b in
+        (-(a.element.vote_average ?? 0), -(a.element.vote_count ?? 0), a.offset)
+          < (-(b.element.vote_average ?? 0), -(b.element.vote_count ?? 0), b.offset)
+      }?.element.file_path
   }
 
   /// Astra (KP, 2026-11-07: "a lot of them don't have the logo"): the best
@@ -339,8 +357,11 @@ public struct TMDBClient: Sendable {
         var file_path: String?
         var iso_639_1: String?
         var vote_average: Double?
+        var vote_count: Int?
+        var width: Int?
       }
       var logos: [Image]?
+      var backdrops: [Image]?
     }
     var poster_path: String?
     var backdrop_path: String?

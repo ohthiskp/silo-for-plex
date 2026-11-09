@@ -262,3 +262,30 @@ final class LockedBox<Value>: @unchecked Sendable {
     set { lock.withLock { stored = newValue } }
   }
 }
+
+/// KP (2026-11-09): Details gets a cinematic, scenic shot: TMDB's best-voted
+/// backdrop with no text on it.
+final class SceneryBackdropTests: XCTestCase {
+  private func image(_ path: String, _ language: String?, vote: Double, count: Int = 10, width: Int = 3840)
+    -> TMDBClient.ArtworkRaw.Images.Image
+  {
+    .init(file_path: path, iso_639_1: language, vote_average: vote, vote_count: count, width: width)
+  }
+
+  func testPicksTheBestVotedTextFreeBackdrop() {
+    let pick = TMDBClient.bestScenery([
+      image("/titled.jpg", "en", vote: 9.9),
+      image("/small.jpg", nil, vote: 9.5, width: 780),
+      image("/plain.jpg", nil, vote: 5.3),
+      image("/scenic.jpg", nil, vote: 5.8),
+      image("/scenic-fewer-votes.jpg", nil, vote: 5.8, count: 2),
+    ])
+    XCTAssertEqual(pick, "/scenic.jpg")
+  }
+
+  func testNoTextFreeBackdropFallsBack() {
+    XCTAssertNil(TMDBClient.bestScenery([image("/titled.jpg", "en", vote: 8)]))
+    let art = TMDBArtwork(posterPath: nil, backdropPath: "/main.jpg", logoPath: nil)
+    XCTAssertNil(art.sceneryPath)
+  }
+}

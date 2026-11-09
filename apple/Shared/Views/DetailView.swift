@@ -300,7 +300,7 @@ struct DetailView: View {
     .frame(maxWidth: .infinity, minHeight: min(Astra.Layout.detailHeaderHeight, viewport * 0.72), alignment: .bottomLeading)
     .background {
       ZStack {
-        ArtworkImage(library: library, item: shown, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear)
+        ArtworkImage(library: library, item: shown, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .clipped()
           // Darkens a little as the page rises over it.
@@ -577,18 +577,22 @@ struct DetailMetaLine: View {
   @AppStorage(Preferences.ratingsKey) private var showRatings = true
 
   var body: some View {
-    // KP (2026-11-08): "2014 · 2h 49m · PG-13": the official rating is part
-    // of the line, not a badge.
+    // KP (2026-11-09): the official rating sits in its own official-looking
+    // box at the front of the line: "[PG-13]  2014 · 2h 49m".
     let parts = [
       item.year.map(String.init),
       item.type == .show ? item.childCount.map { "\($0) Season\($0 == 1 ? "" : "s")" } : item.durationLabel,
-      showRatings ? (item.officialRating ?? fetchedRating) : nil,
       showsGenres ? item.genres.prefix(2).map(\.tag).joined(separator: ", ").nilIfEmpty : nil,
     ].compactMap { $0 }
-    Text(parts.joined(separator: separator))
-      .astraFont(size: fontSize, weight: .medium)
-      .foregroundStyle(Astra.Color.ink.opacity(0.9))
-      .lineLimit(1)
+    HStack(spacing: fontSize * 0.6) {
+      if showRatings, let rating = item.officialRating ?? fetchedRating {
+        RatingBox(text: rating, fontSize: fontSize * 0.8)
+      }
+      Text(parts.joined(separator: separator))
+        .astraFont(size: fontSize, weight: .medium)
+        .foregroundStyle(Astra.Color.ink.opacity(0.9))
+        .lineLimit(1)
+    }
       .task(id: item.id) {
         fetchedRating = nil
         guard item.officialRating == nil, item.type == .movie || item.type == .show, let library else { return }
@@ -659,6 +663,31 @@ struct FormatPill<Content: View>: View {
           .strokeBorder(Astra.Color.ink.opacity(0.5), lineWidth: 1)
       )
       .fixedSize()
+  }
+}
+
+/// The official age rating (PG-13, R, TV-MA…) in a squared box with a solid
+/// border and heavy condensed letters, like the rating box on a film's
+/// poster or trailer (KP, 2026-11-09: "in a box… look very official"). The
+/// same box on the hero, Details and Apple TV.
+struct RatingBox: View {
+  var text: String
+  var fontSize: CGFloat = 12
+
+  var body: some View {
+    Text(text.uppercased())
+      .font(.system(size: fontSize, weight: .heavy).width(.condensed))
+      .tracking(fontSize * 0.05)
+      .monospacedDigit()
+      .foregroundStyle(Astra.Color.ink)
+      .padding(.horizontal, fontSize * 0.5)
+      .frame(height: fontSize * 1.75)
+      .overlay(
+        RoundedRectangle(cornerRadius: fontSize * 0.16, style: .continuous)
+          .strokeBorder(Astra.Color.ink, lineWidth: max(1.25, fontSize * 0.12))
+      )
+      .fixedSize()
+      .accessibilityLabel("Rated \(text)")
   }
 }
 
@@ -833,7 +862,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       .background(alignment: .top) {
         ZStack {
           ArtworkImage(
-            library: library, item: shown, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear
+            library: library, item: shown, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear
           )
           .frame(width: width, height: width * PhoneDetail.backdropShare)
           .clipped()

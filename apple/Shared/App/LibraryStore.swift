@@ -958,7 +958,9 @@ final class LibraryStore {
 
   // MARK: Artwork from TMDB
 
-  enum ArtKind { case poster, backdrop, heroBackdrop, logo }
+  /// `scenery` is the Details backdrop: TMDB's best text-free wide shot,
+  /// else the usual backdrop.
+  enum ArtKind { case poster, backdrop, heroBackdrop, scenery, logo }
 
   private var artwork: [String: TMDBArtwork] = [:]
   private var artworkTasks: [String: Task<TMDBArtwork?, Never>] = [:]
@@ -994,6 +996,7 @@ final class LibraryStore {
         case .poster: TMDBArtwork.url(art.posterPath, size: "w500")
         case .backdrop: TMDBArtwork.url(art.backdropPath, size: "w1280")
         case .heroBackdrop: TMDBArtwork.url(art.backdropPath, size: "original")
+        case .scenery: TMDBArtwork.url(art.sceneryPath ?? art.backdropPath, size: "original")
         case .logo: TMDBArtwork.url(art.logoPath, size: "w500")
         }
       if let url { return url }
@@ -1001,7 +1004,7 @@ final class LibraryStore {
     let plexPath: String? =
       switch kind {
       case .poster: item.poster
-      case .backdrop, .heroBackdrop: item.backdrop
+      case .backdrop, .heroBackdrop, .scenery: item.backdrop
       case .logo: item.clearLogo
       }
     return imageURL(plexPath, width: width, height: height)
@@ -1530,7 +1533,7 @@ final class LibraryStore {
       guard !isClosed, !Task.isCancelled else { return }
       guard prewarmed.insert(item.id).inserted else { continue }
       _ = await tmdbArtwork(for: item)
-      for kind in [ArtKind.heroBackdrop, .logo] {
+      for kind in [ArtKind.heroBackdrop, .scenery, .logo] {
         if let url = await artworkURL(for: item, kind, width: 1920, height: 1080) {
           _ = await ImagePipeline.shared.image(for: url)
         }

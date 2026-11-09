@@ -711,7 +711,7 @@ struct RatingBadge: View {
 
   var body: some View {
     Group {
-      if showRatings, let rating { Badge(text: rating).fixedSize() }
+      if showRatings, let rating { RatingBox(text: rating) }
     }
     .task(id: item.id) {
       fetched = nil

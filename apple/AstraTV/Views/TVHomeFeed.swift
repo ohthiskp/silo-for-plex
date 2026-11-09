@@ -198,7 +198,7 @@ struct TVMarquee: View {
 
       HStack(spacing: 10) {
         if let rating = item.officialRating ?? certification {
-          TVChip(fontSize: 15) { Text(rating) }
+          RatingBox(text: rating, fontSize: 15)
         }
         Text(facts)
           .font(.system(size: TVMetrics.marqueeMetaSize, weight: .medium))

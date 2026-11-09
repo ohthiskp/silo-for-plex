@@ -31,7 +31,7 @@ struct TVDetailPage: View {
 
   var body: some View {
     ZStack(alignment: .top) {
-      TVPageBackdrop(library: library, item: shown, showsTopScrim: false)
+      TVPageBackdrop(library: library, item: shown, showsTopScrim: false, kind: .scenery)
       ScrollView(.vertical, showsIndicators: false) {
         VStack(alignment: .leading, spacing: 0) {
           hero
@@ -75,7 +75,7 @@ struct TVDetailPage: View {
         // Rating chip, facts, then the format badges, on one line.
         HStack(spacing: 14) {
           if let rating = shown.officialRating ?? certification {
-            TVChip { Text(rating) }
+            RatingBox(text: rating, fontSize: 18)
           }
           let facts = TVFacts.line(shown)
           if !facts.isEmpty {
