@@ -299,7 +299,9 @@ struct ServicePill: View {
             if selected && service == nil {
               Capsule().fill(.white)
             } else {
-              Capsule().fill(.white.opacity(selected ? 0.22 : 0.06))
+              // A dark tint under the glass keeps white logos readable on
+              // bright artwork (KP, 2026-11-09).
+              Capsule().fill(selected ? Color.white.opacity(0.22) : Color.black.opacity(0.28))
                 .astraGlass(in: Capsule(), variant: .clear)
                 .overlay {
                   if selected { Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 1.5) }

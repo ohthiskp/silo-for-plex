@@ -118,6 +118,17 @@ struct FramedArtwork: View {
         limitY: limitY, topOffset: topOffset, minTop: minTop, focus: focus?.focus)
       RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
         .frame(width: rect.width, height: rect.height)
+        // KP (2026-11-09): wherever the framing puts the picture, its top and
+        // bottom edges melt into the frosted page (no hard line across the
+        // hero, and the art blurs up under the Dynamic Island).
+        .mask {
+          LinearGradient(
+            stops: [
+              .init(color: .clear, location: 0), .init(color: .black, location: 0.14),
+              .init(color: .black, location: 0.72), .init(color: .clear, location: 1),
+            ],
+            startPoint: .top, endPoint: .bottom)
+        }
         .offset(x: rect.minX, y: rect.minY)
         .astraAnimation(Astra.Motion.base, value: focus)
     }
