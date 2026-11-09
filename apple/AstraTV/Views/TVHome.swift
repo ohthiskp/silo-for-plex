@@ -314,7 +314,7 @@ private struct TVSidebarButtonBody: View {
       .scaleEffect(configuration.isPressed ? 0.95 : (focused ? 1.12 : 1))
       .shadow(color: .black.opacity(focused ? 0.4 : 0.2), radius: focused ? 16 : 8, y: 6)
       .focusEffectDisabled()
-      .animation(.easeOut(duration: 0.15), value: focused)
+      .animation(.snappy(duration: 0.22), value: focused)
   }
 }
 
@@ -559,7 +559,7 @@ private struct TVGlassButtonBody: View {
     .scaleEffect(configuration.isPressed ? 0.97 : (focused ? 1.06 : 1))
     .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 18, y: 8)
     .focusEffectDisabled()
-    .animation(.easeOut(duration: 0.15), value: focused)
+    .animation(.snappy(duration: 0.22), value: focused)
     .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
   }
 }

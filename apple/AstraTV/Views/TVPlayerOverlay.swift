@@ -372,6 +372,6 @@ private struct TVCircleGlyph: View {
       .background(Circle().fill(focused ? Color.white : Color.black.opacity(0.35)))
       .overlay(Circle().stroke(Color.white.opacity(focused ? 0 : 0.22), lineWidth: 1))
       .contentShape(Circle())
-      .animation(.easeOut(duration: 0.15), value: focused)
+      .animation(.snappy(duration: 0.22), value: focused)
   }
 }

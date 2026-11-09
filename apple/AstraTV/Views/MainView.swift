@@ -132,6 +132,10 @@ struct MainView: View {
 private struct TVTopBar: View {
   @Binding var tab: TVTab
   var focus: FocusState<TVTab?>.Binding
+  /// One white focus pill and one glass pill for the open page, each
+  /// sliding from item to item (KP: "make the navigation from button to
+  /// button seamless").
+  @Namespace private var pills
 
   var body: some View {
     ZStack {
@@ -164,7 +168,7 @@ private struct TVTopBar: View {
         .padding(.horizontal, round ? 0 : 26)
         .frame(width: round ? 66 : nil, height: 66)
     }
-    .buttonStyle(TVBarButtonStyle(selected: tab == page, round: round))
+    .buttonStyle(TVBarButtonStyle(selected: tab == page, round: round, pills: pills))
     .focused(focus, equals: page)
     .accessibilityLabel(page.title)
     .accessibilityAddTraits(tab == page ? .isSelected : [])
@@ -176,9 +180,10 @@ private struct TVTopBar: View {
 private struct TVBarButtonStyle: ButtonStyle {
   var selected: Bool
   var round: Bool
+  var pills: Namespace.ID
 
   func makeBody(configuration: Configuration) -> some View {
-    TVBarButtonBody(configuration: configuration, selected: selected, round: round)
+    TVBarButtonBody(configuration: configuration, selected: selected, round: round, pills: pills)
   }
 }
 
@@ -186,6 +191,7 @@ private struct TVBarButtonBody: View {
   let configuration: ButtonStyleConfiguration
   var selected: Bool
   var round: Bool
+  var pills: Namespace.ID
   @Environment(\.isFocused) private var focused
 
   var body: some View {
@@ -193,17 +199,26 @@ private struct TVBarButtonBody: View {
     configuration.label
       .foregroundStyle(focused ? Color.black : (selected || round ? Color.white : Color.white.opacity(0.7)))
       .background {
-        if focused {
-          shape.fill(.white)
-        } else if selected || round {
-          shape.fill(.white.opacity(0.08)).astraGlass(in: shape, variant: .clear)
+        ZStack {
+          if round, !focused {
+            shape.fill(.white.opacity(0.08)).astraGlass(in: shape, variant: .clear)
+          }
+          if selected, !focused, !round {
+            shape.fill(.white.opacity(0.08)).astraGlass(in: shape, variant: .clear)
+              .matchedGeometryEffect(id: "page", in: pills)
+          }
+          if focused {
+            shape.fill(.white)
+              .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
+              .matchedGeometryEffect(id: "focus", in: pills)
+          }
         }
       }
       .contentShape(shape)
-      .scaleEffect(configuration.isPressed ? 0.96 : (focused ? 1.08 : 1))
-      .shadow(color: .black.opacity(focused ? 0.3 : 0), radius: 12, y: 5)
+      .scaleEffect(configuration.isPressed ? 0.96 : (focused ? 1.06 : 1))
       .focusEffectDisabled()
-      .animation(.easeOut(duration: 0.15), value: focused)
+      .animation(.snappy(duration: 0.28), value: focused)
+      .animation(.snappy(duration: 0.28), value: selected)
   }
 }
 

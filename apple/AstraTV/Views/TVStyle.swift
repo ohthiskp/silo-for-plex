@@ -308,7 +308,7 @@ private struct TVCardButtonBody: View {
       .scaleEffect(configuration.isPressed ? (focused ? scale : 1) * 0.97 : (focused ? scale : 1))
       .shadow(color: .black.opacity(focused ? 0.45 : 0.3), radius: focused ? 18 : 8, y: focused ? 8 : 4)
       .focusEffectDisabled()
-      .animation(.easeOut(duration: 0.15), value: focused)
+      .animation(.snappy(duration: 0.22), value: focused)
       .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
   }
 }
@@ -351,7 +351,7 @@ private struct TVCardCaption: View {
     }
     .frame(width: width, alignment: .leading)
     .offset(y: focused ? 8 : 0)
-    .animation(.easeOut(duration: 0.15), value: focused)
+    .animation(.snappy(duration: 0.22), value: focused)
   }
 }
 
