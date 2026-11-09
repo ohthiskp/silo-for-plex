@@ -1,3 +1,4 @@
+import AstraKit
 import SwiftUI
 
 // Astra uses Apple's own Liquid Glass (macOS 26): the system glass button
