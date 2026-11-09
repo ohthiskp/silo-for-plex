@@ -900,6 +900,28 @@ final class LibraryStore {
     return LocalSearch.rank(libraryIndex.libraryItems, text: text, limit: limit)
   }
 
+  /// Search's results with this server's own matches added (KP, 2026-11-09:
+  /// "Rocky" + Bollywood found nothing because TMDB's top results for
+  /// "Rocky" are the boxing films): TMDB's ranked titles first, then titles
+  /// in the library index whose name matches that TMDB didn't return.
+  func searchResults(_ tmdb: [TMDBItem], text: String) -> [PlexMetadata] {
+    Self.merged(withServerNow(tmdb), localSearch(text, limit: 20))
+  }
+
+  @ObservationIgnored private var languageCache: [String: String] = [:]
+
+  /// A title's original language from TMDB ("hi"), cached; for Bollywood on
+  /// titles that came from the library index rather than TMDB's search.
+  func language(of item: PlexMetadata) async -> String? {
+    guard let key = item.tmdbKey, let tmdb else { return nil }
+    if let known = languageCache[key] { return known }
+    let parts = key.split(separator: ":")
+    guard parts.count == 2, let id = Int(parts[1]), let kind = TMDBItem.Kind(rawValue: String(parts[0])) else { return nil }
+    guard let found = try? await tmdb.item(id: id, kind: kind), let language = found.language else { return nil }
+    languageCache[key] = language
+    return language
+  }
+
   /// `first` then whatever `more` adds, each title once (by TMDB id, else rating key).
   static func merged(_ first: [PlexMetadata], _ more: [PlexMetadata]) -> [PlexMetadata] {
     var seen = Set<String>()

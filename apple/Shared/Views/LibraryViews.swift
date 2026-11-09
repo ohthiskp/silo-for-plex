@@ -502,7 +502,7 @@ struct SearchView: View {
     }
     if let hit = SearchCache.shared[text] {
       remember(languagesOf: hit.items)
-      results = library.withServerNow(hit.items)
+      results = library.searchResults(hit.items, text: text)
       people = hit.people
       searched = true
       peopleSearched = true
@@ -523,7 +523,7 @@ struct SearchView: View {
     if let found { SearchCache.shared[text] = (found.items, shownPeople) }
     remember(languagesOf: found?.items ?? [])
     astraWithAnimation(Astra.Motion.base) {
-      results = library.withServerNow(found?.items ?? [])
+      results = library.searchResults(found?.items ?? [], text: text)
       people = shownPeople
       searched = true
       peopleSearched = true
@@ -537,6 +537,25 @@ struct SearchView: View {
   /// Atmos and Dolby Vision are in a title's tracks, which only its full
   /// details have: read them for the server's results (cached, four at a time).
   private func readTracks() async {
+    // Bollywood: the language of server titles TMDB's search didn't return.
+    let unknown = filters.contains(.bollywood) ? results.filter { $0.tmdbKey.map { languages[$0] == nil } ?? false } : []
+    if !unknown.isEmpty {
+      verifying = true
+      defer { verifying = false }
+      let found = await withTaskGroup(of: (String, String)?.self) { group in
+        for item in unknown {
+          group.addTask {
+            guard let key = item.tmdbKey, let language = await library.language(of: item) else { return nil }
+            return (key, language)
+          }
+        }
+        var out: [(String, String)] = []
+        for await pair in group { if let pair { out.append(pair) } }
+        return out
+      }
+      guard !Task.isCancelled else { return }
+      for (key, language) in found { languages[key] = language }
+    }
     guard filters.contains(where: \.needsStreams) else { return }
     let pending = results.filter { item in
       !item.isCatalogOnly && fullCopies[item.ratingKey] == nil
