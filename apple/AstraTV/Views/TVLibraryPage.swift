@@ -71,6 +71,7 @@ struct TVLibraryPage: View {
     .astraPageBackground()
     .navigationDestination(isPresented: $showSettings) {
       SettingsView(showsTitle: true)
+        .padding(.horizontal, TVLayout.leading)
         .astraPageBackground()
     }
   }
@@ -87,11 +88,13 @@ struct TVLibraryPage: View {
   }
 }
 
-/// Six posters across inside the page's side margins (1920 pt wide on every Apple TV).
+/// Six posters across inside the TV's 80 pt safe area and the page margins
+/// (1920 pt wide on every Apple TV).
 private enum TVGrid {
   static let columns = 6
   static let spacing: CGFloat = 40
-  static let posterWidth: CGFloat = floor((1920 - TVLayout.leading * 2 - spacing * CGFloat(columns - 1)) / CGFloat(columns))
+  static let posterWidth: CGFloat = floor(
+    (1920 - 80 * 2 - TVLayout.leading * 2 - spacing * CGFloat(columns - 1)) / CGFloat(columns))
   static var layout: [GridItem] { Array(repeating: GridItem(.fixed(posterWidth), spacing: spacing), count: columns) }
 }
 

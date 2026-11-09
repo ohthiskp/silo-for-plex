@@ -61,6 +61,8 @@ struct TVHome: View {
             stops: [.init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
             startPoint: .top, endPoint: .bottom)
         }
+        // Edge to edge: out past the TV's 80 pt side safe area.
+        .padding(.horizontal, -80)
         .id(current.id)
         .transition(.opacity)
 
