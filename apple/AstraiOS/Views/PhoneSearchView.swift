@@ -65,7 +65,7 @@ struct PhoneSearchView: View {
     }
     .scrollIndicators(.never)
     .scrollDismissesKeyboard(.immediately)
-    .background(Astra.Color.bg.ignoresSafeArea())
+    .astraPageBackground()
     .navigationDestination(item: $person) { PersonView(library: library, person: $0) }
     .task(id: query) { await runSearch() }
   }
@@ -426,7 +426,7 @@ struct PersonView: View {
       .padding(.bottom, 100)
     }
     .scrollIndicators(.never)
-    .background(Astra.Color.bg.ignoresSafeArea())
+    .astraPageBackground()
     .navigationTitle(person.name)
     .navigationBarTitleDisplayMode(.inline)
     .toolbar(.visible, for: .navigationBar)

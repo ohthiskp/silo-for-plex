@@ -46,7 +46,7 @@ struct LibrariesView: View {
       .padding(.bottom, 100)
     }
     .scrollIndicators(.never)
-    .background(Astra.Color.bg.ignoresSafeArea())
+    .astraPageBackground()
     .astraAnimation(Astra.Motion.base, value: segment)
     .sheet(isPresented: $showSettings) {
       NavigationStack {

@@ -12,6 +12,8 @@ struct HomeView: View {
   /// The switcher shows only near the top of the page, so the hero's title
   /// never slides under it. Changes only when crossing the line, not every frame.
   @State private var showsTopBar = true
+  /// The hero title on screen; the frosted page background follows it.
+  @State private var heroItem: PlexMetadata?
 
   private var heroHeight: CGFloat {
     min(Astra.Layout.heroHeight, max(380, viewport * Astra.Layout.heroShare))
@@ -27,7 +29,8 @@ struct HomeView: View {
         .allowsHitTesting(showsTopBar)
         .astraAnimation(Astra.Motion.base, value: showsTopBar)
     }
-    .background(Astra.Color.bg.ignoresSafeArea())
+    // KP (2026-11-09): frosted Liquid Glass over the hero's artwork, not flat black.
+    .background(AmbientBackdrop(library: library, item: heroItem ?? library.homeHero.first))
     // Astra: the chosen service's brand colour accents the page (Apple TV+'s is white).
     // Settings → Appearance → Streaming Service Accents turns it off.
     .environment(
@@ -60,7 +63,7 @@ struct HomeView: View {
           // Astra (KP, 2026-11-07): the hero follows the finger (or the
           // trackpad) and snaps to the next title; a stretching dot shows
           // where you are. No arrows, on iPhone and Mac.
-          SwipeHero(library: library, items: library.homeHero, height: heroHeight)
+          SwipeHero(library: library, items: library.homeHero, height: heroHeight) { heroItem = $0 }
           // A new set of titles (another service) starts a fresh carousel.
           .id(library.selectedService?.id ?? "for-you")
           .tvFullBleed()
@@ -519,9 +522,17 @@ struct HeroInfo: View {
   @Environment(\.playItem) private var playItem
   @Environment(AppModel.self) private var app
 
+  /// The server's full copy (read ahead for Home), for the 4K / Dolby /
+  /// Atmos pills and the runtime: a streaming-list title has no media of
+  /// its own, so without this the hero showed only "2026 · PG".
+  @State private var full: PlexMetadata?
+
   private var playable: Bool {
     library.availability(of: item) != .notOnServer && app.canPlay(item)
   }
+
+  /// Best copy known: the full one, else the index's match, else the title itself.
+  private var shown: PlexMetadata { full ?? library.indexMatch(item) ?? item }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -540,8 +551,19 @@ struct HeroInfo: View {
       // KP's mockup (2026-11-08): no summary; "year · runtime · rating",
       // the 4K / Dolby Vision / Atmos pills, then Play and +.
       VStack(alignment: .leading, spacing: 8) {
-        DetailMetaLine(item: item, library: library, showsGenres: false, fontSize: 14.5)
-        FormatBadges(item: item)
+        // Genres too when there are no format pills (not on the server),
+        // so the hero never reads as empty.
+        let pills = shown.media.isEmpty == false
+        DetailMetaLine(item: shown, library: library, showsGenres: !pills, fontSize: 14.5)
+        FormatBadges(item: shown)
+      }
+      .task(id: item.id) {
+        full = nil
+        let key = item.isCatalogOnly ? library.indexMatch(item)?.ratingKey : item.ratingKey
+        guard let key else { return }
+        let found = try? await library.details(key)
+        guard !Task.isCancelled else { return }
+        full = found
       }
       // Same height for every title, so the buttons never move.
       .frame(height: 52 * Astra.Layout.textScale, alignment: .topLeading)
@@ -582,6 +604,24 @@ struct HeroScrim: View {
         ], startPoint: .top, endPoint: .bottom)
       LinearGradient(
         colors: [Astra.Color.bg.opacity(0.85), Astra.Color.bg.opacity(0)], startPoint: .leading,
+        endPoint: .init(x: 0.6, y: 0.5))
+    }
+    .allowsHitTesting(false)
+  }
+}
+
+/// The Home hero's shade: dark behind the title at the left, a little at the
+/// bottom; the bottom edge itself is a fade (mask), not a band of black.
+struct HeroBlend: View {
+  var body: some View {
+    ZStack {
+      LinearGradient(
+        stops: [
+          .init(color: Astra.Color.bg.opacity(0), location: 0.4),
+          .init(color: Astra.Color.bg.opacity(0.5), location: 1),
+        ], startPoint: .top, endPoint: .bottom)
+      LinearGradient(
+        colors: [Astra.Color.bg.opacity(0.8), Astra.Color.bg.opacity(0)], startPoint: .leading,
         endPoint: .init(x: 0.6, y: 0.5))
     }
     .allowsHitTesting(false)
@@ -718,8 +758,12 @@ struct WatchlistButton: View {
     var library: LibraryStore
     var items: [PlexMetadata]
     var height: CGFloat
+    /// The title now showing (for the page's frosted background).
+    var onCurrent: (PlexMetadata) -> Void = { _ in }
 
     @State private var position: Int?
+    /// How far the page has scrolled the hero up; it blurs and fades by it.
+    @State private var scrolled: CGFloat = 0
     /// Pages scrolled, fractional while dragging (1.5 = halfway to the third).
     @State private var progress: CGFloat = 0
     @Environment(\.contentLeading) private var leading
@@ -740,6 +784,11 @@ struct WatchlistButton: View {
       .scrollPosition(id: $position)
       .scrollIndicators(.never)
       .modifier(PageProgressReader(progress: $progress, position: position))
+      .modifier(ScrolledAway(offset: $scrolled))
+      .onAppear { if let first = items.first { onCurrent(first) } }
+      .onChange(of: position) { _, now in
+        if let now, items.indices.contains(now) { onCurrent(items[now]) }
+      }
       .overlay(alignment: .bottom) {
         if items.count > 1 {
           // On the Mac a click on a dot moves there too (a mouse can't swipe).
@@ -771,7 +820,17 @@ struct WatchlistButton: View {
           )
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .clipped()
-          HeroScrim()
+          // KP (2026-11-09): scrolling down, the artwork blurs into the
+          // frosted background instead of sliding off as a hard picture.
+          .blur(radius: min(30, scrolled / 12))
+          HeroBlend()
+        }
+        // The bottom dissolves into the frosted background (the same
+        // artwork, blurred), so there is no edge between hero and rows.
+        .mask {
+          LinearGradient(
+            stops: [.init(color: .black, location: 0.55), .init(color: .clear, location: 1)],
+            startPoint: .top, endPoint: .bottom)
         }
       }
       .clipped()

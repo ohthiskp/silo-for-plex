@@ -69,6 +69,7 @@ struct MainView: View {
       .padding(.leading, Astra.Sidebar.margin)
     }
     .background(Astra.Color.bg.ignoresSafeArea())
+    .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     .environment(\.openItem) { item in
       // A TMDB-only title opens too; its page finds it on the server or greys out Play.
       astraWithAnimation(Self.cardMotion) { path.append(.details(item)) }

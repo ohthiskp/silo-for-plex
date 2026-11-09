@@ -51,7 +51,7 @@ struct AstraPage<Content: View>: View {
     }
     .scrollIndicators(.never)
     .astraScrollEdges()
-    .background(Astra.Color.bg.ignoresSafeArea())
+    .astraPageBackground()
   }
 }
 
@@ -506,7 +506,7 @@ struct SettingsPage: View {
     }
     .padding(.top, Astra.Spacing.pageTop)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .background(Astra.Color.bg.ignoresSafeArea())
+    .astraPageBackground()
   }
 }
 
