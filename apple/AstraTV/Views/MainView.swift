@@ -109,6 +109,7 @@ struct MainView: View {
     }
     .environment(\.tvLaunchFocus, $launchFocus)
     .background(Astra.Color.bg.ignoresSafeArea())
+    .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     // Moving left into the sidebar lands on the open page's icon, whichever
     // row you came from.
     .onChange(of: sidebarFocus) { old, new in

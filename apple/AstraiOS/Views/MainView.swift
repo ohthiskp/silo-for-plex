@@ -54,6 +54,7 @@ struct MainView: View {
     // A tab turned off in Settings while open: back to Home.
     .onChange(of: storedTabs) { if !tabs.contains(tab) { tab = .home } }
     .environment(\.playItem) { app.play($0) }
+    .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     .onAppear {
       if !tabs.contains(tab) { tab = .home }
       // The title's chevron in the player opens its details in the current tab.

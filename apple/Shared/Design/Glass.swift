@@ -1,3 +1,4 @@
+import AstraKit
 import SwiftUI
 
 // Astra uses Apple's own Liquid Glass (macOS 26): the system glass button
@@ -273,4 +274,84 @@ struct ClearGlassButtonStyle: ButtonStyle {
       .opacity(isEnabled ? 1 : 0.45)
       .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
   }
+}
+
+/// The page background behind Home and the other pages (KP, 2026-11-09:
+/// "liquid frosted glass rather than just completely black"): the current
+/// title's artwork, heavily blurred, under a full-screen pane of Liquid
+/// Glass, with a dark wash so text stays readable. With no artwork it is the
+/// plain background.
+struct AmbientBackdrop: View {
+  var library: LibraryStore
+  var item: PlexMetadata?
+
+  var body: some View {
+    ZStack {
+      Astra.Color.bg
+      if let item {
+        ArtworkImage(library: library, item: item, kind: .backdrop, width: 640, height: 360, placeholder: Color.clear)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .clipped()
+          .blur(radius: 60, opaque: true)
+          .opacity(0.7)
+          .id(item.id)
+          .astraTransition(.opacity)
+      }
+      Rectangle().fill(Color.clear)
+        .astraGlass(in: Rectangle())
+      Astra.Color.bg.opacity(0.45)
+    }
+    .astraAnimation(Astra.Motion.hero, value: item?.id)
+    .ignoresSafeArea()
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+  }
+}
+
+/// Where a view sits in its vertical scroll view: 0 at the top, growing as
+/// it scrolls up out of sight. The hero blurs and fades by it.
+struct ScrolledAway: ViewModifier {
+  @Binding var offset: CGFloat
+
+  func body(content: Content) -> some View {
+    content.onGeometryChange(for: CGFloat.self, of: { max(0, -$0.frame(in: .scrollView).minY) }) { offset = $0 }
+  }
+}
+
+/// The title whose artwork frosts the page backgrounds, set once by each
+/// app's shell (Home's first hero title); nil shows the plain background.
+struct AmbientSource {
+  var library: LibraryStore
+  var item: PlexMetadata?
+}
+
+private struct AmbientKey: EnvironmentKey {
+  static var defaultValue: AmbientSource? { nil }
+}
+
+extension EnvironmentValues {
+  var ambient: AmbientSource? {
+    get { self[AmbientKey.self] }
+    set { self[AmbientKey.self] = newValue }
+  }
+}
+
+private struct PageBackground: ViewModifier {
+  @Environment(\.ambient) private var ambient
+
+  func body(content: Content) -> some View {
+    content.background {
+      if let ambient {
+        AmbientBackdrop(library: ambient.library, item: ambient.item)
+      } else {
+        Astra.Color.bg.ignoresSafeArea()
+      }
+    }
+  }
+}
+
+extension View {
+  /// A page's background: frosted Liquid Glass over the shell's artwork
+  /// (KP, 2026-11-09), else the plain background.
+  func astraPageBackground() -> some View { modifier(PageBackground()) }
 }

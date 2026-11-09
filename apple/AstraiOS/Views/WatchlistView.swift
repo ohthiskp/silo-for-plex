@@ -17,7 +17,7 @@ struct WatchlistView: View {
         .padding(.bottom, 100)
     }
     .scrollIndicators(.never)
-    .background(Astra.Color.bg.ignoresSafeArea())
+    .astraPageBackground()
     .navigationTitle("Watchlist")
     .navigationBarTitleDisplayMode(.large)
     .toolbar(.visible, for: .navigationBar)
