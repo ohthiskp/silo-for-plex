@@ -271,7 +271,8 @@ private struct TVServiceSidebar: View {
             .resizable()
             .scaledToFit()
             .frame(width: TVLayout.sidebarCircle * 0.62, height: min(service.logoHeight * 0.9, 26))
-            .foregroundStyle(brand)
+            // White until chosen; the chosen one in its brand colour (KP).
+            .foregroundStyle(selected ? brand : .white)
         } else {
           Image(systemName: "sparkles")
             .font(.system(size: 28, weight: .semibold))

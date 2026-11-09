@@ -35,7 +35,19 @@ enum TVTab: String, CaseIterable, Identifiable {
     }
   }
 
-  /// The centred text items; Search and Settings are icons.
+  /// The icon beside each centred item's name (KP: "put logos on top bar").
+  var icon: String {
+    switch self {
+    case .search: "magnifyingglass"
+    case .home: "house.fill"
+    case .movies: "film.fill"
+    case .shows: "tv.fill"
+    case .watchlist: "bookmark.fill"
+    case .settings: "gearshape.fill"
+    }
+  }
+
+  /// The centred items (icon and name); Search and Settings are icons only.
   static let centre: [TVTab] = [.home, .movies, .shows, .watchlist]
 }
 
@@ -167,7 +179,11 @@ private struct TVTopBar: View {
           Image(systemName: "magnifyingglass").font(.system(size: 28, weight: .semibold))
         }
         ForEach(TVTab.centre) { page in
-          item(page) { Text(page.title).font(.system(size: 29, weight: .semibold)) }
+          item(page) {
+            Label(page.title, systemImage: page.icon)
+              .labelStyle(TVBarLabelStyle())
+              .font(.system(size: 29, weight: .semibold))
+          }
         }
       }
       HStack {
@@ -197,6 +213,16 @@ private struct TVTopBar: View {
     .focused(focus, equals: page)
     .accessibilityLabel(page.title)
     .accessibilityAddTraits(tab == page ? .isSelected : [])
+  }
+}
+
+/// Icon then name, close together.
+private struct TVBarLabelStyle: LabelStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    HStack(spacing: 12) {
+      configuration.icon.font(.system(size: 26, weight: .semibold))
+      configuration.title
+    }
   }
 }
 
