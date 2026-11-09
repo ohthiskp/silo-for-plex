@@ -44,12 +44,14 @@ final class RemoteNavigationTests: XCTestCase {
     app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
   }
 
-  /// tvOS can start with focus in the tab bar; move down into the page.
+  /// tvOS starts with focus in the tab bar; move down into the page (it
+  /// can take a moment to have something focusable while Home loads).
   private func leaveTabBar() {
-    for _ in 0..<2 {
+    for _ in 0..<8 {
       let label = focusedElement.exists ? focusedElement.label : ""
-      guard ["Home", "Search", "Library"].contains(label) else { return }
+      guard label.isEmpty || ["Home", "Search", "Library"].contains(label) else { return }
       press(.down)
+      sleep(1)
     }
   }
 
@@ -142,7 +144,7 @@ final class RemoteNavigationTests: XCTestCase {
     let collapsed = netflix.frame.width
     shot("sidebar-collapsed")
     leaveTabBar()
-    press(.left, times: 3)
+    press(.left, times: 2)
     sleep(1)
     shot("sidebar-open")
     XCTAssertGreaterThan(netflix.frame.width, collapsed + 40, "Moving left didn't open the sidebar")
@@ -184,7 +186,9 @@ final class RemoteNavigationTests: XCTestCase {
     XCTAssertTrue(homeHero.waitForExistence(timeout: 10), "Closing the player didn't return to Home")
     sleep(2)
     shot("home-after-player")
-    // Menu and Select still work after the player.
+    // Menu and Select still work after the player: down into Continue
+    // Watching, open the first card.
+    leaveTabBar()
     press(.down)
     press(.select)
     XCTAssertTrue(detailsMore.waitForExistence(timeout: 15), "Couldn't open Details after the player")
