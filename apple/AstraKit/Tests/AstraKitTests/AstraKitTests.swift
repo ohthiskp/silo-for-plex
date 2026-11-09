@@ -944,7 +944,8 @@ final class LibraryIndexerTests: XCTestCase {
       XCTAssertEqual(query.first { $0.name == "X-Plex-Container-Size" }?.value, "1000")
       return (200, page(start: start, count: max(0, min(1000, 2500 - start))))
     }
-    let index = try await LibraryIndexer.build(client: client(transport), sections: [try section("1", "movie")])
+    let index = try await LibraryIndexer.build(
+      client: client(transport), sections: [try section("1", "movie")], pageSize: 1000)
     XCTAssertEqual(index.count, 2500)
     XCTAssertEqual(index["movie:2499"]?.ratingKey, "2499")
     // Four pages at once: 0, 1000, 2000 (short, the end) and 3000 (empty).
@@ -958,7 +959,7 @@ final class LibraryIndexerTests: XCTestCase {
       return (200, page(start: start, count: max(0, min(1000, 2500 - start))))
     }
     let index = try await LibraryIndexer.build(
-      client: client(transport), sections: [try section("1", "movie")], parallel: 1)
+      client: client(transport), sections: [try section("1", "movie")], pageSize: 1000, parallel: 1)
     XCTAssertEqual(index.count, 2500)
     XCTAssertEqual(transport.requests.count, 3)
   }
@@ -994,6 +995,21 @@ final class LibraryIndexerTests: XCTestCase {
       XCTAssertEqual((error as? URLError)?.code, .timedOut)
       XCTAssertTrue(PlexError.describe(error, server: "Ohana").hasPrefix("Ohana took too long to answer"))
     }
+  }
+
+  /// KP (2026-11-09): over a remote connection a big page timed out and no
+  /// index was ever saved. Pages are 250 by default and a failed one is retried.
+  func testSmallPagesAndOneRetryPerPage() async throws {
+    let failed = LockedFlag()
+    let transport = FakeTransport { [self] request in
+      let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+      XCTAssertEqual(query.first { $0.name == "X-Plex-Container-Size" }?.value, "250")
+      let start = Int(query.first { $0.name == "X-Plex-Container-Start" }?.value ?? "0")!
+      if start == 250, failed.setOnce() { throw URLError(.timedOut) }
+      return (200, page(start: start, count: max(0, min(250, 600 - start))))
+    }
+    let index = try await LibraryIndexer.build(client: client(transport), sections: [try section("1", "movie")])
+    XCTAssertEqual(index.count, 600)
   }
 
   func testSkipsMusicAndPhotoLibraries() async throws {
@@ -2007,5 +2023,17 @@ final class RemoteScrubTests: XCTestCase {
     XCTAssertEqual(RemoteScrub.target(start: 100, fraction: 0.5, duration: 3_000), 250)
     XCTAssertEqual(RemoteScrub.target(start: 30, fraction: -1, duration: 3_000), 0)
     XCTAssertEqual(RemoteScrub.target(start: 2_900, fraction: 1, duration: 3_000), 3_000)
+  }
+}
+
+/// True the first time `setOnce` is called, false after; safe from any thread.
+final class LockedFlag: @unchecked Sendable {
+  private let lock = NSLock()
+  private var done = false
+  func setOnce() -> Bool {
+    lock.withLock {
+      defer { done = true }
+      return !done
+    }
   }
 }

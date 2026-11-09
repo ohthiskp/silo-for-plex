@@ -77,7 +77,7 @@ public enum LibraryIndexer {
   /// request times out on slow servers), up to `parallel` pages at once. Throws when any page fails, so a partial or
   /// empty index is never mistaken for the real one and saved.
   public static func build(
-    client: PlexServerClient, sections: [PlexLibrarySection], pageSize: Int = 1000, parallel: Int = 4
+    client: PlexServerClient, sections: [PlexLibrarySection], pageSize: Int = 250, parallel: Int = 4
   ) async throws -> [String: PlexMetadata] {
     let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
     // One section at a time, so at most `parallel` requests are ever in flight
@@ -135,7 +135,17 @@ public enum LibraryIndexer {
         for i in 0..<max(1, parallel) {
           let offset = start + i * pageSize
           group.addTask {
-            (i, try await client.libraryItems(sectionKey: section.key, sort: "titleSort", start: offset, size: pageSize))
+            // A page of 1,000 over a remote connection could take longer than
+            // the 60 s a request may run, so no index was ever saved and every
+            // new title waited on a server search (KP, 2026-11-09). Pages are
+            // 250 now, and a failed page is asked for once more.
+            do {
+              return (i, try await client.libraryItems(sectionKey: section.key, sort: "titleSort", start: offset, size: pageSize))
+            } catch is CancellationError {
+              throw CancellationError()
+            } catch {
+              return (i, try await client.libraryItems(sectionKey: section.key, sort: "titleSort", start: offset, size: pageSize))
+            }
           }
         }
         var pages = [[PlexMetadata]](repeating: [], count: max(1, parallel))
