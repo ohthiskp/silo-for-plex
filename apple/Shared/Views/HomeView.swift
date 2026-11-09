@@ -27,6 +27,16 @@ struct HomeView: View {
     // The page runs under the title bar / status bar; the switcher above it stays inside the safe area.
     ZStack(alignment: .top) {
       page
+      #if os(iOS)
+        // KP (2026-11-09): the tabs vanished on bright artwork. A blur runs
+        // down from the Dynamic Island, behind the bar while it shows and
+        // under the status bar once the page scrolls, fading out softly.
+        TopEdgeBlur()
+          .frame(height: showsTopBar ? 112 : 6)
+          .ignoresSafeArea(edges: .top)
+          .allowsHitTesting(false)
+          .astraAnimation(Astra.Motion.base, value: showsTopBar)
+      #endif
       topBar
         .opacity(showsTopBar ? 1 : 0)
         .offset(y: showsTopBar ? 0 : -12)
@@ -191,26 +201,6 @@ struct HomeView: View {
       }
       .padding(.top, Astra.Spacing.s)
       .padding(.leading, leading)
-      // KP (2026-11-09): the tabs vanished on bright artwork. A soft blur
-      // runs down from the Dynamic Island behind the bar and fades out
-      // below the tabs, so there is no hard edge.
-      .background {
-        ZStack {
-          Rectangle().fill(.ultraThinMaterial)
-          LinearGradient(
-            colors: [Astra.Color.bg.opacity(0.55), Astra.Color.bg.opacity(0)],
-            startPoint: .top, endPoint: .bottom)
-        }
-        .mask {
-          LinearGradient(
-            stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.55),
-                    .init(color: .clear, location: 1)],
-            startPoint: .top, endPoint: .bottom)
-        }
-        .padding(.bottom, -28)
-        .ignoresSafeArea(edges: .top)
-        .allowsHitTesting(false)
-      }
     #else
       HStack(spacing: Astra.Spacing.s) {
         if library.tmdb != nil {
@@ -226,6 +216,29 @@ struct HomeView: View {
   }
 }
 
+#if os(iOS)
+  /// A blur at the top of the screen that fades out downwards, with the
+  /// page colour laid over it so white tabs and the clock always read.
+  struct TopEdgeBlur: View {
+    var body: some View {
+      ZStack {
+        Rectangle().fill(.regularMaterial)
+        LinearGradient(
+          colors: [Astra.Color.bg.opacity(0.7), Astra.Color.bg.opacity(0.35)],
+          startPoint: .top, endPoint: .bottom)
+      }
+      .mask {
+        LinearGradient(
+          stops: [
+            .init(color: .black, location: 0), .init(color: .black, location: 0.6),
+            .init(color: .clear, location: 1),
+          ],
+          startPoint: .top, endPoint: .bottom)
+      }
+    }
+  }
+#endif
+
 // MARK: - Streaming-service switcher
 
 /// The floating glass switcher at the top of Home: For You and each service's logo.
@@ -238,13 +251,12 @@ struct ServicePill: View {
 
   var body: some View {
     #if os(iOS)
-      // Astra: iPhone shows a rail of separate glass chips that scrolls to the
-      // right, each logo in its brand colour; the chosen one is outlined in it
-      // (KP's mockup, 2026-11-07).
+      // Astra: iPhone shows a rail of tabs that scrolls to the right: white
+      // logos, the chosen one in a glass capsule (KP's mockup, 2026-11-09).
       ScrollView(.horizontal) {
         HStack(spacing: 8) {
           railChip(nil, label: "For You") {
-            Text("For You").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+            Text("For You").font(.system(size: 14, weight: .semibold)).foregroundStyle(Astra.Color.ink)
           }
           ForEach(StreamingService.all) { service in
             railChip(service, label: service.label) {
@@ -253,7 +265,9 @@ struct ServicePill: View {
                 .resizable()
                 .scaledToFit()
                 .frame(height: service.logoHeight * 0.85)
-                .foregroundStyle(logoColors ? Color(hex: service.accent) : .white)
+                // KP's mockup (2026-11-09): plain white tabs over the blur
+                // (the page's ink, so they read in the Light theme too).
+                .foregroundStyle(Astra.Color.ink)
             }
           }
         }
@@ -284,21 +298,19 @@ struct ServicePill: View {
       _ service: StreamingService?, label: String, @ViewBuilder content: () -> Label
     ) -> some View {
       let selected = library.selectedService == service
-      let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
       return Button {
         library.select(service)
       } label: {
-        // KP's mockup (2026-11-09): the chosen tab sits in a glass capsule
-        // with a thin line of its brand colour; the others are bare.
+        // KP's mockup (2026-11-09): the chosen tab sits in a glass capsule;
+        // the others are bare.
         content()
           .padding(.horizontal, 16)
           .frame(height: 36)
-          .opacity(selected ? 1 : 0.72)
+          .opacity(selected ? 1 : 0.8)
           .background {
             if selected {
               Capsule().fill(Astra.Color.ink.opacity(0.14))
-                .astraGlass(in: Capsule(), variant: .clear, interactive: true)
-                .overlay(Capsule().strokeBorder(brand.opacity(0.55), lineWidth: 1))
+                .astraGlass(in: Capsule(), variant: .clear)
             }
           }
           .contentShape(Capsule())
