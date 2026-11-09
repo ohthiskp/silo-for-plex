@@ -158,27 +158,40 @@ struct HomeView: View {
   }
 
   private var topBar: some View {
-    HStack(spacing: Astra.Spacing.s) {
-      if library.tmdb != nil {
-        ServicePill(library: library)
-      } else {
-        Spacer()
-      }
-      // Astra: on iPhone Settings moved to the Libraries tab, and the top right
-      // holds the Plex Watchlist (KP, 2026-11-07).
-      #if os(iOS)
-        Button {
-          showWatchlist = true
-        } label: {
-          Image(systemName: "bookmark")
+    #if os(iOS)
+      // KP's mockup (2026-11-09): the top left stays clear (no logo), the
+      // Plex Watchlist is a round glass button top right, and the streaming
+      // tabs run full width on the line below.
+      VStack(alignment: .leading, spacing: Astra.Spacing.s) {
+        HStack {
+          Spacer()
+          Button {
+            showWatchlist = true
+          } label: {
+            Image(systemName: "bookmark")
+          }
+          .astraIconButton(size: 40, variant: .clear)
+          .accessibilityLabel("Watchlist")
         }
-        .astraIconButton(size: 40, variant: .clear)
-        .accessibilityLabel("Watchlist")
-      #endif
-    }
-    .padding(.top, Astra.Spacing.s)
-    .padding(.leading, leading)
-    .padding(.trailing, Astra.Spacing.pageTrailing)
+        .padding(.trailing, Astra.Spacing.pageTrailing)
+        if library.tmdb != nil {
+          ServicePill(library: library)
+        }
+      }
+      .padding(.top, Astra.Spacing.s)
+      .padding(.leading, leading)
+    #else
+      HStack(spacing: Astra.Spacing.s) {
+        if library.tmdb != nil {
+          ServicePill(library: library)
+        } else {
+          Spacer()
+        }
+      }
+      .padding(.top, Astra.Spacing.s)
+      .padding(.leading, leading)
+      .padding(.trailing, Astra.Spacing.pageTrailing)
+    #endif
   }
 }
 
@@ -217,11 +230,10 @@ struct ServicePill: View {
         .padding(.trailing, 16)
       }
       .scrollIndicators(.never)
-      // Astra: the rail ends (fading out) before the Watchlist button instead
-      // of sliding underneath it.
+      // Astra: the rail fades out at the screen's right edge.
       .mask {
         LinearGradient(
-          stops: [.init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+          stops: [.init(color: .black, location: 0.92), .init(color: .clear, location: 1)],
           startPoint: .leading, endPoint: .trailing)
       }
       .astraAnimation(.snappy(duration: 0.22), value: library.selectedService)
@@ -245,12 +257,19 @@ struct ServicePill: View {
       return Button {
         library.select(service)
       } label: {
+        // KP's mockup (2026-11-09): the chosen tab sits in a glass capsule
+        // with a thin line of its brand colour; the others are bare.
         content()
           .padding(.horizontal, 16)
-          .frame(height: 38)
-          .background { if selected { Capsule().fill(brand.opacity(0.18)) } }
-          .overlay { if selected { Capsule().strokeBorder(brand, lineWidth: 1.5) } }
-          .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+          .frame(height: 36)
+          .opacity(selected ? 1 : 0.72)
+          .background {
+            if selected {
+              Capsule().fill(Astra.Color.ink.opacity(0.14))
+                .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+                .overlay(Capsule().strokeBorder(brand.opacity(0.55), lineWidth: 1))
+            }
+          }
           .contentShape(Capsule())
       }
       .buttonStyle(.plain)
@@ -455,7 +474,7 @@ struct TopTenCard: View {
     Button {
       openItem(item)
     } label: {
-      HStack(alignment: .bottom, spacing: -width * 0.22) {
+      HStack(alignment: .bottom, spacing: -width * 0.26) {
         RankNumber(rank: rank, size: height * 0.86)
         ArtworkImage(library: library, item: item, kind: .poster, width: width, height: height)
           .frame(width: width, height: height)
@@ -473,36 +492,30 @@ struct TopTenCard: View {
   }
 }
 
-/// The big Top 10 rank: solid white with a light outline (the page colour in
-/// the Light theme), sitting on the poster's baseline.
+/// The big Top 10 rank (KP's mockup, 2026-11-09): a solid, condensed
+/// number in a soft grey gradient, standing behind the poster on its
+/// baseline. Uses the page's ink, so it reads in every theme.
 struct RankNumber: View {
   var rank: Int
   var size: CGFloat = 150
 
   var body: some View {
-    let digits = Text("\(rank)")
-      .font(.system(size: size, weight: .black, design: .rounded))
+    Text("\(rank)")
+      .font(.system(size: size, weight: .heavy))
+      .fontWidth(.condensed)
       .monospacedDigit()
-      .tracking(rank >= 10 ? -size * 0.12 : 0)
-    let line = max(1.5, size / 70)
-    ZStack {
-      // An outline from eight offset copies (SwiftUI has no text stroke).
-      ForEach(0..<8, id: \.self) { step in
-        let angle = Double(step) * .pi / 4
-        digits
-          .foregroundStyle(Astra.Color.ink.opacity(0.85))
-          .offset(x: cos(angle) * line, y: sin(angle) * line)
-      }
-      // KP (2026-11-09): solid white numbers in every theme but Light,
-      // where white would vanish into the page.
-      digits.foregroundStyle(AstraAppearance.shared.appTheme == .light ? Astra.Color.bg : .white)
-    }
-    .lineLimit(1)
-    .fixedSize()
-    // The glyphs carry space under the baseline; pull the number down so its
-    // foot lines up with the poster's bottom edge.
-    .padding(.bottom, -size * 0.14)
-    .accessibilityHidden(true)
+      .tracking(rank >= 10 ? -size * 0.08 : 0)
+      .foregroundStyle(
+        LinearGradient(
+          colors: [Astra.Color.ink.opacity(0.42), Astra.Color.ink.opacity(0.12)],
+          startPoint: .top, endPoint: .bottom)
+      )
+      .lineLimit(1)
+      .fixedSize()
+      // The glyphs carry space under the baseline; pull the number down so its
+      // foot lines up with the poster's bottom edge.
+      .padding(.bottom, -size * 0.14)
+      .accessibilityHidden(true)
   }
 }
 
