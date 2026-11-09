@@ -282,6 +282,9 @@ struct PhoneSearchView: View {
     }
     searched = false
     peopleSearched = false
+    // Like Netflix: titles on the server that match show at once, as you
+    // type, and TMDB's ranked list replaces them a moment later.
+    results = library.localSearch(text, limit: 20)
     // A short pause so each keystroke doesn't send a request.
     try? await Task.pause(0.15)
     guard !Task.isCancelled, let tmdb = library.tmdb else {
