@@ -175,6 +175,8 @@ private struct TVTopBar: View {
     .padding(.top, 10)
     .frame(height: TVLayout.barHeight)
     .focusSection()
+    // Launch lands on the open page's item (Home), not the search icon.
+    .defaultFocus(focus, tab)
   }
 
   private func item<Label: View>(_ page: TVTab, round: Bool = false, @ViewBuilder label: () -> Label) -> some View {
