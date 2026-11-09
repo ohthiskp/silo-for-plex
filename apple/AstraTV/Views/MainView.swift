@@ -64,6 +64,9 @@ struct MainView: View {
         }
       }
     }
+    // While the player is up, nothing under it can take focus, so the remote
+    // (Menu above all) stays with the player.
+    .disabled(app.player.isActive)
     .environment(\.playItem) { app.play($0) }
     .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     .onAppear {

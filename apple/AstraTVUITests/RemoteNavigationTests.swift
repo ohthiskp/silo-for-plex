@@ -38,6 +38,10 @@ final class RemoteNavigationTests: XCTestCase {
   /// A Details page is open (its More button).
   private var detailsMore: XCUIElement { app.buttons["More"].firstMatch }
 
+  private var focusedElement: XCUIElement {
+    app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+  }
+
   private func waitGone(_ element: XCUIElement, timeout: TimeInterval = 8) -> Bool {
     let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
     return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed
@@ -104,12 +108,12 @@ final class RemoteNavigationTests: XCTestCase {
     let screen = app.windows.firstMatch.frame
     press(.down, times: 2)
     shot("home-scrolled-1")
-    press(.down, times: 3)
+    press(.down, times: 6)
     shot("home-scrolled-2")
     XCTAssertTrue(greats.exists, "No All-Time Greats row")
     XCTAssertLessThan(greats.frame.minY, screen.maxY, "Scrolling down didn't bring the last row on screen")
     // Up again to the hero.
-    press(.up, times: 6)
+    press(.up, times: 10)
     shot("home-back-to-top")
     XCTAssertGreaterThan(homeHero.frame.minY, screen.minY, "Scrolling up didn't return to the hero")
   }
@@ -160,7 +164,9 @@ final class RemoteNavigationTests: XCTestCase {
       press(.menu)
       sleep(1)
     }
-    XCTAssertTrue(waitGone(close, timeout: 10), "Menu didn't close the player")
+    let closed = waitGone(close, timeout: 10)
+    if !closed { print("Focus after Menu:", focusedElement.debugDescription) }
+    XCTAssertTrue(closed, "Menu didn't close the player")
     XCTAssertTrue(homeHero.waitForExistence(timeout: 10), "Closing the player didn't return to Home")
     sleep(2)
     shot("home-after-player")

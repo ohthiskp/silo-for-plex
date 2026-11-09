@@ -151,6 +151,9 @@ private struct TVHeroInfo: View {
 
   private enum Field: Hashable { case play, plus, info }
 
+  private var playable: Bool { library.availability(of: item) != .notOnServer && app.canPlay(item) }
+  private var firstFocus: Field { playable ? .play : (item.tmdbKey != nil ? .plus : .info) }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 22) {
       TVLogoTitle(library: library, item: item, maxWidth: 720, maxHeight: 220, textSize: 96)
@@ -175,7 +178,7 @@ private struct TVHeroInfo: View {
         }
         .buttonStyle(TVGlassButtonStyle(prominent: true))
         .focused($focus, equals: .play)
-        .disabled(library.availability(of: item) == .notOnServer || !app.canPlay(item))
+        .disabled(!playable)
 
         if item.tmdbKey != nil {
           TVRoundWatchlist(item: item)
@@ -203,8 +206,9 @@ private struct TVHeroInfo: View {
           .padding(.top, 4)
       }
     }
-    // Home opens on Play, not on the sidebar or the tab bar.
-    .defaultFocus($focus, .play, priority: .userInitiated)
+    // Home opens on Play (or + / info when the title can't play here), not
+    // on the sidebar or the tab bar.
+    .defaultFocus($focus, firstFocus, priority: .userInitiated)
     .onChange(of: focus) { _, new in focused = new != nil }
     .task(id: item.id) {
       certification = nil
@@ -241,7 +245,9 @@ private struct TVDots: View {
 private struct TVServiceSidebar: View {
   var library: LibraryStore
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
-  @FocusState private var focused: String?
+  /// The entry with focus, reported by each entry's button style.
+  @State private var focused: String?
+  @Namespace private var scope
 
   private static let forYou = "for-you"
   private var expanded: Bool { focused != nil }
@@ -263,8 +269,8 @@ private struct TVServiceSidebar: View {
       }
     }
     .frame(maxHeight: .infinity, alignment: .center)
+    .focusScope(scope)
     .focusSection()
-    .defaultFocus($focused, selectedKey)
     .animation(.snappy(duration: 0.25), value: expanded)
   }
 
@@ -290,8 +296,13 @@ private struct TVServiceSidebar: View {
       .padding(.horizontal, 14)
       .frame(height: 64)
     }
-    .buttonStyle(TVSidebarButtonStyle(selected: selected, brand: brand))
-    .focused($focused, equals: key)
+    .buttonStyle(
+      TVSidebarButtonStyle(selected: selected, brand: brand) { has in
+        if has { focused = key } else if focused == key { focused = nil }
+      }
+    )
+    // Moving onto the sidebar lands on the chosen service.
+    .prefersDefaultFocus(selected, in: scope)
     .accessibilityLabel(service?.label ?? "For You")
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
@@ -317,9 +328,10 @@ private struct TVServiceSidebar: View {
 private struct TVSidebarButtonStyle: ButtonStyle {
   var selected: Bool
   var brand: Color
+  var onFocus: (Bool) -> Void
 
   func makeBody(configuration: Configuration) -> some View {
-    TVSidebarButtonBody(configuration: configuration, selected: selected, brand: brand)
+    TVSidebarButtonBody(configuration: configuration, selected: selected, brand: brand, onFocus: onFocus)
   }
 }
 
@@ -327,6 +339,7 @@ private struct TVSidebarButtonBody: View {
   let configuration: ButtonStyleConfiguration
   var selected: Bool
   var brand: Color
+  var onFocus: (Bool) -> Void
   @Environment(\.isFocused) private var focused
 
   var body: some View {
@@ -341,6 +354,7 @@ private struct TVSidebarButtonBody: View {
       .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 14, y: 6)
       .focusEffectDisabled()
       .animation(.easeOut(duration: 0.15), value: focused)
+      .onChange(of: focused, initial: true) { _, new in onFocus(new) }
   }
 }
 
