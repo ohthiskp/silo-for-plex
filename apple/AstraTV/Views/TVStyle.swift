@@ -477,3 +477,19 @@ private struct TVFocusReporter: ViewModifier {
       .onChange(of: focused) { _, new in action(new) }
   }
 }
+
+/// The iPhone-based Apple TV layout (KP, 2026-11-09): sizes for 1920 × 1080.
+enum TVLayout {
+  /// Page edge for titles, rows and buttons.
+  static let leading: CGFloat = 90
+  static let sectionSpacing: CGFloat = 56
+  static let heroHeight: CGFloat = 900
+  /// The streaming switcher's top, under the system tab bar.
+  static let railTop: CGFloat = 150
+  static let poster: CGFloat = 230
+  static let continueCard = CGSize(width: 560, height: 315)
+  static let episodeCard = CGSize(width: 480, height: 270)
+  static let radius: CGFloat = 18
+  static let buttonHeight: CGFloat = 80
+  static let roundButton: CGFloat = 80
+}

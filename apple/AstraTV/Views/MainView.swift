@@ -15,252 +15,94 @@ struct TVRootView: View {
   }
 }
 
-/// The pages in the top bar (KP, 2026-11-09: laid out like Silo's Apple TV app).
+/// The Apple TV tabs: the iPhone's three (KP, 2026-11-09: "go based off how
+/// iOS is"). Settings is the gear on Library, as on the iPhone.
 enum TVTab: String, CaseIterable, Identifiable {
-  case home, movies, shows, watchlist
+  case home, search, library
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
     case .home: "Home"
-    case .movies: "Movies"
-    case .shows: "Shows"
-    case .watchlist: "Watchlist"
+    case .search: "Search"
+    case .library: "Library"
+    }
+  }
+
+  var symbol: String {
+    switch self {
+    case .home: "house.fill"
+    case .search: "magnifyingglass"
+    case .library: "square.stack.fill"
     }
   }
 }
 
-/// Where the bar can put focus: a tab, Search on its left, Settings on its right.
-enum TVBarItem: Hashable {
-  case tab(TVTab)
-  case search
-  case settings
-}
-
-/// What the page under the bar shows.
-enum TVPage: Hashable {
-  case tab(TVTab)
-  case search
-  case settings
-}
-
-/// Signed in on Apple TV: Silo's layout. A top bar (Search, Home, Movies,
-/// Shows, Watchlist, Settings) over the page; opening a title pushes its
-/// Details with the bar hidden, and Menu on the remote goes back.
-///
-/// Menu at the top level: from the page, focus goes up to the bar; from the
-/// bar on any page but Home, back to Home; from Home's bar, out of the app.
+/// Signed in on Apple TV: the system tab bar along the top (Liquid Glass on
+/// tvOS 26) with Home, Search and Library, each its own navigation stack.
+/// Opening a title pushes its Details; Menu goes back, then up to the tab
+/// bar, then out of the app, all handled by tvOS itself.
 struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
 
-  @State private var page: TVPage = Demo.tvPage
-  @State private var path: [Route] = Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
-  @FocusState private var barFocus: TVBarItem?
-  /// The bar can't take focus until the page has had it: launch focus goes to
-  /// the first card, not Search (Silo does the same).
-  @State private var barLocked = true
+  @State private var tab: TVTab = Demo.tvTab
+  @State private var paths: [TVTab: [Route]] = [
+    Demo.tvTab: Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
+  ]
+
+  private func path(_ tab: TVTab) -> Binding<[Route]> {
+    Binding(get: { paths[tab] ?? [] }, set: { paths[tab] = $0 })
+  }
 
   var body: some View {
-    ZStack(alignment: .top) {
-      NavigationStack(path: $path) {
-        root
-          .toolbar(.hidden, for: .navigationBar)
-          .navigationDestination(for: Route.self) { route in
-            switch route {
-            case .details(let item):
-              TVDetailPage(library: library, seed: item)
-                .toolbar(.hidden, for: .navigationBar)
-            }
-          }
-      }
-
-      if path.isEmpty {
-        TVTopBar(page: page, focus: $barFocus) { picked in
-          if picked != page { page = picked }
+    TabView(selection: $tab) {
+      ForEach(TVTab.allCases) { item in
+        Tab(item.title, systemImage: item.symbol, value: item) {
+          stack(item)
         }
-        .disabled(barLocked)
-        .transition(.opacity)
       }
     }
-    .background(TVColor.background.ignoresSafeArea())
-    .environment(\.openItem) { item in path.append(.details(item)) }
     .environment(\.playItem) { app.play($0) }
     .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     .onAppear {
-      app.player.openDetails = { item in path.append(.details(item)) }
-    }
-    .task {
-      try? await Task.pause(0.8)
-      barLocked = false
+      app.player.openDetails = { item in paths[tab, default: []].append(.details(item)) }
     }
   }
 
-  private var root: some View {
-    pageView
-      .id(page)
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .onExitCommand(perform: exitAction)
+  private func stack(_ item: TVTab) -> some View {
+    NavigationStack(path: path(item)) {
+      page(item)
+        .navigationDestination(for: Route.self) { route in
+          switch route {
+          case .details(let title):
+            TVDetailPage(library: library, seed: title)
+          }
+        }
+    }
+    .environment(\.openItem) { title in paths[item, default: []].append(.details(title)) }
   }
 
-  @ViewBuilder private var pageView: some View {
-    switch page {
-    case .tab(.home): TVHomeFeed(library: library)
-    case .tab(.movies): TVLibraryGrid(library: library, kind: "movie")
-    case .tab(.shows): TVLibraryGrid(library: library, kind: "show")
-    case .tab(.watchlist): TVWatchlistGrid(library: library)
+  @ViewBuilder private func page(_ item: TVTab) -> some View {
+    switch item {
+    case .home: TVHome(library: library)
     case .search:
       SearchView(library: library)
-        .padding(.top, TVMetrics.pageTopInset)
-        .background(Astra.Color.bg.ignoresSafeArea())
-    case .settings:
-      SettingsView(showsTitle: false)
-        .padding(.top, TVMetrics.pageTopInset)
-        .background(Astra.Color.bg.ignoresSafeArea())
-    }
-  }
-
-  /// Menu at the top level. Nil hands it to the system: out of the app.
-  private var exitAction: (() -> Void)? {
-    guard path.isEmpty else { return nil }
-    if barFocus == nil {
-      return { barFocus = barItem(for: page) }
-    }
-    if page != .tab(.home) {
-      return {
-        page = .tab(.home)
-        barFocus = .tab(.home)
-      }
-    }
-    return nil
-  }
-
-  private func barItem(for page: TVPage) -> TVBarItem {
-    switch page {
-    case .tab(let tab): .tab(tab)
-    case .search: .search
-    case .settings: .settings
+        .astraPageBackground()
+    case .library: TVLibraryPage(library: library)
     }
   }
 }
 
 extension Demo {
-  /// `-AstraDemoTab home|search|libraries|shows|watchlist|settings` for the TV screenshots.
-  static var tvPage: TVPage {
+  /// `-AstraDemoTab home|search|libraries|settings` for the TV screenshots.
+  static var tvTab: TVTab {
     switch tab {
     case "search": .search
-    case "libraries", "library", "movies": .tab(.movies)
-    case "shows": .tab(.shows)
-    case "watchlist": .tab(.watchlist)
-    case "settings": .settings
-    default: .tab(.home)
+    case "libraries", "library", "watchlist", "settings": .library
+    default: .home
     }
-  }
-}
-
-// MARK: - Top bar
-
-/// Silo's top menu bar: Search, the tabs centred on screen, Settings at the
-/// right. Focused = white capsule with black text; the open page = a faint
-/// grey capsule; the rest dimmed. The bar dims while focus is in the page.
-struct TVTopBar: View {
-  var page: TVPage
-  var focus: FocusState<TVBarItem?>.Binding
-  var choose: (TVPage) -> Void
-
-  private var barFocused: Bool { focus.wrappedValue != nil }
-
-  var body: some View {
-    ZStack {
-      HStack(spacing: TVMetrics.tabSpacing) {
-        iconButton("magnifyingglass", item: .search, page: .search, label: "Search")
-        ForEach(TVTab.allCases) { tab in
-          tabButton(tab)
-        }
-        // Balances Search so the tabs stay centred on screen.
-        Color.clear.frame(width: TVMetrics.barIconSize, height: TVMetrics.barIconSize)
-      }
-      .fixedSize()
-      .frame(maxWidth: .infinity)
-
-      HStack {
-        Spacer()
-        iconButton("gearshape.fill", item: .settings, page: .settings, label: "Settings")
-      }
-    }
-    .frame(height: TVMetrics.barHeight)
-    .padding(.horizontal, TVMetrics.safeAreaX)
-    .padding(.top, TVMetrics.barTopInset)
-    .frame(maxWidth: .infinity, alignment: .top)
-    .ignoresSafeArea(edges: [.top, .horizontal])
-    .opacity(barFocused ? 1 : TVMetrics.barDimmedOpacity)
-    .animation(.easeInOut(duration: 0.2), value: barFocused)
-    // Up from the page lands on the open page's tab, not whatever is above the card.
-    .defaultFocus(focus, defaultItem, priority: .userInitiated)
-    .focusSection()
-  }
-
-  private var defaultItem: TVBarItem {
-    switch page {
-    case .tab(let tab): .tab(tab)
-    case .search: .search
-    case .settings: .settings
-    }
-  }
-
-  private func tabButton(_ tab: TVTab) -> some View {
-    let focused = focus.wrappedValue == .tab(tab)
-    let selected = page == .tab(tab)
-    return Button {
-      choose(.tab(tab))
-    } label: {
-      Text(tab.title)
-        .font(.system(size: TVMetrics.tabLabelSize, weight: .semibold))
-        .foregroundStyle(focused ? Color.black : (selected ? Color.white : Color.white.opacity(0.62)))
-        .lineLimit(1)
-        .padding(.horizontal, TVMetrics.tabPaddingHorizontal)
-        .padding(.vertical, TVMetrics.tabPaddingVertical)
-        .modifier(TVCapsuleChrome(selected: selected, focused: focused))
-    }
-    .buttonStyle(TVPlainButtonStyle())
-    .focused(focus, equals: .tab(tab))
-    // Moving across the bar opens each tab, as on the Apple TV app.
-    .onChange(of: focused) { _, now in if now, !selected { choose(.tab(tab)) } }
-    .accessibilityLabel(tab.title)
-    .accessibilityAddTraits(selected ? .isSelected : [])
-  }
-
-  private func iconButton(_ symbol: String, item: TVBarItem, page target: TVPage, label: String) -> some View {
-    let focused = focus.wrappedValue == item
-    let selected = page == target
-    return Button {
-      choose(target)
-    } label: {
-      Image(systemName: symbol)
-        .font(.system(size: 26, weight: .semibold))
-        .foregroundStyle(focused ? Color.black : (selected ? Color.white : Color.white.opacity(0.62)))
-        .frame(width: TVMetrics.barIconSize, height: TVMetrics.barIconSize)
-        .modifier(TVCapsuleChrome(selected: selected, focused: focused))
-    }
-    .buttonStyle(TVPlainButtonStyle())
-    .focused(focus, equals: item)
-    .accessibilityLabel(label)
-    .accessibilityAddTraits(selected ? .isSelected : [])
-  }
-}
-
-private struct TVCapsuleChrome: ViewModifier {
-  var selected: Bool
-  var focused: Bool
-
-  func body(content: Content) -> some View {
-    content
-      .background(Capsule().fill(focused ? Color.white : (selected ? TVColor.selectedFill : Color.clear)))
-      .overlay(Capsule().strokeBorder(focused || !selected ? Color.clear : TVColor.selectedBorder, lineWidth: 1))
-      .scaleEffect(focused ? 1.04 : 1)
-      .animation(.spring(response: 0.3, dampingFraction: 0.8), value: focused)
-      .animation(.easeInOut(duration: 0.18), value: selected)
   }
 }
 
