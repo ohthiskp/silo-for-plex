@@ -96,13 +96,24 @@ struct MainView: View {
     }
   }
 
+  /// Brings the bar back (it fades out while a page is scrolled down, and
+  /// a faded bar can't take focus), then moves focus onto the page's item.
+  private func focusBar(_ item: TVTab) {
+    scrolledDown = false
+    Task { @MainActor in
+      await Task.yield()
+      try? await Task.pause(0.05)
+      barFocus = item
+    }
+  }
+
   private func stack(_ item: TVTab) -> some View {
     NavigationStack(path: path(item)) {
       page(item)
         // Menu on a page goes up to the bar; on the bar it leaves the app
         // (nil hands the press on). It sits on the page itself, inside the
         // stack, so in Details the stack's own Back runs instead.
-        .onExitCommand(perform: barFocus == nil ? { barFocus = item } : nil)
+        .onExitCommand(perform: barFocus == nil ? { focusBar(item) } : nil)
         .navigationDestination(for: Route.self) { route in
           switch route {
           case .details(let title):
