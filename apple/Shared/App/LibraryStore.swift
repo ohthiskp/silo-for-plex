@@ -838,9 +838,12 @@ final class LibraryStore {
 
   private func resolveUncached(_ item: PlexMetadata) async throws -> PlexMetadata {
     // The library index already knows: no search needed (by TMDB id, or title and year).
-    // The saved index loads in a moment, so wait for it rather than search.
-    let index = (try? await loadLibraryIndex()) ?? libraryIndex
-    if let hit = index?.match(item) { return hit }
+    // Never wait for the index here: with no saved copy, reading it means
+    // reading the whole library from the server, which over a remote
+    // connection never finished and left Details stuck with Play greyed
+    // (KP, 2026-11-09). Use what is in memory, start a read, and search.
+    if libraryIndex == nil { spawn { [weak self] in _ = try? await self?.loadLibraryIndex() } }
+    if let hit = libraryIndex?.match(item) { return hit }
     // Not in the index (added since it was read, or titled differently on
     // the server): ask the server.
     return try await searchMatch(item)
