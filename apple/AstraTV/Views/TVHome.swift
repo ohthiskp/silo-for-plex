@@ -20,16 +20,23 @@ struct TVHome: View {
   }
 
   var body: some View {
-    ScrollView(.vertical, showsIndicators: false) {
-      VStack(alignment: .leading, spacing: TVLayout.sectionSpacing) {
-        hero
-        rows
+    ZStack(alignment: .leading) {
+      ScrollView(.vertical, showsIndicators: false) {
+        VStack(alignment: .leading, spacing: TVLayout.sectionSpacing) {
+          hero
+          rows
+        }
+        .padding(.bottom, 80)
       }
-      .padding(.bottom, 80)
+      .scrollClipDisabled()
+      .environment(\.tvLeading, TVLayout.homeLeading)
+      .ignoresSafeArea(edges: .top)
+
+      // KP (2026-11-09): the streaming services down the left, logos only
+      // until focus moves onto them.
+      TVServiceSidebar(library: library)
     }
-    .scrollClipDisabled()
     .background { AmbientBackdrop(library: library, item: current) }
-    .ignoresSafeArea(edges: .top)
     .onChange(of: heroItems.map(\.id)) { _, ids in if index >= ids.count { index = 0 } }
     // The hero turns every 9 s while focus is elsewhere.
     .task(id: "\(index)|\(heroFocused)|\(heroItems.count)") {
@@ -72,7 +79,7 @@ struct TVHome: View {
         )
         .id("info-\(current.id)")
         .transition(.opacity)
-        .padding(.leading, TVLayout.leading)
+        .padding(.leading, TVLayout.homeLeading)
         .padding(.bottom, 40)
       } else {
         VStack(spacing: 20) {
@@ -87,10 +94,6 @@ struct TVHome: View {
         .frame(height: TVLayout.heroHeight)
       }
 
-      // The streaming switcher sits at the top of the hero, as on the iPhone.
-      TVServiceRail(library: library)
-        .padding(.top, TVLayout.railTop)
-        .frame(maxHeight: .infinity, alignment: .top)
     }
     .frame(height: TVLayout.heroHeight)
     .animation(.easeInOut(duration: 0.6), value: current?.id)
@@ -200,6 +203,8 @@ private struct TVHeroInfo: View {
           .padding(.top, 4)
       }
     }
+    // Home opens on Play, not on the sidebar or the tab bar.
+    .defaultFocus($focus, .play, priority: .userInitiated)
     .onChange(of: focus) { _, new in focused = new != nil }
     .task(id: item.id) {
       certification = nil
@@ -227,56 +232,115 @@ private struct TVDots: View {
   }
 }
 
-// MARK: - Streaming switcher
+// MARK: - Streaming sidebar
 
-/// For You and the streaming services as glass chips, each logo in its brand
-/// colour and the chosen one outlined in it (the iPhone's rail).
-private struct TVServiceRail: View {
+/// For You and the streaming services down the left of Home (KP,
+/// 2026-11-09): only the logos while focus is elsewhere; move left onto them
+/// and the sidebar opens on a glass panel with each service's name. The
+/// chosen one is outlined in its brand colour.
+private struct TVServiceSidebar: View {
   var library: LibraryStore
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
+  @FocusState private var focused: String?
+
+  private static let forYou = "for-you"
+  private var expanded: Bool { focused != nil }
+  private var selectedKey: String { library.selectedService?.id ?? Self.forYou }
 
   var body: some View {
-    ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: 14) {
-        chip(nil, label: "For You") {
-          Text("For You").font(.system(size: 24, weight: .semibold))
-        }
-        ForEach(StreamingService.all) { service in
-          chip(service, label: service.label) {
-            Image(service.logo)
-              .renderingMode(.template)
-              .resizable()
-              .scaledToFit()
-              .frame(height: service.logoHeight * 1.35)
-              .foregroundStyle(logoColors ? Color(hex: service.accent) : .white)
-          }
-        }
-      }
-      .padding(.horizontal, TVLayout.leading)
-      .padding(.vertical, 12)
+    VStack(alignment: .leading, spacing: 12) {
+      row(nil)
+      ForEach(StreamingService.all) { row($0) }
     }
-    .scrollClipDisabled()
+    .padding(.vertical, 26)
+    .padding(.horizontal, expanded ? 18 : 0)
+    .background {
+      if expanded {
+        RoundedRectangle(cornerRadius: 40, style: .continuous)
+          .fill(.black.opacity(0.35))
+          .astraGlass(in: RoundedRectangle(cornerRadius: 40, style: .continuous))
+          .transition(.opacity)
+      }
+    }
+    .frame(maxHeight: .infinity, alignment: .center)
     .focusSection()
+    .defaultFocus($focused, selectedKey)
+    .animation(.snappy(duration: 0.25), value: expanded)
   }
 
-  private func chip<Content: View>(
-    _ service: StreamingService?, label: String, @ViewBuilder content: () -> Content
-  ) -> some View {
-    let selected = library.selectedService == service
+  private func row(_ service: StreamingService?) -> some View {
+    let key = service?.id ?? Self.forYou
+    let selected = key == selectedKey
     let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
     return Button {
       library.select(service)
     } label: {
-      content()
-        .foregroundStyle(.white)
-        .padding(.horizontal, 26)
-        .frame(height: 60)
-        .background { if selected { Capsule().fill(brand.opacity(0.18)) } }
-        .overlay { if selected { Capsule().strokeBorder(brand, lineWidth: 2.5) } }
+      HStack(spacing: 18) {
+        logo(service, brand: brand)
+          .frame(width: TVLayout.sidebarCollapsed - 28, height: 44)
+        if expanded {
+          Text(service?.label ?? "For You")
+            .font(.system(size: 26, weight: .semibold))
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.trailing, 10)
+            .transition(.opacity.combined(with: .move(edge: .leading)))
+        }
+      }
+      .padding(.horizontal, 14)
+      .frame(height: 64)
     }
-    .buttonStyle(TVGlassButtonStyle(chip: true))
-    .accessibilityLabel(label)
+    .buttonStyle(TVSidebarButtonStyle(selected: selected, brand: brand))
+    .focused($focused, equals: key)
+    .accessibilityLabel(service?.label ?? "For You")
     .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+
+  @ViewBuilder private func logo(_ service: StreamingService?, brand: Color) -> some View {
+    if let service {
+      Image(service.logo)
+        .renderingMode(.template)
+        .resizable()
+        .scaledToFit()
+        .frame(maxHeight: min(service.logoHeight * 1.1, 34))
+        .foregroundStyle(brand)
+    } else {
+      Image(systemName: "sparkles")
+        .font(.system(size: 28, weight: .semibold))
+        .foregroundStyle(.white)
+    }
+  }
+}
+
+/// A sidebar entry: a glass capsule, lighter and larger when focused; the
+/// chosen service is outlined in its brand colour.
+private struct TVSidebarButtonStyle: ButtonStyle {
+  var selected: Bool
+  var brand: Color
+
+  func makeBody(configuration: Configuration) -> some View {
+    TVSidebarButtonBody(configuration: configuration, selected: selected, brand: brand)
+  }
+}
+
+private struct TVSidebarButtonBody: View {
+  let configuration: ButtonStyleConfiguration
+  var selected: Bool
+  var brand: Color
+  @Environment(\.isFocused) private var focused
+
+  var body: some View {
+    configuration.label
+      .foregroundStyle(.white)
+      .background {
+        Capsule().fill(.white.opacity(focused ? 0.28 : (selected ? 0.12 : 0)))
+      }
+      .astraGlass(in: Capsule(), variant: .clear, interactive: true)
+      .overlay { if selected { Capsule().strokeBorder(brand, lineWidth: 2.5) } }
+      .scaleEffect(configuration.isPressed ? 0.97 : (focused ? 1.06 : 1))
+      .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 14, y: 6)
+      .focusEffectDisabled()
+      .animation(.easeOut(duration: 0.15), value: focused)
   }
 }
 
@@ -288,6 +352,7 @@ struct TVRow<Content: View>: View {
   var series: Binding<Bool>? = nil
   var spacing: CGFloat = 40
   @ViewBuilder var content: Content
+  @Environment(\.tvLeading) private var leading
 
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
@@ -300,13 +365,13 @@ struct TVRow<Content: View>: View {
           TVKindSwitch(series: series)
         }
       }
-      .padding(.leading, TVLayout.leading)
+      .padding(.leading, leading)
       .focusSection()
       ScrollView(.horizontal, showsIndicators: false) {
         LazyHStack(alignment: .top, spacing: spacing) {
           content
         }
-        .padding(.horizontal, TVLayout.leading)
+        .padding(.horizontal, leading)
         .padding(.vertical, 20)
       }
       .scrollClipDisabled()

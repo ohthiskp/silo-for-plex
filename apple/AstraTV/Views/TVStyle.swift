@@ -484,12 +484,20 @@ enum TVLayout {
   static let leading: CGFloat = 90
   static let sectionSpacing: CGFloat = 56
   static let heroHeight: CGFloat = 900
-  /// The streaming switcher's top, under the system tab bar.
-  static let railTop: CGFloat = 150
+  /// Home's page edge, clear of the collapsed streaming sidebar on the left.
+  static let homeLeading: CGFloat = 170
+  /// The streaming sidebar's width while it shows only logos.
+  static let sidebarCollapsed: CGFloat = 120
   static let poster: CGFloat = 230
   static let continueCard = CGSize(width: 560, height: 315)
   static let episodeCard = CGSize(width: 480, height: 270)
   static let radius: CGFloat = 18
   static let buttonHeight: CGFloat = 80
   static let roundButton: CGFloat = 80
+}
+
+extension EnvironmentValues {
+  /// The page edge rows and titles line up on: `TVLayout.leading`, or
+  /// `TVLayout.homeLeading` on Home beside the streaming sidebar.
+  @Entry var tvLeading: CGFloat = TVLayout.leading
 }

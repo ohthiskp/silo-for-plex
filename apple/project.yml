@@ -232,6 +232,23 @@ targets:
         TEST_TARGET_NAME: AstraiOS
         CODE_SIGN_STYLE: Automatic
 
+  # Astra: UI tests for the Apple TV remote: Menu goes back, scrolling, the
+  # player (run by the tvOS launch-check workflow).
+  AstraTVUITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    sources:
+      - path: AstraTVUITests
+    dependencies:
+      - target: AstraTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.astra.swiftui.tv.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: AstraTV
+        TARGETED_DEVICE_FAMILY: "3"
+        CODE_SIGN_STYLE: Automatic
+
 schemes:
   AstraiOS:
     build:
@@ -250,8 +267,13 @@ schemes:
     build:
       targets:
         AstraTV: all
+        AstraTVUITests: [test]
     run:
       config: Debug
+    test:
+      config: Release
+      targets:
+        - AstraTVUITests
     archive:
       config: Release
   AstraMac:
