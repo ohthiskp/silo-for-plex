@@ -11,8 +11,7 @@ struct AstraiOSApp: App {
     WindowGroup {
       RootView()
         .environment(app)
-        .preferredColorScheme(.dark)
-        .tint(.white)
+        // Colour scheme and tint follow the app theme (RootView).
         .task { await app.start() }
         // Astra: the player is landscape only on iPhone (KP, 2026-11-07).
         .onChange(of: app.player.isActive, initial: true) { _, active in

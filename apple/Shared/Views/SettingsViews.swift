@@ -227,20 +227,13 @@ struct AppearanceSettings: View {
   var body: some View {
     SettingsForm {
       Section {
-        ColorSwatches(
-          selected: appearance.accentHex, set: { appearance.setAccent($0) })
+        ThemePicker(selected: appearance.appTheme) { theme in
+          astraWithAnimation(Astra.Motion.page) { appearance.setTheme(theme) }
+        }
       } header: {
-        Text("Accent Colour")
+        Text("Theme")
       } footer: {
-        Text("Progress bars, switches and selected chips.")
-      }
-      Section {
-        ColorSwatches(
-          selected: appearance.themeHex, set: { appearance.setTheme($0) })
-      } header: {
-        Text("Theme Colour")
-      } footer: {
-        Text("Icons, the tab bar and the Mac sidebar.")
+        Text("Changes the whole app: backgrounds, glass, text and buttons.")
       }
       Section {
         Toggle("Service Accent Colours", isOn: $serviceAccents).tint(Astra.Color.switchOn)
@@ -254,30 +247,79 @@ struct AppearanceSettings: View {
   }
 }
 
-/// Astra's presets in a row. Presets only, so no purple and nothing too dark
-/// to read on the glass (KP, 2026-11-08).
-struct ColorSwatches: View {
-  var selected: RGBHex
-  var set: (RGBHex) -> Void
+/// The four whole-app themes as little previews of a page in that theme
+/// (KP, 2026-11-09): its background, a card, a line of text and its accent.
+struct ThemePicker: View {
+  var selected: AppTheme
+  var set: (AppTheme) -> Void
+
+  #if os(tvOS)
+    private let columns = [GridItem(.adaptive(minimum: 260), spacing: 24)]
+  #else
+    private let columns = [GridItem(.adaptive(minimum: 140), spacing: 12)]
+  #endif
 
   var body: some View {
-    HStack(spacing: 10) {
-      ForEach(AccentPreset.allCases) { preset in
-        let isOn = selected == preset.hex
-        Button { set(preset.hex) } label: {
-          Circle()
-            .fill(Color(hex: preset.hex.value))
-            .frame(width: 26, height: 26)
-            .overlay(Circle().stroke(Astra.Color.hairline, lineWidth: 1))
-            .overlay(Circle().stroke(Astra.Color.ink, lineWidth: isOn ? 2 : 0).padding(-4))
+    LazyVGrid(columns: columns, spacing: 12 * Astra.Layout.controlScale) {
+      ForEach(AppTheme.allCases) { theme in
+        let isOn = theme == selected
+        Button { set(theme) } label: {
+          VStack(alignment: .leading, spacing: 8) {
+            ThemePreview(palette: theme.palette)
+              .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                  .stroke(isOn ? Astra.Color.accent : Astra.Color.hairline, lineWidth: isOn ? 2.5 : 1)
+              )
+            HStack(spacing: 6) {
+              Text(theme.title).astraFont(size: 14, weight: .semibold).foregroundStyle(Astra.Color.ink)
+              if isOn {
+                Image(systemName: "checkmark.circle.fill")
+                  .astraFont(size: 13, weight: .semibold)
+                  .foregroundStyle(Astra.Color.accent)
+              }
+            }
+            Text(theme.subtitle).astraFont(size: 12).foregroundStyle(Astra.Color.muted).lineLimit(1)
+          }
+          .contentShape(Rectangle())
+          .tvFocusLift(1.05)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(preset.title)
+        .accessibilityLabel(theme.title)
         .accessibilityAddTraits(isOn ? .isSelected : [])
       }
-      Spacer(minLength: 0)
     }
     .padding(.vertical, 6)
+  }
+}
+
+/// A miniature page in a theme's colours.
+struct ThemePreview: View {
+  var palette: ThemePalette
+
+  var body: some View {
+    ZStack(alignment: .bottomLeading) {
+      RoundedRectangle(cornerRadius: 14, style: .continuous).fill(palette.bg)
+      if palette.ambient > 0 {
+        // A hint of the frosted artwork the theme lays its glass over.
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .fill(
+            LinearGradient(
+              colors: [palette.ink.opacity(0.18 * palette.ambient), (palette.glassTint ?? .clear)],
+              startPoint: .topTrailing, endPoint: .bottomLeading))
+      }
+      VStack(alignment: .leading, spacing: 6) {
+        Capsule().fill(palette.ink).frame(width: 46, height: 6)
+        Capsule().fill(palette.ink.opacity(0.5)).frame(width: 30, height: 5)
+        HStack(spacing: 6) {
+          RoundedRectangle(cornerRadius: 5, style: .continuous).fill(palette.surface2).frame(width: 34, height: 22)
+          RoundedRectangle(cornerRadius: 5, style: .continuous).fill(palette.surface2).frame(width: 34, height: 22)
+          Circle().fill(SwiftUI.Color(hex: palette.accentHex.value)).frame(width: 12, height: 12)
+        }
+      }
+      .padding(12)
+    }
+    .frame(height: 96 * Astra.Layout.controlScale)
+    .accessibilityHidden(true)
   }
 }
 

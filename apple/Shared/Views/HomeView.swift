@@ -781,6 +781,10 @@ struct WatchlistButton: View {
         .scrollTargetLayout()
       }
       .scrollTargetBehavior(.paging)
+      // The artwork sits behind the sliding pages as one layer, so a swipe
+      // crossfades and blurs one title into the next with no seam between
+      // two pictures (KP, 2026-11-09). Only the text slides.
+      .background { artwork }
       .scrollPosition(id: $position)
       .scrollIndicators(.never)
       .modifier(PageProgressReader(progress: $progress, position: position))
@@ -803,6 +807,37 @@ struct WatchlistButton: View {
       #endif
     }
 
+    /// The title being left and the one arriving, by how far the swipe is.
+    private var artwork: some View {
+      let count = items.count
+      let base = min(max(0, Int(progress.rounded(.down))), max(0, count - 1))
+      let mix = min(max(0, progress - CGFloat(base)), 1)
+      let shown = items.isEmpty ? [] : [items[base]] + (base + 1 < count && mix > 0.001 ? [items[base + 1]] : [])
+      return ZStack {
+        ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
+          ArtworkImage(
+            library: library, item: item, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear
+          )
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .clipped()
+          .opacity(i == 0 ? 1 : mix)
+        }
+        // Mid-swipe the two blur together; scrolling down blurs into the
+        // frosted background below (KP, 2026-11-09).
+        .blur(radius: sin(mix * .pi) * 22 + min(30, scrolled / 12))
+        HeroBlend()
+      }
+      // The bottom dissolves into the frosted background (the same
+      // artwork, blurred), so there is no edge between hero and rows.
+      .mask {
+        LinearGradient(
+          stops: [.init(color: .black, location: 0.55), .init(color: .clear, location: 1)],
+          startPoint: .top, endPoint: .bottom)
+      }
+      .clipped()
+      .allowsHitTesting(false)
+    }
+
     private func page(_ item: PlexMetadata) -> some View {
       VStack(alignment: .leading, spacing: 0) {
         HeroInfo(library: library, item: item)
@@ -813,26 +848,6 @@ struct WatchlistButton: View {
       .padding(.top, 110)
       .padding(.bottom, 30)
       .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
-      .background {
-        ZStack {
-          ArtworkImage(
-            library: library, item: item, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear
-          )
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .clipped()
-          // KP (2026-11-09): scrolling down, the artwork blurs into the
-          // frosted background instead of sliding off as a hard picture.
-          .blur(radius: min(30, scrolled / 12))
-          HeroBlend()
-        }
-        // The bottom dissolves into the frosted background (the same
-        // artwork, blurred), so there is no edge between hero and rows.
-        .mask {
-          LinearGradient(
-            stops: [.init(color: .black, location: 0.55), .init(color: .clear, location: 1)],
-            startPoint: .top, endPoint: .bottom)
-        }
-      }
       .clipped()
       // A tap anywhere opens Details; Play and + keep their own action.
       .contentShape(Rectangle())

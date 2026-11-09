@@ -12,9 +12,7 @@ struct AstraMacApp: App {
       RootView()
         .environment(app)
         .frame(minWidth: 960, minHeight: 600)
-        .preferredColorScheme(.dark)
-        // White, never the system accent colour (which can be purple).
-        .tint(.white)
+        // Colour scheme and tint follow the app theme (RootView).
         .environment(\.checkForUpdates) { [updater] in updater.checkForUpdates() }
         .task { await app.start() }
     }

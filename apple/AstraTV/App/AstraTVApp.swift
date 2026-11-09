@@ -12,9 +12,7 @@ struct AstraTVApp: App {
     WindowGroup {
       TVRootView()
         .environment(app)
-        .preferredColorScheme(.dark)
-        // White, never the system accent colour (which can be purple).
-        .tint(.white)
+        // Colour scheme and tint follow the app theme (RootView).
         .task { await app.start() }
     }
   }

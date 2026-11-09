@@ -10,25 +10,26 @@ import SwiftUI
 /// Astra tokens from DESIGN_SYSTEM.md, in one place.
 enum Astra {
   enum Color {
-    // Neutral, cinematic greys. No purple accent anywhere (KP, 2026-11-06):
-    // selection and progress are white; colour comes from the artwork.
-    static let bg = SwiftUI.Color(hex: 0x0A0A0B)
-    static let surface = SwiftUI.Color(hex: 0x161618)
-    static let surface2 = SwiftUI.Color(hex: 0x1E1E21)
-    static let ink = SwiftUI.Color(hex: 0xF5F5F7)
-    static let muted = SwiftUI.Color(hex: 0xF5F5F7).opacity(0.62)
-    /// Selection, progress and focus: white unless KP picks another accent
-    /// in Settings → Appearance (Astra 4.0).
+    // Whole-app themes (KP, 2026-11-09), Settings → Appearance: Frosted
+    // Glass (the default: neutral greys, colour from the artwork), OLED,
+    // Light and Violet. Every surface reads these, so a theme changes the
+    // entire screen. Violet is the only purple, and only when KP picks it.
+    @MainActor static var bg: SwiftUI.Color { AstraAppearance.shared.palette.bg }
+    @MainActor static var surface: SwiftUI.Color { AstraAppearance.shared.palette.surface }
+    @MainActor static var surface2: SwiftUI.Color { AstraAppearance.shared.palette.surface2 }
+    @MainActor static var ink: SwiftUI.Color { AstraAppearance.shared.palette.ink }
+    @MainActor static var muted: SwiftUI.Color { AstraAppearance.shared.palette.ink.opacity(0.62) }
+    /// Selection, progress and focus: the theme's accent.
     @MainActor static var accent: SwiftUI.Color { AstraAppearance.shared.accent }
-    /// Text and icons on an accent fill: black on light accents, white on dark ones.
+    /// Text and icons on an accent fill.
     @MainActor static var onAccent: SwiftUI.Color { AstraAppearance.shared.onAccent }
-    /// An "on" switch: the accent, but grey when the accent is white or
-    /// silver so the white knob still shows (KP: "too white for switches").
+    /// An "on" switch: the accent, but grey when the accent is white so the
+    /// white knob still shows (KP: "too white for switches").
     @MainActor static var switchOn: SwiftUI.Color { AstraAppearance.shared.switchOn }
-    /// Settings → Appearance → Theme: icons, the tab bar and the sidebar. White by default.
-    @MainActor static var theme: SwiftUI.Color { AstraAppearance.shared.theme }
-    @MainActor static var onTheme: SwiftUI.Color { AstraAppearance.shared.themeHex.prefersDarkText ? .black : .white }
-    static let hairline = SwiftUI.Color.white.opacity(0.09)
+    /// Icons, the tab bar and the sidebar.
+    @MainActor static var theme: SwiftUI.Color { AstraAppearance.shared.accent }
+    @MainActor static var onTheme: SwiftUI.Color { AstraAppearance.shared.onAccent }
+    @MainActor static var hairline: SwiftUI.Color { AstraAppearance.shared.palette.hairline }
   }
 
   /// Fixed-size fonts. Text in views uses `.astraFont(_:)`, the same sizes
@@ -200,47 +201,111 @@ private struct ContentLeadingKey: EnvironmentKey {
 
 /// Settings → Appearance, read wherever a view uses `Astra.Color.accent`;
 /// views redraw when it changes because it is observed.
-@MainActor @Observable final class AstraAppearance {
-  static let shared = AstraAppearance()
+/// Settings → Appearance → Theme: how the whole app looks (KP, 2026-11-09).
+enum AppTheme: String, CaseIterable, Identifiable, Sendable {
+  case frosted, oled, light, violet
 
-  private let defaults: UserDefaults
-  private(set) var accentHex: RGBHex
-  private(set) var themeHex: RGBHex
+  var id: String { rawValue }
 
-  init(defaults: UserDefaults = .standard) {
-    self.defaults = defaults
-    // Presets only (KP, 2026-11-08): a custom colour saved by an older build falls back to white,
-    // so nothing can be purple or too dark to read on the glass.
-    accentHex = defaults.string(forKey: Preferences.accentKey).flatMap(RGBHex.init(string:))
-      .flatMap { AccentPreset.matching($0)?.hex } ?? AccentPreset.white.hex
-    themeHex = defaults.string(forKey: Preferences.themeKey).flatMap(RGBHex.init(string:))
-      .flatMap { AccentPreset.matching($0)?.hex } ?? AccentPreset.white.hex
-  }
-
-  var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
-  var theme: SwiftUI.Color { SwiftUI.Color(hex: themeHex.value) }
-
-  func setTheme(_ hex: RGBHex) {
-    themeHex = hex
-    if hex == AccentPreset.white.hex {
-      defaults.removeObject(forKey: Preferences.themeKey)
-    } else {
-      defaults.set(hex.string, forKey: Preferences.themeKey)
+  var title: String {
+    switch self {
+    case .frosted: "Frosted Glass"
+    case .oled: "OLED"
+    case .light: "Light"
+    case .violet: "Violet"
     }
   }
 
-  var onAccent: SwiftUI.Color { accentHex.prefersDarkText ? .black : .white }
-  var switchOn: SwiftUI.Color {
-    accentHex == AccentPreset.white.hex || accentHex == AccentPreset.silver.hex
-      ? SwiftUI.Color(hex: 0x636366) : accent
+  var subtitle: String {
+    switch self {
+    case .frosted: "Liquid Glass over the artwork"
+    case .oled: "Pure black, no blur"
+    case .light: "Bright glass and dark text"
+    case .violet: "Deep purple glass"
+    }
   }
 
-  func setAccent(_ hex: RGBHex) {
-    accentHex = hex
-    if hex == AccentPreset.white.hex {
-      defaults.removeObject(forKey: Preferences.accentKey)
+  var palette: ThemePalette {
+    switch self {
+    case .frosted:
+      ThemePalette(
+        bg: 0x0A0A0B, surface: 0x161618, surface2: 0x1E1E21, ink: 0xF5F5F7, accent: 0xFFFFFF,
+        isLight: false, ambient: 0.7, wash: 0.45, glassTint: nil)
+    case .oled:
+      ThemePalette(
+        bg: 0x000000, surface: 0x0E0E0F, surface2: 0x161617, ink: 0xF5F5F7, accent: 0xFFFFFF,
+        isLight: false, ambient: 0, wash: 0, glassTint: nil)
+    case .light:
+      ThemePalette(
+        bg: 0xF2F2F7, surface: 0xFFFFFF, surface2: 0xE5E5EA, ink: 0x1C1C1E, accent: 0x1C1C1E,
+        isLight: true, ambient: 0.55, wash: 0.55, glassTint: nil)
+    case .violet:
+      ThemePalette(
+        bg: 0x110A1F, surface: 0x1C1230, surface2: 0x261A40, ink: 0xF4F0FF, accent: 0xB69CFF,
+        isLight: false, ambient: 0.55, wash: 0.5, glassTint: 0x6E4BD8)
+    }
+  }
+}
+
+/// One theme's colours. `ambient` is how strongly the blurred artwork shows
+/// behind pages (0 = none, OLED); `wash` the theme colour laid over it.
+struct ThemePalette {
+  let bg: SwiftUI.Color
+  let surface: SwiftUI.Color
+  let surface2: SwiftUI.Color
+  let ink: SwiftUI.Color
+  let accentHex: RGBHex
+  let isLight: Bool
+  let ambient: Double
+  let wash: Double
+  let glassTint: SwiftUI.Color?
+
+  init(
+    bg: UInt32, surface: UInt32, surface2: UInt32, ink: UInt32, accent: UInt32,
+    isLight: Bool, ambient: Double, wash: Double, glassTint: UInt32?
+  ) {
+    self.bg = SwiftUI.Color(hex: bg)
+    self.surface = SwiftUI.Color(hex: surface)
+    self.surface2 = SwiftUI.Color(hex: surface2)
+    self.ink = SwiftUI.Color(hex: ink)
+    accentHex = RGBHex(accent)
+    self.isLight = isLight
+    self.ambient = ambient
+    self.wash = wash
+    self.glassTint = glassTint.map { SwiftUI.Color(hex: $0).opacity(0.35) }
+  }
+
+  var hairline: SwiftUI.Color { isLight ? .black.opacity(0.1) : .white.opacity(0.09) }
+  var colorScheme: ColorScheme { isLight ? .light : .dark }
+}
+
+@MainActor @Observable final class AstraAppearance {
+  static let shared = AstraAppearance()
+  static let themeKey = "astra.appearance.appTheme"
+
+  private let defaults: UserDefaults
+  private(set) var appTheme: AppTheme
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+    appTheme = defaults.string(forKey: Self.themeKey).flatMap(AppTheme.init(rawValue:)) ?? .frosted
+  }
+
+  var palette: ThemePalette { appTheme.palette }
+  var colorScheme: ColorScheme { palette.colorScheme }
+  var accentHex: RGBHex { palette.accentHex }
+  var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
+  var onAccent: SwiftUI.Color { accentHex.prefersDarkText ? .black : .white }
+  var switchOn: SwiftUI.Color {
+    accentHex == AccentPreset.white.hex ? SwiftUI.Color(hex: 0x636366) : accent
+  }
+
+  func setTheme(_ theme: AppTheme) {
+    appTheme = theme
+    if theme == .frosted {
+      defaults.removeObject(forKey: Self.themeKey)
     } else {
-      defaults.set(hex.string, forKey: Preferences.accentKey)
+      defaults.set(theme.rawValue, forKey: Self.themeKey)
     }
   }
 }

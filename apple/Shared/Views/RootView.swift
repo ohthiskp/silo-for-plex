@@ -68,6 +68,11 @@ struct RootView: View {
     // Text grows with Text Size (KP, 2026-11-08) up to the largest standard
     // size; the accessibility sizes would break the fixed-height rows and bars.
     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    // Settings → Appearance → Theme (KP, 2026-11-09): light or dark system
+    // glass and controls, and the theme's accent as the tint (never the
+    // system accent, which can be purple).
+    .preferredColorScheme(AstraAppearance.shared.colorScheme)
+    .tint(AstraAppearance.shared.accent)
     .onChange(of: app.phase, initial: true) { _, phase in updateLoader(for: phase) }
     .task(id: loader) {
       // "Connected" shows for a moment, then the app fades in. It was 1.1 s,

@@ -30,7 +30,10 @@ struct AstraGlass<S: Shape>: ViewModifier {
   func body(content: Content) -> some View {
     if #available(macOS 26.0, iOS 26.0, *) {
       var glass: Glass = variant == .clear ? .clear : .regular
-      if let tint { glass = glass.tint(tint) }
+      // The theme tints regular glass (Violet); an explicit tint wins.
+      if let tint = tint ?? (variant == .regular ? AstraAppearance.shared.palette.glassTint : nil) {
+        glass = glass.tint(tint)
+      }
       if interactive { glass = glass.interactive() }
       return AnyView(content.glassEffect(glass, in: shape))
     } else {
@@ -286,20 +289,22 @@ struct AmbientBackdrop: View {
   var item: PlexMetadata?
 
   var body: some View {
+    // The theme decides how much artwork shows: none on OLED (pure black).
+    let palette = AstraAppearance.shared.palette
     ZStack {
       Astra.Color.bg
-      if let item {
+      if let item, palette.ambient > 0 {
         ArtworkImage(library: library, item: item, kind: .backdrop, width: 640, height: 360, placeholder: Color.clear)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .clipped()
           .blur(radius: 60, opaque: true)
-          .opacity(0.7)
+          .opacity(palette.ambient)
           .id(item.id)
           .astraTransition(.opacity)
+        Rectangle().fill(Color.clear)
+          .astraGlass(in: Rectangle())
+        Astra.Color.bg.opacity(palette.wash)
       }
-      Rectangle().fill(Color.clear)
-        .astraGlass(in: Rectangle())
-      Astra.Color.bg.opacity(0.45)
     }
     .astraAnimation(Astra.Motion.hero, value: item?.id)
     .ignoresSafeArea()
