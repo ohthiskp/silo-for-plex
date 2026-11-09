@@ -495,7 +495,7 @@ final class LibraryStore {
       if let saved = LibraryIndexSnapshot.load(from: url), !saved.items.isEmpty {
         return (LibraryMatch.withAliases(saved.items), !saved.isFresh())
       }
-      let items = try await Self.buildIndex(client: client, sections: sections, quality: quality)
+      let items = try await Self.buildIndex(client: client, sections: sections, quality: quality, url: url)
       try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
       return (LibraryMatch.withAliases(items), false)
     }
@@ -593,7 +593,7 @@ final class LibraryStore {
   private func refreshLibraryIndex(client: PlexServerClient, sections: [PlexLibrarySection], url: URL) {
     let quality = libraryQuality
     let task = Task.detached(priority: .utility) {
-      let items = try await Self.buildIndex(client: client, sections: sections, quality: quality)
+      let items = try await Self.buildIndex(client: client, sections: sections, quality: quality, url: url)
       try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
       return LibraryMatch.withAliases(items)
     }
@@ -611,14 +611,16 @@ final class LibraryStore {
   /// "not on the server" (KP, 2026-11-08). An empty result is an error, never
   /// saved or shown.
   nonisolated private static func buildIndex(
-    client: PlexServerClient, sections: [PlexLibrarySection], quality: LibraryQuality
+    client: PlexServerClient, sections: [PlexLibrarySection], quality: LibraryQuality, url: URL
   ) async throws -> [String: PlexMetadata] {
     var wanted = sections
     if wanted.isEmpty {
       let all = try await client.librarySections()
       wanted = LibraryFilter(quality: quality, sections: all).indexSections(all)
     }
-    let items = try await LibraryIndexer.build(client: client, sections: wanted)
+    // Saved library by library, so an interrupted read picks up where it stopped.
+    let progress = url.deletingPathExtension().appendingPathExtension("progress.json")
+    let items = try await LibraryIndexer.buildResumable(client: client, sections: wanted, progressURL: progress)
     guard !items.isEmpty else { throw URLError(.zeroByteResource) }
     return items
   }
