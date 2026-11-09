@@ -11,6 +11,7 @@ class StreamingService {
     required this.logoAsset,
     required this.tmdbProviderIds,
     this.logoHeight = 18,
+    this.brandColor = 0xFFFFFFFF,
   });
 
   /// Stable key, persisted as the user's selection.
@@ -27,6 +28,9 @@ class StreamingService {
   /// Visual height of the logo inside the pill, tuned per wordmark.
   final double logoHeight;
 
+  /// The logo's real color, shown when this service is selected.
+  final int brandColor;
+
   bool get isSvg => logoAsset.endsWith('.svg');
 
   String get tmdbFilter => tmdbProviderIds.join('|');
@@ -41,20 +45,7 @@ const List<StreamingService> streamingServices = [
     logoAsset: 'assets/providers/netflix.svg',
     tmdbProviderIds: [8],
     logoHeight: 15,
-  ),
-  StreamingService(
-    id: 'disney',
-    label: 'Disney+',
-    logoAsset: 'assets/providers/disney.svg',
-    tmdbProviderIds: [337],
-    logoHeight: 24,
-  ),
-  StreamingService(
-    id: 'prime',
-    label: 'Prime Video',
-    logoAsset: 'assets/providers/prime.svg',
-    tmdbProviderIds: [9],
-    logoHeight: 20,
+    brandColor: 0xFFE50914,
   ),
   StreamingService(
     id: 'appletv',
@@ -62,6 +53,22 @@ const List<StreamingService> streamingServices = [
     logoAsset: 'assets/providers/appletv.svg',
     tmdbProviderIds: [350],
     logoHeight: 17,
+  ),
+  StreamingService(
+    id: 'prime',
+    label: 'Prime Video',
+    logoAsset: 'assets/providers/prime.svg',
+    tmdbProviderIds: [9],
+    logoHeight: 20,
+    brandColor: 0xFF1FA8F0,
+  ),
+  StreamingService(
+    id: 'disney',
+    label: 'Disney+',
+    logoAsset: 'assets/providers/disney.svg',
+    tmdbProviderIds: [337],
+    logoHeight: 24,
+    brandColor: 0xFF4AA8FF,
   ),
   StreamingService(
     id: 'max',
@@ -76,6 +83,7 @@ const List<StreamingService> streamingServices = [
     logoAsset: 'assets/providers/hulu.svg',
     tmdbProviderIds: [15],
     logoHeight: 15,
+    brandColor: 0xFF1CE783,
   ),
   StreamingService(
     id: 'paramount',
@@ -83,6 +91,7 @@ const List<StreamingService> streamingServices = [
     logoAsset: 'assets/providers/paramount.svg',
     tmdbProviderIds: [531, 2303],
     logoHeight: 18,
+    brandColor: 0xFF3A86FF,
   ),
   StreamingService(
     id: 'peacock',
@@ -97,6 +106,7 @@ const List<StreamingService> streamingServices = [
     logoAsset: 'assets/providers/crunchyroll.png',
     tmdbProviderIds: [283],
     logoHeight: 14,
+    brandColor: 0xFFF47521,
   ),
 ];
 

@@ -28,6 +28,7 @@ class MainScreenFocusScope extends InheritedModel<MainScreenScopeAspect> {
   final double? viewportWidth;
   final void Function(String libraryGlobalKey)? selectLibrary;
   final VoidCallback? openSettings;
+  final VoidCallback? openDownloads;
 
   const MainScreenFocusScope({
     super.key,
@@ -39,6 +40,7 @@ class MainScreenFocusScope extends InheritedModel<MainScreenScopeAspect> {
     this.viewportWidth,
     this.selectLibrary,
     this.openSettings,
+    this.openDownloads,
     required super.child,
   });
 

@@ -2099,6 +2099,7 @@ class _MainScreenState extends State<MainScreen>
                     viewportWidth: viewportWidth,
                     selectLibrary: _selectLibrary,
                     openSettings: _openSettings,
+                    openDownloads: () => _selectTab(NavigationTabId.downloads),
                     child: SideNavigationScope(
                       child: Stack(
                         clipBehavior: Clip.hardEdge,
@@ -2316,7 +2317,14 @@ class _MainScreenState extends State<MainScreen>
       // Astra: content runs under the floating glass tab bar.
       extendBody: true,
       backgroundColor: AstraColors.bg,
-      body: _buildTickerAwareStack(),
+      body: MainScreenFocusScope(
+        focusSidebar: () {},
+        sideNavigationWidth: 0,
+        selectLibrary: _selectLibrary,
+        openSettings: _openSettings,
+        openDownloads: () => _selectTab(NavigationTabId.downloads),
+        child: _buildTickerAwareStack(),
+      ),
       bottomNavigationBar: Column(
         key: _navBarKey,
         mainAxisSize: .min,
@@ -2361,7 +2369,7 @@ class _MainScreenState extends State<MainScreen>
               // this builder reruns on label toggles AND on every
               // MainScreen rebuild (offline bar appearing/disappearing).
               _scheduleNavBarMeasure(rail: false);
-              // Astra 3.0: liquid-glass tab bar (Home, Search, Downloads) + Settings.
+              // Astra 3.0: liquid-glass tab bar (Home, Search, Library).
               return AstraTabBar(
                 current: _currentTab,
                 onSelect: _selectTab,

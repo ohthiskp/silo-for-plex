@@ -21,6 +21,7 @@ import '../../services/settings_service.dart';
 import '../../widgets/settings_builder.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/platform_detector.dart';
+import '../../navigation/main_screen_scope.dart';
 import '../../utils/content_utils.dart';
 import '../../widgets/app_menu.dart';
 import '../../widgets/desktop_app_bar.dart';
@@ -829,6 +830,7 @@ class _LibrariesScreenState extends State<LibrariesScreen>
       return provider.getClientForServer(serverId)?.capabilities.folderGrouping ?? false;
     });
 
+    final astraScope = MainScreenFocusScope.of(context, listen: false);
     List<FocusableAction> appBarActions() => [
       if (allLibraries.isNotEmpty)
         FocusableAction(
@@ -875,6 +877,11 @@ class _LibrariesScreenState extends State<LibrariesScreen>
           onPressed: () => unawaited(MediaListPlaybackLauncher.shuffleLibrary(context, selectedLibrary)),
         ),
       FocusableAction(icon: Symbols.refresh_rounded, tooltip: t.common.refresh, onPressed: manualRefresh),
+      // Astra: the iPhone tab bar has no Downloads or Settings tabs; reach them here.
+      if (astraScope?.openDownloads != null && !PlatformDetector.isTV() && !useSideNavigation)
+        FocusableAction(icon: Symbols.download_rounded, tooltip: 'Downloads', onPressed: astraScope!.openDownloads!),
+      if (astraScope?.openSettings != null && !PlatformDetector.isTV() && !useSideNavigation)
+        FocusableAction(icon: Symbols.settings_rounded, tooltip: 'Settings', onPressed: astraScope!.openSettings!),
     ];
 
     Widget appBar({required bool floating}) => DesktopSliverAppBar(

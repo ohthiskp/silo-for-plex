@@ -6,7 +6,7 @@ import '../navigation/navigation_tabs.dart';
 import 'astra_style.dart';
 
 /// Astra 3.0 iPhone tab bar: a floating liquid-glass capsule with Home,
-/// Search and Downloads, and a Settings button at the far right.
+/// Search and Library. Settings lives in the Library screen's top bar.
 class AstraTabBar extends StatelessWidget {
   const AstraTabBar({super.key, required this.current, required this.onSelect, required this.onSettings});
 
@@ -19,47 +19,33 @@ class AstraTabBar extends StatelessWidget {
     final items = <(NavigationTabId, IconData, IconData, String)>[
       (NavigationTabId.discover, Icons.home_outlined, Icons.home_rounded, 'Home'),
       (NavigationTabId.search, Icons.search_rounded, Icons.search_rounded, 'Search'),
-      (NavigationTabId.downloads, Icons.download_outlined, Icons.download_rounded, 'Downloads'),
+      (NavigationTabId.libraries, Icons.layers_outlined, Icons.layers_rounded, 'Library'),
     ];
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: LiquidGlass(
-              radius: 34,
-              child: SizedBox(
-                height: 66,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    for (final (id, icon, iconOn, label) in items)
-                      _Tab(
-                        selected: current == id,
-                        icon: current == id ? iconOn : icon,
-                        label: label,
-                        onTap: () => onSelect(id),
-                      ),
-                  ],
+      child: LiquidGlass(
+        radius: 34,
+        child: SizedBox(
+          height: 66,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              for (final (id, icon, iconOn, label) in items)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: _Tab(
+                      selected: current == id,
+                      icon: current == id ? iconOn : icon,
+                      label: label,
+                      onTap: () => onSelect(id),
+                    ),
+                  ),
                 ),
-              ),
-            ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Semantics(
-            button: true,
-            label: 'Settings',
-            selected: current == NavigationTabId.settings,
-            child: GestureDetector(
-              onTap: onSettings,
-              child: const LiquidGlass(
-                radius: 33,
-                child: SizedBox(width: 66, height: 66, child: Icon(Icons.settings_outlined, color: Colors.white, size: 26)),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -97,7 +83,6 @@ class _TabState extends State<_Tab> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
-            width: 88,
             height: 54,
             decoration: BoxDecoration(
               borderRadius: const BorderRadius.all(Radius.circular(27)),

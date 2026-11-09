@@ -2,6 +2,8 @@ import Flutter
 import UIKit
 import AVFoundation
 import MediaPlayer
+import ImageIO
+import Vision
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -70,6 +72,10 @@ import MediaPlayer
 
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "DeepLinkPlugin") {
       DeepLinkPlugin.register(with: registrar)
+    }
+
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "AstraArtFocus") {
+      AstraArtFocus.register(messenger: registrar.messenger())
     }
   }
 
@@ -222,5 +228,47 @@ import MediaPlayer
     }
 
     return UIApplication.shared.windows.first(where: { $0.isKeyWindow }) ?? UIApplication.shared.windows.first
+  }
+}
+
+
+/// Astra: finds where the faces (or, failing that, the most eye-catching
+/// subject) sit in a backdrop so the app can frame the art around them.
+/// Returns normalized rects with a top-left origin.
+final class AstraArtFocus {
+  static func register(messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "astra/art_focus", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "analyze",
+            let args = call.arguments as? [String: Any],
+            let string = args["url"] as? String,
+            let url = URL(string: string) else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      URLSession.shared.dataTask(with: url) { data, _, _ in
+        let out = data.flatMap { AstraArtFocus.analyze($0) }
+        DispatchQueue.main.async { result(out) }
+      }.resume()
+    }
+  }
+
+  static func analyze(_ data: Data) -> [String: Any]? {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+    var out: [String: Any] = ["width": image.width, "height": image.height]
+    let handler = VNImageRequestHandler(cgImage: image, options: [:])
+    let faces = VNDetectFaceRectanglesRequest()
+    let saliency = VNGenerateAttentionBasedSaliencyImageRequest()
+    try? handler.perform([faces, saliency])
+    func flip(_ r: CGRect) -> [Double] {
+      [Double(r.minX), Double(1 - r.maxY), Double(r.width), Double(r.height)]
+    }
+    let faceRects = (faces.results ?? []).filter { $0.confidence > 0.6 }.map { flip($0.boundingBox) }
+    if !faceRects.isEmpty { out["faces"] = faceRects }
+    if let obs = saliency.results?.first, let objects = obs.salientObjects, !objects.isEmpty {
+      out["salient"] = objects.map { flip($0.boundingBox) }
+    }
+    return out
   }
 }

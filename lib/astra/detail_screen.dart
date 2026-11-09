@@ -9,6 +9,8 @@ import '../media/media_item.dart';
 import '../media/media_kind.dart';
 import '../models/catalog/catalog_item.dart';
 import '../providers/catalog_sources_provider.dart';
+import '../providers/download_provider.dart';
+import '../utils/download_utils.dart';
 import '../services/catalog/catalog_library_matcher.dart';
 import '../services/catalog/catalog_source.dart';
 import '../utils/external_ids.dart';
@@ -16,6 +18,7 @@ import '../utils/media_image_helper.dart';
 import '../utils/media_navigation_helper.dart';
 import '../utils/provider_extensions.dart';
 import '../widgets/optimized_media_image.dart';
+import 'astra_art.dart';
 import 'astra_style.dart';
 import 'tmdb_client.dart';
 
@@ -44,6 +47,7 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
   MediaItem? _library; // the playable copy on the user's server, if any
   bool _matching = true;
   _Tab _tab = _Tab.overview;
+  bool _expanded = false;
 
   MediaItem get item => widget.item;
   bool get _isCatalog => item.isCatalogItem;
@@ -234,44 +238,54 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final wide = size.width >= 900;
-    final top = MediaQuery.paddingOf(context).top;
+    final pad = MediaQuery.paddingOf(context);
+    final top = pad.top;
     final client = _library != null ? context.getMediaClientForItemOrNull(_library!) : null;
     final artClient = _backdrop?.startsWith('http') ?? false ? null : client;
+    final showMore = _library != null && widget.onLegacyDetails != null && _kind == MediaKind.show;
 
     return Scaffold(
-      backgroundColor: AstraColors.bg,
+      backgroundColor: const Color(0xFF100C1C),
       body: Stack(
         children: [
+          Positioned.fill(child: AstraFrostedBackground(imagePath: _backdrop, client: artClient)),
           CustomScrollView(
             physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(child: wide ? _wideHeader(context, artClient, client) : _phoneHeader(context, artClient, client)),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(wide ? 156 : 22, 6, wide ? 48 : 22, 0),
-                  child: _tabs(),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(wide ? 156 : 22, 8, wide ? 48 : 0, MediaQuery.paddingOf(context).bottom + 60),
-                  child: _tabBody(wide),
-                ),
-              ),
-            ],
+            slivers: wide
+                ? [
+                    SliverToBoxAdapter(child: _wideHeader(context, artClient, client)),
+                    SliverToBoxAdapter(
+                      child: Padding(padding: const EdgeInsets.fromLTRB(156, 6, 48, 0), child: _tabs()),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(156, 8, 48, pad.bottom + 60),
+                        child: _tabBody(true),
+                      ),
+                    ),
+                  ]
+                : [
+                    SliverToBoxAdapter(child: _phoneHeader(context, artClient, client)),
+                    SliverToBoxAdapter(child: _phoneBody(context, client)),
+                    SliverToBoxAdapter(child: SizedBox(height: pad.bottom + 40)),
+                  ],
           ),
+          Positioned(top: 0, left: 0, right: 0, child: AstraEdgeBlur(height: top + (wide ? 90 : 70), top: true, tint: 0.5)),
+          if (!wide) Positioned(bottom: 0, left: 0, right: 0, child: AstraEdgeBlur(height: pad.bottom + 28, top: false, tint: 0.55)),
           Positioned(
-            top: top + (wide ? 22 : 10),
+            top: top + (wide ? 22 : 8),
             left: wide ? 156 : 16,
-            child: _CircleButton(icon: Icons.chevron_left_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
+            child: AstraCircleButton(icon: Icons.chevron_left_rounded, label: 'Back', size: 44, iconSize: 28, onTap: () => Navigator.of(context).maybePop()),
           ),
-          if (!wide && _library != null && _kind == MediaKind.show && widget.onLegacyDetails != null)
+          if (!wide && showMore)
             Positioned(
-              top: top + 10,
+              top: top + 8,
               right: 16,
-              child: _CircleButton(
+              child: AstraCircleButton(
                 icon: Icons.more_horiz_rounded,
                 label: 'Seasons and episodes',
+                size: 44,
+                iconSize: 24,
                 onTap: () => widget.onLegacyDetails!(context, _library!),
               ),
             ),
@@ -304,35 +318,306 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
     );
   }
 
+  /// Phone: art framed around its faces, the logo centered right under
+  /// them, then the meta line with badges and the genres.
   Widget _phoneHeader(BuildContext context, dynamic artClient, dynamic client) {
-    final h = (MediaQuery.sizeOf(context).height * 0.52).clamp(380.0, 520.0);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final size = MediaQuery.sizeOf(context);
+    final top = MediaQuery.paddingOf(context).top;
+    final logoTop = (size.height * 0.377).clamp(280.0, 360.0);
+    const logoW = 200.0;
+    const logoH = 130.0;
+    final logo = _logo;
+    final title = _title;
+    final lib = _library;
+    final year = item.year ?? _detail?.item.year;
+    final cert = (item.contentRating?.isNotEmpty ?? false) ? item.contentRating : _detail?.item.certification;
+    String? length;
+    if (_kind == MediaKind.show) {
+      final n = _detail?.seasons ?? item.childCount;
+      if (n != null && n > 0) length = n == 1 ? '1 Season' : '$n Seasons';
+    } else {
+      final mins = item.durationMs != null ? (item.durationMs! / 60000).round() : _detail?.item.runtimeMinutes;
+      length = astraRuntime(mins);
+    }
+    return Stack(
       children: [
-        SizedBox(
-          height: h,
-          child: Stack(
-            fit: StackFit.expand,
+        AstraFramedArt(
+          imagePath: _backdrop,
+          client: artClient,
+          zoneHeight: logoTop + 82,
+          limitY: logoTop - 4,
+          topOffset: 0,
+          minTop: top + 52,
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(20, logoTop, 20, 0),
+          child: Column(
             children: [
-              _art(artClient),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    stops: [0, 0.35, 0.65],
-                    colors: [AstraColors.bg, Color(0x9907060B), Color(0x0007060B)],
-                  ),
-                ),
+              if (logo != null && logo.isNotEmpty)
+                ClearLogoImage(
+                  client: logo.startsWith('http') ? null : client,
+                  logoPath: logo,
+                  width: logoW,
+                  height: logoH,
+                  fallbackWidth: size.width - 40,
+                  alignment: Alignment.bottomCenter,
+                  fallbackBuilder: (_) => Align(alignment: Alignment.bottomCenter, child: AstraTitleText(title, wide: false)),
+                )
+              else
+                SizedBox(height: logoH, child: Align(alignment: Alignment.bottomCenter, child: AstraTitleText(title, wide: false))),
+              const SizedBox(height: 12),
+              AstraHeroMeta(
+                year: year,
+                length: length,
+                rating: cert,
+                resolution: astraResolution(lib),
+                dolbyVision: astraHasDolbyVision(lib),
+                atmos: astraHasAtmos(lib),
+                genres: _genres,
               ),
-              Positioned(left: 24, right: 24, bottom: 12, child: _logoOrTitle(client, wide: false, width: 300, height: 100)),
             ],
           ),
         ),
-        Padding(padding: const EdgeInsets.fromLTRB(24, 10, 24, 0), child: _infoBlock(wide: false)),
       ],
     );
   }
+
+  /// Phone: Play with the download and My List circles, the synopsis,
+  /// director, More, then Cast and More Like This.
+  Widget _phoneBody(BuildContext context, dynamic client) {
+    final d = _detail;
+    final onServer = _library != null;
+    final canDownload = onServer && client != null && _kind == MediaKind.movie;
+    final overview = _overview ?? '';
+    final people = d?.cast ?? const <TmdbPerson>[];
+    final related = d?.related ?? const <CatalogItem>[];
+    const muted = TextStyle(color: Color(0x8CF4F2F8), fontSize: 13.5);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          child: AnimatedOpacity(
+            opacity: _matching ? 0.4 : 1,
+            duration: const Duration(milliseconds: 200),
+            child: Row(
+              children: [
+                Expanded(
+                  child: AstraWhitePlay(
+                    label: onServer ? 'Play' : 'Request',
+                    icon: onServer ? Icons.play_arrow_rounded : Icons.add_rounded,
+                    height: 50,
+                    onTap: onServer ? _play : _request,
+                  ),
+                ),
+                if (canDownload) ...[
+                  const SizedBox(width: 14),
+                  AstraCircleButton(
+                    icon: Icons.download_rounded,
+                    label: 'Download',
+                    size: 50,
+                    onTap: () => queueDownloadWithFeedback(
+                      context,
+                      metadata: _library!,
+                      client: client,
+                      downloadProvider: context.read<DownloadProvider>(),
+                    ),
+                  ),
+                ],
+                if (_watchlistSource != null) ...[
+                  const SizedBox(width: 14),
+                  AstraCircleButton(
+                    icon: _onWatchlist == true ? Icons.check_rounded : Icons.add_rounded,
+                    label: _onWatchlist == true ? 'Remove from My List' : 'Add to My List',
+                    size: 50,
+                    onTap: _toggleWatchlist,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        if (!_matching && !onServer)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(22, 10, 22, 0),
+            child: Text('Not on your server yet.', style: TextStyle(color: AstraColors.muted, fontSize: 12.5)),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (overview.isNotEmpty)
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: Text(
+                    overview,
+                    maxLines: _expanded ? null : 3,
+                    overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                    style: const TextStyle(color: Color(0xD9F4F2F8), fontSize: 14.5, height: 1.48),
+                  ),
+                ),
+              if (d != null && d.directors.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text.rich(
+                  TextSpan(
+                    text: _kind == MediaKind.show ? 'Created by ' : 'Directed by ',
+                    children: [
+                      TextSpan(text: d.directors.join(', '), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  style: muted,
+                ),
+              ],
+              if (_expanded) ...[
+                if (d != null && d.writers.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text.rich(
+                    TextSpan(
+                      text: 'Written by ',
+                      children: [TextSpan(text: d.writers.join(', '), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))],
+                    ),
+                    style: muted,
+                  ),
+                ],
+                if (d?.studio != null) ...[
+                  const SizedBox(height: 6),
+                  Text.rich(
+                    TextSpan(
+                      text: _kind == MediaKind.show ? 'Network ' : 'Studio ',
+                      children: [TextSpan(text: d!.studio!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))],
+                    ),
+                    style: muted,
+                  ),
+                ],
+              ],
+              const SizedBox(height: 8),
+              Semantics(
+                button: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_expanded ? 'Less' : 'More', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 4),
+                        Icon(_expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_expanded && (d?.trailers.isNotEmpty ?? false)) ...[
+          _sectionHeader('Trailers'),
+          SizedBox(
+            height: 132,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              itemCount: d!.trailers.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (_, i) {
+                final v = d.trailers[i];
+                return GestureDetector(
+                  onTap: () => launchUrl(v.url, mode: LaunchMode.externalApplication),
+                  child: SizedBox(
+                    width: 200,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: const BorderRadius.all(Radius.circular(12)),
+                          child: SizedBox(
+                            width: 200,
+                            height: 112,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.network(v.thumbnail, fit: BoxFit.cover, errorBuilder: (_, _, _) => const ColoredBox(color: AstraColors.surface)),
+                                const Center(child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 40)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(v.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AstraColors.ink, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+        if (people.isNotEmpty) ...[
+          _sectionHeader('Cast'),
+          SizedBox(
+            height: 118,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              itemCount: people.length.clamp(0, 15),
+              separatorBuilder: (_, _) => const SizedBox(width: 14),
+              itemBuilder: (_, i) => _CastTile(people[i]),
+            ),
+          ),
+        ],
+        if (related.isNotEmpty) ...[
+          _sectionHeader('More Like This'),
+          SizedBox(
+            height: 162,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              itemCount: related.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                final c = related[i];
+                return GestureDetector(
+                  onTap: () => _openRelated(c),
+                  child: Container(
+                    width: 108,
+                    height: 162,
+                    decoration: const BoxDecoration(
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                      boxShadow: [BoxShadow(color: Color(0x73000000), blurRadius: 18, offset: Offset(0, 8))],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.all(Radius.circular(12)),
+                      child: c.posterUrl == null
+                          ? const ColoredBox(color: AstraColors.surface2)
+                          : Image.network(c.posterUrl!, fit: BoxFit.cover),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _sectionHeader(String title) => Padding(
+    padding: const EdgeInsets.fromLTRB(22, 26, 18, 12),
+    child: Row(
+      children: [
+        Text(title, style: const TextStyle(color: AstraColors.ink, fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+        const Spacer(),
+        const Icon(Icons.chevron_right_rounded, color: AstraColors.ink, size: 24),
+      ],
+    ),
+  );
 
   Widget _wideHeader(BuildContext context, dynamic artClient, dynamic client) {
     final poster = _poster;
@@ -341,22 +626,21 @@ class _AstraDetailScreenState extends State<AstraDetailScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          _art(artClient, alignment: const Alignment(0.6, -0.3)),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                stops: [0, 0.35, 0.62, 0.85],
-                colors: [Color(0xF507060B), Color(0xD107060B), Color(0x3307060B), Color(0x0007060B)],
-              ),
-            ),
+          ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (b) => const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0, 0.65, 1],
+              colors: [Colors.black, Colors.black, Colors.transparent],
+            ).createShader(b),
+            child: _art(artClient, alignment: const Alignment(0.6, -0.3)),
           ),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                stops: [0, 0.3],
-                colors: [AstraColors.bg, Color(0x0007060B)],
+                stops: [0, 0.35, 0.62, 0.85],
+                colors: [Color(0xD90B0912), Color(0x990B0912), Color(0x260B0912), Color(0x000B0912)],
               ),
             ),
           ),
@@ -815,28 +1099,56 @@ class _PersonCard extends StatelessWidget {
   }
 }
 
-class _CircleButton extends StatelessWidget {
-  const _CircleButton({required this.icon, required this.label, required this.onTap});
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: label,
-    child: GestureDetector(
-      onTap: onTap,
-      child: AstraGlass(
-        child: SizedBox(width: 48, height: 48, child: Icon(icon, color: Colors.white, size: 28)),
-      ),
-    ),
-  );
-}
-
 class _Empty extends StatelessWidget {
   const _Empty(this.text);
   final String text;
   @override
   Widget build(BuildContext context) =>
       Padding(padding: const EdgeInsets.symmetric(vertical: 30), child: Text(text, style: const TextStyle(color: AstraColors.muted)));
+}
+
+/// Rounded-square headshot with the name and character under it.
+class _CastTile extends StatelessWidget {
+  const _CastTile(this.p);
+  final TmdbPerson p;
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 74,
+      child: Column(
+        children: [
+          Container(
+            width: 68,
+            height: 68,
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.all(Radius.circular(14)),
+              boxShadow: [BoxShadow(color: Color(0x59000000), blurRadius: 14, offset: Offset(0, 6))],
+            ),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.all(Radius.circular(14)),
+              child: p.photo == null
+                  ? const AstraGlassSurface(radius: 14, child: Center(child: Icon(Icons.person_rounded, color: AstraColors.muted, size: 30)))
+                  : Image.network(p.photo!, fit: BoxFit.cover, alignment: const Alignment(0, -0.5)),
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            p.name,
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AstraColors.ink, fontSize: 12, fontWeight: FontWeight.w600, height: 1.2),
+          ),
+          if (p.role.isNotEmpty)
+            Text(
+              p.role,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0x8CF4F2F8), fontSize: 11),
+            ),
+        ],
+      ),
+    );
+  }
 }

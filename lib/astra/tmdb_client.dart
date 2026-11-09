@@ -153,6 +153,14 @@ class TmdbClient {
         final pick = (en.isNotEmpty ? en : logos).firstOrNull;
         logo = image(pick?['file_path'] as String?, 'w500');
       }
+      // Prefer a backdrop with no text baked in (the logo already names it),
+      // the best-voted one first.
+      String? textless;
+      if (images is Map && images['backdrops'] is List) {
+        final clean = (images['backdrops'] as List).whereType<Map>().where((b) => b['iso_639_1'] == null && b['file_path'] is String).toList()
+          ..sort((a, b) => ((b['vote_average'] as num?) ?? 0).compareTo((a['vote_average'] as num?) ?? 0));
+        textless = clean.firstOrNull?['file_path'] as String?;
+      }
       String? cert;
       if (isShow) {
         final results = (json['content_ratings'] as Map?)?['results'];
@@ -201,7 +209,7 @@ class TmdbClient {
         episodeCount: seasons,
         ids: CatalogItemIds(tmdb: id, imdb: imdb, tvdb: tvdb),
         posterUrl: item.posterUrl,
-        backdropUrl: image(json['backdrop_path'] as String?, 'original') ?? item.backdropUrl,
+        backdropUrl: image(textless ?? json['backdrop_path'] as String?, 'original') ?? item.backdropUrl,
         logoUrl: logo,
       );
     } catch (_) {

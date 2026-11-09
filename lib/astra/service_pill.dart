@@ -1,93 +1,74 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'astra_art.dart';
 import 'astra_home.dart';
 import 'streaming_services.dart';
 
-/// The floating glass switcher at the top of Home: "For You" plus each
-/// streaming service's logo. Logos are tinted white on the glass and dark on
-/// the selected chip. Scrolls sideways when it doesn't fit (phones).
+/// The row of separate glass pills at the top of Home: "For You" plus each
+/// streaming service. Logos are white; the selected service shows its logo
+/// in its real color on brighter glass. Scrolls sideways when it doesn't fit.
 class AstraServicePill extends StatelessWidget {
-  const AstraServicePill({super.key, this.compact = false});
+  const AstraServicePill({super.key, this.compact = false, this.padding = EdgeInsets.zero});
 
-  /// Smaller chips for phones.
+  /// Phone sizing.
   final bool compact;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
     final home = AstraHome.instance;
+    final h = compact ? 38.0 : 42.0;
     return ListenableBuilder(
       listenable: home,
       builder: (context, _) {
-        final chips = <Widget>[
-          _Chip(
+        final pills = <Widget>[
+          _Pill(
             selected: home.isForYou,
-            compact: compact,
+            white: true,
+            height: h,
             semanticLabel: 'For You',
             onTap: () => home.select(null),
-            builder: (color) => Text(
+            padding: EdgeInsets.symmetric(horizontal: compact ? 17 : 20),
+            child: Text(
               'For You',
-              style: TextStyle(color: color, fontSize: compact ? 14 : 15, fontWeight: FontWeight.w700, letterSpacing: -0.1),
+              style: TextStyle(
+                color: home.isForYou ? const Color(0xFF0B0912) : Colors.white,
+                fontSize: compact ? 14.5 : 15,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.1,
+              ),
             ),
           ),
           for (final s in streamingServices)
-            _Chip(
+            _Pill(
               selected: home.serviceId == s.id,
-              compact: compact,
+              height: h,
+              minWidth: compact ? 82 : 96,
               semanticLabel: s.label,
               onTap: () => home.select(s.id),
-              builder: (color) => _Logo(service: s, color: color, scale: compact ? 0.86 : 1),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: _Logo(
+                service: s,
+                color: home.serviceId == s.id ? Color(s.brandColor) : Colors.white,
+                scale: compact ? 0.86 : 1,
+              ),
             ),
         ];
-        return ClipRRect(
-          borderRadius: const BorderRadius.all(Radius.circular(999)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Colors.white.withValues(alpha: 0.12), Colors.white.withValues(alpha: 0.04)],
-                ),
-                borderRadius: const BorderRadius.all(Radius.circular(999)),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-              ),
-              child: Padding(
-                padding: EdgeInsets.all(compact ? 4 : 5),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: _withDividers(chips, home)),
-                ),
-              ),
-            ),
+        return SizedBox(
+          height: h + 16,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            clipBehavior: Clip.none,
+            padding: padding.add(const EdgeInsets.symmetric(vertical: 8)),
+            itemCount: pills.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (_, i) => pills[i],
           ),
         );
       },
     );
-  }
-
-  List<Widget> _withDividers(List<Widget> chips, AstraHome home) {
-    final out = <Widget>[];
-    for (var i = 0; i < chips.length; i++) {
-      if (i > 1) {
-        // A hairline between services, hidden next to the selected chip.
-        final prevSelected = i - 1 == 0 ? home.isForYou : home.serviceId == streamingServices[i - 2].id;
-        final thisSelected = home.serviceId == streamingServices[i - 1].id;
-        out.add(
-          Container(
-            width: 1,
-            height: compact ? 16 : 20,
-            color: Colors.white.withValues(alpha: prevSelected || thisSelected ? 0 : 0.16),
-          ),
-        );
-      }
-      out.add(chips[i]);
-    }
-    return out;
   }
 }
 
@@ -112,32 +93,45 @@ class _Logo extends StatelessWidget {
   }
 }
 
-class _Chip extends StatefulWidget {
-  const _Chip({
+class _Pill extends StatefulWidget {
+  const _Pill({
     required this.selected,
     required this.onTap,
-    required this.builder,
+    required this.child,
     required this.semanticLabel,
-    required this.compact,
+    required this.height,
+    required this.padding,
+    this.minWidth = 0,
+    this.white = false,
   });
   final bool selected;
-  final bool compact;
+
+  /// Selected look is a solid white pill ("For You") instead of bright glass.
+  final bool white;
   final VoidCallback onTap;
+  final Widget child;
   final String semanticLabel;
-  final Widget Function(Color color) builder;
+  final double height;
+  final double minWidth;
+  final EdgeInsets padding;
 
   @override
-  State<_Chip> createState() => _ChipState();
+  State<_Pill> createState() => _PillState();
 }
 
-class _ChipState extends State<_Chip> {
-  bool _hover = false;
+class _PillState extends State<_Pill> {
   bool _down = false;
 
   @override
   Widget build(BuildContext context) {
     final sel = widget.selected;
-    final fg = sel ? const Color(0xFF0B0912) : Colors.white.withValues(alpha: _hover ? 1 : 0.9);
+    final content = ConstrainedBox(
+      constraints: BoxConstraints(minWidth: widget.minWidth, minHeight: widget.height, maxHeight: widget.height),
+      child: Padding(
+        padding: widget.padding,
+        child: Center(widthFactor: 1, child: widget.child),
+      ),
+    );
     return Semantics(
       button: true,
       selected: sel,
@@ -145,8 +139,6 @@ class _ChipState extends State<_Chip> {
       excludeSemantics: true,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = _down = false),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapDown: (_) => setState(() => _down = true),
@@ -157,25 +149,16 @@ class _ChipState extends State<_Chip> {
             scale: _down ? 0.94 : 1,
             duration: const Duration(milliseconds: 120),
             curve: Curves.easeOutCubic,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeOutCubic,
-              height: widget.compact ? 34 : 40,
-              padding: EdgeInsets.symmetric(horizontal: widget.compact ? 14 : 20),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: sel
-                    ? const Color(0xF0F4F2F8)
-                    : _hover
-                    ? Colors.white.withValues(alpha: 0.10)
-                    : Colors.transparent,
-                borderRadius: const BorderRadius.all(Radius.circular(999)),
-                boxShadow: sel
-                    ? const [BoxShadow(color: Color(0x4D000000), blurRadius: 14, offset: Offset(0, 4))]
-                    : const [],
-              ),
-              child: widget.builder(fg),
-            ),
+            child: widget.white && sel
+                ? DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF4F2F8),
+                      borderRadius: BorderRadius.all(Radius.circular(widget.height / 2)),
+                      boxShadow: const [BoxShadow(color: Color(0x4D000000), blurRadius: 14, offset: Offset(0, 4))],
+                    ),
+                    child: content,
+                  )
+                : AstraGlassSurface(radius: widget.height / 2, strong: sel, child: content),
           ),
         ),
       ),
