@@ -32,7 +32,7 @@ struct HomeView: View {
         // down from the Dynamic Island, behind the bar while it shows and
         // under the status bar once the page scrolls, fading out softly.
         TopEdgeBlur()
-          .frame(height: showsTopBar ? 112 : 6)
+          .frame(height: showsTopBar ? 112 : 34)
           .ignoresSafeArea(edges: .top)
           .allowsHitTesting(false)
           .astraAnimation(Astra.Motion.base, value: showsTopBar)
