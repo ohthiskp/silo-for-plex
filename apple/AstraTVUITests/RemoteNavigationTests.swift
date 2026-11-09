@@ -42,6 +42,15 @@ final class RemoteNavigationTests: XCTestCase {
     app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
   }
 
+  /// tvOS can start with focus in the tab bar; move down into the page.
+  private func leaveTabBar() {
+    for _ in 0..<2 {
+      let label = focusedElement.exists ? focusedElement.label : ""
+      guard ["Home", "Search", "Library"].contains(label) else { return }
+      press(.down)
+    }
+  }
+
   private func waitGone(_ element: XCUIElement, timeout: TimeInterval = 8) -> Bool {
     let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
     return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed
@@ -65,6 +74,7 @@ final class RemoteNavigationTests: XCTestCase {
     XCTAssertTrue(homeHero.waitForExistence(timeout: 30), "Home didn't load")
     sleep(3)
     // Down from the hero into Continue Watching, then open the first card.
+    leaveTabBar()
     press(.down)
     shot("home-row-focused")
     press(.select)
@@ -129,6 +139,7 @@ final class RemoteNavigationTests: XCTestCase {
     XCTAssertTrue(netflix.exists, "No Netflix in the sidebar")
     let collapsed = netflix.frame.width
     shot("sidebar-collapsed")
+    leaveTabBar()
     press(.left, times: 3)
     sleep(1)
     shot("sidebar-open")
@@ -163,9 +174,10 @@ final class RemoteNavigationTests: XCTestCase {
     for _ in 0..<4 where close.exists {
       press(.menu)
       sleep(1)
+      print("ASTRA-FOCUS after Menu:", focusedElement.exists ? focusedElement.label : "none", "player open:", close.exists)
     }
     let closed = waitGone(close, timeout: 10)
-    if !closed { print("Focus after Menu:", focusedElement.debugDescription) }
+    if !closed { print("ASTRA-FOCUS final:", focusedElement.debugDescription) }
     XCTAssertTrue(closed, "Menu didn't close the player")
     XCTAssertTrue(homeHero.waitForExistence(timeout: 10), "Closing the player didn't return to Home")
     sleep(2)

@@ -65,9 +65,20 @@ struct PlayerOverlay: View {
     }
     .astraAnimation(Astra.Motion.base, value: visible)
     .astraAnimation(Astra.Motion.fast, value: player.buffering)
-    // Menu on a button (where the host's remote is off) goes back to the timeline.
+    // Menu (Back). While focus is in these controls SwiftUI gets the press
+    // first and the host's Menu never runs, so the whole Back order is here:
+    // cancel a scrub, else hide the controls, else close the player (KP,
+    // 2026-11-09: "menu/back button doesn't work").
     .onExitCommand {
-      if focus != .bar { focus = .bar }
+      if scrubbing != nil {
+        scrubbing = nil
+        poke()
+      } else if visible {
+        focus = .bar
+        visible = false
+      } else {
+        player.close()
+      }
     }
     .onAppear {
       focus = .bar

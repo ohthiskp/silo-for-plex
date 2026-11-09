@@ -130,13 +130,13 @@ jobs:
             -project Astra.xcodeproj -scheme AstraTV -configuration Release \
             -destination "id=$UDID" -derivedDataPath "$RUNNER_TEMP/dd" \
             -resultBundlePath "$RUNNER_TEMP/ui.xcresult" 2>&1 | tee "$RUNNER_TEMP/ui.log" \
-            | grep -E "Test Case|error:|XCTAssert|TEST (SUCCEEDED|FAILED)|\*\* TEST"
+            | grep -E "Test Case|error:|XCTAssert|ASTRA-FOCUS|TEST (SUCCEEDED|FAILED)|\*\* TEST"
           STATUS=${PIPESTATUS[0]}
           # Screenshots the tests took, printed small for log readers.
           mkdir -p "$RUNNER_TEMP/uishots"
           xcrun xcresulttool export attachments --path "$RUNNER_TEMP/ui.xcresult" \
             --output-path "$RUNNER_TEMP/uishots" > /dev/null 2>&1 || true
-          cat "$RUNNER_TEMP/uishots/manifest.json" 2>/dev/null | head -c 6000 || true
+          python3 -c 'import json,sys;[print("ASTRA-ATTACH",a["exportedFileName"],a["suggestedHumanReadableName"]) for t in json.load(open(sys.argv[1])) for a in t.get("attachments",[])]' "$RUNNER_TEMP/uishots/manifest.json" || true
           for f in "$RUNNER_TEMP"/uishots/*.png; do
             [ -f "$f" ] || continue
             sips -s format jpeg -s formatOptions 55 -Z 1280 "$f" --out "${f%.png}.jpg" > /dev/null
