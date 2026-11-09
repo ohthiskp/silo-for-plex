@@ -704,9 +704,12 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let margin: CGFloat = 24
     static let trailing: CGFloat = 22
     /// Where the logo starts, as a share of the width (175 pt on a 393 pt phone).
-    static let logoTop: CGFloat = 0.445
+    static let logoTop: CGFloat = 0.6
     /// The backdrop's height as a share of the width, fading into the page.
-    static let backdropShare: CGFloat = 0.98
+    /// Taller, and starting below the Dynamic Island so faces aren't cut
+    /// off by it (KP, 2026-11-09: "the poster should be more down").
+    static let backdropShare: CGFloat = 1.08
+    static let backdropTop: CGFloat = 56
     static let logoWidth: CGFloat = 0.5
     static let logoHeight: CGFloat = 64
     static let sectionGap: CGFloat = 26
@@ -714,7 +717,8 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let actionCircle: CGFloat = 40
     static let resumeHeight: CGFloat = 48
     static let castPhoto = CGSize(width: 78, height: 62)
-    static let relatedTile = CGSize(width: 80, height: 90)
+    /// Related rows are 2:3 posters (KP, 2026-11-09: "the posters below are way too small").
+    static let relatedTile = CGSize(width: 120, height: 180)
     static let rowSpacing: CGFloat = 14
 
     /// A dark floor behind the floating tab bar: content fades out above it.
@@ -816,8 +820,13 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
           .clipped()
           .overlay(Astra.Color.bg.opacity(min(0.6, max(0, scrolled) / 600)))
           PhoneDetail.backdropFade
+          // The strip above the artwork fades from the page colour into it.
+          LinearGradient(colors: [Astra.Color.bg, Astra.Color.bg.opacity(0)], startPoint: .top, endPoint: .bottom)
+            .frame(height: 60)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(width: width, height: width * PhoneDetail.backdropShare)
+        .padding(.top, PhoneDetail.backdropTop)
         // Held in place while the page rises over it (KP, 2026-11-07).
         .offset(y: max(0, scrolled))
       }
@@ -1059,14 +1068,11 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         openItem(item)
       } label: {
         ZStack(alignment: .bottom) {
-          ArtworkImage(library: library, item: item, kind: .backdrop, width: size.width * 3, height: size.height * 3)
+          ArtworkImage(library: library, item: item, kind: .poster, width: size.width * 3, height: size.height * 3)
             .frame(width: size.width, height: size.height)
-          LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
+          // Posters carry their own title; a name only when there's no artwork.
           Group {
-            if let logo {
-              RemoteImage(url: logo, contentMode: .fit, placeholder: Color.clear)
-                .frame(maxWidth: size.width - 12, maxHeight: size.height * 0.28)
-            } else if resolved {
+            if logo == nil, resolved, item.thumb == nil {
               Text(item.displayTitle)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.white)
