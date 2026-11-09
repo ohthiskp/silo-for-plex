@@ -71,7 +71,7 @@ struct TVLibraryPage: View {
     .astraPageBackground()
     .navigationDestination(isPresented: $showSettings) {
       SettingsView(showsTitle: true)
-        .padding(.horizontal, TVLayout.leading)
+        .contentMargins(.horizontal, TVLayout.leading, for: .scrollContent)
         .astraPageBackground()
     }
   }
