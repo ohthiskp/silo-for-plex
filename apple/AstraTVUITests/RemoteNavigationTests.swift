@@ -23,6 +23,8 @@ final class RemoteNavigationTests: XCTestCase {
     for _ in 0..<times {
       remote.press(button)
       usleep(700_000)
+      let focus = focusedElement
+      print("ASTRA-FOCUS \(name) press \(button.rawValue) ->", focus.exists ? "\(focus.elementType.rawValue) '\(focus.label)' \(focus.frame)" : "none")
     }
   }
 
@@ -39,7 +41,7 @@ final class RemoteNavigationTests: XCTestCase {
   private var detailsMore: XCUIElement { app.buttons["More"].firstMatch }
 
   private var focusedElement: XCUIElement {
-    app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+    app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
   }
 
   /// tvOS can start with focus in the tab bar; move down into the page.
