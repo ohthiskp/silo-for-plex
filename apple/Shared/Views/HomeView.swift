@@ -191,6 +191,26 @@ struct HomeView: View {
       }
       .padding(.top, Astra.Spacing.s)
       .padding(.leading, leading)
+      // KP (2026-11-09): the tabs vanished on bright artwork. A soft blur
+      // runs down from the Dynamic Island behind the bar and fades out
+      // below the tabs, so there is no hard edge.
+      .background {
+        ZStack {
+          Rectangle().fill(.ultraThinMaterial)
+          LinearGradient(
+            colors: [Astra.Color.bg.opacity(0.55), Astra.Color.bg.opacity(0)],
+            startPoint: .top, endPoint: .bottom)
+        }
+        .mask {
+          LinearGradient(
+            stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.55),
+                    .init(color: .clear, location: 1)],
+            startPoint: .top, endPoint: .bottom)
+        }
+        .padding(.bottom, -28)
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
+      }
     #else
       HStack(spacing: Astra.Spacing.s) {
         if library.tmdb != nil {
