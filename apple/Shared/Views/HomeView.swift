@@ -515,10 +515,13 @@ struct HeroInfo: View {
 
   #if os(macOS)
     static let titleBox: CGFloat = 130
+    static let logoWidth: CGFloat = 400
   #elseif os(tvOS)
     static let titleBox: CGFloat = 180
+    static let logoWidth: CGFloat = 680
   #else
-    static let titleBox: CGFloat = 96
+    static let titleBox: CGFloat = 104
+    static let logoWidth: CGFloat = 300
   #endif
   @Environment(\.openItem) private var openItem
   @Environment(\.playItem) private var playItem
@@ -554,7 +557,8 @@ struct HeroInfo: View {
       Button {
         openItem(item)
       } label: {
-        HeroTitle(library: library, item: item, maxHeight: Self.titleBox)
+        // A wide logo across most of the block, centred over it (KP's mockup).
+        HeroTitle(library: library, item: item, maxWidth: Self.logoWidth, maxHeight: Self.titleBox, alignment: .bottom)
           .frame(maxWidth: .infinity)
           .frame(height: Self.titleBox, alignment: .bottom)
           .contentShape(Rectangle())
@@ -646,25 +650,28 @@ struct HeroTitle: View {
   var item: PlexMetadata
   var maxWidth: CGFloat = 440
   var maxHeight: CGFloat = 140
+  /// The hero centres its logo over the text (KP's mockup, 2026-11-09).
+  var alignment: Alignment = .bottomLeading
 
   @State private var logo: URL?
   @State private var resolved = false
 
   var body: some View {
-    ZStack(alignment: .bottomLeading) {
+    ZStack(alignment: alignment) {
       if let logo {
         RemoteImage(url: logo, contentMode: .fit, placeholder: Color.clear)
-          .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: .bottomLeading)
+          .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
           .shadow(color: .black.opacity(0.5), radius: 14, y: 4)
       } else if resolved {
         Text(item.displayTitle)
           .astraDisplay(Astra.Layout.titleSize, tracking: 10)
           .lineLimit(2)
           .minimumScaleFactor(0.5)
-          .frame(maxWidth: 640, maxHeight: maxHeight, alignment: .bottomLeading)
+          .multilineTextAlignment(alignment == .bottom ? .center : .leading)
+          .frame(maxWidth: 640, maxHeight: maxHeight, alignment: alignment)
       }
     }
-    .frame(minHeight: 44, alignment: .bottomLeading)
+    .frame(minHeight: 44, alignment: alignment)
     .task(id: item.id) {
       logo = await library.artworkURL(for: item, .logo, width: maxWidth, height: maxHeight)
       resolved = true
@@ -842,7 +849,9 @@ struct WatchlistButton: View {
       // artwork, blurred), so there is no edge between hero and rows.
       .mask {
         LinearGradient(
-          stops: [.init(color: .black, location: 0.55), .init(color: .clear, location: 1)],
+          // KP's mockup (2026-11-09): the artwork stays bright behind the
+          // logo and buttons and only fades at the very bottom.
+          stops: [.init(color: .black, location: 0.8), .init(color: .clear, location: 1)],
           startPoint: .top, endPoint: .bottom)
       }
       .clipped()
