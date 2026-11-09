@@ -91,6 +91,12 @@ struct MainView: View {
     .environment(\.playItem) { app.play($0) }
     .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     .environment(\.tvScrolledDown) { scrolledDown = $0 }
+    .task {
+      // tvOS puts first focus on the leftmost item (the search icon); start
+      // on the open page instead, unless a title was opened at launch.
+      try? await Task.pause(0.4)
+      if atRoot, barFocus == nil || barFocus == .search { barFocus = tab }
+    }
     .onAppear {
       app.player.openDetails = { item in paths[tab, default: []].append(.details(item)) }
     }
