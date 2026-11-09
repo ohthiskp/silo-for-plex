@@ -528,30 +528,39 @@ struct TopTenCard: View {
   }
 }
 
-/// The big Top 10 rank (KP's mockup, 2026-11-09): a solid, condensed
-/// number in a soft grey gradient, standing behind the poster on its
-/// baseline. Uses the page's ink, so it reads in every theme.
+/// The big Top 10 rank (KP, 2026-11-09: "a mix of white and frosted
+/// glass"): the digits are cut from a frosted blur of whatever is behind
+/// them, washed with white that is bright at the top and fades into the
+/// glass towards the foot. Uses the page's ink, so Light keeps dark digits.
 struct RankNumber: View {
   var rank: Int
   var size: CGFloat = 150
 
   var body: some View {
-    Text("\(rank)")
+    let digits = Text("\(rank)")
       .font(.system(size: size, weight: .heavy))
       .fontWidth(.condensed)
       .monospacedDigit()
       .tracking(rank >= 10 ? -size * 0.08 : 0)
-      .foregroundStyle(
-        LinearGradient(
-          colors: [Astra.Color.ink.opacity(0.42), Astra.Color.ink.opacity(0.12)],
-          startPoint: .top, endPoint: .bottom)
-      )
       .lineLimit(1)
       .fixedSize()
-      // The glyphs carry space under the baseline; pull the number down so its
-      // foot lines up with the poster's bottom edge.
-      .padding(.bottom, -size * 0.14)
-      .accessibilityHidden(true)
+    ZStack {
+      // Frosted glass in the shape of the digits.
+      Rectangle()
+        .fill(.ultraThinMaterial)
+        .mask(digits)
+      // The white wash over it.
+      digits.foregroundStyle(
+        LinearGradient(
+          colors: [Astra.Color.ink.opacity(0.92), Astra.Color.ink.opacity(0.5), Astra.Color.ink.opacity(0.12)],
+          startPoint: .top, endPoint: .bottom))
+    }
+    .fixedSize()
+    .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+    // The glyphs carry space under the baseline; pull the number down so its
+    // foot lines up with the poster's bottom edge.
+    .padding(.bottom, -size * 0.14)
+    .accessibilityHidden(true)
   }
 }
 
