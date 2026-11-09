@@ -1,10 +1,11 @@
 import AstraKit
 import SwiftUI
 
-/// The Apple TV player chrome (docs/design/appletv-player.png, KP 2026-11-06):
-/// the title bottom left with the white bar under it, and only two buttons at
-/// the bottom right, captions and quality (Auto / HD / 4K between the original
-/// files on the server, never a transcode).
+/// The Apple TV player chrome, laid out like Silo Apple's tvOS player (KP,
+/// 2026-11-09; https://github.com/Silo-Server/silo-apple, AGPL-3.0-or-later,
+/// Copyright (C) 2026 Silo Media L.L.C. and contributors). Playback itself is
+/// still mpv with the original file; quality picks between the original files
+/// on the server (Auto / HD / 4K), never a transcode.
 ///
 /// The remote comes from `TVPlayerHost` (playback): click or Play/Pause plays
 /// and pauses, left / right skip 10 s, a swipe scrubs, Menu hides the controls
@@ -21,7 +22,7 @@ struct PlayerOverlay: View {
   @State private var activity = 0
   @FocusState private var focus: Field?
 
-  private enum Field: Hashable { case bar, captions, quality, next }
+  private enum Field: Hashable { case bar, back, playPause, forward, captions, quality, next, close }
   private var player: PlayerController { app.player }
 
   var body: some View {
@@ -40,11 +41,12 @@ struct PlayerOverlay: View {
     ZStack(alignment: .bottom) {
       Color.clear
 
-      // A dimming scrim under the controls only, so the picture stays clean.
-      LinearGradient(
-        stops: [.init(color: .clear, location: 0.45), .init(color: .black.opacity(0.8), location: 1)],
-        startPoint: .top, endPoint: .bottom
-      )
+      // Silo: a shallow gradient at the bottom only, so the picture stays clean.
+      VStack(spacing: 0) {
+        Spacer()
+        LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+          .frame(height: 240)
+      }
       .ignoresSafeArea()
       .opacity(visible ? 1 : 0)
       .allowsHitTesting(false)
@@ -55,6 +57,8 @@ struct PlayerOverlay: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .transition(.opacity)
       }
+
+      scrubPreview
 
       chrome
         .opacity(visible ? 1 : 0)
@@ -80,6 +84,42 @@ struct PlayerOverlay: View {
     }
   }
 
+  /// Silo's still preview that follows the playhead while scrubbing.
+  @ViewBuilder private var scrubPreview: some View {
+    if let target = scrubbing, player.duration > 0, let image = player.thumbnail(at: target) {
+      GeometryReader { proxy in
+        let inset = Self.inset
+        let cardWidth: CGFloat = 340
+        let track = max(proxy.size.width - inset * 2, 0)
+        let head = inset + track * CGFloat(min(1, max(0, target / player.duration)))
+        let leading = min(max(head - cardWidth / 2, inset), proxy.size.width - inset - cardWidth)
+        VStack(spacing: 8) {
+          Image(platformImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: 320, height: 180)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+          Text(TVScrubBarLabel.clock(target))
+            .font(.system(size: 24, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(.white)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.ultraThinMaterial))
+        .shadow(color: .black.opacity(0.5), radius: 18, y: 7)
+        .frame(width: cardWidth)
+        .padding(.leading, leading)
+        .padding(.bottom, 300)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+      }
+      .allowsHitTesting(false)
+      .transition(.opacity)
+    }
+  }
+
+  /// Silo's side inset for the transport.
+  private static let inset: CGFloat = 80
+
   private func poke() {
     visible = true
     activity &+= 1
@@ -87,44 +127,82 @@ struct PlayerOverlay: View {
 
   // MARK: Chrome
 
+  /// Silo's transport: the title bottom left, the timeline with its puck,
+  /// the times, then -10 / play / +10 on the left and Next Episode,
+  /// subtitles, quality and close on the right.
   private var chrome: some View {
-    VStack(alignment: .leading, spacing: 26) {
-      HStack(alignment: .bottom, spacing: 24) {
-        VStack(alignment: .leading, spacing: 8) {
-          if let subtitle = player.subtitle, !subtitle.isEmpty {
-            Text(subtitle)
-              .font(.system(size: 26, weight: .medium))
-              .foregroundStyle(.white.opacity(0.75))
-              .lineLimit(1)
-          }
-          Text(player.title)
-            .font(.system(size: 44, weight: .bold))
-            .foregroundStyle(.white)
-            .lineLimit(2)
+    VStack(alignment: .leading, spacing: 12) {
+      VStack(alignment: .leading, spacing: 2) {
+        if let subtitle = player.subtitle, !subtitle.isEmpty {
+          Text(subtitle)
+            .font(.system(size: 22, weight: .medium))
+            .foregroundStyle(.white.opacity(0.65))
+            .lineLimit(1)
         }
-        Spacer(minLength: 40)
+        Text(player.title)
+          .font(.system(size: 34, weight: .semibold))
+          .foregroundStyle(.white)
+          .lineLimit(1)
+      }
+
+      TVScrubBar(player: player, scrubbing: scrubbing)
+        .focused($focus, equals: .bar)
+
+      HStack(spacing: 10) {
+        circle("gobackward.10", field: .back, label: "Back 10 seconds", primary: false) {
+          player.seek(by: -NowPlaying.skipSeconds)
+        }
+        circle(player.paused ? "play.fill" : "pause.fill", field: .playPause, label: player.paused ? "Play" : "Pause", primary: true) {
+          player.togglePause()
+        }
+        circle("goforward.10", field: .forward, label: "Forward 10 seconds", primary: false) {
+          player.seek(by: NowPlaying.skipSeconds)
+        }
+        Spacer(minLength: 24)
         if showNextEpisode, nextEpisodeShown {
           Button {
             player.playUpNext()
           } label: {
             Label("Next Episode", systemImage: "forward.end.fill")
+              .font(.system(size: 24, weight: .semibold))
+              .foregroundStyle(focus == .next ? Color.black : Color.white)
+              .padding(.horizontal, 26)
+              .frame(height: 66)
+              .background(Capsule().fill(focus == .next ? Color.white : Color.black.opacity(0.35)))
+              .overlay(Capsule().stroke(Color.white.opacity(focus == .next ? 0 : 0.22), lineWidth: 1))
           }
-          .astraSecondaryButton()
+          .buttonStyle(TVBareButtonStyle())
           .focused($focus, equals: .next)
         }
         captionsMenu
         qualityMenu
+        circle("xmark", field: .close, label: "Close player", primary: false) {
+          player.close()
+        }
       }
       // Hidden buttons can't take focus.
       .disabled(!visible)
-
-      TVScrubBar(player: player, scrubbing: scrubbing)
-        .focused($focus, equals: .bar)
+      .focusSection()
     }
-    .padding(.horizontal, 90)
-    .padding(.bottom, 60)
+    .padding(.horizontal, Self.inset)
+    .padding(.bottom, 48)
     .focusSection()
     .onChange(of: focus) { poke() }
+  }
+
+  /// One of Silo's 66 pt round transport buttons: white when focused.
+  private func circle(
+    _ symbol: String, field: Field, label: String, primary: Bool, action: @escaping () -> Void
+  ) -> some View {
+    Button {
+      action()
+      poke()
+    } label: {
+      TVCircleGlyph(symbol: symbol, focused: focus == field, size: primary ? 30 : 25)
+    }
+    .buttonStyle(TVBareButtonStyle())
+    .focused($focus, equals: field)
+    .accessibilityLabel(label)
   }
 
   private var nextEpisodeShown: Bool {
@@ -142,9 +220,11 @@ struct PlayerOverlay: View {
         }
       }
     } label: {
-      Image(systemName: player.subtitleId == nil ? "captions.bubble" : "captions.bubble.fill")
+      TVCircleGlyph(
+        symbol: player.subtitleId == nil ? "captions.bubble" : "captions.bubble.fill",
+        focused: focus == .captions, size: 25)
     }
-    .astraIconButton(size: 50, variant: .clear)
+    .buttonStyle(TVBareButtonStyle())
     .focused($focus, equals: .captions)
     .accessibilityLabel("Subtitles")
   }
@@ -168,13 +248,13 @@ struct PlayerOverlay: View {
         Image(systemName: "chevron.down").font(.system(size: 16, weight: .bold))
       }
       .font(.system(size: 22, weight: .semibold))
-      .foregroundStyle(.white)
+      .foregroundStyle(focus == .quality ? Color.black : Color.white)
       .padding(.horizontal, 22)
-      .frame(height: 64)
-      .astraGlass(in: Capsule(), variant: .clear, interactive: true)
-      .tvFocusLift(1.08)
+      .frame(height: 66)
+      .background(Capsule().fill(focus == .quality ? Color.white : Color.black.opacity(0.35)))
+      .overlay(Capsule().stroke(Color.white.opacity(focus == .quality ? 0 : 0.22), lineWidth: 1))
     }
-    .buttonStyle(.plain)
+    .buttonStyle(TVBareButtonStyle())
     .disabled(player.versions.count < 2)
     .focused($focus, equals: .quality)
     .accessibilityLabel("Quality")
@@ -197,7 +277,7 @@ private struct TVScrubBar: View {
   }
 }
 
-private struct TVScrubBarLabel: View {
+struct TVScrubBarLabel: View {
   let player: PlayerController
   var scrubbing: Double?
   @Environment(\.isFocused) private var focused
@@ -210,31 +290,45 @@ private struct TVScrubBarLabel: View {
   }
 
   var body: some View {
-    VStack(spacing: 12) {
+    VStack(spacing: 10) {
       GeometryReader { geo in
+        let width = geo.size.width
         ZStack(alignment: .leading) {
-          Capsule().fill(.white.opacity(0.28))
-          Capsule().fill(.white).frame(width: max(focused ? 10 : 6, geo.size.width * fraction))
+          Capsule().fill(.white.opacity(scrubbing != nil ? 0.48 : focused ? 0.35 : 0.24))
+            .frame(height: barHeight)
+          Capsule().fill(.white).frame(width: max(barHeight, width * fraction), height: barHeight)
+          if focused {
+            let puck: CGFloat = scrubbing != nil ? 36 : 30
+            Circle()
+              .fill(.white)
+              .frame(width: puck, height: puck)
+              .overlay(Circle().stroke(.white.opacity(scrubbing != nil ? 0.55 : 0), lineWidth: 8))
+              .shadow(color: .black.opacity(0.48), radius: 8, y: 3)
+              .offset(x: width * fraction - puck / 2)
+          }
         }
+        .frame(height: 56)
       }
-      .frame(height: focused ? 10 : 6)
+      .frame(height: 56)
       HStack {
         HStack(spacing: 10) {
           if player.paused {
-            Image(systemName: "pause.fill").font(.system(size: 20, weight: .bold))
+            Image(systemName: "pause.fill").font(.system(size: 22, weight: .bold))
           }
           Text(Self.clock(time))
         }
         Spacer()
-        Text("-" + Self.clock(max(0, player.duration - time)))
+        Text("\u{2212}" + Self.clock(max(0, player.duration - time)))
       }
-      .font(.system(size: 24, weight: .semibold))
+      .font(.system(size: 28, weight: .semibold, design: .rounded))
       .monospacedDigit()
-      .foregroundStyle(.white.opacity(focused ? 1 : 0.8))
+      .foregroundStyle(.white)
     }
     .contentShape(Rectangle())
     .astraAnimation(Astra.Motion.fast, value: focused)
   }
+
+  private var barHeight: CGFloat { scrubbing != nil ? 12 : 7 }
 
   /// "1:02:05" or "12:05".
   static func clock(_ seconds: Double) -> String {
@@ -248,5 +342,25 @@ private struct TVScrubBarLabel: View {
 private struct TVBareButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
+      .focusEffectDisabled()
+      .scaleEffect(configuration.isPressed ? 0.96 : 1)
+  }
+}
+
+/// Silo's round transport glyph: dark glass at rest, white with a black glyph when focused.
+private struct TVCircleGlyph: View {
+  var symbol: String
+  var focused: Bool
+  var size: CGFloat
+
+  var body: some View {
+    Image(systemName: symbol)
+      .font(.system(size: size, weight: .semibold))
+      .foregroundStyle(focused ? Color.black : Color.white)
+      .frame(width: 66, height: 66)
+      .background(Circle().fill(focused ? Color.white : Color.black.opacity(0.35)))
+      .overlay(Circle().stroke(Color.white.opacity(focused ? 0 : 0.22), lineWidth: 1))
+      .contentShape(Circle())
+      .animation(.easeOut(duration: 0.15), value: focused)
   }
 }

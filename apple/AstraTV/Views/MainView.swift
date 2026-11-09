@@ -15,245 +15,263 @@ struct TVRootView: View {
   }
 }
 
-/// The Apple TV sidebar's pages: the same four as the Mac and iPhone.
-enum TVSection: String, CaseIterable, Identifiable {
-  case home, library, search, settings
+/// The pages in the top bar (KP, 2026-11-09: laid out like Silo's Apple TV app).
+enum TVTab: String, CaseIterable, Identifiable {
+  case home, movies, shows, watchlist
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
     case .home: "Home"
-    case .library: "Library"
-    case .search: "Search"
-    case .settings: "Settings"
-    }
-  }
-
-  var symbol: String {
-    switch self {
-    case .home: "house.fill"
-    case .library: "square.stack.fill"
-    case .search: "magnifyingglass"
-    case .settings: "gearshape.fill"
+    case .movies: "Movies"
+    case .shows: "Shows"
+    case .watchlist: "Watchlist"
     }
   }
 }
 
-/// Signed in on Apple TV: the Mac's glass sidebar on the left, which expands
-/// to icons and names while it has focus (KP, 2026-11-08), and the page to
-/// its right. Details push onto the page's stack; Menu on the remote goes back.
+/// Where the bar can put focus: a tab, Search on its left, Settings on its right.
+enum TVBarItem: Hashable {
+  case tab(TVTab)
+  case search
+  case settings
+}
+
+/// What the page under the bar shows.
+enum TVPage: Hashable {
+  case tab(TVTab)
+  case search
+  case settings
+}
+
+/// Signed in on Apple TV: Silo's layout. A top bar (Search, Home, Movies,
+/// Shows, Watchlist, Settings) over the page; opening a title pushes its
+/// Details with the bar hidden, and Menu on the remote goes back.
+///
+/// Menu at the top level: from the page, focus goes up to the bar; from the
+/// bar on any page but Home, back to Home; from Home's bar, out of the app.
 struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
 
-  @State private var section: TVSection = Demo.tvSection
-  /// Pages stay alive once opened, so switching back keeps scroll and focus.
-  @State private var opened: [TVSection] = Demo.tvSection == .home ? [.home] : [.home, Demo.tvSection]
-  @State private var paths: [TVSection: [Route]] = [
-    .home: Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
-  ]
-  @FocusState private var sidebarFocus: TVSection?
-  /// Focus starts on the first hero's Play, not the sidebar (`tvLaunchFocus`).
-  @FocusState private var launchFocus: String?
-  @State private var startedOnHero = false
-
-  private func path(_ id: TVSection) -> Binding<[Route]> {
-    Binding(get: { paths[id] ?? [] }, set: { paths[id] = $0 })
-  }
+  @State private var page: TVPage = Demo.tvPage
+  @State private var path: [Route] = Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
+  @FocusState private var barFocus: TVBarItem?
+  /// The bar can't take focus until the page has had it: launch focus goes to
+  /// the first card, not Search (Silo does the same).
+  @State private var barLocked = true
 
   var body: some View {
-    ZStack(alignment: .leading) {
-      ZStack {
-        ForEach(opened) { id in
-          let current = id == section
-          stack(id)
-            .environment(\.isPageActive, current)
-            .opacity(current ? 1 : 0)
-            .disabled(!current)
-            .accessibilityHidden(!current)
-        }
-      }
-      .environment(\.contentLeading, Astra.Sidebar.contentInset)
-      .focusSection()
-
-      // While the sidebar is open, the page behind it dims from the left, so
-      // the names never sit on top of the hero's text.
-      LinearGradient(
-        stops: [
-          .init(color: Astra.Color.bg.opacity(0.92), location: 0),
-          .init(color: Astra.Color.bg.opacity(0.7), location: 0.5),
-          .init(color: Astra.Color.bg.opacity(0), location: 1),
-        ],
-        startPoint: .leading, endPoint: .trailing
-      )
-      .frame(width: Astra.Sidebar.expandedWidth * 2.4)
-      .frame(maxHeight: .infinity)
-      .ignoresSafeArea()
-      .opacity(sidebarOpen ? 1 : 0)
-      .allowsHitTesting(false)
-      .astraAnimation(Astra.Motion.base, value: sidebarOpen)
-
-      TVSidebar(selection: section, focus: $sidebarFocus, expandable: !showingDetails) { picked in
-        if !opened.contains(picked) { opened.append(picked) }
-        if picked == section {
-          // Selecting the open page again goes back to its first screen.
-          paths[picked] = []
-          if picked == .home, library.selectedService != nil { library.select(nil) }
-        } else {
-          section = picked
-        }
-      }
-      .padding(.leading, Astra.Sidebar.margin)
-      .focusSection()
-    }
-    .environment(\.tvLaunchFocus, $launchFocus)
-    .background(Astra.Color.bg.ignoresSafeArea())
-    .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
-    // Moving left into the sidebar lands on the open page's icon, whichever
-    // row you came from.
-    .onChange(of: sidebarFocus) { old, new in
-      if old == nil, let new, new != section { sidebarFocus = section }
-    }
-    // Launch: focus goes to the first hero's Play as soon as the hero is
-    // there (it can arrive after the first focus pass), once.
-    .task(id: library.homeHero.first?.id) { focusHero() }
-    .environment(\.playItem) { app.play($0) }
-    .onAppear {
-      app.player.openDetails = { item in
-        paths[section, default: []].append(.details(item))
-      }
-    }
-  }
-
-  /// Details is a stacked card over the page: the sidebar stays icons only
-  /// there, so it never covers the title, meta line or Play (KP, 2026-11-08).
-  private var showingDetails: Bool { !(paths[section] ?? []).isEmpty }
-  private var sidebarOpen: Bool { sidebarFocus != nil && !showingDetails }
-
-  private func focusHero() {
-    guard !startedOnHero, section == .home, paths[.home]?.isEmpty ?? true,
-      let first = library.homeHero.first
-    else { return }
-    startedOnHero = true
-    launchFocus = first.id
-  }
-
-  private func stack(_ id: TVSection) -> some View {
-    NavigationStack(path: path(id)) {
-      page(id)
-        .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(for: Route.self) { route in
-          switch route {
-          case .details(let item):
-            DetailView(library: library, seed: item, path: path(id))
+    ZStack(alignment: .top) {
+      NavigationStack(path: $path) {
+        root
+          .toolbar(.hidden, for: .navigationBar)
+          .navigationDestination(for: Route.self) { route in
+            switch route {
+            case .details(let item):
+              TVDetailPage(library: library, seed: item)
+                .toolbar(.hidden, for: .navigationBar)
+            }
           }
+      }
+
+      if path.isEmpty {
+        TVTopBar(page: page, focus: $barFocus) { picked in
+          if picked != page { page = picked }
         }
+        .disabled(barLocked)
+        .transition(.opacity)
+      }
     }
-    .environment(\.openItem) { item in paths[id, default: []].append(.details(item)) }
+    .background(TVColor.background.ignoresSafeArea())
+    .environment(\.openItem) { item in path.append(.details(item)) }
+    .environment(\.playItem) { app.play($0) }
+    .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
+    .onAppear {
+      app.player.openDetails = { item in path.append(.details(item)) }
+    }
+    .task {
+      try? await Task.pause(0.8)
+      barLocked = false
+    }
   }
 
-  @ViewBuilder private func page(_ id: TVSection) -> some View {
-    switch id {
-    case .home: HomeView(library: library)
-    case .library: LibraryPage(library: library)
-    case .search: SearchView(library: library)
-    case .settings: SettingsView(showsTitle: true)
+  private var root: some View {
+    pageView
+      .id(page)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .onExitCommand(perform: exitAction)
+  }
+
+  @ViewBuilder private var pageView: some View {
+    switch page {
+    case .tab(.home): TVHomeFeed(library: library)
+    case .tab(.movies): TVLibraryGrid(library: library, kind: "movie")
+    case .tab(.shows): TVLibraryGrid(library: library, kind: "show")
+    case .tab(.watchlist): TVWatchlistGrid(library: library)
+    case .search:
+      SearchView(library: library)
+        .padding(.top, TVMetrics.pageTopInset)
+        .background(Astra.Color.bg.ignoresSafeArea())
+    case .settings:
+      SettingsView(showsTitle: false)
+        .padding(.top, TVMetrics.pageTopInset)
+        .background(Astra.Color.bg.ignoresSafeArea())
+    }
+  }
+
+  /// Menu at the top level. Nil hands it to the system: out of the app.
+  private var exitAction: (() -> Void)? {
+    guard path.isEmpty else { return nil }
+    if barFocus == nil {
+      return { barFocus = barItem(for: page) }
+    }
+    if page != .tab(.home) {
+      return {
+        page = .tab(.home)
+        barFocus = .tab(.home)
+      }
+    }
+    return nil
+  }
+
+  private func barItem(for page: TVPage) -> TVBarItem {
+    switch page {
+    case .tab(let tab): .tab(tab)
+    case .search: .search
+    case .settings: .settings
     }
   }
 }
 
 extension Demo {
-  /// `-AstraDemoTab home|search|libraries|settings` for the TV screenshots.
-  static var tvSection: TVSection {
+  /// `-AstraDemoTab home|search|libraries|shows|watchlist|settings` for the TV screenshots.
+  static var tvPage: TVPage {
     switch tab {
     case "search": .search
-    case "libraries", "library": .library
+    case "libraries", "library", "movies": .tab(.movies)
+    case "shows": .tab(.shows)
+    case "watchlist": .tab(.watchlist)
     case "settings": .settings
-    default: .home
+    default: .tab(.home)
     }
   }
 }
 
-// MARK: - Sidebar
+// MARK: - Top bar
 
-/// A column of glass: icons only, and icons with names while focus is in it.
-/// Focus lands on the open page's icon when you move left into it, and the
-/// column floats over the page, so expanding never moves the content.
-struct TVSidebar: View {
-  var selection: TVSection
-  var focus: FocusState<TVSection?>.Binding
-  /// False over Details: icons only, even with focus.
-  var expandable = true
-  var choose: (TVSection) -> Void
+/// Silo's top menu bar: Search, the tabs centred on screen, Settings at the
+/// right. Focused = white capsule with black text; the open page = a faint
+/// grey capsule; the rest dimmed. The bar dims while focus is in the page.
+struct TVTopBar: View {
+  var page: TVPage
+  var focus: FocusState<TVBarItem?>.Binding
+  var choose: (TVPage) -> Void
 
-  private var expanded: Bool { expandable && focus.wrappedValue != nil }
-  private static let shape = RoundedRectangle(cornerRadius: Astra.Sidebar.collapsedWidth / 2, style: .continuous)
+  private var barFocused: Bool { focus.wrappedValue != nil }
 
   var body: some View {
-    VStack(spacing: Astra.Spacing.s) {
-      ForEach(TVSection.allCases) { item in
-        Button { choose(item) } label: {
-          TVSidebarLabel(item: item, selected: item == selection, expanded: expanded)
+    ZStack {
+      HStack(spacing: TVMetrics.tabSpacing) {
+        iconButton("magnifyingglass", item: .search, page: .search, label: "Search")
+        ForEach(TVTab.allCases) { tab in
+          tabButton(tab)
         }
-        .buttonStyle(TVSidebarButtonStyle())
-        .focused(focus, equals: item)
-        .accessibilityLabel(item.title)
-        .accessibilityAddTraits(item == selection ? .isSelected : [])
+        // Balances Search so the tabs stay centred on screen.
+        Color.clear.frame(width: TVMetrics.barIconSize, height: TVMetrics.barIconSize)
+      }
+      .fixedSize()
+      .frame(maxWidth: .infinity)
+
+      HStack {
+        Spacer()
+        iconButton("gearshape.fill", item: .settings, page: .settings, label: "Settings")
       }
     }
-    .padding(14)
-    .frame(width: expanded ? Astra.Sidebar.expandedWidth : Astra.Sidebar.collapsedWidth, alignment: .leading)
-    .astraGlass(in: Self.shape, variant: .clear)
-    .astraGlassEdge(Self.shape)
-    .frame(maxHeight: .infinity)
-    .astraAnimation(Astra.Motion.base, value: expanded)
+    .frame(height: TVMetrics.barHeight)
+    .padding(.horizontal, TVMetrics.safeAreaX)
+    .padding(.top, TVMetrics.barTopInset)
+    .frame(maxWidth: .infinity, alignment: .top)
+    .ignoresSafeArea(edges: [.top, .horizontal])
+    .opacity(barFocused ? 1 : TVMetrics.barDimmedOpacity)
+    .animation(.easeInOut(duration: 0.2), value: barFocused)
+    // Up from the page lands on the open page's tab, not whatever is above the card.
+    .defaultFocus(focus, defaultItem, priority: .userInitiated)
+    .focusSection()
+  }
+
+  private var defaultItem: TVBarItem {
+    switch page {
+    case .tab(let tab): .tab(tab)
+    case .search: .search
+    case .settings: .settings
+    }
+  }
+
+  private func tabButton(_ tab: TVTab) -> some View {
+    let focused = focus.wrappedValue == .tab(tab)
+    let selected = page == .tab(tab)
+    return Button {
+      choose(.tab(tab))
+    } label: {
+      Text(tab.title)
+        .font(.system(size: TVMetrics.tabLabelSize, weight: .semibold))
+        .foregroundStyle(focused ? Color.black : (selected ? Color.white : Color.white.opacity(0.62)))
+        .lineLimit(1)
+        .padding(.horizontal, TVMetrics.tabPaddingHorizontal)
+        .padding(.vertical, TVMetrics.tabPaddingVertical)
+        .modifier(TVCapsuleChrome(selected: selected, focused: focused))
+    }
+    .buttonStyle(TVPlainButtonStyle())
+    .focused(focus, equals: .tab(tab))
+    // Moving across the bar opens each tab, as on the Apple TV app.
+    .onChange(of: focused) { _, now in if now, !selected { choose(.tab(tab)) } }
+    .accessibilityLabel(tab.title)
+    .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+
+  private func iconButton(_ symbol: String, item: TVBarItem, page target: TVPage, label: String) -> some View {
+    let focused = focus.wrappedValue == item
+    let selected = page == target
+    return Button {
+      choose(target)
+    } label: {
+      Image(systemName: symbol)
+        .font(.system(size: 26, weight: .semibold))
+        .foregroundStyle(focused ? Color.black : (selected ? Color.white : Color.white.opacity(0.62)))
+        .frame(width: TVMetrics.barIconSize, height: TVMetrics.barIconSize)
+        .modifier(TVCapsuleChrome(selected: selected, focused: focused))
+    }
+    .buttonStyle(TVPlainButtonStyle())
+    .focused(focus, equals: item)
+    .accessibilityLabel(label)
+    .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }
 
-private struct TVSidebarLabel: View {
-  var item: TVSection
+private struct TVCapsuleChrome: ViewModifier {
   var selected: Bool
-  var expanded: Bool
-  @Environment(\.isFocused) private var focused
+  var focused: Bool
 
-  var body: some View {
-    HStack(spacing: 16) {
-      Image(systemName: item.symbol)
-        .font(.system(size: 28, weight: .semibold))
-        .frame(width: 68, height: 68)
-      if expanded {
-        Text(item.title)
-          .font(.system(size: 28, weight: .semibold))
-          .lineLimit(1)
-          .fixedSize()
-          .transition(.opacity)
-        Spacer(minLength: 0)
-      }
-    }
-    .frame(width: expanded ? nil : 68, height: 68)
-    .frame(maxWidth: expanded ? .infinity : nil, alignment: .leading)
-    // Focus is a white fill with dark text (the remote's highlight); the open
-    // page keeps a quieter grey fill so you always know where you are.
-    .foregroundStyle(focused ? Color.black : (selected ? Astra.Color.ink : Astra.Color.muted))
-    .background {
-      if focused {
-        Capsule().fill(Astra.Color.theme)
-      } else if selected {
-        Capsule().fill(Astra.Color.ink.opacity(0.16))
-      }
-    }
-    .scaleEffect(focused ? 1.04 : 1)
-    .astraAnimation(Astra.Motion.fast, value: focused)
+  func body(content: Content) -> some View {
+    content
+      .background(Capsule().fill(focused ? Color.white : (selected ? TVColor.selectedFill : Color.clear)))
+      .overlay(Capsule().strokeBorder(focused || !selected ? Color.clear : TVColor.selectedBorder, lineWidth: 1))
+      .scaleEffect(focused ? 1.04 : 1)
+      .animation(.spring(response: 0.3, dampingFraction: 0.8), value: focused)
+      .animation(.easeInOut(duration: 0.18), value: selected)
   }
 }
 
-private struct TVSidebarButtonStyle: ButtonStyle {
+/// A button that draws only its label: no system focus glass.
+struct TVPlainButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .contentShape(Capsule())
+      .focusEffectDisabled()
       .scaleEffect(configuration.isPressed ? 0.96 : 1)
-      .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
+      .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
   }
 }
 
