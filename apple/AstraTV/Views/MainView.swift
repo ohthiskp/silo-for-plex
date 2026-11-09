@@ -73,15 +73,17 @@ struct MainView: View {
       }
 
       if atRoot {
+        // A soft shade at the top so the bar reads over bright artwork.
+        LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
+          .frame(height: 220)
+          .ignoresSafeArea()
+          .allowsHitTesting(false)
+          .opacity(barShown ? 1 : 0)
         TVTopBar(tab: $tab, focus: $barFocus)
           .opacity(barShown ? 1 : 0)
-          .animation(.easeInOut(duration: 0.25), value: barShown)
       }
     }
-    // Menu at the top of a page goes up to the bar; on the bar it leaves
-    // the app (nil hands the press to the system). In Details the stack's
-    // own Back runs.
-    .onExitCommand(perform: atRoot && barFocus == nil && !app.player.isActive ? { barFocus = tab } : nil)
+    .animation(.easeInOut(duration: 0.25), value: barShown)
     .onChange(of: tab) { scrolledDown = false }
     // While the player is up, nothing under it can take focus, so the remote
     // (Menu above all) stays with the player.
@@ -97,6 +99,10 @@ struct MainView: View {
   private func stack(_ item: TVTab) -> some View {
     NavigationStack(path: path(item)) {
       page(item)
+        // Menu on a page goes up to the bar; on the bar it leaves the app
+        // (nil hands the press on). It sits on the page itself, inside the
+        // stack, so in Details the stack's own Back runs instead.
+        .onExitCommand(perform: barFocus == nil ? { barFocus = item } : nil)
         .navigationDestination(for: Route.self) { route in
           switch route {
           case .details(let title):

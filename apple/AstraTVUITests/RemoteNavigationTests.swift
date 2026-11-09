@@ -69,6 +69,7 @@ final class RemoteNavigationTests: XCTestCase {
     XCTAssertTrue(detailsMore.waitForExistence(timeout: 30), "Details didn't open")
     sleep(3)
     shot("details-before-menu")
+    print("ASTRA-FOCUS before Menu:", focusedElement.exists ? focusedElement.label : "none")
     press(.menu)
     XCTAssertTrue(waitGone(detailsMore), "Menu didn't close Details")
     XCTAssertTrue(homeHero.waitForExistence(timeout: 10), "Menu didn't go back to Home")
