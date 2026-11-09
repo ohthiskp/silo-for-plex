@@ -101,29 +101,15 @@ struct LibraryGridContent: View {
   @State private var loaded = 0
   @State private var loading = false
   @AppStorage("astra.libraries.macSort") private var sort = "addedAt:desc"
-  /// KP (2026-11-09): search this library, answered at once from the index.
-  @State private var searchText = ""
 
   private var sections: [PlexLibrarySection] { library.sections.filter { $0.type == kind } }
   private var section: PlexLibrarySection? {
     sections.first { $0.key == sectionKey } ?? sections.first
   }
   private var noun: String { kind == "show" ? "Shows" : "Movies" }
-  private var searching: Bool { !searchText.trimmingCharacters(in: .whitespaces).isEmpty }
-
-  private var matches: [PlexMetadata] {
-    _ = library.indexRevision
-    let sectionID = sections.count > 1 ? section.flatMap { Int($0.key) } : nil
-    return library.shown(
-      library.localSearch(searchText.trimmingCharacters(in: .whitespaces), limit: 300).filter {
-        $0.type.rawValue == kind && (sectionID == nil || $0.librarySectionID == sectionID)
-      }, swap: false)
-  }
-
   var body: some View {
     VStack(alignment: .leading, spacing: Astra.Spacing.l) {
       HStack(spacing: Astra.Spacing.s) {
-        LibrarySearchField(text: $searchText, prompt: "Search \(noun)")
         if sections.count > 1 {
           Picker("Library", selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 })) {
             ForEach(sections) { Text($0.title).tag($0.key) }
@@ -145,17 +131,6 @@ struct LibraryGridContent: View {
         EmptyState(
           symbol: kind == "show" ? "tv" : "film", title: "No \(noun.lowercased()) library",
           message: "This Plex server has no \(noun.lowercased()) library.")
-      } else if searching {
-        let found = matches
-        if found.isEmpty {
-          EmptyState(
-            symbol: "magnifyingglass", title: library.indexReady ? "No matches" : "Still reading your library",
-            message: library.indexReady ? "Nothing in \(noun) matches “\(searchText)”." : "Try again in a moment.")
-        } else {
-          LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
-            ForEach(found) { PosterCard(library: library, item: $0) }
-          }
-        }
       } else if items.isEmpty && reachedEnd {
         EmptyState(symbol: "square.stack", title: "Nothing here yet", message: "This library is empty.")
       } else {
@@ -502,7 +477,7 @@ struct SearchView: View {
     }
     if let hit = SearchCache.shared[text] {
       remember(languagesOf: hit.items)
-      results = library.withServerNow(hit.items)
+      results = library.searchResults(hit.items, text: text)
       people = hit.people
       searched = true
       peopleSearched = true
@@ -510,6 +485,9 @@ struct SearchView: View {
     }
     searched = false
     peopleSearched = false
+    // Like Netflix: titles on the server that match show at once, as you
+    // type, and TMDB's ranked list replaces them a moment later.
+    results = library.localSearch(text, limit: 20)
     // A short pause so each keystroke doesn't send a request.
     try? await Task.pause(0.15)
     guard !Task.isCancelled, let tmdb = library.tmdb else {
@@ -523,7 +501,7 @@ struct SearchView: View {
     if let found { SearchCache.shared[text] = (found.items, shownPeople) }
     remember(languagesOf: found?.items ?? [])
     astraWithAnimation(Astra.Motion.base) {
-      results = library.withServerNow(found?.items ?? [])
+      results = library.searchResults(found?.items ?? [], text: text)
       people = shownPeople
       searched = true
       peopleSearched = true
@@ -537,6 +515,25 @@ struct SearchView: View {
   /// Atmos and Dolby Vision are in a title's tracks, which only its full
   /// details have: read them for the server's results (cached, four at a time).
   private func readTracks() async {
+    // Bollywood: the language of server titles TMDB's search didn't return.
+    let unknown = filters.contains(.bollywood) ? results.filter { $0.tmdbKey.map { languages[$0] == nil } ?? false } : []
+    if !unknown.isEmpty {
+      verifying = true
+      defer { verifying = false }
+      let found = await withTaskGroup(of: (String, String)?.self) { group in
+        for item in unknown {
+          group.addTask {
+            guard let key = item.tmdbKey, let language = await library.language(of: item) else { return nil }
+            return (key, language)
+          }
+        }
+        var out: [(String, String)] = []
+        for await pair in group { if let pair { out.append(pair) } }
+        return out
+      }
+      guard !Task.isCancelled else { return }
+      for (key, language) in found { languages[key] = language }
+    }
     guard filters.contains(where: \.needsStreams) else { return }
     let pending = results.filter { item in
       !item.isCatalogOnly && fullCopies[item.ratingKey] == nil

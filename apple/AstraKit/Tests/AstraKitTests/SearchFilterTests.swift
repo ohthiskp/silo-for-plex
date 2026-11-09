@@ -58,3 +58,22 @@ final class SearchFilterTests: XCTestCase {
     XCTAssertEqual(SearchFilter.matches(try movie(hdListed), language: nil, all: [.fourK, .atmos]), false)
   }
 }
+
+final class SearchRankPopularityTests: XCTestCase {
+  private func item(_ id: Int, _ title: String) -> TMDBItem {
+    TMDBItem(tmdbID: id, kind: .movie, title: title, year: nil, overview: nil, rating: nil, posterPath: "/p", backdropPath: nil)
+  }
+
+  /// KP (2026-11-09): typing "inter" should show Interstellar, not an obscure "Inter" first.
+  func testPopularPrefixBeatsObscureExactMatch() {
+    let ranked = SearchRank.titles(
+      [(item(1, "Inter"), 0.9), (item(2, "Inter View"), 0.6), (item(3, "Interstellar"), 180), (item(4, "Inception"), 90)],
+      text: "inter")
+    XCTAssertEqual(ranked.map(\.title), ["Interstellar", "Inter", "Inter View", "Inception"])
+  }
+
+  func testExactMatchStillWinsAgainstSimilarPopularity() {
+    let ranked = SearchRank.titles([(item(1, "Rocky Balboa"), 40), (item(2, "Rocky"), 35)], text: "rocky")
+    XCTAssertEqual(ranked.first?.title, "Rocky")
+  }
+}

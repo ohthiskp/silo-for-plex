@@ -211,11 +211,18 @@ public struct TMDBClient: Sendable {
 
   /// Search: titles and people for `text`, best matches first (see `SearchRank`).
   public func searchMulti(_ text: String) async throws -> (items: [TMDBItem], people: [TMDBPerson]) {
-    let data = try await get("/search/multi", ["query": text, "include_adult": "false"])
-    let page = try JSONDecoder().decode(MultiPage.self, from: data)
+    // Two pages (40 results) at once: a popular title that only starts with
+    // what was typed ("inter" → Interstellar) was often past the first 20
+    // (KP, 2026-11-09). A failed second page is fine.
+    async let first = get("/search/multi", ["query": text, "include_adult": "false"])
+    async let second = try? get("/search/multi", ["query": text, "include_adult": "false", "page": "2"])
+    var results = try JSONDecoder().decode(MultiPage.self, from: try await first).results
+    if let more = await second, let page = try? JSONDecoder().decode(MultiPage.self, from: more) {
+      results += page.results
+    }
     var items: [(TMDBItem, Double)] = []
     var people: [(TMDBPerson, Double)] = []
-    for result in page.results {
+    for result in results {
       if result.media_type == "person" {
         if let person = result.person { people.append((person, result.popularity ?? 0)) }
       } else if let item = result.raw.item(forcedKind: nil) {
@@ -653,25 +660,26 @@ public enum ServiceCatalog {
 /// match what was typed exactly come first, then ones starting with it, then
 /// ones containing it, then the rest; within each, the most popular first.
 public enum SearchRank {
+  /// Titles ranked by how well they match plus how popular they are. A match
+  /// counts a lot, but no longer always wins: "inter" puts the hugely popular
+  /// Interstellar above an obscure film called "Inter" (KP, 2026-11-09).
+  /// Score = match bonus + ln(1 + popularity).
   public static func titles(_ items: [(TMDBItem, Double)], text: String) -> [TMDBItem] {
     let needle = fold(text)
-    func tier(_ item: TMDBItem) -> Int {
+    func bonus(_ item: TMDBItem) -> Double {
       let title = fold(item.title)
-      if title == needle { return 0 }
-      if title.hasPrefix(needle) { return 1 }
-      if title.contains(needle) { return 2 }
-      return 3
+      if title == needle { return 4 }
+      if title.hasPrefix(needle) { return 2.5 }
+      if title.contains(" " + needle) { return 1.5 }
+      if title.contains(needle) { return 1 }
+      return -2
     }
     var seen = Set<String>()
     return items.enumerated()
       .filter { seen.insert($0.element.0.id).inserted }
-      .sorted { a, b in
-        let ta = tier(a.element.0), tb = tier(b.element.0)
-        if ta != tb { return ta < tb }
-        if a.element.1 != b.element.1 { return a.element.1 > b.element.1 }
-        return a.offset < b.offset
-      }
-      .map(\.element.0)
+      .map { (offset: $0.offset, item: $0.element.0, score: bonus($0.element.0) + log(1 + max(0, $0.element.1))) }
+      .sorted { a, b in a.score != b.score ? a.score > b.score : a.offset < b.offset }
+      .map(\.item)
   }
 
   static func fold(_ text: String) -> String {
