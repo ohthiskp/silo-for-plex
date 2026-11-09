@@ -107,9 +107,10 @@ enum Astra {
       static let tvSideSafeArea: CGFloat = 80
     #else
       static let leading: CGFloat = 20
-      static let heroHeight: CGFloat = 560
+      /// KP's iPhone mockup (2026-11-09): the hero takes about 80 % of the screen.
+      static let heroHeight: CGFloat = 700
       static let detailHeaderHeight: CGFloat = 560
-      static let heroShare: CGFloat = 0.72
+      static let heroShare: CGFloat = 0.8
       static let artCard = CGSize(width: 168, height: 95)
       static let continueCard = CGSize(width: 270, height: 152)
       static let episodeCard = CGSize(width: 240, height: 135)

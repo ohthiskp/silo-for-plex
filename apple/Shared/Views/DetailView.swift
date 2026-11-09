@@ -117,7 +117,7 @@ struct DetailView: View {
       // The floating tab bar gets a dark floor, so it never sits on top of the
       // cast or posters (KP's mockup, 2026-11-08).
       .overlay(alignment: .bottom) {
-        if narrow { PhoneDetail.tabBarFloor }
+        if narrow { BottomEdgeBlur() }
       }
       .sheet(isPresented: $showAllCast) { PhoneCastList(roles: shown.roles) }
       .sheet(item: $allRelated) { hub in
@@ -576,6 +576,8 @@ struct DetailMetaLine: View {
   var genreLimit = 2
   /// The hero puts the rating box after the text: "2025 · 2h 8m · Sci-Fi [PG-13]".
   var ratingAfter = false
+  /// iPhone hero and Details (KP, 2026-11-09): the rating in a grey filled box.
+  var greyRating = false
 
   @State private var fetchedRating: String?
   @AppStorage(Preferences.ratingsKey) private var showRatings = true
@@ -590,12 +592,12 @@ struct DetailMetaLine: View {
     ].compactMap { $0 }
     let rating = showRatings ? item.officialRating ?? fetchedRating : nil
     HStack(spacing: fontSize * 0.6) {
-      if !ratingAfter, let rating { RatingBox(text: rating, fontSize: fontSize * 0.8) }
+      if !ratingAfter, let rating { RatingBox(text: rating, fontSize: fontSize * 0.8, grey: greyRating) }
       Text(parts.joined(separator: separator))
         .astraFont(size: fontSize, weight: .medium)
         .foregroundStyle(Astra.Color.ink.opacity(0.9))
         .lineLimit(1)
-      if ratingAfter, let rating { RatingBox(text: rating, fontSize: fontSize * 0.8) }
+      if ratingAfter, let rating { RatingBox(text: rating, fontSize: fontSize * 0.8, grey: greyRating) }
     }
       .task(id: item.id) {
         fetchedRating = nil
@@ -677,18 +679,23 @@ struct FormatPill<Content: View>: View {
 struct RatingBox: View {
   var text: String
   var fontSize: CGFloat = 12
+  /// A soft grey filled box instead of the outlined one (KP's iPhone mockup, 2026-11-09).
+  var grey = false
 
   var body: some View {
     Text(text.uppercased())
       .font(.system(size: fontSize, weight: .heavy).width(.condensed))
       .tracking(fontSize * 0.05)
       .monospacedDigit()
-      .foregroundStyle(Astra.Color.ink)
+      .foregroundStyle(Astra.Color.ink.opacity(grey ? 0.9 : 1))
       .padding(.horizontal, fontSize * 0.5)
       .frame(height: fontSize * 1.75)
+      .background {
+        if grey { RoundedRectangle(cornerRadius: fontSize * 0.3, style: .continuous).fill(Astra.Color.ink.opacity(0.22)) }
+      }
       .overlay(
         RoundedRectangle(cornerRadius: fontSize * 0.16, style: .continuous)
-          .strokeBorder(Astra.Color.ink, lineWidth: max(1.25, fontSize * 0.12))
+          .strokeBorder(Astra.Color.ink, lineWidth: grey ? 0 : max(1.25, fontSize * 0.12))
       )
       .fixedSize()
       .accessibilityLabel("Rated \(text)")
@@ -764,9 +771,11 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let backdropTop: CGFloat = 56
     static let logoWidth: CGFloat = 0.5
     static let logoHeight: CGFloat = 64
+    /// The centred logo's box (KP's mockup, 2026-11-09).
+    static let logoBox = CGSize(width: 210, height: 130)
     static let sectionGap: CGFloat = 26
-    static let actionColumn: CGFloat = 68
-    static let actionCircle: CGFloat = 40
+    static let actionColumn: CGFloat = 50
+    static let actionCircle: CGFloat = 50
     static let resumeHeight: CGFloat = 48
     static let castPhoto = CGSize(width: 78, height: 62)
     /// Related rows are 2:3 posters (KP, 2026-11-09: "the posters below are way too small").
@@ -793,14 +802,34 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     /// the progress line, synopsis, director and More, in that order.
     var phoneHeader: some View {
       let width = max(pageWidth, 320)
+      // KP's mockup (2026-11-09): the logo sits at about 38 % of the screen,
+      // centred, with the faces framed above it.
+      let logoTop = min(360, max(280, viewport * 0.377))
       return VStack(alignment: .leading, spacing: 0) {
         HeroTitle(
-          library: library, item: shown, maxWidth: width * PhoneDetail.logoWidth, maxHeight: PhoneDetail.logoHeight)
-        DetailMetaLine(item: shown, library: library, separator: "  •  ")
-          .minimumScaleFactor(0.85)
-          .padding(.top, 12)
-        FormatBadges(item: shown)
-          .padding(.top, 10)
+          library: library, item: shown, maxWidth: PhoneDetail.logoBox.width, maxHeight: PhoneDetail.logoBox.height,
+          alignment: .bottom
+        )
+        .frame(maxWidth: .infinity)
+        .frame(height: PhoneDetail.logoBox.height, alignment: .bottom)
+        // "2024 • 2h 46m • [PG-13] [HD] [Dolby Atmos]", the genres under it.
+        HStack(spacing: 8) {
+          DetailMetaLine(
+            item: shown, library: library, showsGenres: false, fontSize: 14, separator: "  •  ", ratingAfter: true,
+            greyRating: true)
+          FormatBadges(item: shown)
+        }
+        .minimumScaleFactor(0.85)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 12)
+        if !shown.genres.isEmpty {
+          Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
+            .astraFont(size: 13.5)
+            .foregroundStyle(Astra.Color.ink.opacity(0.62))
+            .lineLimit(1)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 6)
+        }
         phoneActions
           .padding(.top, 16)
         if let left = timeLeft, let progress = resumeProgress {
@@ -861,23 +890,21 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       }
       .padding(.leading, PhoneDetail.margin)
       .padding(.trailing, PhoneDetail.trailing)
-      .padding(.top, width * PhoneDetail.logoTop)
+      .padding(.top, logoTop)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(alignment: .top) {
         ZStack {
-          ArtworkImage(
-            library: library, item: shown, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear
-          )
-          .frame(width: width, height: width * PhoneDetail.backdropShare)
-          .clipped()
+          // KP (2026-11-09): framed so the faces end above the logo, for any title.
+          FramedArtwork(
+            library: library, item: shown, kind: .scenery, zoneHeight: logoTop + 90, limitY: logoTop - 4,
+            topOffset: PhoneDetail.backdropTop, minTop: PhoneDetail.backdropTop + 40)
           PhoneDetail.backdropShade
         }
-        .frame(width: width, height: width * PhoneDetail.backdropShare)
+        .frame(width: width, height: logoTop + 90)
         // Both edges melt into the frosted blur behind the page instead of into black,
         // and the sharp art dissolves into it as the page scrolls (KP, 2026-11-09).
         .mask(PhoneDetail.backdropMask)
         .opacity(max(0, 1 - max(0, scrolled) / 420))
-        .padding(.top, PhoneDetail.backdropTop)
         // Held in place while the page rises over it (KP, 2026-11-07).
         .offset(y: max(0, scrolled))
       }
@@ -885,16 +912,16 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
 
     /// Resume (the strongest thing on the page), then quieter round Download and My List.
     private var phoneActions: some View {
-      HStack(alignment: .top, spacing: 6) {
+      HStack(alignment: .center, spacing: 14) {
         Button {
           playItem(shown)
         } label: {
           Label(playLabel, systemImage: "play.fill")
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(PhoneResumeButtonStyle())
+        // KP's mockup (2026-11-09): a white Play, like the hero's.
+        .buttonStyle(SolidCapsuleButtonStyle())
         .disabled(shown.isCatalogOnly || !app.canPlay(shown))
-        .padding(.trailing, 8)
 
         if shown.type != .collection, !shown.isCatalogOnly {
           DownloadButton(item: shown, labeled: true)
@@ -1041,27 +1068,22 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
   }
 
-  /// A round glass icon with a short label under it (Download, My List).
+  /// A round glass icon (Download, My List). KP (2026-11-09): no text under
+  /// it; the title is read out to VoiceOver only.
   struct PhoneActionLabel<Icon: View>: View {
     var title: String
     @ViewBuilder var icon: Icon
 
     var body: some View {
-      VStack(spacing: 7) {
-        icon
-          .font(.system(size: 18, weight: .semibold))
-          .foregroundStyle(.white)
-          .frame(width: PhoneDetail.actionCircle, height: PhoneDetail.actionCircle)
-          .astraGlass(in: Circle(), variant: .regular, interactive: true)
-          .astraGlassEdge(Circle(), strength: 0.6)
-        Text(title)
-          .font(.system(size: 13, weight: .medium))
-          .foregroundStyle(Astra.Color.ink)
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-      }
-      .frame(width: PhoneDetail.actionColumn)
-      .contentShape(Rectangle())
+      icon
+        .font(.system(size: 19, weight: .semibold))
+        .foregroundStyle(.white)
+        .frame(width: PhoneDetail.actionCircle, height: PhoneDetail.actionCircle)
+        .astraGlass(in: Circle(), variant: .regular, interactive: true)
+        .astraGlassEdge(Circle(), strength: 0.6)
+        .frame(width: PhoneDetail.actionColumn)
+        .contentShape(Circle())
+        .accessibilityLabel(title)
     }
   }
 
