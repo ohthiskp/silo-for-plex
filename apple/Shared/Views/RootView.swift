@@ -70,9 +70,10 @@ struct RootView: View {
     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     .onChange(of: app.phase, initial: true) { _, phase in updateLoader(for: phase) }
     .task(id: loader) {
-      // "Connected" stays up briefly, then the app fades in.
+      // "Connected" shows for a moment, then the app fades in. It was 1.1 s,
+      // added to every launch (KP, 2026-11-09: "a huge delay every time I open it").
       guard loader == .connected else { return }
-      try? await Task.pause(1.1)
+      try? await Task.pause(0.35)
       guard !Task.isCancelled, loader == .connected else { return }
       astraWithAnimation(Astra.Motion.hero) { loader = .hidden }
     }
