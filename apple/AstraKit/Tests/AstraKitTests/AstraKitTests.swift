@@ -1012,33 +1012,6 @@ final class LibraryIndexerTests: XCTestCase {
     XCTAssertEqual(index.count, 600)
   }
 
-  /// KP (2026-11-09): an interrupted read keeps the libraries it finished.
-  func testResumableReadKeepsFinishedLibraries() async throws {
-    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    let progress = folder.appendingPathComponent("s.progress.json")
-    let showFailures = LockedCounter()
-    let transport = FakeTransport { [self] request in
-      let shows = request.url!.path.contains("/sections/2/")
-      // The shows library fails twice (a page and its retry): the first read stops there.
-      if shows, showFailures.next() <= 2 { throw URLError(.networkConnectionLost) }
-      return (200, page(start: shows ? 100 : 0, count: 3))
-    }
-    let sections = [try section("1", "movie"), try section("2", "show")]
-    do {
-      _ = try await LibraryIndexer.buildResumable(
-        client: client(transport), sections: sections, progressURL: progress, parallel: 1)
-      XCTFail("expected the first read to stop at the shows library")
-    } catch {}
-    XCTAssertTrue(FileManager.default.fileExists(atPath: progress.path))
-    let moviesBefore = transport.requests.filter { $0.url!.path.contains("/sections/1/") }.count
-    // Second read: movies come from the saved progress, only shows are read.
-    let index = try await LibraryIndexer.buildResumable(
-      client: client(transport), sections: sections, progressURL: progress, parallel: 1)
-    XCTAssertEqual(transport.requests.filter { $0.url!.path.contains("/sections/1/") }.count, moviesBefore)
-    XCTAssertEqual(index.count, 6)
-    XCTAssertFalse(FileManager.default.fileExists(atPath: progress.path))
-  }
-
   func testSkipsMusicAndPhotoLibraries() async throws {
     let transport = FakeTransport { [self] _ in (200, page(start: 0, count: 3)) }
     _ = try await LibraryIndexer.build(

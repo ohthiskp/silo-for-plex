@@ -487,11 +487,73 @@ struct SourcesSettings: View {
       } footer: {
         Text("Downloads and streams are fastest on your local network. Remote speed depends on the server's upload; Plex Relay is capped by Plex.")
       }
+      if let library = app.library {
+        LibraryIndexSection(library: library)
+      }
       Section {
         Button("Change Server…") { Task { await app.chooseServer() } }
         Button("Sign Out", role: .destructive) { app.signOut() }
       }
     }
+  }
+}
+
+/// Settings → Sources → Library Index (KP, 2026-11-09): how much of the
+/// server Astra has read, when the last full read finished and how long it
+/// took, retries and the last error, and how long titles take to open.
+struct LibraryIndexSection: View {
+  var library: LibraryStore
+
+  var body: some View {
+    let status = library.indexStatus
+    Section {
+      LabeledContent("Status", value: phaseText(status))
+      LabeledContent("Titles Indexed", value: status.itemCount.formatted())
+      ForEach(status.libraries) { section in
+        LabeledContent(section.title, value: progressText(section))
+      }
+      LabeledContent("Last Full Sync", value: status.lastSuccess.map { $0.formatted(.relative(presentation: .named)) } ?? "Never")
+      if let duration = status.lastDuration {
+        LabeledContent("Sync Took", value: Self.seconds(duration))
+      }
+      if status.retries > 0 {
+        LabeledContent("Retries", value: "\(status.retries)")
+      }
+      if let error = status.lastError {
+        LabeledContent("Last Error", value: error)
+      }
+      LabeledContent("Opening a Title", value: openText(library.openTimings))
+      Button("Index Now") { library.reindexNow() }
+        .disabled(status.phase == .indexing)
+    } header: {
+      Text("Library Index")
+    } footer: {
+      Text("Astra reads your library in the background and saves as it goes, so titles it has read open at once and an interrupted read carries on where it stopped.")
+    }
+  }
+
+  private func phaseText(_ status: LibraryIndexStatus) -> String {
+    switch status.phase {
+    case .idle: "Not started"
+    case .indexing: status.complete ? "Up to date, checking for changes" : "Indexing"
+    case .complete: "Complete"
+    case .failed: status.complete ? "Complete, last check failed" : "Paused, will retry"
+    }
+  }
+
+  private func progressText(_ section: LibraryIndexStatus.Library) -> String {
+    if section.complete { return "\(section.fetched.formatted()) titles" }
+    if let total = section.total { return "\(section.fetched.formatted()) of \(total.formatted())" }
+    return "\(section.fetched.formatted()) so far"
+  }
+
+  private func openText(_ timings: OpenTimings) -> String {
+    guard let last = timings.last, let median = timings.median else { return "Not measured yet" }
+    return "Last \(Self.seconds(last)), typical \(Self.seconds(median))"
+  }
+
+  static func seconds(_ value: TimeInterval) -> String {
+    value < 60 ? String(format: "%.1f s", value) : "\(Int(value / 60)) min \(Int(value) % 60) s"
   }
 }
 

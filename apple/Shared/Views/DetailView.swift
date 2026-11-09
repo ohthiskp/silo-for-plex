@@ -412,6 +412,9 @@ struct DetailView: View {
   // MARK: Loading
 
   private func load(refresh: Bool = false) async {
+    // KP's requirement 14: how long a title takes to open, until its full
+    // details show (Settings → Sources).
+    let opened = Date()
     do {
       // A refresh reloads the title already shown; otherwise start from the seed.
       var key = refresh ? (item?.ratingKey ?? seed.ratingKey) : seed.ratingKey
@@ -432,6 +435,7 @@ struct DetailView: View {
       }
       let full = try await library.details(key, refresh: refresh)
       astraWithAnimation(Astra.Motion.base) { item = full }
+      if !refresh { library.recordOpen(seconds: Date().timeIntervalSince(opened)) }
       switch full.type {
       case .show:
         seasons = try await library.children(of: full.ratingKey).filter { $0.type == .season }

@@ -105,36 +105,6 @@ public enum LibraryIndexer {
     return index
   }
 
-  /// `build`, one library at a time, saving each finished library to
-  /// `progressURL` (KP, 2026-11-09: "please fix the indexing"). A read cut
-  /// short (the app closed, the connection dropped) keeps what it finished;
-  /// the next read skips libraries saved less than `maxAge` ago and only
-  /// reads the rest. The progress file is removed once every library is read.
-  public static func buildResumable(
-    client: PlexServerClient, sections: [PlexLibrarySection], progressURL: URL,
-    maxAge: TimeInterval = 24 * 60 * 60, pageSize: Int = 250, parallel: Int = 4, now: Date = Date()
-  ) async throws -> [String: PlexMetadata] {
-    let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
-    var progress = LibraryIndexProgress.load(from: progressURL) ?? LibraryIndexProgress()
-    progress.sections = progress.sections.filter { now.timeIntervalSince($0.value.savedAt) < maxAge }
-    var index: [String: PlexMetadata] = [:]
-    for section in wanted {
-      let part: [String: PlexMetadata]
-      if let saved = progress.sections[section.key] {
-        part = saved.items
-      } else {
-        part = try await build(client: client, sections: [section], pageSize: pageSize, parallel: parallel)
-        progress.sections[section.key] = LibraryIndexSnapshot(savedAt: now, items: part)
-        try? progress.save(to: progressURL)
-      }
-      // The first library's copy of a title wins, as in `build`.
-      index.merge(part) { first, _ in first }
-    }
-    guard !index.isEmpty else { throw URLError(.zeroByteResource) }
-    try? FileManager.default.removeItem(at: progressURL)
-    return index
-  }
-
   /// `index` with `items` added (a section's newest titles, read in one quick
   /// request): a saved index from before a title was added still finds it,
   /// without waiting for the whole library to be read again (KP, 2026-11-08:
@@ -208,10 +178,13 @@ extension PlexMetadata {
 public struct LibraryIndexSnapshot: Codable, Sendable {
   public var savedAt: Date
   public var items: [String: PlexMetadata]
+  /// How long the full read took (Settings → Sources); nil in older files.
+  public var duration: TimeInterval?
 
-  public init(savedAt: Date, items: [String: PlexMetadata]) {
+  public init(savedAt: Date, items: [String: PlexMetadata], duration: TimeInterval? = nil) {
     self.savedAt = savedAt
     self.items = items
+    self.duration = duration
   }
 
   /// `…/Astra/LibraryIndex/<server>.json`.
@@ -294,22 +267,5 @@ extension ServerConnector {
   /// Whether the saved address still answers with this token (its libraries list).
   public func check(_ session: ServerSession) async -> [PlexLibrarySection]? {
     try? await session.client.librarySections()
-  }
-}
-
-/// The libraries an unfinished index read has finished, by library key.
-public struct LibraryIndexProgress: Codable, Sendable {
-  public var sections: [String: LibraryIndexSnapshot] = [:]
-
-  public init() {}
-
-  public static func load(from url: URL) -> LibraryIndexProgress? {
-    guard let data = try? Data(contentsOf: url) else { return nil }
-    return try? JSONDecoder().decode(LibraryIndexProgress.self, from: data)
-  }
-
-  public func save(to url: URL) throws {
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try JSONEncoder().encode(self).write(to: url, options: .atomic)
   }
 }

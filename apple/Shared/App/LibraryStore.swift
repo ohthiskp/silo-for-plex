@@ -87,12 +87,33 @@ final class LibraryStore {
   @ObservationIgnored private var libraryIndex: [String: PlexMetadata]?
   /// Observed stand-in for `libraryIndex`: flips when an index is in memory.
   private(set) var indexReady = false
-  /// The read in progress; every service waiting for the index shares it.
-  @ObservationIgnored private var indexTask: Task<[String: PlexMetadata], Error>?
-  /// The first read of the index; cancelled by `close()`.
-  @ObservationIgnored private var indexBuild: Task<(items: [String: PlexMetadata], stale: Bool), Error>?
-  /// The background re-read of a stale saved index; cancelled by `close()`.
-  @ObservationIgnored private var refreshTask: Task<[String: PlexMetadata], Error>?
+  /// Observed: bumped every time the index in memory changes.
+  private(set) var indexRevision = 0
+  /// Whether the index in memory is a finished read of every library.
+  private(set) var indexComplete = false
+  /// Whether a miss in the complete index can be trusted: read this session,
+  /// or saved less than `LibraryIndexSnapshot.freshFor` ago.
+  private(set) var indexTrusted = false
+  /// Settings → Sources → Library Index.
+  private(set) var indexStatus = LibraryIndexStatus()
+  /// Observed: bumped when a server search answers for a title.
+  private(set) var verifiedVersion = 0
+  /// How long opening a title took, until its full details showed.
+  private(set) var openTimings = OpenTimings.load()
+  /// The last complete index (no aliases), kept while a new read runs.
+  @ObservationIgnored private var completeItems: [String: PlexMetadata] = [:]
+  /// Each library's newest titles (`topUpLibraryIndex`), kept in every partial index.
+  private let indexExtras = IndexExtras()
+  @ObservationIgnored private var indexWaiters: [CheckedContinuation<[String: PlexMetadata], Error>] = []
+  @ObservationIgnored private var indexStarted = false
+  @ObservationIgnored private var indexRunning = false
+  @ObservationIgnored private var indexRun: Task<Void, Never>?
+  @ObservationIgnored private var indexDiskRead: Task<Void, Never>?
+  @ObservationIgnored private var indexFailures = 0
+  /// Server searches in flight, one per title, shared by every caller.
+  @ObservationIgnored private var searches: [String: Task<PlexMetadata, Error>] = [:]
+  /// When a "not on the server" search answer stops counting.
+  @ObservationIgnored private var negativeUntil: [String: Date] = [:]
   /// Each built service's TMDB lists, kept so they can be matched again when the index changes.
   @ObservationIgnored private var serviceLists: [String: [(ServiceCatalog.Row, [TMDBItem])]] = [:]
   /// TMDB's trending titles (today, then this week), fetched once per session.
@@ -117,9 +138,12 @@ final class LibraryStore {
   func close() {
     isClosed = true
     serviceTask?.cancel()
-    indexTask?.cancel()
-    refreshTask?.cancel()
-    indexBuild?.cancel()
+    indexRun?.cancel()
+    searches.values.forEach { $0.cancel() }
+    searches.removeAll()
+    let waiters = indexWaiters
+    indexWaiters = []
+    waiters.forEach { $0.resume(throwing: CancellationError()) }
     cinebyRowsRefresh?.cancel()
     trendingRefresh?.cancel()
     background.values.forEach { $0.cancel() }
@@ -367,8 +391,9 @@ final class LibraryStore {
     // The saved library index is a quick disk read: use it so playable titles are marked at once.
     if libraryIndex == nil,
       FileManager.default.fileExists(atPath: indexURL.path)
+        || FileManager.default.fileExists(atPath: Self.checkpointURL(for: indexURL).path)
     {
-      _ = try? await loadLibraryIndex()
+      await loadSavedIndex()
     }
     let trending = tmdb == nil ? [] : await loadWeekTrending()
     func picks(_ index: [String: PlexMetadata]) async -> [PlexMetadata] {
@@ -478,38 +503,198 @@ final class LibraryStore {
     return snapshot
   }
 
-  /// The library index, read once. Concurrent callers share one read; a
-  /// failed read is not cached, so the next service tries again.
+  // MARK: Library index (KP, 2026-11-09)
+  //
+  // The Omega library index made reliable on a big remote server:
+  // - What is on disk is used at once: the last complete index, else the
+  //   checkpoint of a read that was interrupted.
+  // - The server is read in the background (LibraryIndexRun), each round
+  //   saved, and what has been read is usable straight away.
+  // - The last complete index stays in use while a new read runs.
+  // - Nothing a tap does ever waits for the read.
+
+  /// The index in memory, else the first one there is (disk copy, the first
+  /// round read from the server, or the newest titles). Concurrent callers
+  /// share one read; never called from a tap that has to answer at once.
   private func loadLibraryIndex() async throws -> [String: PlexMetadata] {
     if let libraryIndex { return libraryIndex }
-    if let indexTask { return try await indexTask.value }
-    // Set before any await, so every caller shares this one read.
+    startLibraryIndex()
+    if let libraryIndex { return libraryIndex }
+    return try await withCheckedThrowingContinuation { indexWaiters.append($0) }
+  }
+
+  /// Reads the disk copy, then starts the server read when it is needed.
+  private func startLibraryIndex() {
+    guard !indexStarted, !isClosed else { return }
+    indexStarted = true
+    let url = indexURL
+    let checkpointURL = Self.checkpointURL(for: url)
+    indexStatus.phase = .indexing
+    indexDiskRead = Task { [weak self] in
+      // Off the main actor: a big library is thousands of titles to decode and alias.
+      let disk = await Task.detached(priority: .userInitiated) { () -> DiskIndex in
+        let snapshot = LibraryIndexSnapshot.load(from: url).flatMap { $0.items.isEmpty ? nil : $0 }
+        let checkpoint = LibraryIndexCheckpoint.load(from: checkpointURL)
+        let partial = checkpoint.map { $0.index(order: $0.libraries.keys.sorted()) } ?? [:]
+        let base = (snapshot?.items ?? [:]).merging(partial) { _, read in read }
+        return DiskIndex(
+          snapshot: snapshot.map { .init(savedAt: $0.savedAt, duration: $0.duration, fresh: $0.isFresh()) },
+          complete: snapshot?.items ?? [:], aliased: base.isEmpty ? [:] : LibraryMatch.withAliases(base))
+      }.value
+      guard let self, !self.isClosed else { return }
+      if let saved = disk.snapshot {
+        self.completeItems = disk.complete
+        self.indexComplete = true
+        self.indexTrusted = saved.fresh
+        self.indexStatus.complete = true
+        self.indexStatus.lastSuccess = saved.savedAt
+        self.indexStatus.lastDuration = saved.duration
+      }
+      if !disk.aliased.isEmpty { self.setLibraryIndex(disk.aliased) }
+      self.topUpLibraryIndex()
+      if disk.snapshot?.fresh == true {
+        self.indexStatus.phase = .complete
+      } else {
+        self.runLibraryIndex()
+      }
+    }
+  }
+
+  /// Starts the index and waits only for the disk copy (never the server).
+  private func loadSavedIndex() async {
+    startLibraryIndex()
+    await indexDiskRead?.value
+  }
+
+  /// What `startLibraryIndex` found on disk.
+  private struct DiskIndex: Sendable {
+    struct Saved: Sendable {
+      var savedAt: Date
+      var duration: TimeInterval?
+      var fresh: Bool
+    }
+    var snapshot: Saved?
+    var complete: [String: PlexMetadata]
+    var aliased: [String: PlexMetadata]
+  }
+
+  /// Reads every library from the server in the background, resuming from
+  /// the checkpoint, and saves the complete index when it is done. A failed
+  /// read keeps what it read and is tried again after 30 s, 2 min and 10 min.
+  private func runLibraryIndex() {
+    guard !isClosed, !indexRunning else { return }
+    indexRunning = true
     let client = client
     let sections = filter.indexSections(allSections)
     let quality = libraryQuality
     let url = indexURL
-    let task = Task.detached(priority: .userInitiated) { () throws -> (items: [String: PlexMetadata], stale: Bool) in
-      // The saved copy first: tabs open at once.
-      // Title-and-year aliases are added here, off the main actor (a big
-      // library has thousands of titles); the saved file never has them.
-      if let saved = LibraryIndexSnapshot.load(from: url), !saved.items.isEmpty {
-        return (LibraryMatch.withAliases(saved.items), !saved.isFresh())
+    let checkpointURL = Self.checkpointURL(for: url)
+    let started = Date()
+    let extras = indexExtras
+    indexStatus.phase = .indexing
+    indexStatus.startedAt = started
+    indexStatus.lastError = nil
+    indexStatus.retries = 0
+    let onProgress = Self.indexProgress(
+      previous: completeItems, extras: indexExtras,
+      store: { [weak self] progress, aliased in await self?.applyIndexProgress(progress, aliased: aliased) })
+    indexRun = Task.detached(priority: .utility) { [weak self] in
+      do {
+        var wanted = sections
+        if wanted.isEmpty {
+          // Asked before the server's sections were known: an index built from
+          // no sections was empty (KP, 2026-11-08).
+          let all = try await client.librarySections()
+          wanted = LibraryFilter(quality: quality, sections: all).indexSections(all)
+        }
+        let items = try await LibraryIndexRun.run(
+          client: client, sections: wanted, checkpointURL: checkpointURL, onProgress: onProgress)
+        let duration = Date().timeIntervalSince(started)
+        try? LibraryIndexSnapshot(savedAt: Date(), items: items, duration: duration).save(to: url)
+        let aliased = LibraryMatch.withAliases(LibraryIndexer.merging(items, extras.items))
+        await self?.indexFinished(items: items, aliased: aliased, duration: duration)
+      } catch {
+        await self?.indexFailed(error)
       }
-      let items = try await Self.buildIndex(client: client, sections: sections, quality: quality, url: url)
-      try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
-      return (LibraryMatch.withAliases(items), false)
     }
-    indexBuild = task
-    let shared = Task { try await task.value.items }
-    indexTask = shared
-    defer { indexTask = nil }
-    // Not cancelled with the caller: other tabs may be waiting on the same read.
-    let result = try await task.value
-    guard !isClosed else { return result.items }
-    setLibraryIndex(result.items)
-    if result.stale { refreshLibraryIndex(client: client, sections: sections, url: url) }
-    topUpLibraryIndex(client: client, sections: sections, url: url)
-    return libraryIndex ?? result.items
+  }
+
+  /// Builds the progress handler off the main actor: merges what has been
+  /// read with the last complete index (what was read wins) and the newest
+  /// titles, and aliases it, only when it is going to be published.
+  nonisolated private static func indexProgress(
+    previous: [String: PlexMetadata], extras: IndexExtras,
+    store: @escaping @Sendable (LibraryIndexRun.Progress, [String: PlexMetadata]?) async -> Void
+  ) -> @Sendable (LibraryIndexRun.Progress) async -> Void {
+    let gate = PublishGate(eager: previous.isEmpty)
+    return { progress in
+      let completed = progress.libraries.filter(\.complete).count
+      var aliased: [String: PlexMetadata]?
+      if gate.shouldPublish(completed: completed, count: progress.items.count) {
+        let read = previous.merging(progress.items) { _, read in read }
+        aliased = LibraryMatch.withAliases(LibraryIndexer.merging(read, extras.items))
+      }
+      await store(progress, aliased)
+    }
+  }
+
+  private func applyIndexProgress(_ progress: LibraryIndexRun.Progress, aliased: [String: PlexMetadata]?) {
+    guard !isClosed else { return }
+    indexStatus.libraries = progress.libraries
+    indexStatus.retries = progress.retries
+    if let error = progress.lastError { indexStatus.lastError = error }
+    if let aliased, !aliased.isEmpty { setLibraryIndex(aliased) }
+  }
+
+  private func indexFinished(items: [String: PlexMetadata], aliased: [String: PlexMetadata], duration: TimeInterval) {
+    indexRunning = false
+    guard !isClosed else { return }
+    indexFailures = 0
+    completeItems = items
+    indexComplete = true
+    indexTrusted = true
+    indexStatus.phase = .complete
+    indexStatus.complete = true
+    indexStatus.lastSuccess = Date()
+    indexStatus.lastDuration = duration
+    indexStatus.lastError = nil
+    indexStatus.libraries = indexStatus.libraries.map {
+      var library = $0
+      library.complete = true
+      return library
+    }
+    setLibraryIndex(aliased)
+  }
+
+  private func indexFailed(_ error: Error) {
+    indexRunning = false
+    guard !isClosed, !(error is CancellationError) else { return }
+    indexStatus.phase = .failed
+    indexStatus.lastError = describe(error)
+    if libraryIndex == nil {
+      let waiters = indexWaiters
+      indexWaiters = []
+      waiters.forEach { $0.resume(throwing: error) }
+    }
+    let delays: [Double] = [30, 120, 600]
+    guard indexFailures < delays.count else { return }
+    let delay = delays[indexFailures]
+    indexFailures += 1
+    spawn { [weak self] in
+      guard (try? await Task.pause(delay)) != nil, let self, !self.isClosed else { return }
+      self.runLibraryIndex()
+    }
+  }
+
+  /// Settings → Sources → "Index Now": reads the library again (resuming any
+  /// unfinished read), keeping the index in use until it is done.
+  func reindexNow() {
+    indexFailures = 0
+    if !indexStarted {
+      startLibraryIndex()
+    } else {
+      runLibraryIndex()
+    }
   }
 
   /// Bumped whenever the index changes; a service built with an older one is rebuilt.
@@ -521,10 +706,13 @@ final class LibraryStore {
   private func setLibraryIndex(_ aliased: [String: PlexMetadata]) {
     let replacing = libraryIndex != nil
     libraryIndex = aliased
-    // Titles remembered as missing get another look with the new index.
-    resolveCache = resolveCache.filter { $0.value != nil }
     if !indexReady { indexReady = true }
+    indexRevision += 1
+    indexStatus.itemCount = aliased.keys.filter { !$0.hasPrefix(LibraryMatch.aliasPrefix) }.count
     indexVersion += 1
+    let waiters = indexWaiters
+    indexWaiters = []
+    waiters.forEach { $0.resume(returning: aliased) }
     // Tabs already built with an older (or no) index get matched again.
     for (id, version) in serviceIndexVersion where version != indexVersion {
       guard let service = StreamingService.byID(id), let lists = serviceLists[id] else { continue }
@@ -554,9 +742,12 @@ final class LibraryStore {
   /// Adds each library's 100 newest titles to the index, one quick request
   /// per library, so a title added since the saved index was read is found
   /// at once (KP, 2026-11-08: new titles took 8 s to open because only the
-  /// slow server search found them). The full re-read still runs when the
-  /// saved index is old.
-  private func topUpLibraryIndex(client: PlexServerClient, sections: [PlexLibrarySection], url: URL) {
+  /// slow server search found them). With nothing on disk yet, these are the
+  /// first titles usable while the full read runs.
+  private func topUpLibraryIndex() {
+    let client = client
+    let sections = filter.indexSections(allSections)
+    let url = indexURL
     spawn { [weak self] in
       let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
       guard !wanted.isEmpty else { return }
@@ -575,54 +766,33 @@ final class LibraryStore {
         for await items in group { all += items }
         return all
       }
-      guard let self, !self.isClosed, !newest.isEmpty, let current = self.libraryIndex else { return }
-      let base = current.filter { !$0.key.hasPrefix(LibraryMatch.aliasPrefix) }
-      let merged = LibraryIndexer.merging(base, newest)
+      guard let self, !self.isClosed, !newest.isEmpty else { return }
+      self.indexExtras.items = newest
+      let base = (self.libraryIndex ?? [:]).filter { !$0.key.hasPrefix(LibraryMatch.aliasPrefix) }
       // Nothing new: leave the index (and every row matched with it) alone.
       let known = Set(base.values.map(\.ratingKey))
       guard newest.contains(where: { !known.contains($0.ratingKey) }) else { return }
-      self.setLibraryIndex(LibraryMatch.withAliases(merged))
+      self.setLibraryIndex(LibraryMatch.withAliases(LibraryIndexer.merging(base, newest)))
+      // Only a complete index is saved as one: a partial one lives in the checkpoint.
+      guard self.indexComplete else { return }
+      let complete = LibraryIndexer.merging(self.completeItems, newest)
+      self.completeItems = complete
       Task.detached(priority: .utility) {
-        try? LibraryIndexSnapshot(savedAt: LibraryIndexSnapshot.load(from: url)?.savedAt ?? Date(), items: merged).save(to: url)
+        guard let saved = LibraryIndexSnapshot.load(from: url) else { return }
+        try? LibraryIndexSnapshot(savedAt: saved.savedAt, items: complete, duration: saved.duration).save(to: url)
       }
     }
   }
 
-  /// Reads the library again in the background and saves it; open tabs are
-  /// matched again with it. A failure keeps the saved one.
-  private func refreshLibraryIndex(client: PlexServerClient, sections: [PlexLibrarySection], url: URL) {
-    let quality = libraryQuality
-    let task = Task.detached(priority: .utility) {
-      let items = try await Self.buildIndex(client: client, sections: sections, quality: quality, url: url)
-      try? LibraryIndexSnapshot(savedAt: Date(), items: items).save(to: url)
-      return LibraryMatch.withAliases(items)
-    }
-    refreshTask = task
-    spawn { [weak self] in
-      guard let fresh = try? await task.value, let self, !self.isClosed else { return }
-      self.setLibraryIndex(fresh)
-    }
+  /// The checkpoint of an unfinished read, next to the saved index.
+  nonisolated static func checkpointURL(for indexURL: URL) -> URL {
+    indexURL.deletingPathExtension().appendingPathExtension("checkpoint.json")
   }
 
-  /// Reads the library. Asked before the server's sections were known (a
-  /// streaming tab or Search can start first), it reads them itself: an
-  /// index built from no sections was empty, which left For You without
-  /// Recently Released and All-Time Greats and marked every Search result
-  /// "not on the server" (KP, 2026-11-08). An empty result is an error, never
-  /// saved or shown.
-  nonisolated private static func buildIndex(
-    client: PlexServerClient, sections: [PlexLibrarySection], quality: LibraryQuality, url: URL
-  ) async throws -> [String: PlexMetadata] {
-    var wanted = sections
-    if wanted.isEmpty {
-      let all = try await client.librarySections()
-      wanted = LibraryFilter(quality: quality, sections: all).indexSections(all)
-    }
-    // Saved library by library, so an interrupted read picks up where it stopped.
-    let progress = url.deletingPathExtension().appendingPathExtension("progress.json")
-    let items = try await LibraryIndexer.buildResumable(client: client, sections: wanted, progressURL: progress)
-    guard !items.isEmpty else { throw URLError(.zeroByteResource) }
-    return items
+  /// Records how long a title took to open (Settings → Sources).
+  func recordOpen(seconds: Double) {
+    openTimings.record(seconds)
+    openTimings.save()
   }
 
   /// One saved index per server and Library Quality ("-v2": items carry their library).
@@ -669,7 +839,7 @@ final class LibraryStore {
   /// in memory, never waiting on the network. Re-runs when the index arrives
   /// (`indexReady` is observed).
   func matchWatchlist(_ items: [PlexMetadata]) -> [PlexMetadata] {
-    _ = indexReady
+    _ = indexRevision
     return WatchlistMatch.match(items, index: libraryIndex ?? [:])
   }
 
@@ -689,10 +859,27 @@ final class LibraryStore {
 
   func availability(of item: PlexMetadata) -> PlayAvailability {
     guard item.isCatalogOnly else { return .playable }
-    _ = indexReady
-    guard let index = libraryIndex else { return .checking }
-    if index.match(item) != nil { return .playable }
-    return .notOnServer
+    _ = indexRevision
+    _ = verifiedVersion
+    _ = indexComplete
+    _ = indexTrusted
+    // KP's requirement 6: never "not on the server" because the read hasn't finished.
+    let inIndex = libraryIndex?.match(item) != nil
+    let searched = searchAnswer(item.ratingKey).map { $0 != nil }
+    switch LibraryAvailability.decide(inIndex: inIndex, searchFound: searched, indexComplete: indexComplete && indexTrusted) {
+    case .available: return .playable
+    case .notFound: return .notOnServer
+    case .unverified: return .checking
+    }
+  }
+
+  /// What a server search said about a title, while it still counts: the
+  /// server's ratingKey, nil for "not on the server", or nothing when it
+  /// wasn't asked (or a "not found" has expired).
+  private func searchAnswer(_ key: String) -> String?? {
+    guard let cached = resolveCache[key] else { return nil }
+    if cached == nil, let until = negativeUntil[key], until < Date() { return nil }
+    return cached
   }
 
   /// Starts reading the library index (saved copy first) if nothing has yet.
@@ -821,35 +1008,46 @@ final class LibraryStore {
   }
 
   /// Finds a TMDB title on the Plex server: TMDB id first, then title and year.
+  /// Never waits for the library read (KP's requirement 7): the index in
+  /// memory, then a search answer from the last 10 minutes, then, only when
+  /// the index can't say (still being read, or old), one server search per
+  /// title, shared by everyone asking.
   func resolve(_ item: PlexMetadata) async throws -> PlexMetadata {
     guard item.isCatalogOnly else { return item }
-    if let cached = resolveCache[item.ratingKey] {
-      guard let key = cached else { throw CatalogError.notOnServer(item.title) }
+    if libraryIndex == nil { startLibraryIndex() }
+    if let hit = libraryIndex?.match(item) { return hit }
+    if let answer = searchAnswer(item.ratingKey) {
+      guard let key = answer else { throw CatalogError.notOnServer(item.title) }
       if let full = detailCache[key] { return full }
       return try await details(key)
     }
+    // A complete index read this session (or minutes ago) without the title
+    // is the answer; the newest titles are in it too (topUpLibraryIndex).
+    if indexComplete && indexTrusted { throw CatalogError.notOnServer(item.title) }
+    let id = item.ratingKey
+    if let running = searches[id] { return try await running.value }
+    let search = Task { [weak self] () throws -> PlexMetadata in
+      guard let self else { throw CancellationError() }
+      return try await self.searchMatch(item)
+    }
+    searches[id] = search
+    defer { searches[id] = nil }
     do {
-      let match = try await resolveUncached(item)
-      resolveCache[item.ratingKey] = .some(match.ratingKey)
+      let match = try await search.value
+      resolveCache[id] = .some(match.ratingKey)
+      negativeUntil[id] = nil
+      verifiedVersion += 1
       return match
     } catch CatalogError.notOnServer(let title) {
-      resolveCache[item.ratingKey] = .some(nil)
+      resolveCache[id] = .some(nil)
+      negativeUntil[id] = Date().addingTimeInterval(Self.notFoundFor)
+      verifiedVersion += 1
       throw CatalogError.notOnServer(title)
     }
   }
 
-  private func resolveUncached(_ item: PlexMetadata) async throws -> PlexMetadata {
-    // The library index already knows: no search needed (by TMDB id, or title and year).
-    // Never wait for the index here: with no saved copy, reading it means
-    // reading the whole library from the server, which over a remote
-    // connection never finished and left Details stuck with Play greyed
-    // (KP, 2026-11-09). Use what is in memory, start a read, and search.
-    if libraryIndex == nil { spawn { [weak self] in _ = try? await self?.loadLibraryIndex() } }
-    if let hit = libraryIndex?.match(item) { return hit }
-    // Not in the index (added since it was read, or titled differently on
-    // the server): ask the server.
-    return try await searchMatch(item)
-  }
+  /// How long a search's "not on the server" counts before it is asked again.
+  static let notFoundFor: TimeInterval = 10 * 60
 
   /// Finds `item` on the server by searching its title.
   private func searchMatch(_ item: PlexMetadata) async throws -> PlexMetadata {
