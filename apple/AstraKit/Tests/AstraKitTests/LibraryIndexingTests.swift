@@ -53,7 +53,7 @@ final class LibraryIndexRunTests: XCTestCase {
       }
       let attempt = attempts.next("\(key):\(start)")
       if fail(key, start, attempt) { throw URLError(.networkConnectionLost) }
-      let range = start..<min(total, start + size)
+      let range = start..<max(start, min(total, start + size))
       let items = range.map { n in
         let id = Int(key)! * 1_000_000 + n
         return #"{"ratingKey":"\#(id)","type":"movie","title":"M\#(id)","Guid":[{"id":"tmdb://\#(id)"}]}"#
