@@ -11,11 +11,16 @@ import Foundation
 /// - `-AstraDemoTab home|search|libraries`: the tab to open on.
 /// - `-AstraDemoQuery <text>`: text typed into Search.
 /// - `-AstraDemoOpen <ratingKey>`: open that title's details on Home.
+/// - `-AstraDemoScroll <points>`: scroll Home down this far (rows below the hero).
 enum Demo {
   static var isOn: Bool { UserDefaults.standard.bool(forKey: "AstraDemo") }
   static var tab: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoTab") : nil }
   static var query: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoQuery") : nil }
   static var openKey: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoOpen") : nil }
+  static var homeScroll: Double? {
+    guard isOn, let text = UserDefaults.standard.string(forKey: "AstraDemoScroll") else { return nil }
+    return Double(text)
+  }
   /// `-AstraDemoPlay <path>`: a local video file to open in the player at launch (UI tests).
   static var videoPath: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlay") : nil }
 

@@ -14,6 +14,8 @@ struct HomeView: View {
   @State private var showsTopBar = true
   /// The hero title on screen; the frosted page background follows it.
   @State private var heroItem: PlexMetadata?
+  /// Only moved by the CI demo (`-AstraDemoScroll`), to screenshot the rows below the hero.
+  @State private var scrollPosition = ScrollPosition(edge: .top)
 
   private var heroHeight: CGFloat {
     min(Astra.Layout.heroHeight, max(380, viewport * Astra.Layout.heroShare))
@@ -127,6 +129,11 @@ struct HomeView: View {
       .onGeometryChange(for: Bool.self, of: { $0.frame(in: .scrollView).minY > -60 }) { showsTopBar = $0 }
     }
     .scrollIndicators(.never)
+    .scrollPosition($scrollPosition)
+    .task {
+      guard let y = Demo.homeScroll, (try? await Task.pause(12)) != nil else { return }
+      scrollPosition.scrollTo(y: y)
+    }
     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewport = $0 }
     .overlay {
       if library.isLoadingHome || (library.isLoadingService && !library.homeHasSections) {
