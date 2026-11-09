@@ -473,8 +473,8 @@ struct TopTenCard: View {
   }
 }
 
-/// The big Top 10 rank: the page colour inside a light outline, like the
-/// streaming apps (white and grey only), sitting on the poster's baseline.
+/// The big Top 10 rank: solid white with a light outline (the page colour in
+/// the Light theme), sitting on the poster's baseline.
 struct RankNumber: View {
   var rank: Int
   var size: CGFloat = 150
@@ -493,7 +493,9 @@ struct RankNumber: View {
           .foregroundStyle(Astra.Color.ink.opacity(0.85))
           .offset(x: cos(angle) * line, y: sin(angle) * line)
       }
-      digits.foregroundStyle(Astra.Color.bg)
+      // KP (2026-11-09): solid white numbers in every theme but Light,
+      // where white would vanish into the page.
+      digits.foregroundStyle(AstraAppearance.shared.appTheme == .light ? Astra.Color.bg : .white)
     }
     .lineLimit(1)
     .fixedSize()
