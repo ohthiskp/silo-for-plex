@@ -245,18 +245,22 @@ struct TVLogoTitle: View {
   var maxWidth: CGFloat
   var maxHeight: CGFloat
   var textSize: CGFloat
+  /// The hero centres its logo over the block (KP's hero mockup, 2026-11-09).
+  var centered = false
+
+  private var alignment: Alignment { centered ? .bottom : .bottomLeading }
 
   @State private var logo: PlatformImage?
   @State private var resolved = false
 
   var body: some View {
-    ZStack(alignment: .bottomLeading) {
+    ZStack(alignment: alignment) {
       if let logo {
         Image(platformImage: logo)
           .resizable()
           .interpolation(.high)
           .aspectRatio(contentMode: .fit)
-          .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: .bottomLeading)
+          .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
           .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
           .accessibilityLabel(item.displayTitle)
           .transition(.opacity)
@@ -265,12 +269,13 @@ struct TVLogoTitle: View {
           .font(.system(size: textSize, weight: .heavy).leading(.tight))
           .foregroundStyle(.white)
           .lineLimit(2)
+          .multilineTextAlignment(centered ? .center : .leading)
           .minimumScaleFactor(0.6)
           .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
-          .frame(maxWidth: maxWidth, alignment: .leading)
+          .frame(maxWidth: maxWidth, alignment: centered ? .center : .leading)
       }
     }
-    .frame(maxWidth: maxWidth, minHeight: maxHeight, maxHeight: maxHeight, alignment: .bottomLeading)
+    .frame(maxWidth: maxWidth, minHeight: maxHeight, maxHeight: maxHeight, alignment: alignment)
     .task(id: item.id) {
       logo = nil
       resolved = false

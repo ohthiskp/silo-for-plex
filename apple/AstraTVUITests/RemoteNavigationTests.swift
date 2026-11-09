@@ -35,8 +35,8 @@ final class RemoteNavigationTests: XCTestCase {
     add(attachment)
   }
 
-  /// Home's hero is on screen (its round info button).
-  private var homeHero: XCUIElement { app.buttons["Details"].firstMatch }
+  /// Home is on screen (its Continue Watching row).
+  private var homeHero: XCUIElement { app.staticTexts["Continue Watching"].firstMatch }
   /// A Details page is open (its More button).
   private var detailsMore: XCUIElement { app.buttons["More"].firstMatch }
 

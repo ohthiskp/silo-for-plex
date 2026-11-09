@@ -132,9 +132,12 @@ struct TVHome: View {
 
 // MARK: - Hero info
 
-/// The hero's text and buttons, bottom left: logo, rating box and year,
-/// then Play and the round + (Watchlist). Left on Play and right on + turn
-/// the hero, and the dots show where you are.
+/// The hero's block, bottom left, after KP's hero mockup (2026-11-09) as on
+/// the iPhone and Mac: the title's logo centred over the block, then
+/// "2025 · 2h 8m · Sci-Fi [PG-13] [4K]" on one line, then a wide white Play
+/// beside the round glass + (Watchlist). No Details button: hold Select on
+/// Play for Details and the rest. Right on + turns the hero; the dots show
+/// where you are.
 private struct TVHeroInfo: View {
   var library: LibraryStore
   var item: PlexMetadata
@@ -144,76 +147,74 @@ private struct TVHeroInfo: View {
   var step: (Int) -> Void
 
   @Environment(\.playItem) private var playItem
-  @Environment(\.openItem) private var openItem
   @Environment(AppModel.self) private var app
   @FocusState private var focus: Field?
-  @State private var certification: String?
+  /// The server's full copy, for the 4K / Dolby badges and the runtime.
+  @State private var full: PlexMetadata?
 
-  private enum Field: Hashable { case play, plus, info }
+  private enum Field: Hashable { case play, plus }
+
+  private static let blockWidth: CGFloat = 760
 
   private var playable: Bool { library.availability(of: item) != .notOnServer && app.canPlay(item) }
-  private var firstFocus: Field { playable ? .play : (item.tmdbKey != nil ? .plus : .info) }
+  private var firstFocus: Field { playable || item.tmdbKey == nil ? .play : .plus }
+  private var shown: PlexMetadata { full ?? library.indexMatch(item) ?? item }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 22) {
-      TVLogoTitle(library: library, item: item, maxWidth: 720, maxHeight: 220, textSize: 96)
-      HStack(spacing: 16) {
-        if let rating = item.officialRating ?? certification {
-          RatingBox(text: rating, fontSize: 20)
+    VStack(alignment: .leading, spacing: 24) {
+      VStack(spacing: 22) {
+        TVLogoTitle(library: library, item: item, maxWidth: 700, maxHeight: 200, textSize: 90, centered: true)
+          .frame(maxWidth: .infinity)
+        HStack(spacing: 14) {
+          DetailMetaLine(item: shown, library: library, fontSize: 26, genreLimit: 1, ratingAfter: true)
+            .layoutPriority(1)
+          TVFormatChips(item: shown, fontSize: 18, showsRating: false)
         }
-        let facts = TVFacts.line(item, genres: 1)
-        if !facts.isEmpty {
-          Text(facts)
-            .font(.system(size: 26, weight: .medium))
-            .foregroundStyle(Astra.Color.ink.opacity(0.9))
-        }
+        .frame(height: 40)
+        .frame(maxWidth: .infinity)
       }
+
       HStack(spacing: 20) {
         Button {
           playItem(item)
         } label: {
           Label("Play", systemImage: "play.fill")
             .font(.system(size: 30, weight: .semibold))
-            .frame(width: 300)
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(TVGlassButtonStyle(prominent: true))
         .focused($focus, equals: .play)
         .disabled(!playable)
+        // Hold Select for Details, Mark Watched and Go to (no downloads on TV).
+        .itemMenu(library: library, item: item)
 
         if item.tmdbKey != nil {
           TVRoundWatchlist(item: item)
             .focused($focus, equals: .plus)
         }
-        Button {
-          openItem(item)
-        } label: {
-          Image(systemName: "info")
-            .font(.system(size: 30, weight: .semibold))
-            .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)
-        }
-        .buttonStyle(TVGlassButtonStyle(round: true))
-        .focused($focus, equals: .info)
-        .accessibilityLabel("Details")
       }
       .focusSection()
       .onMoveCommand { direction in
         // Only reached when focus can't move further that way.
-        if direction == .left, focus == .play { step(-1) }
-        if direction == .right, focus == .info || (focus == .plus && item.tmdbKey == nil) { step(1) }
+        if direction == .right, focus == .plus || (focus == .play && item.tmdbKey == nil) { step(1) }
       }
       if count > 1 {
         TVDots(count: count, index: index)
-          .padding(.top, 4)
+          .frame(maxWidth: .infinity)
       }
     }
-    // Home opens on Play (or + / info when the title can't play here), not
-    // on the sidebar or the tab bar.
+    .frame(width: Self.blockWidth)
+    // Home opens on Play (or + when the title can't play here), not on the
+    // sidebar or the tab bar.
     .defaultFocus($focus, firstFocus, priority: .userInitiated)
     .onChange(of: focus) { _, new in focused = new != nil }
     .task(id: item.id) {
-      certification = nil
-      guard item.officialRating == nil, item.type == .movie || item.type == .show else { return }
-      certification = await library.tmdbArtwork(for: item)?.certification
+      full = nil
+      let key = item.isCatalogOnly ? library.indexMatch(item)?.ratingKey : item.ratingKey
+      guard let key else { return }
+      let found = try? await library.details(key)
+      guard !Task.isCancelled else { return }
+      full = found
     }
   }
 }
