@@ -546,8 +546,8 @@ struct RankNumber: View {
       .fixedSize()
     ZStack {
       // Frosted glass in the shape of the digits.
-      Rectangle()
-        .fill(.ultraThinMaterial)
+      digits.hidden()
+        .background(.ultraThinMaterial)
         .mask(digits)
       // The white wash over it.
       digits.foregroundStyle(
