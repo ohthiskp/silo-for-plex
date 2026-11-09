@@ -4,6 +4,9 @@ import Foundation
 /// (KP, 2026-11-09: "the logo goes over the faces"). Pure maths, so it is
 /// the same on iPhone and Mac and covered by tests.
 public enum ArtFraming {
+  /// Faces spread wider than this share of the picture aren't one subject.
+  public static let groupWidth: CGFloat = 0.3
+
   /// The rect to draw an image of `aspect` (width / height) in, inside a box
   /// `boxWidth` wide whose art area is `zoneHeight` tall.
   ///
@@ -37,7 +40,11 @@ public enum ArtFraming {
       }
     }
     let width = height * aspect
-    let centre = focus.map { Double($0.midX) } ?? fallbackX
+    // One face or a tight group is centred across the screen. A wide spread
+    // of faces (a crowded poster like Mario's) keeps the picture's own
+    // centre, where the artist put the main subject (KP, 2026-11-09:
+    // "Super Mario isn't even centered").
+    let centre = focus.flatMap { $0.width <= Self.groupWidth ? Double($0.midX) : nil } ?? fallbackX
     let left = min(0, max(boxWidth - width, boxWidth / 2 - centre * width))
     return CGRect(x: left, y: top, width: width, height: height)
   }

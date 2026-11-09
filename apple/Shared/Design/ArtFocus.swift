@@ -116,20 +116,39 @@ struct FramedArtwork: View {
       let rect = ArtFraming.frame(
         boxWidth: geo.size.width, zoneHeight: zoneHeight, aspect: focus?.aspect ?? 16.0 / 9.0,
         limitY: limitY, topOffset: topOffset, minTop: minTop, focus: focus?.focus)
-      RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
-        .frame(width: rect.width, height: rect.height)
-        // KP (2026-11-09): wherever the framing puts the picture, its top and
-        // bottom edges melt into the frosted page (no hard line across the
-        // hero, and the art blurs up under the Dynamic Island).
-        .mask {
-          LinearGradient(
-            stops: [
-              .init(color: .clear, location: 0), .init(color: .black, location: 0.14),
-              .init(color: .black, location: 0.72), .init(color: .clear, location: 1),
-            ],
-            startPoint: .top, endPoint: .bottom)
-        }
-        .offset(x: rect.minX, y: rect.minY)
+      ZStack(alignment: .topLeading) {
+        // KP (2026-11-09, "why is the cut off that drastic?"): a blurred copy
+        // of the same picture fills the whole hero, so where the sharp art
+        // ends its colours carry on, softly, into the page.
+        RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
+          .frame(width: geo.size.width, height: zoneHeight)
+          .clipped()
+          .blur(radius: 44, opaque: true)
+          .opacity(0.8)
+          .mask {
+            LinearGradient(
+              stops: [
+                .init(color: .black, location: 0), .init(color: .black, location: 0.55),
+                .init(color: .clear, location: 1),
+              ],
+              startPoint: .top, endPoint: .bottom)
+          }
+        // The sharp art melts into that blur over a long, eased fade at the
+        // bottom, and up under the Dynamic Island at the top.
+        RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
+          .frame(width: rect.width, height: rect.height)
+          .mask {
+            LinearGradient(
+              stops: [
+                .init(color: .clear, location: 0), .init(color: .black, location: 0.14),
+                .init(color: .black, location: 0.5), .init(color: .black.opacity(0.8), location: 0.65),
+                .init(color: .black.opacity(0.45), location: 0.8), .init(color: .black.opacity(0.15), location: 0.92),
+                .init(color: .clear, location: 1),
+              ],
+              startPoint: .top, endPoint: .bottom)
+          }
+          .offset(x: rect.minX, y: rect.minY)
+      }
         .astraAnimation(Astra.Motion.base, value: focus)
     }
     .frame(height: zoneHeight)

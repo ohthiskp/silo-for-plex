@@ -33,6 +33,13 @@ final class ArtFramingTests: XCTestCase {
     XCTAssertEqual(faceX, 195, accuracy: 1)
   }
 
+  func testWideSpreadOfFacesKeepsThePictureCentred() {
+    // Rosalina at the left, Peach at the right, Mario in the middle.
+    let focus = CGRect(x: 0.05, y: 0.2, width: 0.6, height: 0.5)
+    let r = frame(focus)
+    XCTAssertEqual(r.midX, 195, accuracy: 0.5)
+  }
+
   func testNeverLeavesAGapAtTheSides() {
     let focus = CGRect(x: 0.95, y: 0.2, width: 0.05, height: 0.2)
     let r = frame(focus)
