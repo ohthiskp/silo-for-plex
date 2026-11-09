@@ -101,29 +101,15 @@ struct LibraryGridContent: View {
   @State private var loaded = 0
   @State private var loading = false
   @AppStorage("astra.libraries.macSort") private var sort = "addedAt:desc"
-  /// KP (2026-11-09): search this library, answered at once from the index.
-  @State private var searchText = ""
 
   private var sections: [PlexLibrarySection] { library.sections.filter { $0.type == kind } }
   private var section: PlexLibrarySection? {
     sections.first { $0.key == sectionKey } ?? sections.first
   }
   private var noun: String { kind == "show" ? "Shows" : "Movies" }
-  private var searching: Bool { !searchText.trimmingCharacters(in: .whitespaces).isEmpty }
-
-  private var matches: [PlexMetadata] {
-    _ = library.indexRevision
-    let sectionID = sections.count > 1 ? section.flatMap { Int($0.key) } : nil
-    return library.shown(
-      library.localSearch(searchText.trimmingCharacters(in: .whitespaces), limit: 300).filter {
-        $0.type.rawValue == kind && (sectionID == nil || $0.librarySectionID == sectionID)
-      }, swap: false)
-  }
-
   var body: some View {
     VStack(alignment: .leading, spacing: Astra.Spacing.l) {
       HStack(spacing: Astra.Spacing.s) {
-        LibrarySearchField(text: $searchText, prompt: "Search \(noun)")
         if sections.count > 1 {
           Picker("Library", selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 })) {
             ForEach(sections) { Text($0.title).tag($0.key) }
@@ -145,17 +131,6 @@ struct LibraryGridContent: View {
         EmptyState(
           symbol: kind == "show" ? "tv" : "film", title: "No \(noun.lowercased()) library",
           message: "This Plex server has no \(noun.lowercased()) library.")
-      } else if searching {
-        let found = matches
-        if found.isEmpty {
-          EmptyState(
-            symbol: "magnifyingglass", title: library.indexReady ? "No matches" : "Still reading your library",
-            message: library.indexReady ? "Nothing in \(noun) matches “\(searchText)”." : "Try again in a moment.")
-        } else {
-          LazyVGrid(columns: posterColumns, alignment: .leading, spacing: 26) {
-            ForEach(found) { PosterCard(library: library, item: $0) }
-          }
-        }
       } else if items.isEmpty && reachedEnd {
         EmptyState(symbol: "square.stack", title: "Nothing here yet", message: "This library is empty.")
       } else {

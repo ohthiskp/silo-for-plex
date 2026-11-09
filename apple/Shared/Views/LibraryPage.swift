@@ -210,36 +210,3 @@ struct WatchlistContent: View {
     }
   }
 #endif
-
-/// The small search field at the top of Movies and Shows (KP, 2026-11-09):
-/// results come from the library index on the device, as you type.
-struct LibrarySearchField: View {
-  @Binding var text: String
-  var prompt: String
-
-  var body: some View {
-    HStack(spacing: 10) {
-      Image(systemName: "magnifyingglass")
-        .font(.system(size: 14, weight: .semibold))
-        .foregroundStyle(Astra.Color.muted)
-      TextField(prompt, text: $text)
-        .textFieldStyle(.plain)
-        .astraFont(size: 15)
-        .autocorrectionDisabled()
-        .submitLabel(.search)
-      if !text.isEmpty {
-        Button {
-          text = ""
-        } label: {
-          Image(systemName: "xmark.circle.fill").foregroundStyle(Astra.Color.muted)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Clear Search")
-      }
-    }
-    .padding(.horizontal, 14)
-    .frame(height: 38 * Astra.Layout.controlScale)
-    .frame(maxWidth: 420)
-    .astraGlass(in: Capsule(), variant: .clear, interactive: true)
-  }
-}
