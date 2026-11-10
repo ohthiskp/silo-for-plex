@@ -229,8 +229,8 @@ struct PlayerOverlay: View {
             Spacer()
             MacVolume(player: player, poke: poke)
           }
-          // Clear of the traffic lights.
-          .padding(.top, 34)
+          // Below the traffic lights (the title-bar strip is ~28 pt).
+          .padding(.top, 40)
           .opacity(scrubbing == nil ? 1 : 0)
           .allowsHitTesting(scrubbing == nil)
           Spacer()
@@ -279,7 +279,12 @@ struct PlayerOverlay: View {
           .allowsHitTesting(scrubbing == nil)
       }
       .padding(.horizontal, 28)
-      .padding(.bottom, 16)
+      .padding(.bottom, 18)
+      // Laid out against the window's own edges, not its title-bar safe area,
+      // so a short window (a wide film) keeps the X clear of the traffic lights
+      // and the times under the scrubber on screen.
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .ignoresSafeArea()
       .astraAnimation(Astra.Motion.fast, value: scrubbing == nil)
     }
 
