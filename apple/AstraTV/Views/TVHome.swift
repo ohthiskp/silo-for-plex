@@ -211,6 +211,15 @@ private struct TVHeroInfo: View {
     // sidebar or the tab bar.
     .defaultFocus($focus, firstFocus, priority: .userInitiated)
     .onChange(of: focus) { _, new in focused = new != nil }
+    // Closing the player re-enables the page with nothing focused, and tvOS
+    // would then pick the leftmost circle; land back on the hero instead.
+    .onChange(of: app.player.isActive) { _, active in
+      guard !active else { return }
+      Task {
+        try? await Task.pause(0.3)
+        focus = firstFocus
+      }
+    }
     .task(id: item.id) {
       full = nil
       let key = item.isCatalogOnly ? library.indexMatch(item)?.ratingKey : item.ratingKey
