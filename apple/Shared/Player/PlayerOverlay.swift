@@ -6,6 +6,8 @@ import AstraKit
 import SwiftUI
 import Observation
 #if os(iOS)
+  import AVFoundation
+  import MediaPlayer
   import UIKit
 #endif
 
@@ -37,9 +39,10 @@ struct PlayerOverlay: View {
     /// The Next Episode button while it shows (it shows with the controls hidden
     /// too): a tap on it must not also show or hide the controls or double-tap skip.
     @State private var nextEpisodeFrame: CGRect?
-    /// The ⋯ menu (Audio, Quality, Speed, Chapters; KP's mockup 2b, 2026-11-10).
-    @State private var moreOpen = false
-    @State private var morePage: PlayerMorePage = .root
+    /// Whether the controls showed before the last single tap (a double tap restores it).
+    @State private var visibleBeforeTap = false
+    /// The system volume: what a swipe on the right and the slider set (instant, unlike mpv's).
+    @State private var systemVolume = SystemVolume.shared
   #endif
   #if os(macOS)
     // Astra: the control panel can be dragged anywhere over the video (KP, 2026-11-07).
@@ -72,14 +75,17 @@ struct PlayerOverlay: View {
         // UIKit recognizers, so the single tap reliably waits for a double.
         PlayerTapSurface(
           blocked: (visible ? Array(controlFrames.values) : []) + [nextEpisodeFrame].compactMap { $0 },
+          // KP (2026-11-10): "very very responsive": a tap shows or hides the
+          // controls at once, without waiting to see whether a double tap follows.
           onTap: {
-            if moreOpen {
-              closeMore()
-            } else {
-              visible ? hide() : poke()
-            }
+            visibleBeforeTap = visible
+            visible ? hide() : poke()
           },
-          onDoubleTap: { forward in doubleTapSkip(forward: forward) },
+          onDoubleTap: { forward in
+            // The double tap's first tap toggled the controls; put them back.
+            if visible != visibleBeforeTap { visibleBeforeTap ? poke() : hide() }
+            doubleTapSkip(forward: forward)
+          },
           onSwipe: { right, delta in if swipeGestures { swipeLevel(right: right, delta: delta) } },
           // KP (2026-11-08): a two-finger tap plays or pauses.
           onTwoFingerTap: { if twoFingerPause { player.togglePause() } }
@@ -140,7 +146,8 @@ struct PlayerOverlay: View {
           .transition(.opacity)
       }
     }
-    .astraAnimation(Astra.Motion.base, value: visible)
+    // iPhone: the controls come and go in 0.15 s (KP, 2026-11-10: "very very responsive").
+    .astraAnimation(Self.showHide, value: visible)
     .astraAnimation(Astra.Motion.fast, value: player.buffering)
     .astraAnimation(Astra.Motion.base, value: player.hasFirstFrame)
     #if os(macOS)
@@ -171,6 +178,12 @@ struct PlayerOverlay: View {
   }
 
   static let space = "player"
+
+  #if os(iOS)
+    static let showHide = Astra.Motion.fast
+  #else
+    static let showHide = Astra.Motion.base
+  #endif
 
   /// iPhone: while the controls show, the play button itself shows loading.
   private var loaderInRing: Bool {
@@ -400,36 +413,12 @@ struct PlayerOverlay: View {
             }
             .astraIconButton(size: 44, variant: .clear)
             .accessibilityLabel("Close Player")
-            if PlayerController.supportsPictureInPicture { pipButton(size: 44) }
+            .reportFrame("close", into: $controlFrames)
             Spacer()
-            SubtleVolume(player: player, level: level, poke: poke)
-            // KP (2026-11-10): ⋯ top right, very subtle: a bare glyph like the speaker's.
-            Button {
-              if moreOpen { closeMore() } else { openMore() }
-            } label: {
-              Image(systemName: "ellipsis")
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 36, height: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.white)
-            .opacity(moreOpen ? 1 : 0.7)
-            .shadow(color: .black.opacity(0.35), radius: 6)
-            .accessibilityLabel("More")
-            .accessibilityIdentifier("astra.player.more")
+            // KP (2026-11-10): no PiP and no ⋯ on iPhone; volume only, top right.
+            SubtleVolume(player: player, volume: systemVolume, level: level, poke: poke)
+              .reportFrame("volume", into: $controlFrames)
           }
-          .astraGlassGroup(spacing: 12)
-          .overlay(alignment: .topTrailing) {
-            if moreOpen {
-              PlayerMoreMenu(player: player, page: $morePage, onDone: closeMore, poke: poke)
-                .padding(.top, 50)
-                .reportFrame("more", into: $controlFrames)
-                .astraTransition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topTrailing)))
-            }
-          }
-          .zIndex(1)
-          .reportFrame("top", into: $controlFrames)
           .opacity(scrubbing == nil ? 1 : 0)
           .allowsHitTesting(scrubbing == nil)
           Spacer()
@@ -454,21 +443,19 @@ struct PlayerOverlay: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(player.title), Details")
+            .reportFrame("titleButton", into: $controlFrames)
             Spacer(minLength: 16)
             // KP (2026-11-10): a bare subtitle glyph, no box or glass around it; alone bottom right.
             captionsChip
+              .reportFrame("captions", into: $controlFrames)
           }
           .padding(.bottom, 10)
-          .reportFrame("title", into: $controlFrames)
           .opacity(scrubbing == nil ? 1 : 0)
           .allowsHitTesting(scrubbing == nil)
           PhoneScrubber(player: player, scrubbing: $scrubbing, poke: poke)
             .reportFrame("timeline", into: $controlFrames)
         }
-        // The ⋯ menu (in the top row) sits above the transport buttons.
-        .zIndex(moreOpen ? 1 : 0)
         phoneTransport
-          .reportFrame("transport", into: $controlFrames)
           .opacity(scrubbing == nil ? 1 : 0)
           .allowsHitTesting(scrubbing == nil)
       }
@@ -477,21 +464,6 @@ struct PlayerOverlay: View {
       .padding(.top, 10)
       .padding(.bottom, 6)
       .astraAnimation(Astra.Motion.fast, value: scrubbing == nil)
-      .astraAnimation(Astra.Motion.fast, value: moreOpen)
-      .onChange(of: moreOpen) { _, open in
-        if !open { controlFrames["more"] = nil }
-      }
-    }
-
-    private func openMore() {
-      morePage = .root
-      moreOpen = true
-      hideTask?.cancel()
-    }
-
-    private func closeMore() {
-      moreOpen = false
-      poke()
     }
 
     /// Back 10 s, play/pause (a spinner in its place while loading), forward 10 s.
@@ -506,6 +478,7 @@ struct PlayerOverlay: View {
         }
         .buttonStyle(PlayerGlyphButtonStyle(size: 56))
         .accessibilityLabel("Back 10 Seconds")
+        .reportFrame("back10", into: $controlFrames)
 
         Button {
           player.togglePause()
@@ -524,6 +497,7 @@ struct PlayerOverlay: View {
         }
         .buttonStyle(PlayerGlyphButtonStyle(size: 76))
         .accessibilityLabel(player.paused ? "Play" : "Pause")
+        .reportFrame("play", into: $controlFrames)
 
         Button {
           player.seek(by: 10)
@@ -533,6 +507,7 @@ struct PlayerOverlay: View {
         }
         .buttonStyle(PlayerGlyphButtonStyle(size: 56))
         .accessibilityLabel("Forward 10 Seconds")
+        .reportFrame("forward10", into: $controlFrames)
       }
       .shadow(color: .black.opacity(0.35), radius: 8)
     }
@@ -551,7 +526,7 @@ struct PlayerOverlay: View {
       if delta == 0 {
         level.generation += 1
         level.volume = right
-        level.start = right ? (player.muted ? 0 : player.volume / 100) : Double(UIScreen.main.brightness)
+        level.start = right ? (player.muted ? 0 : systemVolume.level) : Double(UIScreen.main.brightness)
         level.value = level.start
         if !right { level.brightness = level.start }
         level.shown = true
@@ -562,7 +537,9 @@ struct PlayerOverlay: View {
       level.value = value
       if right {
         if player.muted, value > 0 { player.setMuted(false) }
-        player.setVolume(value * 100)
+        // The system volume, like Infuse: it changes at once (mpv's own volume
+        // only takes effect after its audio buffer, which felt like a delay).
+        systemVolume.set(value)
       } else {
         level.brightness = value
         UIScreen.main.brightness = CGFloat(value)
@@ -661,6 +638,68 @@ struct PlayerOverlay: View {
           }
         }
       }
+      #if os(iOS)
+        // KP (2026-11-10): no ⋯ on iPhone; audio, quality, speed and chapters
+        // live under the subtitle button instead.
+        if player.audioTracks.count > 1 {
+          Menu {
+            audioButtons
+          } label: {
+            Label("Audio", systemImage: "speaker.wave.2")
+            Text(player.audioTracks.first { $0.id == player.audioId }?.title ?? "")
+          }
+        }
+        Menu {
+          ForEach(PlaybackQuality.allCases) { quality in
+            Button {
+              player.setQuality(quality)
+            } label: {
+              checked(quality.title, player.quality == quality)
+            }
+          }
+          // Other original files of this title (another library's 4K copy, say); never a transcode.
+          if player.versions.count > 1 {
+            Section {
+              ForEach(player.versions) { version in
+                Button {
+                  player.playVersion(version)
+                } label: {
+                  checked(version.badge, version.media.id == player.currentMediaID)
+                }
+              }
+            }
+          }
+        } label: {
+          Label("Quality", systemImage: "sparkles.tv")
+          Text(player.quality.title)
+        }
+        Menu {
+          ForEach(PlayerController.speeds, id: \.self) { speed in
+            Button {
+              player.setSpeed(speed)
+            } label: {
+              checked(PlayerController.speedLabel(speed), player.speed == speed)
+            }
+          }
+        } label: {
+          Label("Speed", systemImage: "gauge.with.dots.needle.67percent")
+          Text(PlayerController.speedLabel(player.speed))
+        }
+        if !player.chapters.isEmpty {
+          Menu {
+            let current = player.currentChapter?.id
+            ForEach(player.chapters) { chapter in
+              Button {
+                player.seek(to: chapter.start)
+              } label: {
+                checked("\(chapter.title)  \(PlaybackClock.format(chapter.start))", chapter.id == current)
+              }
+            }
+          } label: {
+            Label("Chapters", systemImage: "list.bullet")
+          }
+        }
+      #endif
     } label: {
       // Astra: a speech-bubble captions glyph (KP asked for a new icon); filled when subtitles are on.
       #if os(iOS)
@@ -765,12 +804,12 @@ struct PlayerOverlay: View {
     hideTask?.cancel()
     hideTask = Task { @MainActor in
       try? await Task.pause(3)
-      guard !Task.isCancelled, !player.paused, scrubbing == nil, !menuOpen else { return }
+      guard !Task.isCancelled, !player.paused, scrubbing == nil else { return }
       hide()
     }
   }
 
-  /// CI screenshots: `-AstraDemoPlayer controls|more|scrub` (iPhone).
+  /// CI screenshots: `-AstraDemoPlayer controls|scrub` (iPhone).
   private func applyDemo() {
     #if os(iOS)
       guard let shot = Demo.playerShot else { return }
@@ -779,7 +818,6 @@ struct PlayerOverlay: View {
         try? await Task.pause(1)
         player.setPaused(true)
         switch shot {
-        case "more": openMore()
         case "scrub": scrubbing = player.duration * 0.35
         default: poke()
         }
@@ -787,19 +825,8 @@ struct PlayerOverlay: View {
     #endif
   }
 
-  /// iPhone: the ⋯ menu is open (the controls stay up while it is).
-  private var menuOpen: Bool {
-    #if os(iOS)
-      moreOpen
-    #else
-      false
-    #endif
-  }
 
   private func hide() {
-    #if os(iOS)
-      moreOpen = false
-    #endif
     visible = false
     #if os(macOS)
       NSCursor.setHiddenUntilMouseMoves(true)
@@ -1033,11 +1060,12 @@ extension View {
   /// Its own view, so volume changes redraw only this slider.
   struct SubtleVolume: View {
     var player: PlayerController
+    var volume: SystemVolume
     var level: LevelState
     var poke: () -> Void
     @State private var dragging = false
 
-    private var value: Double { player.muted ? 0 : player.volume / 100 }
+    private var value: Double { player.muted ? 0 : volume.level }
     /// Dragging here, or swiping on the right side of the picture.
     private var active: Bool { dragging || (level.shown && level.volume) }
 
@@ -1056,7 +1084,8 @@ extension View {
             DragGesture(minimumDistance: 0)
               .onChanged { drag in
                 dragging = true
-                player.setVolume(Double(min(1, max(0, drag.location.x / max(width, 1)))) * 100)
+                if player.muted { player.setMuted(false) }
+                volume.set(Double(drag.location.x / max(width, 1)))
                 poke()
               }
               .onEnded { _ in dragging = false }
@@ -1083,13 +1112,56 @@ extension View {
       .accessibilityValue("\(Int((value * 100).rounded())) percent")
       .accessibilityIdentifier("astra.level.volume")
       .accessibilityAdjustableAction { direction in
-        player.setVolume((value + (direction == .increment ? 0.1 : -0.1)) * 100)
+        volume.set(value + (direction == .increment ? 0.1 : -0.1))
       }
     }
 
     private var symbol: String {
       if value == 0 { return "speaker.slash.fill" }
       return value < 0.34 ? "speaker.wave.1.fill" : value < 0.67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
+    }
+  }
+
+  /// The phone's own volume (what the side buttons change), set through a
+  /// hidden MPVolumeView so it changes instantly and the system's volume HUD
+  /// stays away while the player shows. KP (2026-11-10): "immediate volume".
+  @MainActor @Observable final class SystemVolume {
+    static let shared = SystemVolume()
+
+    /// 0…1, kept in step with the side buttons.
+    private(set) var level = Double(AVAudioSession.sharedInstance().outputVolume)
+
+    @ObservationIgnored private let view: MPVolumeView = {
+      let view = MPVolumeView(frame: CGRect(x: -1000, y: -1000, width: 100, height: 40))
+      view.alpha = 0.01
+      view.isUserInteractionEnabled = false
+      return view
+    }()
+    @ObservationIgnored private var observation: NSKeyValueObservation?
+
+    /// The volume view must be in a window for its slider to work.
+    func attach(to window: UIWindow) {
+      if view.superview !== window { window.addSubview(view) }
+      level = Double(AVAudioSession.sharedInstance().outputVolume)
+      guard observation == nil else { return }
+      observation = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.new]) { [weak self] _, change in
+        guard let value = change.newValue, let self else { return }
+        Task { @MainActor in self.level = Double(value) }
+      }
+    }
+
+    func detach() {
+      view.removeFromSuperview()
+      observation?.invalidate()
+      observation = nil
+    }
+
+    func set(_ value: Double) {
+      let value = min(1, max(0, value))
+      level = value
+      guard let slider = view.subviews.lazy.compactMap({ $0 as? UISlider }).first else { return }
+      slider.value = Float(value)
+      slider.sendActions(for: .valueChanged)
     }
   }
 
@@ -1226,174 +1298,6 @@ extension View {
     }
   }
 
-  /// Which page of the ⋯ menu shows.
-  enum PlayerMorePage: Hashable { case root, audio, quality, speed, chapters }
-
-  /// The ⋯ menu (KP's mockup 2b, 2026-11-10): Audio, Quality, Speed and
-  /// Chapters with what is chosen on the right; a row opens its choices in
-  /// the same panel. Quality only picks between original files (never a transcode).
-  struct PlayerMoreMenu: View {
-    let player: PlayerController
-    @Binding var page: PlayerMorePage
-    var onDone: () -> Void
-    var poke: () -> Void
-
-    private static let width: CGFloat = 270
-    private static let row: CGFloat = 40
-
-    var body: some View {
-      VStack(spacing: 0) {
-        switch page {
-        case .root: root
-        case .audio: list("Audio") { audio }
-        case .quality: list("Quality") { quality }
-        case .speed: list("Speed") { speed }
-        case .chapters: list("Chapters") { chapters }
-        }
-      }
-      .frame(width: Self.width)
-      .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-      .astraGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), variant: .regular)
-      .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-      .foregroundStyle(.white)
-      .astraAnimation(Astra.Motion.fast, value: page)
-      .accessibilityIdentifier("astra.player.moreMenu")
-    }
-
-    private var root: some View {
-      VStack(spacing: 0) {
-        rootRow("Audio", value: currentAudio, page: .audio, enabled: !player.audioTracks.isEmpty)
-        Divider().overlay(.white.opacity(0.08))
-        rootRow("Quality", value: player.quality.title, page: .quality)
-        Divider().overlay(.white.opacity(0.08))
-        rootRow("Speed", value: PlayerController.speedLabel(player.speed), page: .speed)
-        Divider().overlay(.white.opacity(0.08))
-        rootRow("Chapters", value: player.chapters.isEmpty ? "None" : nil, page: .chapters, enabled: !player.chapters.isEmpty)
-      }
-    }
-
-    private var currentAudio: String {
-      player.audioTracks.first { $0.id == player.audioId }?.title ?? player.audioTracks.first?.title ?? "—"
-    }
-
-    private func rootRow(_ title: String, value: String?, page target: PlayerMorePage, enabled: Bool = true) -> some View {
-      Button {
-        page = target
-        poke()
-      } label: {
-        HStack(spacing: 12) {
-          Text(title).font(.system(size: 15, weight: .medium))
-          Spacer(minLength: 8)
-          if let value {
-            Text(value).font(.system(size: 13)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-          }
-          if enabled, value == nil || target == .chapters {
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
-          }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: Self.row)
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .disabled(!enabled)
-      .accessibilityLabel(value.map { "\(title), \($0)" } ?? title)
-    }
-
-    /// A page of choices under a back row.
-    private func list<Rows: View>(_ title: String, @ViewBuilder rows: () -> Rows) -> some View {
-      VStack(spacing: 0) {
-        Button {
-          page = .root
-          poke()
-        } label: {
-          HStack(spacing: 6) {
-            Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
-            Text(title).font(.system(size: 15, weight: .semibold))
-            Spacer()
-          }
-          .padding(.horizontal, 14)
-          .frame(height: Self.row)
-          .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Back")
-        Divider().overlay(.white.opacity(0.08))
-        ScrollView {
-          VStack(spacing: 0) { rows() }
-        }
-        .frame(maxHeight: 200)
-        .fixedSize(horizontal: false, vertical: true)
-      }
-    }
-
-    private func choice(_ title: String, detail: String? = nil, on: Bool, action: @escaping () -> Void) -> some View {
-      Button {
-        action()
-        poke()
-      } label: {
-        HStack(spacing: 10) {
-          Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).opacity(on ? 1 : 0)
-          Text(title).font(.system(size: 14, weight: on ? .semibold : .regular)).lineLimit(1)
-          Spacer(minLength: 8)
-          if let detail {
-            Text(detail).font(.system(size: 13).monospacedDigit()).foregroundStyle(.white.opacity(0.55))
-          }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: Self.row)
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-    }
-
-    @ViewBuilder private var audio: some View {
-      ForEach(player.audioTracks) { track in
-        choice(track.title, on: player.audioId == track.id) {
-          player.selectAudio(track.id)
-          page = .root
-        }
-      }
-    }
-
-    @ViewBuilder private var quality: some View {
-      ForEach(PlaybackQuality.allCases) { quality in
-        choice(quality.title, on: player.quality == quality) {
-          player.setQuality(quality)
-          page = .root
-        }
-      }
-      // Other original files of this title (another library's 4K copy, say).
-      if player.versions.count > 1 {
-        ForEach(player.versions) { version in
-          choice(version.badge, detail: version.detail, on: version.media.id == player.currentMediaID) {
-            player.playVersion(version)
-            onDone()
-          }
-        }
-      }
-    }
-
-    @ViewBuilder private var speed: some View {
-      ForEach(PlayerController.speeds, id: \.self) { speed in
-        choice(PlayerController.speedLabel(speed), on: player.speed == speed) {
-          player.setSpeed(speed)
-          page = .root
-        }
-      }
-    }
-
-    @ViewBuilder private var chapters: some View {
-      let current = player.currentChapter?.id
-      ForEach(player.chapters) { chapter in
-        choice(chapter.title, detail: PlaybackClock.format(chapter.start), on: chapter.id == current) {
-          player.seek(to: chapter.start)
-          onDone()
-        }
-      }
-    }
-  }
-
   /// One tap / double tap anywhere on the player, read by UIKit recognizers on
   /// the window itself, so nothing SwiftUI draws can swallow them. Taps inside
   /// `blocked` (the visible controls) are left to the controls.
@@ -1445,19 +1349,22 @@ extension View {
       var onTwoFingerTap: () -> Void = {}
       private var recognizers: [UIGestureRecognizer] = []
       private var swipeRight = false
+      /// The last single tap: a tap soon after it, close by, is a double tap's second.
+      private var lastTap: (at: Date, point: CGPoint) = (.distantPast, .zero)
+      private weak var pan: UIPanGestureRecognizer?
 
       func attach(to window: UIWindow) {
         detach()
         let double = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
         double.numberOfTapsRequired = 2
+        // KP (2026-11-10): no waiting for a possible double tap; the single tap
+        // fires at once (the double tap then puts the controls back).
         let single = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
-        single.require(toFail: double)
         // Astra (KP, 2026-11-07): swipe up/down on the left for brightness, on the right for volume.
         let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
         pan.maximumNumberOfTouches = 1
         let twoFinger = UITapGestureRecognizer(target: self, action: #selector(twoFingerTapped(_:)))
         twoFinger.numberOfTouchesRequired = 2
-        single.require(toFail: twoFinger)
         for recognizer in [double, single, pan, twoFinger] {
           // Let SwiftUI see every touch too (buttons, the timeline).
           recognizer.cancelsTouchesInView = false
@@ -1465,7 +1372,11 @@ extension View {
           recognizer.delegate = self
           window.addGestureRecognizer(recognizer)
         }
+        // A swipe that has begun owns its touches, so the button it started on doesn't fire.
+        pan.cancelsTouchesInView = true
+        self.pan = pan
         recognizers = [double, single, pan, twoFinger]
+        SystemVolume.shared.attach(to: window)
         #if DEBUG
           NSLog("Astra gesture: recognizers attached to window %@", String(describing: window))
         #endif
@@ -1474,10 +1385,14 @@ extension View {
       func detach() {
         for recognizer in recognizers { recognizer.view?.removeGestureRecognizer(recognizer) }
         recognizers = []
+        SystemVolume.shared.detach()
       }
 
       func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard let window = recognizer.view else { return false }
+        // KP (2026-11-10): the whole right side is volume and the whole left side
+        // brightness, over the controls too (the swipe is vertical; the sliders are not).
+        if recognizer === pan { return true }
         let point = touch.location(in: window)
         let allowed = !blocked.contains { $0.insetBy(dx: -8, dy: -8).contains(point) }
         #if DEBUG
@@ -1517,10 +1432,15 @@ extension View {
       }
 
       @objc func tapped(_ recognizer: UITapGestureRecognizer) {
+        let point = recognizer.location(in: recognizer.view)
+        let now = Date()
+        let follows = now.timeIntervalSince(lastTap.at) < 0.35 && hypot(point.x - lastTap.point.x, point.y - lastTap.point.y) < 80
+        lastTap = (now, point)
         #if DEBUG
-          NSLog("Astra gesture: single tap")
+          NSLog("Astra gesture: single tap (second of a double: %d)", follows ? 1 : 0)
         #endif
-        onTap()
+        // The second tap of a double tap (or more, for 20 s, 30 s…) leaves the controls alone.
+        if !follows { onTap() }
       }
 
       @objc func doubleTapped(_ recognizer: UITapGestureRecognizer) {

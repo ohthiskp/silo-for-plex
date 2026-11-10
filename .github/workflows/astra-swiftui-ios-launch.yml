@@ -108,7 +108,6 @@ jobs:
             -c:v libx264 -preset ultrafast -g 10 -pix_fmt yuv420p "$RUNNER_TEMP/player.mp4" || true
           if [ -f "$RUNNER_TEMP/player.mp4" ]; then
             shot player-controls -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer controls
-            shot player-more -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer more
             shot player-scrub -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer scrub
           fi
           ls -la "$RUNNER_TEMP/shots"
