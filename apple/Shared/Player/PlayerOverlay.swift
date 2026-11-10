@@ -455,12 +455,8 @@ struct PlayerOverlay: View {
             .buttonStyle(.plain)
             .accessibilityLabel("\(player.title), Details")
             Spacer(minLength: 16)
-            // The subtitle button as it was, in its glass capsule; alone bottom right.
+            // KP (2026-11-10): a bare subtitle glyph, no box or glass around it; alone bottom right.
             captionsChip
-              .padding(.horizontal, 6)
-              .frame(height: 44)
-              .astraGlass(in: Capsule(), variant: .clear)
-              .astraGlassEdge(Capsule(), strength: 0.6)
           }
           .padding(.bottom, 10)
           .reportFrame("title", into: $controlFrames)
@@ -667,10 +663,21 @@ struct PlayerOverlay: View {
       }
     } label: {
       // Astra: a speech-bubble captions glyph (KP asked for a new icon); filled when subtitles are on.
-      Image(systemName: player.subtitleId == nil ? "captions.bubble" : "captions.bubble.fill")
-        .font(.system(size: 15, weight: .semibold))
-        .contentTransition(.symbolEffect(.replace))
-        .playerChip()
+      #if os(iOS)
+        // iPhone: a bare glyph like the ⋯ and speaker, with a soft shadow for contrast.
+        Image(systemName: player.subtitleId == nil ? "captions.bubble" : "captions.bubble.fill")
+          .font(.system(size: 22, weight: .medium))
+          .foregroundStyle(.white)
+          .contentTransition(.symbolEffect(.replace))
+          .frame(width: 44, height: 44)
+          .contentShape(Rectangle())
+          .shadow(color: .black.opacity(0.4), radius: 6)
+      #else
+        Image(systemName: player.subtitleId == nil ? "captions.bubble" : "captions.bubble.fill")
+          .font(.system(size: 15, weight: .semibold))
+          .contentTransition(.symbolEffect(.replace))
+          .playerChip()
+      #endif
     }
     .menuStyle(.button)
     .buttonStyle(.plain)
