@@ -96,22 +96,24 @@ final class PlayerGestureTests: XCTestCase {
       badge("astra.level.brightness").waitForExistence(timeout: 2), "No brightness level after a swipe on the left")
   }
 
-  /// KP (2026-11-10): no ⋯ on iPhone; the subtitle button's menu also holds
-  /// Audio, Quality, Speed and Chapters. Paused first, so the controls can't
-  /// hide by themselves between finding the button and tapping it.
-  func testSubtitleMenuHasPlayerOptions() {
+  /// KP (2026-11-10): no ⋯ on iPhone, and the subtitle button's menu is
+  /// subtitles only (no Audio, Quality, Speed or Chapters). Paused first, so
+  /// the controls can't hide by themselves between finding the button and tapping it.
+  func testSubtitleMenuIsSubtitlesOnly() {
     let subtitles = app.buttons["Subtitles"]
     let pause = app.buttons["Pause"]
-    let speed = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Speed'")).firstMatch
+    let off = app.buttons["Off"]
     var found = false
     for _ in 0..<4 where !found {
       if !showing(subtitles) { point(0.5, 0.35).tap() }
       if showing(pause) { pause.tap() }
       if showing(subtitles) { subtitles.tap() }
-      found = speed.waitForExistence(timeout: 3)
+      found = off.waitForExistence(timeout: 3)
     }
     shot("subtitle-menu")
-    XCTAssertTrue(found, "The subtitle menu has no Speed")
+    XCTAssertTrue(found, "The subtitle menu didn't open")
+    let speed = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Speed'")).firstMatch
+    XCTAssertFalse(speed.exists, "The subtitle menu still has Speed")
     XCTAssertFalse(app.buttons["astra.player.more"].exists, "The ⋯ button is back")
   }
 }

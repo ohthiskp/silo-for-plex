@@ -638,68 +638,6 @@ struct PlayerOverlay: View {
           }
         }
       }
-      #if os(iOS)
-        // KP (2026-11-10): no ⋯ on iPhone; audio, quality, speed and chapters
-        // live under the subtitle button instead.
-        if player.audioTracks.count > 1 {
-          Menu {
-            audioButtons
-          } label: {
-            Label("Audio", systemImage: "speaker.wave.2")
-            Text(player.audioTracks.first { $0.id == player.audioId }?.title ?? "")
-          }
-        }
-        Menu {
-          ForEach(PlaybackQuality.allCases) { quality in
-            Button {
-              player.setQuality(quality)
-            } label: {
-              checked(quality.title, player.quality == quality)
-            }
-          }
-          // Other original files of this title (another library's 4K copy, say); never a transcode.
-          if player.versions.count > 1 {
-            Section {
-              ForEach(player.versions) { version in
-                Button {
-                  player.playVersion(version)
-                } label: {
-                  checked(version.badge, version.media.id == player.currentMediaID)
-                }
-              }
-            }
-          }
-        } label: {
-          Label("Quality", systemImage: "sparkles.tv")
-          Text(player.quality.title)
-        }
-        Menu {
-          ForEach(PlayerController.speeds, id: \.self) { speed in
-            Button {
-              player.setSpeed(speed)
-            } label: {
-              checked(PlayerController.speedLabel(speed), player.speed == speed)
-            }
-          }
-        } label: {
-          Label("Speed", systemImage: "gauge.with.dots.needle.67percent")
-          Text(PlayerController.speedLabel(player.speed))
-        }
-        if !player.chapters.isEmpty {
-          Menu {
-            let current = player.currentChapter?.id
-            ForEach(player.chapters) { chapter in
-              Button {
-                player.seek(to: chapter.start)
-              } label: {
-                checked("\(chapter.title)  \(PlaybackClock.format(chapter.start))", chapter.id == current)
-              }
-            }
-          } label: {
-            Label("Chapters", systemImage: "list.bullet")
-          }
-        }
-      #endif
     } label: {
       // Astra: a speech-bubble captions glyph (KP asked for a new icon); filled when subtitles are on.
       #if os(iOS)
