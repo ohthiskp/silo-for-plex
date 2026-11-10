@@ -20,6 +20,7 @@ enum PerfProbe {
   private static var seen: Set<String> = []
   private static var counters: [String: Int] = [:]
   private static var longestStall: Double = 0
+  private static var longestStallAt = 0
   private static var stalls = 0
 
   /// When the process started (the kernel's own record), so cold launch includes dyld and app init.
@@ -65,7 +66,10 @@ enum PerfProbe {
         try? await Task.pause(0.016)
         let now = Date()
         let gap = now.timeIntervalSince(last) * 1000 - 16
-        if gap > longestStall { longestStall = gap }
+        if gap > longestStall {
+          longestStall = gap
+          longestStallAt = ms()
+        }
         if gap > 100 { stalls += 1 }
         last = now
       }
@@ -139,14 +143,14 @@ enum PerfProbe {
     }
     let images = await ImagePipeline.shared.stats
     log(
-      "img t=\(second) asked=\(images.asked) fetched=\(images.fetched) decoded=\(images.decoded) megapixels=\(Int(images.megapixels)) bytesMB=\(images.bytes >> 20)"
+      "img t=\(second) asked=\(images.asked) fetched=\(images.fetched) decoded=\(images.decoded) prefetchedNoDecode=\(images.prefetched) megapixels=\(Int(images.megapixels)) bytesMB=\(images.bytes >> 20)"
     )
     var usage = rusage()
     getrusage(RUSAGE_SELF, &usage)
     let cpu = Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) * 1000
       + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1000
     log("cpu t=\(second) ms=\(Int(cpu))")
-    log("main t=\(second) longestStallMs=\(Int(longestStall)) stallsOver100ms=\(stalls)")
+    log("main t=\(second) longestStallMs=\(Int(longestStall)) endedAtMs=\(longestStallAt) stallsOver100ms=\(stalls)")
     for (name, n) in counters.sorted(by: { $0.key < $1.key }) { log("count t=\(second) \(name)=\(n)") }
   }
 

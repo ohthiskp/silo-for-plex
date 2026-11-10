@@ -1598,9 +1598,18 @@ final class LibraryStore {
       guard !isClosed, !Task.isCancelled else { return }
       guard prewarmed.insert(item.id).inserted else { continue }
       _ = await tmdbArtwork(for: item)
+      // Performance audit (2026-11-10): the hero's titles are decoded ahead
+      // (they're the first thing on screen); the rest are only downloaded,
+      // so their Details still open without the network but don't push the
+      // hero's images out of memory.
+      let decode = homeHero.contains { $0.id == item.id }
       for kind in [ArtKind.heroBackdrop, .scenery, .logo] {
         if let url = await artworkURL(for: item, kind, width: 1920, height: 1080) {
-          _ = await ImagePipeline.shared.image(for: url)
+          if decode {
+            _ = await ImagePipeline.shared.image(for: url)
+          } else {
+            await ImagePipeline.shared.prefetch(url)
+          }
         }
       }
       guard let resolved = try? await resolve(item), let full = try? await details(resolved.ratingKey) else {

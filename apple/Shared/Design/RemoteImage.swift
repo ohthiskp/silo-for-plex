@@ -26,6 +26,7 @@ actor ImagePipeline {
     var decoded = 0
     var megapixels: Double = 0
     var bytes = 0
+    var prefetched = 0
   }
   private(set) var stats = Stats()
   /// The artwork disk cache ("AstraImages" in Caches). Plex URLs in it carry
@@ -87,6 +88,21 @@ actor ImagePipeline {
       cache.setObject(image, forKey: url as NSURL, cost: cost)
     }
     return image
+  }
+
+  /// Performance audit (2026-11-10): downloads an image into the disk
+  /// cache without decoding it, for artwork that may be needed soon but
+  /// isn't on screen (Top Trending's Details backdrops and logos). Decoding
+  /// every one up front filled the 256 MB memory cache with 2560 px bitmaps
+  /// that were pushed out again before they were used. Opening one now
+  /// decodes it from disk, with no network.
+  func prefetch(_ url: URL) async {
+    if cache.object(forKey: url as NSURL) != nil || inFlight[url] != nil { return }
+    let request = PlexImageAuth.request(url)
+    if Self.urlCache.cachedResponse(for: request) != nil { return }
+    stats.prefetched += 1
+    let session = session
+    _ = await Task.detached(priority: .utility) { try? await session.data(for: request) }.value
   }
 
   /// Decodes at most `maxPixels` on the long side. TMDB's "original" hero
