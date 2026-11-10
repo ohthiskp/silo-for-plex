@@ -245,8 +245,14 @@ enum Demo {
 
 /// Answers every request from `Demo.response`.
 struct DemoTransport: HTTPTransport {
+  /// `-AstraDemoLatency <ms>`: each answer waits this long, like a remote server.
+  static let latency = Double(UserDefaults.standard.integer(forKey: "AstraDemoLatency")) / 1000
+
   func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    let started = Date()
+    if Self.latency > 0 { try await Task.pause(Self.latency) }
     let url = request.url!
+    defer { NetworkLog.shared.record(request, status: 200, started: started, error: nil) }
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     var query: [String: String] = [:]
     for item in components?.queryItems ?? [] { query[item.name] = item.value ?? "" }

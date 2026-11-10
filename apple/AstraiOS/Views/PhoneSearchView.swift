@@ -284,7 +284,9 @@ struct PhoneSearchView: View {
     peopleSearched = false
     // Like Netflix: titles on the server that match show at once, as you
     // type, and TMDB's ranked list replaces them a moment later.
+    let searchStarted = Date()
     results = library.localSearch(text, limit: 20)
+    PerfProbe.value("search.local.ms", Date().timeIntervalSince(searchStarted) * 1000)
     // A short pause so each keystroke doesn't send a request.
     try? await Task.pause(0.15)
     guard !Task.isCancelled, let tmdb = library.tmdb else {
@@ -297,6 +299,7 @@ struct PhoneSearchView: View {
     let shownPeople = Array((found?.people ?? []).filter { $0.profilePath != nil }.prefix(12))
     if let found { SearchCache.shared[text] = (found.items, shownPeople) }
     remember(languagesOf: found?.items ?? [])
+    PerfProbe.value("search.tmdb.ms", Date().timeIntervalSince(searchStarted) * 1000)
     astraWithAnimation(Astra.Motion.base) {
       results = library.searchResults(found?.items ?? [], text: text)
       people = shownPeople
