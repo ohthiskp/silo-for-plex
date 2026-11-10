@@ -97,13 +97,19 @@ final class PlayerGestureTests: XCTestCase {
   }
 
   /// KP (2026-11-10): ⋯ top right opens Audio / Quality / Speed / Chapters.
+  /// The controls hide by themselves 3 s after a tap, which a busy runner can
+  /// outlast between finding the button and tapping it; so pause first (paused,
+  /// the controls stay up) and retry the tap while the menu hasn't opened.
   func testMoreMenuOpens() {
-    point(0.5, 0.35).tap()
     let more = app.buttons["astra.player.more"]
-    XCTAssertTrue(more.waitForExistence(timeout: 5), "No ⋯ button")
-    if !showing(more) { point(0.5, 0.35).tap() }
-    more.tap()
-    let found = badge("astra.player.moreMenu").waitForExistence(timeout: 3)
+    let pause = app.buttons["Pause"]
+    var found = false
+    for _ in 0..<4 where !found {
+      if !showing(more) { point(0.5, 0.35).tap() }
+      if showing(pause) { pause.tap() }
+      if showing(more) { more.tap() }
+      found = badge("astra.player.moreMenu").waitForExistence(timeout: 3)
+    }
     shot("more-menu")
     XCTAssertTrue(found, "The ⋯ menu didn't open")
   }
