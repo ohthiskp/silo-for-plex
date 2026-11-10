@@ -17,6 +17,18 @@ actor ImagePipeline {
     return cache
   }()
   private var inFlight: [URL: Task<PlatformImage?, Never>] = [:]
+
+  /// Counts for the CI performance report (`PerfProbe`): images asked for
+  /// that weren't in memory, fetched (network or disk cache), decoded.
+  struct Stats: Sendable {
+    var asked = 0
+    var fetched = 0
+    var decoded = 0
+    var megapixels: Double = 0
+    var bytes = 0
+    var prefetched = 0
+  }
+  private(set) var stats = Stats()
   /// The artwork disk cache ("AstraImages" in Caches). Plex URLs in it carry
   /// no token (see `PlexImageAuth`); `clearCache()` empties it on sign-out.
   nonisolated static let urlCache: URLCache = {
@@ -57,6 +69,7 @@ actor ImagePipeline {
   func image(for url: URL) async -> PlatformImage? {
     if let hit = cache.object(forKey: url as NSURL) { return hit }
     if let running = inFlight[url] { return await running.value }
+    stats.asked += 1
     let session = session
     let task = Task.detached(priority: .userInitiated) { () -> PlatformImage? in
       // Plex images get the server's token as a header, never in the URL.
@@ -67,10 +80,29 @@ actor ImagePipeline {
     let image = await task.value
     inFlight[url] = nil
     if let image {
+      stats.fetched += 1
+      stats.decoded += 1
+      stats.megapixels += Double(image.pixelArea) / 1_000_000
       let cost = image.pixelArea * 4
+      stats.bytes += cost
       cache.setObject(image, forKey: url as NSURL, cost: cost)
     }
     return image
+  }
+
+  /// Performance audit (2026-11-10): downloads an image into the disk
+  /// cache without decoding it, for artwork that may be needed soon but
+  /// isn't on screen (Top Trending's Details backdrops and logos). Decoding
+  /// every one up front filled the 256 MB memory cache with 2560 px bitmaps
+  /// that were pushed out again before they were used. Opening one now
+  /// decodes it from disk, with no network.
+  func prefetch(_ url: URL) async {
+    if cache.object(forKey: url as NSURL) != nil || inFlight[url] != nil { return }
+    let request = PlexImageAuth.request(url)
+    if Self.urlCache.cachedResponse(for: request) != nil { return }
+    stats.prefetched += 1
+    let session = session
+    _ = await Task.detached(priority: .utility) { try? await session.data(for: request) }.value
   }
 
   /// Decodes at most `maxPixels` on the long side. TMDB's "original" hero

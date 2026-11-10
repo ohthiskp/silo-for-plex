@@ -101,6 +101,7 @@ final class AppModel {
     guard phase == .launching else { return }
     // Astra: CI screenshots run against a fake server (Demo.swift).
     if Demo.isOn {
+      PerfProbe.start(app: self)
       commit(Demo.session(info: info))
       if let demo = Demo.playback() {
         // UI tests: straight into the player with a local file.

@@ -450,7 +450,10 @@ struct DetailView: View {
       }
       let full = try await library.details(key, refresh: refresh)
       astraWithAnimation(Astra.Motion.base) { item = full }
-      if !refresh { library.recordOpen(seconds: Date().timeIntervalSince(opened)) }
+      if !refresh {
+        library.recordOpen(seconds: Date().timeIntervalSince(opened))
+        PerfProbe.value("details.full.ms", Date().timeIntervalSince(opened) * 1000)
+      }
       switch full.type {
       case .show:
         seasons = try await library.children(of: full.ratingKey).filter { $0.type == .season }
@@ -462,6 +465,7 @@ struct DetailView: View {
         break
       }
       related = await library.related(full.ratingKey)
+      if !refresh { PerfProbe.value("details.complete.ms", Date().timeIntervalSince(opened) * 1000) }
     } catch {
       self.error = error.localizedDescription
     }

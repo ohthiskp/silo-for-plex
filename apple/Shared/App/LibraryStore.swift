@@ -472,7 +472,7 @@ final class LibraryStore {
   /// cineby titles not seen before, and saves the result.
   private nonisolated static func fetchTrending(tmdb: TMDBClient, saved: TrendingSnapshot?) async -> TrendingSnapshot {
     var details = saved?.details ?? [:]
-    let entriesTask = Task { (try? await CinebyTrending.fetch()) ?? [] }
+    let entriesTask = Task { (try? await CinebyPage.shared.html()).map(CinebyTrending.parse) ?? [] }
     let pages = await withTaskGroup(of: (Int, [TMDBItem]).self) { group in
       for page in 1...3 {
         group.addTask { (page, (try? await tmdb.trending(.week, page: page)) ?? []) }
@@ -538,7 +538,11 @@ final class LibraryStore {
         let partial = checkpoint.map { $0.index(order: $0.libraries.keys.sorted()) } ?? [:]
         let base = (snapshot?.items ?? [:]).merging(partial) { _, read in read }
         return DiskIndex(
-          snapshot: snapshot.map { .init(savedAt: $0.savedAt, duration: $0.duration, fresh: $0.isFresh()) },
+          snapshot: snapshot.map {
+            .init(
+              savedAt: $0.savedAt, duration: $0.duration, fresh: $0.isFresh(),
+              totals: LibraryIndexCheck.canVerify($0) ? $0.totals : nil)
+          },
           complete: snapshot?.items ?? [:], aliased: base.isEmpty ? [:] : LibraryMatch.withAliases(base))
       }.value
       guard let self, !self.isClosed else { return }
@@ -554,9 +558,29 @@ final class LibraryStore {
       self.topUpLibraryIndex()
       if disk.snapshot?.fresh == true {
         self.indexStatus.phase = .complete
+      } else if let totals = disk.snapshot?.totals {
+        self.verifyLibraryIndex(saved: totals)
       } else {
         self.runLibraryIndex()
       }
+    }
+  }
+
+  /// Performance audit (2026-11-10): a saved index older than 30 minutes is
+  /// checked with one count per library instead of being read again in
+  /// full; only a changed count (or no answer) starts the full read.
+  private func verifyLibraryIndex(saved totals: [String: Int]) {
+    let client = client
+    let sections = filter.indexSections(allSections)
+    spawn { [weak self] in
+      let now = await LibraryIndexCheck.counts(client: client, sections: sections)
+      guard let self, !self.isClosed else { return }
+      guard LibraryIndexCheck.unchanged(saved: totals, now: now) else {
+        self.runLibraryIndex()
+        return
+      }
+      self.indexTrusted = true
+      self.indexStatus.phase = .complete
     }
   }
 
@@ -572,6 +596,8 @@ final class LibraryStore {
       var savedAt: Date
       var duration: TimeInterval?
       var fresh: Bool
+      /// The saved per-library counts, when the snapshot can be checked by them.
+      var totals: [String: Int]?
     }
     var snapshot: Saved?
     var complete: [String: PlexMetadata]
@@ -610,7 +636,9 @@ final class LibraryStore {
         let items = try await LibraryIndexRun.run(
           client: client, sections: wanted, checkpointURL: checkpointURL, onProgress: onProgress)
         let duration = Date().timeIntervalSince(started)
-        try? LibraryIndexSnapshot(savedAt: Date(), items: items, duration: duration).save(to: url)
+        // Each library's count, so the next launch can check the index instead of reading it again.
+        let totals = await LibraryIndexCheck.counts(client: client, sections: wanted)
+        try? LibraryIndexSnapshot(savedAt: Date(), items: items, duration: duration, totals: totals).save(to: url)
         let aliased = LibraryMatch.withAliases(LibraryIndexer.merging(items, extras.items))
         await self?.indexFinished(items: items, aliased: aliased, duration: duration)
       } catch {
@@ -779,7 +807,9 @@ final class LibraryStore {
       self.completeItems = complete
       Task.detached(priority: .utility) {
         guard let saved = LibraryIndexSnapshot.load(from: url) else { return }
-        try? LibraryIndexSnapshot(savedAt: saved.savedAt, items: complete, duration: saved.duration).save(to: url)
+        try? LibraryIndexSnapshot(
+          savedAt: saved.savedAt, items: complete, duration: saved.duration, totals: saved.totals
+        ).save(to: url)
       }
     }
   }
@@ -897,8 +927,14 @@ final class LibraryStore {
   /// it, then containing it. Empty until the index has loaded.
   func localSearch(_ text: String, limit: Int = 30) -> [PlexMetadata] {
     guard let libraryIndex else { return [] }
-    return LocalSearch.rank(libraryIndex.libraryItems, text: text, limit: limit)
+    if searchable?.version != indexVersion {
+      searchable = (indexVersion, LocalSearch.Prepared(libraryIndex.libraryItems))
+    }
+    return LocalSearch.rank(searchable?.titles ?? LocalSearch.Prepared([]), text: text, limit: limit)
   }
+
+  /// The index's titles folded for Search, made once per index version.
+  @ObservationIgnored private var searchable: (version: Int, titles: LocalSearch.Prepared)?
 
   /// Search's results with this server's own matches added (KP, 2026-11-09:
   /// "Rocky" + Bollywood found nothing because TMDB's top results for
@@ -1204,6 +1240,8 @@ final class LibraryStore {
       // Astra: Library Quality first (HD drops 4K libraries; 4K keeps one copy, the 4K one).
       let filter = self.filter
       let twins = libraryIndex ?? [:]
+      // Plex's own home rows aren't shown on Home (4.0's five sections are);
+      // they're only the hero's fallback, so no extra pages are read to fill them.
       let rows = await Self.deduplicatedRows(
         continueWatching: filter.apply(
           loadedContinue.isEmpty ? loadedHubs.first(where: \.isContinueWatching)?.items ?? [] : loadedContinue,
@@ -1213,6 +1251,7 @@ final class LibraryStore {
           hub.items = filter.apply(hub.items, twins: twins)
           return hub
         },
+        minimumPerRow: 0,
         more: { [client] key, start in
           filter.apply((try? await client.hubItems(key: key, start: start)) ?? [], twins: twins)
         })
@@ -1226,7 +1265,8 @@ final class LibraryStore {
     homeRowsLoading = false
     spawn { [weak self] in
       guard let self else { return }
-      await prefetchArtwork(hero + continueWatching + hubs.flatMap(\.items))
+      // Only what Home shows (Plex's hub rows aren't on it).
+      await prefetchArtwork(hero + continueWatching)
     }
     // Astra (KP: "all the content should be instantaneous"): every streaming
     // tab is built in the background, one at a time, so switching is instant.
@@ -1343,11 +1383,14 @@ final class LibraryStore {
   /// memory now. Every await comes first, so the newest index is used. Never
   /// waits on cineby: its rows are used once they've arrived.
   private func publishForYou(isCurrent: @escaping () -> Bool) async {
-    async let recentTMDB = loadRecentReleases()
-    async let ratedTMDB = loadTopRated()
+    // Performance audit (2026-11-10): TMDB's lists are only the stand-in
+    // for a cineby row that isn't there. Asked for only then, instead of 14
+    // TMDB requests every launch that were thrown away.
     let rows = cinebyRows ?? ([], [])
-    let recent = rows.recent.isEmpty ? await recentTMDB : rows.recent
-    let rated = rows.greats.isEmpty ? await ratedTMDB : rows.greats
+    let recentTMDB = rows.recent.isEmpty ? Task { await self.loadRecentReleases() } : nil
+    let ratedTMDB = rows.greats.isEmpty ? Task { await self.loadTopRated() } : nil
+    let recent = await recentTMDB?.value ?? rows.recent
+    let rated = await ratedTMDB?.value ?? rows.greats
     guard isCurrent() else { return }
     let index = libraryIndex ?? [:]
     let library = index.libraryItems
@@ -1422,7 +1465,7 @@ final class LibraryStore {
   private nonisolated static func fetchCinebyRows(
     tmdb: TMDBClient, saved: CinebyRowsSnapshot?
   ) async -> (recent: [TMDBItem], greats: [TMDBItem]) {
-    guard let html = try? await CinebyTrending.fetchHTML() else { return ([], []) }
+    guard let html = try? await CinebyPage.shared.html() else { return ([], []) }
     let sections = CinebyTrending.sections(html)
     let known = saved?.known ?? [:]
     func items(_ keywords: [String]) async -> [TMDBItem] {
@@ -1555,9 +1598,18 @@ final class LibraryStore {
       guard !isClosed, !Task.isCancelled else { return }
       guard prewarmed.insert(item.id).inserted else { continue }
       _ = await tmdbArtwork(for: item)
+      // Performance audit (2026-11-10): the hero's titles are decoded ahead
+      // (they're the first thing on screen); the rest are only downloaded,
+      // so their Details still open without the network but don't push the
+      // hero's images out of memory.
+      let decode = homeHero.contains { $0.id == item.id }
       for kind in [ArtKind.heroBackdrop, .scenery, .logo] {
         if let url = await artworkURL(for: item, kind, width: 1920, height: 1080) {
-          _ = await ImagePipeline.shared.image(for: url)
+          if decode {
+            _ = await ImagePipeline.shared.image(for: url)
+          } else {
+            await ImagePipeline.shared.prefetch(url)
+          }
         }
       }
       guard let resolved = try? await resolve(item), let full = try? await details(resolved.ratingKey) else {
@@ -1717,7 +1769,31 @@ final class LibraryStore {
   func playbackEnded(ratingKey: String) {
     detailCache[ratingKey] = nil
     forgetChildren()
-    spawn { [weak self] in await self?.loadHome() }
+    // Performance audit (2026-11-10): only Continue Watching changes when
+    // the player closes. Reloading all of Home also asked the server for its
+    // hub rows and library list, which Home doesn't show, right as the
+    // player's own final progress report goes out.
+    spawn { [weak self] in await self?.refreshAfterPlayback(ratingKey: ratingKey) }
+  }
+
+  /// Continue Watching read again from the server, and the title's hero
+  /// card (its Resume button) if it is in a hero. A failed read keeps what
+  /// is on screen.
+  private func refreshAfterPlayback(ratingKey: String) async {
+    let inHero = (hero + serviceContent.values.flatMap(\.hero)).contains { $0.ratingKey == ratingKey }
+    let fresh = inHero ? Task { try? await self.details(ratingKey) } : nil
+    if let loaded = try? await client.continueWatching(), !isClosed {
+      var dedup = HomeDeduplicator()
+      setContinueWatching(dedup.filter(filter.apply(loaded, swap: false)))
+    }
+    guard let fresh, let item = await fresh.value, !isClosed else { return }
+    func swapped(_ list: [PlexMetadata]) -> [PlexMetadata] {
+      list.map { $0.ratingKey == ratingKey ? item : $0 }
+    }
+    if hero.contains(where: { $0.ratingKey == ratingKey }) { hero = swapped(hero) }
+    for (id, content) in serviceContent where content.hero.contains(where: { $0.ratingKey == ratingKey }) {
+      serviceContent[id]?.hero = swapped(content.hero)
+    }
   }
 
   /// Plex artwork sized for a frame, in steps (see `ImageSize.bucketed`) so a

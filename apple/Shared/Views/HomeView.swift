@@ -24,6 +24,7 @@ struct HomeView: View {
   }
 
   var body: some View {
+    let _ = PerfProbe.count("HomeView.body")
     // The page runs under the title bar / status bar; the switcher above it stays inside the safe area.
     ZStack(alignment: .top) {
       page
