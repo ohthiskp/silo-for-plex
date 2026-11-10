@@ -125,15 +125,30 @@ public enum LocalSearch {
   /// with it first, then those with a word starting with it, then any that
   /// contain it; ties by title.
   public static func rank(_ items: [PlexMetadata], text: String, limit: Int = 30) -> [PlexMetadata] {
+    rank(Prepared(items), text: text, limit: limit)
+  }
+
+  /// The titles folded once (case, accents, colons), so typing in Search
+  /// doesn't fold every title in the library again on each keystroke
+  /// (performance audit, 2026-11-10). Build one per library index.
+  public struct Prepared: Sendable {
+    let entries: [(title: String, item: PlexMetadata)]
+    public init(_ items: [PlexMetadata]) {
+      entries = items.map { (LocalSearch.fold($0.title), $0) }
+    }
+    public var count: Int { entries.count }
+  }
+
+  public static func rank(_ prepared: Prepared, text: String, limit: Int = 30) -> [PlexMetadata] {
     let needle = fold(text)
     guard !needle.isEmpty else { return [] }
+    let word = " " + needle
     var scored: [(Int, PlexMetadata)] = []
-    for item in items {
-      let title = fold(item.title)
+    for (title, item) in prepared.entries {
       let score: Int
       if title.hasPrefix(needle) {
         score = 0
-      } else if title.contains(" " + needle) {
+      } else if title.contains(word) {
         score = 1
       } else if title.contains(needle) {
         score = 2

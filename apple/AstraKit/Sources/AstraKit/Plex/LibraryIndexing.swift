@@ -345,3 +345,47 @@ public final class IndexExtras: @unchecked Sendable {
     set { lock.withLock { stored = newValue } }
   }
 }
+
+/// Astra (performance audit, 2026-11-10): whether a saved library index
+/// still matches the server without reading every library again. Before,
+/// any index older than 30 minutes was read again in full at launch (on
+/// KP's remote server: every page of every library, in the background,
+/// next to Home and playback). Now each library's count is asked once
+/// (`X-Plex-Container-Size=0`, a few bytes): the same counts as when the
+/// index was read mean nothing was added or removed, so the saved index is
+/// trusted; any difference, or no saved counts, reads it in full as before.
+/// Titles added since are also caught by the newest-titles top-up, and the
+/// index is still read in full once it is a day old.
+public enum LibraryIndexCheck {
+  /// How old a saved index may be and still be trusted by its counts alone.
+  public static let maxAge: TimeInterval = 24 * 60 * 60
+
+  /// Each movie and show library's title count now, by section key. Nil
+  /// when any library didn't answer (the caller then reads in full).
+  public static func counts(client: PlexServerClient, sections: [PlexLibrarySection]) async -> [String: Int]? {
+    let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
+    guard !wanted.isEmpty else { return nil }
+    let found = await withTaskGroup(of: (String, Int?).self) { group in
+      for section in wanted {
+        group.addTask { (section.key, try? await client.libraryCount(sectionKey: section.key)) }
+      }
+      var out: [String: Int?] = [:]
+      for await (key, count) in group { out[key] = count }
+      return out
+    }
+    guard found.values.allSatisfy({ $0 != nil }) else { return nil }
+    return found.compactMapValues { $0 }
+  }
+
+  /// True only when both are known and every library's count is the same.
+  public static func unchanged(saved: [String: Int]?, now: [String: Int]?) -> Bool {
+    guard let saved, let now, !saved.isEmpty else { return false }
+    return saved == now
+  }
+
+  /// Whether `snapshot` may be trusted by its counts: it has them and is younger than `maxAge`.
+  public static func canVerify(_ snapshot: LibraryIndexSnapshot, now: Date = Date()) -> Bool {
+    guard let totals = snapshot.totals, !totals.isEmpty else { return false }
+    return now.timeIntervalSince(snapshot.savedAt) < maxAge
+  }
+}
