@@ -865,7 +865,7 @@ class PlezyActivity : FlutterActivity() {
   // Flutter's supported surface-swap path: resume() after pause() hands the engine a new
   // Surface for the same SurfaceTexture, which rebuilds the onscreen surface at the window's
   // current size and schedules a frame. Flutter itself pauses this view only while a
-  // hybrid-composition platform view renders through an image view; Plezy has none, so
+  // hybrid-composition platform view renders through an image view; Astra has none, so
   // resume() never revives a surface Flutter meant to keep paused.
   private fun swapFlutterSurface(textureView: FlutterTextureView) {
     textureView.pause()

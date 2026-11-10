@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Plezy's curated physical-key compatibility labels, grouped for generated output. This is not a complete USB HID usage registry.",
+  "description": "Astra's curated physical-key compatibility labels, grouped for generated output. This is not a complete USB HID usage registry.",
   "groups": [
     {
       "name": "Special",

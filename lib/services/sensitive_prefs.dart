@@ -1,6 +1,6 @@
 /// Preference keys whose stored values are credentials.
 ///
-/// `shared_preferences` is the most credential-dense artifact in a Plezy
+/// `shared_preferences` is the most credential-dense artifact in a Astra
 /// installation. On the desktop platforms it is a single plaintext JSON file
 /// next to the database, and it holds:
 ///

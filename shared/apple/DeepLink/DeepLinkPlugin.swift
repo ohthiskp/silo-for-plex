@@ -36,12 +36,12 @@ final class DeepLinkPlugin: NSObject, FlutterPlugin {
     #endif
   }
 
-  /// The string Dart receives for `url`, or nil when it is not a Plezy link.
+  /// The string Dart receives for `url`, or nil when it is not a Astra link.
   static func forwardedLink(for url: URL) -> String? {
     url.scheme?.lowercased() == scheme ? url.absoluteString : nil
   }
 
-  /// Takes `url` when it is a Plezy link, delivering it now or retaining it for Dart.
+  /// Takes `url` when it is a Astra link, delivering it now or retaining it for Dart.
   static func receive(_ url: URL) -> Bool {
     guard let link = forwardedLink(for: url) else { return false }
     if case let .deliver(event) = delivery.receive(url: link) {

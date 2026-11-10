@@ -105,7 +105,7 @@ class Translations$app$en {
 
 	// Translations
 
-	/// en: 'Plezy'
+	/// en: 'Astra'
 	String get title => 'Astra';
 }
 
@@ -135,10 +135,10 @@ class Translations$appIcon$en {
 	/// en: 'Couldn't change the app icon'
 	String get changeFailed => 'Couldn\'t change the app icon';
 
-	/// en: 'The new icon appears on your home screen once you leave Plezy.'
+	/// en: 'The new icon appears on your home screen once you leave Astra.'
 	String get launcherHint => 'The new icon appears on your home screen once you leave Astra.';
 
-	/// en: 'The new banner appears once you leave Plezy. Android TV can keep showing the old one until the TV restarts.'
+	/// en: 'The new banner appears once you leave Astra. Android TV can keep showing the old one until the TV restarts.'
 	String get tvLauncherHint => 'The new banner appears once you leave Astra. Android TV can keep showing the old one until the TV restarts.';
 
 	late final Translations$appIcon$names$en names = Translations$appIcon$names$en.internal(_root);
@@ -197,7 +197,7 @@ class Translations$auth$en {
 	/// en: 'Quick Connect expired. Try again.'
 	String get quickConnectExpired => 'Quick Connect expired. Try again.';
 
-	/// en: 'Plezy could not safely recover local sign-in and pending playback data. Please sign in again.'
+	/// en: 'Astra could not safely recover local sign-in and pending playback data. Please sign in again.'
 	String get localDataRecoveryRequired => 'Astra could not safely recover local sign-in and pending playback data. Please sign in again.';
 
 	/// en: 'The Plex PIN check was rejected'
@@ -426,10 +426,10 @@ class Translations$supporter$en {
 
 	// Translations
 
-	/// en: 'Plezy Supporter'
+	/// en: 'Astra Supporter'
 	String get title => 'Astra Supporter';
 
-	/// en: 'A one-time purchase that supports Plezy's development and unlocks cosmetic extras:'
+	/// en: 'A one-time purchase that supports Astra's development and unlocks cosmetic extras:'
 	String get intro => 'A one-time purchase that supports Astra\'s development and unlocks cosmetic extras:';
 
 	/// en: 'Preset themes'
@@ -447,7 +447,7 @@ class Translations$supporter$en {
 	/// en: 'App icons'
 	String get appIcons => 'App icons';
 
-	/// en: 'Choose an alternate Plezy icon'
+	/// en: 'Choose an alternate Astra icon'
 	String get appIconsDescription => 'Choose an alternate Astra icon';
 
 	/// en: 'Buy for ${price}'
@@ -462,7 +462,7 @@ class Translations$supporter$en {
 	/// en: 'Your purchase is waiting for payment or approval. The extras unlock as soon as the store completes it.'
 	String get pending => 'Your purchase is waiting for payment or approval. The extras unlock as soon as the store completes it.';
 
-	/// en: 'Thank you for supporting Plezy'
+	/// en: 'Thank you for supporting Astra'
 	String get thankYouTitle => 'Thank you for supporting Astra';
 
 	/// en: 'Your Supporter extras are unlocked.'
@@ -491,7 +491,7 @@ class Translations$settings$en {
 	/// en: 'Settings'
 	String get title => 'Settings';
 
-	/// en: 'Support Plezy'
+	/// en: 'Support Astra'
 	String get supportDeveloper => 'Support Astra';
 
 	/// en: 'Donate via Liberapay to fund development'
@@ -932,7 +932,7 @@ class Translations$settings$en {
 	/// en: 'Settings imported'
 	String get importSettingsSuccess => 'Settings imported';
 
-	/// en: 'This file isn't a valid Plezy settings export'
+	/// en: 'This file isn't a valid Astra settings export'
 	String get importSettingsInvalidFile => 'This file isn\'t a valid Astra settings export';
 
 	/// en: 'Sign in before importing settings'
@@ -1343,7 +1343,7 @@ class Translations$settings$en {
 	/// en: 'Start in fullscreen'
 	String get startInFullscreen => 'Start in fullscreen';
 
-	/// en: 'Open Plezy in fullscreen mode at launch'
+	/// en: 'Open Astra in fullscreen mode at launch'
 	String get startInFullscreenDescription => 'Open Astra in fullscreen mode at launch';
 
 	/// en: 'Exit fullscreen on player close'
@@ -1493,7 +1493,7 @@ class Translations$settings$en {
 	/// en: 'Per show or movie'
 	String get playerScopeTitle => 'Per show or movie';
 
-	/// en: 'Export Plezy settings'
+	/// en: 'Export Astra settings'
 	String get exportDialogTitle => 'Export Astra settings';
 }
 
@@ -2087,10 +2087,10 @@ class Translations$mediaMenu$en {
 		other: '${n} other episodes are stored in the same file and will be deleted too:',
 	);
 
-	/// en: 'Plezy could not check which files this will remove, so it may delete more than the item named above. Cancel and try again, or delete anyway.'
+	/// en: 'Astra could not check which files this will remove, so it may delete more than the item named above. Cancel and try again, or delete anyway.'
 	String get deleteScopeUnverifiedProbeFailed => 'Astra could not check which files this will remove, so it may delete more than the item named above. Cancel and try again, or delete anyway.';
 
-	/// en: 'Your server did not provide file details for this item, so Plezy cannot check which files this will remove. It may delete more than the item named above.'
+	/// en: 'Your server did not provide file details for this item, so Astra cannot check which files this will remove. It may delete more than the item named above.'
 	String get deleteScopeUnverifiedNoFileInfo => 'Your server did not provide file details for this item, so Astra cannot check which files this will remove. It may delete more than the item named above.';
 
 	/// en: 'Media item deleted successfully'
@@ -2914,7 +2914,7 @@ class Translations$profiles$en {
 
 	// Translations
 
-	/// en: 'Add Plezy profile'
+	/// en: 'Add Astra profile'
 	String get addPlezyProfile => 'Add Astra profile';
 
 	/// en: 'Switching profile…'
@@ -3148,7 +3148,7 @@ class Translations$connections$en {
 	/// en: 'Edit ${product} connection'
 	String editMediaBrowserTitle({required Object product}) => 'Edit ${product} connection';
 
-	/// en: 'Add or remove URLs for ${serverName}. Plezy will use the reachable URL with the lowest latency.'
+	/// en: 'Add or remove URLs for ${serverName}. Astra will use the reachable URL with the lowest latency.'
 	String editMediaBrowserIntro({required Object serverName}) => 'Add or remove URLs for ${serverName}. Astra will use the reachable URL with the lowest latency.';
 }
 
@@ -3172,7 +3172,7 @@ class Translations$accountPreferences$en {
 	/// en: 'Every account stores its own preferences. Pick the one to edit.'
 	String get pickAccount => 'Every account stores its own preferences. Pick the one to edit.';
 
-	/// en: 'These options are saved on the account itself, so every app signed in to it uses them — including Plezy on your other devices.'
+	/// en: 'These options are saved on the account itself, so every app signed in to it uses them — including Astra on your other devices.'
 	String get storedOnAccount => 'These options are saved on the account itself, so every app signed in to it uses them — including Astra on your other devices.';
 
 	/// en: 'No accounts to configure'
@@ -3651,13 +3651,13 @@ class Translations$startup$en {
 
 	// Translations
 
-	/// en: 'Plezy could not start'
+	/// en: 'Astra could not start'
 	String get failedTitle => 'Astra could not start';
 
 	/// en: 'Something went wrong during startup. The details below identify what failed.'
 	String get failedBody => 'Something went wrong during startup. The details below identify what failed.';
 
-	/// en: 'Plezy's saved settings file is damaged and has to be rebuilt before Plezy can start. Retrying will not help — choose Repair storage.'
+	/// en: 'Astra's saved settings file is damaged and has to be rebuilt before Astra can start. Retrying will not help — choose Repair storage.'
 	String get failedBodyRepairable => 'Astra\'s saved settings file is damaged and has to be rebuilt before Astra can start. Retrying will not help — choose Repair storage.';
 
 	/// en: 'Step'
@@ -3684,7 +3684,7 @@ class Translations$startup$en {
 	/// en: 'Repair stored data?'
 	String get repairTitle => 'Repair stored data?';
 
-	/// en: 'Plezy's settings file is damaged and cannot be read. Repairing resets every setting to its default.'
+	/// en: 'Astra's settings file is damaged and cannot be read. Repairing resets every setting to its default.'
 	String get repairBodyCommon => 'Astra\'s settings file is damaged and cannot be read. Repairing resets every setting to its default.';
 
 	/// en: 'One saved sign-in is damaged and cannot be read. Repairing removes just that one; your other settings are left alone.'
@@ -3696,7 +3696,7 @@ class Translations$startup$en {
 	/// en: 'The key protecting your saved sign-ins cannot be recovered from this file, so you will have to sign in to every server and profile again. Nothing on your media server is affected.'
 	String get repairBodySignInsLost => 'The key protecting your saved sign-ins cannot be recovered from this file, so you will have to sign in to every server and profile again. Nothing on your media server is affected.';
 
-	/// en: 'Trackers (MAL, AniList, Simkl, Trakt) and Seerr are stored separately and may or may not survive. Plezy will tell you exactly what it kept.'
+	/// en: 'Trackers (MAL, AniList, Simkl, Trakt) and Seerr are stored separately and may or may not survive. Astra will tell you exactly what it kept.'
 	String get repairBodySessionsUncertain => 'Trackers (MAL, AniList, Simkl, Trakt) and Seerr are stored separately and may or may not survive. Astra will tell you exactly what it kept.';
 
 	/// en: 'Repair'
@@ -3708,10 +3708,10 @@ class Translations$startup$en {
 	/// en: 'Storage repaired — restart required'
 	String get repairNeedsRestart => 'Storage repaired — restart required';
 
-	/// en: 'Your data was repaired, but Plezy has to start fresh before it can use it. Close Plezy and open it again.'
+	/// en: 'Your data was repaired, but Astra has to start fresh before it can use it. Close Astra and open it again.'
 	String get restartRequiredBody => 'Your data was repaired, but Astra has to start fresh before it can use it. Close Astra and open it again.';
 
-	/// en: 'Quit Plezy'
+	/// en: 'Quit Astra'
 	String get quitPlezy => 'Quit Astra';
 
 	/// en: 'Repair failed'
@@ -3738,7 +3738,7 @@ class Translations$startup$en {
 	/// en: 'Copy deleted.'
 	String get backupDeleted => 'Copy deleted.';
 
-	/// en: 'Plezy failed to start last time'
+	/// en: 'Astra failed to start last time'
 	String get previousFailureTitle => 'Astra failed to start last time';
 }
 
@@ -4472,7 +4472,7 @@ class Translations$watchTogether$en {
 	/// en: 'Invite copied. Paste it into a message.'
 	String get inviteCopied => 'Invite copied. Paste it into a message.';
 
-	/// en: 'Join my Watch Together room in Plezy: open Watch Together, choose Join Room and enter ${code}.'
+	/// en: 'Join my Watch Together room in Astra: open Watch Together, choose Join Room and enter ${code}.'
 	String inviteMessage({required Object code}) => 'Join my Watch Together room in Astra: open Watch Together, choose Join Room and enter ${code}.';
 
 	/// en: 'Open Watch Together session controls'
@@ -4550,7 +4550,7 @@ class Translations$watchTogether$en {
 	/// en: 'You don't have this video'
 	String get unavailableTitle => 'You don\'t have this video';
 
-	/// en: 'Plezy couldn't find it in your libraries. Pick a copy yourself or search again.'
+	/// en: 'Astra couldn't find it in your libraries. Pick a copy yourself or search again.'
 	String get unavailableDescription => 'Astra couldn\'t find it in your libraries. Pick a copy yourself or search again.';
 
 	/// en: 'Choose a Copy'
@@ -5742,7 +5742,7 @@ class Translations$trakt$en {
 	/// en: 'Disconnect Trakt account?'
 	String get disconnectConfirm => 'Disconnect Trakt account?';
 
-	/// en: 'Plezy will stop sending events to Trakt. You can reconnect any time.'
+	/// en: 'Astra will stop sending events to Trakt. You can reconnect any time.'
 	String get disconnectConfirmBody => 'Astra will stop sending events to Trakt. You can reconnect any time.';
 
 	/// en: 'Real-time scrobbling'
@@ -5754,7 +5754,7 @@ class Translations$trakt$en {
 	/// en: 'Sync watched status'
 	String get watchedSync => 'Sync watched status';
 
-	/// en: 'When you mark items as watched in Plezy, they are also marked as watched on Trakt.'
+	/// en: 'When you mark items as watched in Astra, they are also marked as watched on Trakt.'
 	String get watchedSyncDescription => 'When you mark items as watched in Astra, they are also marked as watched on Trakt.';
 }
 
@@ -5793,7 +5793,7 @@ class Translations$seerr$en {
 	/// en: 'Email'
 	String get email => 'Email';
 
-	/// en: 'This Seerr instance offers no sign-in method Plezy supports.'
+	/// en: 'This Seerr instance offers no sign-in method Astra supports.'
 	String get noSignInMethods => 'This Seerr instance offers no sign-in method Astra supports.';
 
 	/// en: 'Instance'
@@ -5802,7 +5802,7 @@ class Translations$seerr$en {
 	/// en: 'Disconnect Seerr?'
 	String get disconnectConfirm => 'Disconnect Seerr?';
 
-	/// en: 'Plezy will forget this Seerr instance. Reconnect any time.'
+	/// en: 'Astra will forget this Seerr instance. Reconnect any time.'
 	String get disconnectConfirmBody => 'Astra will forget this Seerr instance. Reconnect any time.';
 
 	/// en: 'Request'
@@ -5877,7 +5877,7 @@ class Translations$seerr$en {
 	/// en: 'No Seerr instance at ${url} (HTTP ${status})'
 	String noInstanceAtUrl({required Object url, required Object status}) => 'No Seerr instance at ${url} (HTTP ${status})';
 
-	/// en: 'An authenticating reverse proxy (SSO or HTTP auth) answered instead of Seerr. Plezy cannot sign in through it: let Seerr's /api/v1 path bypass the proxy for this app, or use an address that reaches Seerr directly.'
+	/// en: 'An authenticating reverse proxy (SSO or HTTP auth) answered instead of Seerr. Astra cannot sign in through it: let Seerr's /api/v1 path bypass the proxy for this app, or use an address that reaches Seerr directly.'
 	String get behindAuthProxy => 'An authenticating reverse proxy (SSO or HTTP auth) answered instead of Seerr. Astra cannot sign in through it: let Seerr\'s /api/v1 path bypass the proxy for this app, or use an address that reaches Seerr directly.';
 
 	/// en: 'Enter a server address like https://seerr.example.com'
@@ -5949,7 +5949,7 @@ class Translations$services$en {
 	/// en: 'Disconnect ${service}?'
 	String disconnectConfirm({required Object service}) => 'Disconnect ${service}?';
 
-	/// en: 'Plezy will stop updating ${service}. Reconnect any time.'
+	/// en: 'Astra will stop updating ${service}. Reconnect any time.'
 	String disconnectConfirmBody({required Object service}) => 'Astra will stop updating ${service}. Reconnect any time.';
 
 	/// en: 'Couldn't connect to ${service}. Try again.'
@@ -6121,7 +6121,7 @@ class Translations$deepLinks$en {
 
 	// Translations
 
-	/// en: 'This Plezy link isn't valid.'
+	/// en: 'This Astra link isn't valid.'
 	String get invalid => 'This Astra link isn\'t valid.';
 
 	/// en: 'No profile matches "${profile}".'
@@ -7621,7 +7621,7 @@ class Translations$watchTogether$errors$en {
 	/// en: 'Too many attempts. Wait a moment and try again.'
 	String get rateLimited => 'Too many attempts. Wait a moment and try again.';
 
-	/// en: 'This version of Plezy can't use the relay. Update the app.'
+	/// en: 'This version of Astra can't use the relay. Update the app.'
 	String get clientBlocked => 'This version of Astra can\'t use the relay. Update the app.';
 
 	/// en: 'Only the host can do that.'
@@ -7666,16 +7666,16 @@ class Translations$downloads$backgroundWarning$en {
 	/// en: 'Background downloads may be limited'
 	String get sheetTitleDegraded => 'Background downloads may be limited';
 
-	/// en: 'Android is preventing Plezy from downloading reliably in the background.'
+	/// en: 'Android is preventing Astra from downloading reliably in the background.'
 	String get sheetIntro => 'Android is preventing Astra from downloading reliably in the background.';
 
-	/// en: 'Your device is limiting when Plezy can download in the background.'
+	/// en: 'Your device is limiting when Astra can download in the background.'
 	String get sheetIntroDegraded => 'Your device is limiting when Astra can download in the background.';
 
-	/// en: 'Plezy's background usage is restricted. Set its battery or background usage to "Unrestricted".'
+	/// en: 'Astra's background usage is restricted. Set its battery or background usage to "Unrestricted".'
 	String get reasonBackgroundRestricted => 'Astra\'s background usage is restricted. Set its battery or background usage to "Unrestricted".';
 
-	/// en: 'Android has put Plezy in a restricted standby state. Set its battery usage to "Unrestricted".'
+	/// en: 'Android has put Astra in a restricted standby state. Set its battery usage to "Unrestricted".'
 	String get reasonStandbyRestricted => 'Android has put Astra in a restricted standby state. Set its battery usage to "Unrestricted".';
 
 	/// en: 'Download notifications are turned off, so progress and controls may be unavailable.'
@@ -7687,7 +7687,7 @@ class Translations$downloads$backgroundWarning$en {
 	/// en: 'Data Saver is on, which blocks background downloads on mobile data. Downloads should still run on Wi-Fi.'
 	String get reasonDataSaver => 'Data Saver is on, which blocks background downloads on mobile data. Downloads should still run on Wi-Fi.';
 
-	/// en: 'Downloads repeatedly stopped while Plezy was in the background. Check Plezy's battery or background usage settings.'
+	/// en: 'Downloads repeatedly stopped while Astra was in the background. Check Astra's battery or background usage settings.'
 	String get reasonOemUnknown => 'Downloads repeatedly stopped while Astra was in the background. Check Astra\'s battery or background usage settings.';
 
 	/// en: 'Open settings'
@@ -7798,7 +7798,7 @@ class Translations$companionRemote$pairing$en {
 
 	// Translations
 
-	/// en: 'Plezy devices with the same Plex account appear here'
+	/// en: 'Astra devices with the same Plex account appear here'
 	String get discoveryDescription => 'Astra devices with the same Plex account appear here';
 
 	/// en: '192.168.1.100:48632'
@@ -7813,7 +7813,7 @@ class Translations$companionRemote$pairing$en {
 	/// en: 'No devices found on your network'
 	String get noDevicesFound => 'No devices found on your network';
 
-	/// en: 'Open Plezy on desktop and use the same Wi-Fi'
+	/// en: 'Open Astra on desktop and use the same Wi-Fi'
 	String get noDevicesHint => 'Open Astra on desktop and use the same Wi-Fi';
 
 	/// en: 'Available Devices'
@@ -7834,7 +7834,7 @@ class Translations$companionRemote$pairing$en {
 	/// en: 'Connection timed out. Use the same network on both devices.'
 	String get connectionTimedOut => 'Connection timed out. Use the same network on both devices.';
 
-	/// en: 'Device not found. Make sure Plezy is running on the host.'
+	/// en: 'Device not found. Make sure Astra is running on the host.'
 	String get sessionNotFound => 'Device not found. Make sure Astra is running on the host.';
 
 	/// en: 'Authentication failed. Both devices need the same Plex account.'
@@ -8002,7 +8002,7 @@ class Translations$services$simklReconnect$en {
 	/// en: 'Reconnect Simkl'
 	String get title => 'Reconnect Simkl';
 
-	/// en: 'Simkl is retiring the sign-in method this connection uses. Reconnecting opens simkl.com to approve Plezy — Plezy never sees your password. Your watch history stays on Simkl.'
+	/// en: 'Simkl is retiring the sign-in method this connection uses. Reconnecting opens simkl.com to approve Astra — Astra never sees your password. Your watch history stays on Simkl.'
 	String get subtitle => 'Simkl is retiring the sign-in method this connection uses. Reconnecting opens simkl.com to approve Astra — Astra never sees your password. Your watch history stays on Simkl.';
 }
 
@@ -8014,7 +8014,7 @@ class Translations$services$deviceCode$en {
 
 	// Translations
 
-	/// en: 'Activate Plezy on ${service}'
+	/// en: 'Activate Astra on ${service}'
 	String title({required Object service}) => 'Activate Astra on ${service}';
 
 	/// en: 'Scan the QR code, or visit the address below and enter this code:'

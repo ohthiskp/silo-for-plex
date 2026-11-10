@@ -82,7 +82,7 @@ fi
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
-APPDIR="$WORK_DIR/Plezy.AppDir"
+APPDIR="$WORK_DIR/Astra.AppDir"
 
 echo "==> Assembling AppDir"
 cp -a "$BUNDLE_DIR" "$APPDIR"

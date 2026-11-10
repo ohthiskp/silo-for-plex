@@ -100,14 +100,14 @@ void main() {
     });
 
     test('accepts a directory inside the configured custom download root', () {
-      final task = _rootTask('t', 'srv:item-1', '/Volumes/External/Plezy/Movies/Arrival (2016)');
+      final task = _rootTask('t', 'srv:item-1', '/Volumes/External/Astra/Movies/Arrival (2016)');
 
       expect(
         isRelocatedRootTaskDirectory(
           task: task,
           rootBasePath: rootBase,
           baseAppDirPath: baseAppDir,
-          customRootPath: '/Volumes/External/Plezy',
+          customRootPath: '/Volumes/External/Astra',
         ),
         isFalse,
       );

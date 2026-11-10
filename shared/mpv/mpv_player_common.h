@@ -543,7 +543,7 @@ inline void ApplyCommonStartupOptions(mpv_handle* mpv, bool audio_only) {
   mpv_set_option_string(mpv, "input-default-bindings", "no");
   mpv_set_option_string(mpv, "input-vo-keyboard", "no");
   mpv_set_option_string(mpv, "osc", "no");
-  // Every URL Plezy opens is a media-server stream or a local file, never a
+  // Every URL Astra opens is a media-server stream or a local file, never a
   // site mpv's bundled ytdl_hook could resolve. Loading it costs an on_load
   // hook per open and, on a failed open, spawns yt-dlp with the full stream
   // URL — access token included — in its argv, where other processes can read

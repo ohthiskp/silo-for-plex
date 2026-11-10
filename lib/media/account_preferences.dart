@@ -34,7 +34,7 @@ enum AccountPreferenceKey {
 
   /// Play the next episode automatically. Jellyfin
   /// `EnableNextEpisodeAutoPlay`. MediaBrowser only — Plex keeps its twin in
-  /// the per-device `experience` blob, which Plezy deliberately never writes.
+  /// the per-device `experience` blob, which Astra deliberately never writes.
   autoPlayNextEpisode(AccountPreferenceValueKind.boolean),
 
   /// List episodes the library knows about but has no file for. Jellyfin
@@ -69,11 +69,11 @@ enum AccountPreferenceKey {
   ///
   /// Jellyfin only, and the one key here with no field of its own on the
   /// server: `/Shows/NextUp` takes `EnableRewatching` per request and
-  /// `UserConfiguration` has no twin, so Plezy stores it in the account's
+  /// `UserConfiguration` has no twin, so Astra stores it in the account's
   /// `DisplayPreferences` custom prefs and sends the parameter itself. That is
   /// a deliberate departure from jellyfin-web, which keeps the same switch in
   /// browser local storage and therefore loses it on every new device; the
-  /// store Plezy uses is keyed by user, so the choice follows the account.
+  /// store Astra uses is keyed by user, so the choice follows the account.
   rewatchingInNextUp(AccountPreferenceValueKind.boolean);
 
   const AccountPreferenceKey(this.valueKind);
@@ -274,7 +274,7 @@ class AccountPreferences implements MediaServerUserProfile {
 /// reasons: Plex Web sends only the changed keys as query parameters, and
 /// Jellyfin's `POST /Users/Configuration` replaces the whole object against
 /// constructor defaults, so its transport must merge the patch into a freshly
-/// read `Configuration` and preserve the fields Plezy does not model
+/// read `Configuration` and preserve the fields Astra does not model
 /// (`OrderedViews`, `CastReceiverId`, …).
 class AccountPreferencesPatch {
   AccountPreferencesPatch(Map<AccountPreferenceKey, Object?> values)
@@ -338,7 +338,7 @@ class AccountPreferencesCapabilities {
   /// no row in the Account preferences screen: the local
   /// `SettingsService.rememberTrackSelections` toggle is the one opt-in, the
   /// only answer available for Plex, and the one the playback path reads. The
-  /// server, though, records and applies the stream indexes Plezy reports
+  /// server, though, records and applies the stream indexes Astra reports
   /// only while these flags are on
   /// ([MediaBrowserDialect.persistsTrackSelectionsViaAccountFlags]), so
   /// `TrackManager` turns the flag for a picked track type on when the local
@@ -347,7 +347,7 @@ class AccountPreferencesCapabilities {
   ///
   /// [AccountPreferenceKey.autoPlayNextEpisode] is read and round-tripped —
   /// the whole-object write must never reset it — but stays deliberately
-  /// **not** editable: Plezy owns that decision locally (`autoPlayNextEpisode`,
+  /// **not** editable: Astra owns that decision locally (`autoPlayNextEpisode`,
   /// also a toggle in the player's settings sheet) and the server plays no part
   /// in it.
   static const jellyfin = AccountPreferencesCapabilities(

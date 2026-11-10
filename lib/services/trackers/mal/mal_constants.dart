@@ -8,7 +8,7 @@ enum MalRankingType {
 
 /// Bundled MyAnimeList API endpoints and public client ID.
 ///
-/// The authorize flow lives in the Plezy relay's OAuth proxy; see
+/// The authorize flow lives in the upstream relay's OAuth proxy; see
 /// `lib/services/trackers/oauth_proxy_client.dart`. Only the refresh path
 /// (public-client, no redirect) calls MAL directly from the device.
 class MalConstants {

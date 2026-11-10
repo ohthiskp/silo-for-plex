@@ -91,7 +91,7 @@ mixin AnimeListTrackerBase<TClient extends DisposableTrackerClient> on TrackerBa
   }
 
   /// Unwatching is a progress write, never a removal: the list entry carries
-  /// dates, score, tags and rewatch history that Plezy cannot restore (issue
+  /// dates, score, tags and rewatch history that Astra cannot restore (issue
   /// #2424). A completed entry is left alone — it is a finished record, and new
   /// progress on it becomes a rewatch through [markWatched]. An in-progress
   /// entry goes back to zero and keeps its rewatch flag.

@@ -85,7 +85,7 @@ internal object SystemShelfLifecycle {
   fun <T> exclusive(block: () -> T): T = synchronized(operationLock, block)
 }
 
-/** Owns Plezy's durable Android TV Watch Next rows and their local artwork. */
+/** Owns Astra's durable Android TV Watch Next rows and their local artwork. */
 class WatchNextProvider internal constructor(
   private val context: Context,
   private val lifecycleLease: SystemShelfLifecycle.Lease?,

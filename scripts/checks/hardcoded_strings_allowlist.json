@@ -3,7 +3,7 @@
     "Plex": "Brand name",
     "Jellyfin": "Brand name",
     "Emby": "Brand name",
-    "Plezy": "Brand name",
+    "Astra": "Brand name",
     "Simkl": "Brand name",
     "BL": "Technical token",
     "EL": "Technical token",
@@ -72,7 +72,7 @@
     "Display: ${DevicePerformance.describeDisplay()}": "English bug-report diagnostic"
   },
   "lib/services/startup_diagnostics.dart": {
-    "Plezy startup failure": "English bug-report diagnostic",
+    "Astra startup failure": "English bug-report diagnostic",
     "Version: $appVersion": "English bug-report diagnostic",
     "Platform: $platform": "English bug-report diagnostic",
     "When: ${timestamp.toUtc().toIso8601String()}": "English bug-report diagnostic",

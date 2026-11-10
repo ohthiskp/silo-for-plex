@@ -748,7 +748,7 @@ class WatchTogetherProvider extends ChangeNotifier {
 }
 
 /// [name] as an Open Watch Party display name: 1 to 32 code points of
-/// protocol text; "Plezy" when nothing is left.
+/// protocol text; "Astra" when nothing is left.
 String _sanitizedName(String name) {
   final text = descriptorText(name);
   if (text == null) return 'Astra';

@@ -32,7 +32,7 @@ class AppIconSetting extends StatelessWidget {
   /// hidden in this build and the device can switch its icon (iOS, iPadOS,
   /// tvOS, Android phones and Android TV). Rebuilds [context] when either
   /// changes.
-  // Silo: the alternate icons are Plezy's artwork, so the picker is hidden.
+  // Astra: the alternate icons are upstream artwork, so the picker is hidden.
   static bool isShown(BuildContext context) => false;
 
   @override

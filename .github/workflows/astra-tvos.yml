@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: silo-tvos
+  group: astra-tvos
   cancel-in-progress: false
 
 env:
@@ -94,7 +94,7 @@ jobs:
           PLATFORM: IOS
         run: |
           python3 -m pip install --quiet --break-system-packages pyjwt cryptography 2>/dev/null || python3 -m pip install --quiet pyjwt cryptography
-          python3 tool/silo/asc_preflight.py
+          python3 tool/astra/asc_preflight.py
 
       - name: Setup Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -136,7 +136,7 @@ jobs:
         run: tvos/scripts/pod_install.sh
 
       - name: Temporary App Store signing (certificate + profiles)
-        run: python3 tool/silo/asc_tv_signing.py setup
+        run: python3 tool/astra/asc_tv_signing.py setup
 
       - name: Point the Xcode targets at those profiles
         run: |
@@ -203,7 +203,7 @@ jobs:
 
       - name: Remove temporary signing
         if: always()
-        run: python3 tool/silo/asc_tv_signing.py cleanup || true
+        run: python3 tool/astra/asc_tv_signing.py cleanup || true
 
       - name: Remove API key
         if: always()

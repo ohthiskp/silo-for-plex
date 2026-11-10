@@ -205,7 +205,7 @@ open class MpvPlayerPlugin(
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
-    // The video core owns views and window services from this Activity. Plezy
+    // The video core owns views and window services from this Activity. Astra
     // does not retain the engine across configuration recreation, so there is
     // no Activity-transfer contract under which that core may survive.
     if (!audioOnly) {

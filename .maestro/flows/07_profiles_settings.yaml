@@ -15,7 +15,7 @@ tags:
     visible: "Switch Profile"
     timeout: 10000
 - assertVisible: "(?s).*Maestro.*"
-- tapOn: "Add Plezy profile"
+- tapOn: "Add Astra profile"
 - extendedWaitUntil:
     visible: "New profile"
     timeout: 10000

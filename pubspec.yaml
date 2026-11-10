@@ -1,5 +1,5 @@
 name: plezy
-description: "Astra: a media app for your Plex server, based on Plezy"
+description: "Astra: a media app for your Plex server"
 publish_to: "none"
 version: 3.0.0+1
 

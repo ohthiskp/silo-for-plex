@@ -5,7 +5,7 @@ import 'media_backend.dart';
 /// Jellyfin forked from Emby 3.5.2, so the two still share almost their entire
 /// wire contract: identical `BaseItemDto` shapes, the same `/Items` query
 /// grammar, the `MediaBrowser` Authorization scheme, the `X-Emby-Token` header
-/// and a token query fallback. Plezy therefore drives both through one
+/// and a token query fallback. Astra therefore drives both through one
 /// client stack ([JellyfinClient]) and keeps every delta in this one type.
 ///
 /// Verified against Jellyfin 10.10.7/10.11 and Emby 4.9.5:
@@ -196,7 +196,7 @@ enum MediaBrowserDialect {
   /// Jellyfin-only. Measured on Emby 4.9.5: `/Users/{uid}/Items/Resume`
   /// returns the genuinely in-progress items *and* one zero-position next
   /// episode per started series — Emby's own home merges both into one shelf —
-  /// and no `Filters` value removes the extra rows. Plezy models Continue
+  /// and no `Filters` value removes the extra rows. Astra models Continue
   /// Watching and Next Up as separate rows, so the Emby client splits the
   /// response by `UserData.PlaybackPositionTicks` instead: positive rows feed
   /// Continue Watching, zero-position episode rows feed Next Up. The route has

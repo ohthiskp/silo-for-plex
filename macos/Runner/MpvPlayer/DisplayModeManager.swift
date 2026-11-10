@@ -10,7 +10,7 @@ import Cocoa
 /// (47.95, 59.94), not in Windows' whole hertz.
 ///
 /// Switches are app-scoped (`.forAppOnly`): macOS hands every display back to
-/// the user's own configuration when Plezy quits or crashes, so there is no
+/// the user's own configuration when Astra quits or crashes, so there is no
 /// recovery record to keep, and restoring does the same thing on purpose.
 final class DisplayModeManager {
   private struct PendingSwitch {

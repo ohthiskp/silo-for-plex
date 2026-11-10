@@ -129,7 +129,7 @@ class AppleUploadTest(unittest.TestCase):
             deploy_dir = Path(tmp) / "deploy"
             archive = Path(tmp) / "Runner.xcarchive"
             archive.mkdir()
-            ipa = deploy_dir / "export-tvos/Plezy.ipa"
+            ipa = deploy_dir / "export-tvos/Astra.ipa"
             with (
                 mock.patch.object(deploy, "DEPLOY_DIR", deploy_dir),
                 mock.patch.object(deploy, "run") as run_command,
@@ -148,7 +148,7 @@ class AppleUploadTest(unittest.TestCase):
 
     def test_upload_uses_altool_with_api_key(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            ipa = Path(tmp) / "Plezy.ipa"
+            ipa = Path(tmp) / "Astra.ipa"
             ipa.write_bytes(b"ipa")
             with mock.patch.object(deploy, "run") as run_command:
                 deploy._upload_ipa(self._context(), ipa, "tvos")

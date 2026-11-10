@@ -167,7 +167,7 @@ String watchLengthDifference(int? deltaMs) {
       : t.watchTogether.lengthShorter(duration: duration);
 }
 
-/// The app part of a participant's `client` ("Plezy/2.23.0" -> "Plezy").
+/// The app part of a participant's `client` ("Astra/2.23.0" -> "Astra").
 String watchClientApp(String client) {
   final slash = client.indexOf('/');
   return slash < 0 ? client : client.substring(0, slash);

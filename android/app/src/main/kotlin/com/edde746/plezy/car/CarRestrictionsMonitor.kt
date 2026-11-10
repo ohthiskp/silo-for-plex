@@ -16,8 +16,8 @@ import android.view.Display
 /**
  * Reads Android Automotive OS driver-distraction state straight from the platform.
  *
- * Plezy previously derived "may audio play?" from the Flutter activity lifecycle, which conflates
- * two different things: a car that is driving, and a car that is parked with Plezy simply not in
+ * Astra previously derived "may audio play?" from the Flutter activity lifecycle, which conflates
+ * two different things: a car that is driving, and a car that is parked with Astra simply not in
  * the foreground. Only the first must silence playback (car app quality `DD-2`/`DD-3`); the second
  * is ordinary background audio. [CarUxRestrictionsManager] is the signal the platform documents for
  * apps where lifecycle reaction is not sufficient.

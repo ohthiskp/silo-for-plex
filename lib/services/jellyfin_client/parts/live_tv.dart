@@ -250,7 +250,7 @@ class _JellyfinLiveTvSupport implements LiveTvSupport {
             channelKey,
             isLiveTv: true,
             // A posted MediaBrowser DeviceProfile defaults an omitted
-            // MaxStreamingBitrate to 8 Mbps. Keep Original on Plezy's normal
+            // MaxStreamingBitrate to 8 Mbps. Keep Original on Astra's normal
             // 100 Mbps negotiation ceiling: it stays above the server's 40 Mbps
             // unknown-live estimate without inheriting that implicit 8 Mbps cap.
             maxStreamingBitrate: quality.isOriginal ? 100_000_000 : (quality.videoBitrateKbps ?? 100_000) * 1000,

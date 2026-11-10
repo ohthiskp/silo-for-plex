@@ -100,7 +100,7 @@ class DeviceIdentityService {
 }
 
 /// Makes a free-form device name safe to send as an HTTP header value on
-/// every transport Plezy uses: folds Latin letters to their base form
+/// every transport Astra uses: folds Latin letters to their base form
 /// (`Bjørn PC` → `Bjorn PC`), drops whatever is still outside printable
 /// ASCII, trims, and returns null when nothing usable remains.
 ///

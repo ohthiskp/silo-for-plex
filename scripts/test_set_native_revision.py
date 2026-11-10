@@ -5,7 +5,7 @@ The script moves ten pin sites at once and promises all-or-nothing: either
 every Apple requirement, every SwiftPM lock, mpv-build.lock.json and the
 Android build's Gradle verification metadata move to the new commit together,
 or nothing is written. These tests drive the real script end to end against a
-synthetic Plezy tree and a real (temporary) git checkout of the unified
+synthetic Astra tree and a real (temporary) git checkout of the unified
 mpv-build repo, because the failure that matters -- a half-moved pin -- can
 only happen across process and file boundaries.
 
@@ -379,7 +379,7 @@ class SetNativeRevisionTest(unittest.TestCase):
 
     def test_default_source_is_the_sibling_checkout(self) -> None:
         # No --repo: the ../mpv-build convention must find the checkout
-        # sitting next to the Plezy tree.
+        # sitting next to the Astra tree.
         _, commit = self._make_mpv_build()
 
         result = self._run(commit)
@@ -577,7 +577,7 @@ class SetNativeRevisionTest(unittest.TestCase):
         self.assertFalse((self.root / "mpv-build.lock.json").exists())
 
     def test_android_without_the_aar_is_omitted_and_verifies_nothing(self) -> None:
-        # A commit that publishes only the tarballs gives Plezy no android
+        # A commit that publishes only the tarballs gives Astra no android
         # entry; Gradle then fails on the missing group rather than guess.
         artifacts = artifacts_fixture()
         del artifacts["platforms"]["android"]["libraries"]["mpv-android"]

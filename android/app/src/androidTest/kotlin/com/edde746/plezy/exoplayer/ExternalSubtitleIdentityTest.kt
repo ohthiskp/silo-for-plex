@@ -93,7 +93,7 @@ class ExternalSubtitleIdentityTest {
               listOf(
                 MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(subtitle))
                   .setId(ExternalSubtitleIds.idFor(0))
-                  .setLabel("Plezy sidecar")
+                  .setLabel("Astra sidecar")
                   .setLanguage("en")
                   .setMimeType(MimeTypes.APPLICATION_SUBRIP)
                   .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)

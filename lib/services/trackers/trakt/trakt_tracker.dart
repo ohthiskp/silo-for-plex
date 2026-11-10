@@ -22,7 +22,7 @@ import 'trakt_client.dart';
 /// at or above 80% progress records a play, below that it stores a resumable
 /// position. `POST /sync/history` covers the marks that never pass through the
 /// player: manual, container, offline replay, external players, and watch state
-/// Plezy observes changing on the server.
+/// Astra observes changing on the server.
 ///
 /// Unlike the other services Trakt splits its user settings in two: the
 /// scrobble toggle gates real-time reports ([canReportPlayback]) and a separate

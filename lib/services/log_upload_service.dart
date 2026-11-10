@@ -3,7 +3,7 @@ import 'dart:convert';
 import '../utils/media_server_http_client.dart';
 import 'plezy_server.dart';
 
-/// Plezy server endpoint that returns a short, quotable Log ID.
+/// upstream server endpoint that returns a short, quotable Log ID.
 const String logUploadEndpoint = '$plezyServerBaseUrl/logs';
 
 /// The server's `/logs` accepts 1 MiB. The in-memory buffer intentionally remains

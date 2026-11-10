@@ -37,8 +37,8 @@ RUN ./seed.sh
 
 FROM ${JELLYFIN_IMAGE}
 
-LABEL org.opencontainers.image.title="Plezy Jellyfin demo server" \
-      org.opencontainers.image.description="Ready-to-run Jellyfin server with Plezy's deterministic codec demo catalog" \
+LABEL org.opencontainers.image.title="Astra Jellyfin demo server" \
+      org.opencontainers.image.description="Ready-to-run Jellyfin server with Astra's deterministic codec demo catalog" \
       org.opencontainers.image.source="https://github.com/edde746/plezy"
 
 COPY --from=seed /media /media
