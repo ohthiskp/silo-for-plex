@@ -102,6 +102,8 @@ struct PlayerOverlay: View {
       chrome
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible)
+        // Hidden controls aren't there for VoiceOver (or the UI tests) either.
+        .accessibilityHidden(!visible)
 
       // Astra 4.0: Next Episode in the last 15 s of an episode, tap only.
       // Only in the tree for an episode with a next one, so it never sits
