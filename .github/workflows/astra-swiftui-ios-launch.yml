@@ -5,7 +5,7 @@ run-name: SwiftUI iPhone launch check ${{ github.sha }}
 # prints any crash report, so launch crashes can be seen without a phone.
 on:
   push:
-    branches: [claude/project-thread-otuzui]
+    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r]
     paths:
       - "apple/**"
       - ".github/workflows/astra-swiftui-ios-launch.yml"
@@ -102,6 +102,15 @@ jobs:
           shot libraries -AstraDemoTab libraries
           shot details-movie -AstraDemoOpen 101
           shot details-show -AstraDemoOpen 205
+          # The player (KP's 2026-11-10 redesign) over a 1 h 56 m test video, paused in each state.
+          brew install ffmpeg > /dev/null 2>&1 || true
+          ffmpeg -loglevel error -f lavfi -i testsrc2=duration=6960:size=1280x720:rate=1 \
+            -c:v libx264 -preset ultrafast -g 10 -pix_fmt yuv420p "$RUNNER_TEMP/player.mp4" || true
+          if [ -f "$RUNNER_TEMP/player.mp4" ]; then
+            shot player-controls -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer controls
+            shot player-more -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer more
+            shot player-scrub -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer scrub
+          fi
           ls -la "$RUNNER_TEMP/shots"
           # Small JPEGs printed into the log, for reviewers who can read logs but not artifacts.
           for f in "$RUNNER_TEMP"/shots/*.png; do

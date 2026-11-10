@@ -146,7 +146,7 @@ public enum PlaybackResolver {
       metadataKey: item.key ?? "/library/metadata/\(item.ratingKey)",
       durationMs: item.duration ?? part.duration ?? media.duration ?? 0,
       title: item.displayTitle,
-      subtitle: item.type == .episode ? [item.episodeLabel, item.title].compactMap { $0 }.joined(separator: "  ") : nil,
+      subtitle: item.type == .episode ? [item.episodeLabel, item.title].compactMap { $0 }.joined(separator: " · ") : nil,
       media: media,
       part: part,
       mpvURL: edl(media.parts.compactMap { $0.key.map { client.baseURL.appending(plexPath: $0) } })
@@ -277,6 +277,8 @@ public struct StreamSelection: Equatable, Sendable {
   /// Plex stream ids by kind and container index, to save a choice back.
   public var audioIDs: [Int: Int]
   public var subtitleIDs: [Int: Int]
+  /// Plex's names for the audio tracks by container index ("English (TrueHD 7.1 Atmos)").
+  public var audioTitles: [Int: String] = [:]
 
   public init(part: PlexPart) {
     let audio = part.streams.filter { $0.streamType == 2 }
@@ -293,7 +295,13 @@ public struct StreamSelection: Equatable, Sendable {
         language: stream.languageCode, codec: stream.codec, selected: stream.selected == true)
     }
     var audioIDs: [Int: Int] = [:]
-    for stream in audio { if let index = stream.index { audioIDs[index] = stream.id } }
+    var audioTitles: [Int: String] = [:]
+    for stream in audio {
+      guard let index = stream.index else { continue }
+      audioIDs[index] = stream.id
+      if let title = stream.extendedDisplayTitle ?? stream.displayTitle { audioTitles[index] = title }
+    }
+    self.audioTitles = audioTitles
     var subtitleIDs: [Int: Int] = [:]
     for stream in subs { if let index = stream.index, stream.key == nil { subtitleIDs[index] = stream.id } }
     self.audioIDs = audioIDs

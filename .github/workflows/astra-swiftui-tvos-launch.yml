@@ -8,7 +8,7 @@ run-name: SwiftUI Apple TV launch check ${{ github.sha }}
 # JPEGs (ASTRA-SHOT-BEGIN … END) and uploaded as the "tvos-launch" artifact.
 on:
   push:
-    branches: [claude/project-thread-otuzui]
+    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r]
     paths:
       - "apple/**"
       - ".github/workflows/astra-swiftui-tvos-launch.yml"
@@ -103,6 +103,17 @@ jobs:
           shot search -AstraDemoTab search
           shot libraries -AstraDemoTab libraries
           shot details-movie -AstraDemoOpen 101
+          # The player (KP's 2026-11-10 redesign) over a 1 h 56 m test video, paused in each state.
+          brew install ffmpeg > /dev/null 2>&1 || true
+          ffmpeg -loglevel error -f lavfi -i testsrc2=duration=6960:size=1920x1080:rate=1 \
+            -c:v libx264 -preset ultrafast -g 10 -pix_fmt yuv420p "$RUNNER_TEMP/player.mp4" || true
+          if [ -f "$RUNNER_TEMP/player.mp4" ]; then
+            shot player-controls -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer controls
+            shot player-scrub -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer scrub
+            shot player-info -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer info
+            shot player-settings -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer settings
+            shot player-subtitles -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer subtitles
+          fi
           ls -la "$RUNNER_TEMP/shots"
           for f in "$RUNNER_TEMP"/shots/*.png; do
             sips -s format jpeg -s formatOptions 55 -Z 1280 "$f" --out "${f%.png}.jpg" > /dev/null
