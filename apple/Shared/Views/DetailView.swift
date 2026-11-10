@@ -769,10 +769,12 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     /// off by it (KP, 2026-11-09: "the poster should be more down").
     static let backdropShare: CGFloat = 1.08
     static let backdropTop: CGFloat = 56
-    static let logoWidth: CGFloat = 0.5
-    static let logoHeight: CGFloat = 64
-    /// The centred logo's box (KP's mockup, 2026-11-09).
-    static let logoBox = CGSize(width: 210, height: 130)
+    /// The centred logo's box: as wide as the text column and 120 pt tall, so
+    /// every logo grows until it meets one edge. Thin wide wordmarks (The
+    /// Odyssey) fill the width and tall ones fill the height (KP, 2026-11-10:
+    /// "Why is odyssey logo so small bro… make those logos way bigger").
+    static let logoMaxWidth: CGFloat = 360
+    static let logoHeight: CGFloat = 120
     static let sectionGap: CGFloat = 26
     static let actionColumn: CGFloat = 50
     static let actionCircle: CGFloat = 50
@@ -807,11 +809,13 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       let logoTop = min(360, max(280, viewport * 0.377))
       return VStack(alignment: .leading, spacing: 0) {
         HeroTitle(
-          library: library, item: shown, maxWidth: PhoneDetail.logoBox.width, maxHeight: PhoneDetail.logoBox.height,
+          library: library, item: shown,
+          maxWidth: min(PhoneDetail.logoMaxWidth, width - PhoneDetail.margin - PhoneDetail.trailing),
+          maxHeight: PhoneDetail.logoHeight,
           alignment: .bottom
         )
         .frame(maxWidth: .infinity)
-        .frame(height: PhoneDetail.logoBox.height, alignment: .bottom)
+        .frame(height: PhoneDetail.logoHeight, alignment: .bottom)
         // "2024 • 2h 46m • [PG-13] [HD] [Dolby Atmos]", the genres under it.
         HStack(spacing: 8) {
           DetailMetaLine(
