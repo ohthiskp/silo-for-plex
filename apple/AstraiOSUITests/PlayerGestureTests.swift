@@ -95,4 +95,16 @@ final class PlayerGestureTests: XCTestCase {
     XCTAssertTrue(
       badge("astra.level.brightness").waitForExistence(timeout: 2), "No brightness level after a swipe on the left")
   }
+
+  /// KP (2026-11-10): ⋯ top right opens Audio / Quality / Speed / Chapters.
+  func testMoreMenuOpens() {
+    point(0.5, 0.35).tap()
+    let more = app.buttons["astra.player.more"]
+    XCTAssertTrue(more.waitForExistence(timeout: 5), "No ⋯ button")
+    if !showing(more) { point(0.5, 0.35).tap() }
+    more.tap()
+    let found = badge("astra.player.moreMenu").waitForExistence(timeout: 3)
+    shot("more-menu")
+    XCTAssertTrue(found, "The ⋯ menu didn't open")
+  }
 }

@@ -194,28 +194,18 @@ final class RemoteNavigationTests: XCTestCase {
   func testPlayerControlsAndMenuCloses() throws {
     let video = try XCTUnwrap(ProcessInfo.processInfo.environment["ASTRA_DEMO_VIDEO"], "No test video given")
     launch(["-AstraDemoPlay", video])
-    let close = app.buttons["Close player"].firstMatch
-    XCTAssertTrue(close.waitForExistence(timeout: 30), "The player didn't open")
+    // The player's only on-screen button is Subtitles (KP's 2026-11-10 redesign).
+    let subtitles = app.buttons["astra.player.subtitles"].firstMatch
+    XCTAssertTrue(subtitles.waitForExistence(timeout: 30), "The player didn't open")
     sleep(4)
     shot("player-playing")
     press(.playPause)
     sleep(2)
     shot("player-paused")
-    // Down to the buttons row.
-    press(.down)
+    // Back exits the player straight away (no menu or scrub open).
+    press(.menu)
     sleep(1)
-    shot("player-buttons")
-    // Menu: back to the timeline, hide the controls, then close (one press
-    // at a time, so a spare press doesn't leave the app).
-    for _ in 0..<4 where close.exists {
-      press(.menu)
-      sleep(1)
-      print("ASTRA-FOCUS after Menu:", focusedElement.exists ? focusedElement.label : "none", "player open:", close.exists)
-    }
-    let closed = waitGone(close, timeout: 10)
-    if !closed { print("ASTRA-FOCUS final:", focusedElement.debugDescription) }
-    XCTAssertTrue(closed, "Menu didn't close the player")
-    XCTAssertTrue(homeHero.waitForExistence(timeout: 10), "Closing the player didn't return to Home")
+    XCTAssertTrue(homeHero.waitForExistence(timeout: 15), "Menu didn't close the player")
     sleep(2)
     shot("home-after-player")
     // Menu and Select still work after the player: down into Continue

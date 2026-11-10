@@ -37,6 +37,9 @@ struct PlayerOverlay: View {
     /// The Next Episode button while it shows (it shows with the controls hidden
     /// too): a tap on it must not also show or hide the controls or double-tap skip.
     @State private var nextEpisodeFrame: CGRect?
+    /// The ⋯ menu (Audio, Quality, Speed, Chapters; KP's mockup 2b, 2026-11-10).
+    @State private var moreOpen = false
+    @State private var morePage: PlayerMorePage = .root
   #endif
   #if os(macOS)
     // Astra: the control panel can be dragged anywhere over the video (KP, 2026-11-07).
@@ -69,7 +72,13 @@ struct PlayerOverlay: View {
         // UIKit recognizers, so the single tap reliably waits for a double.
         PlayerTapSurface(
           blocked: (visible ? Array(controlFrames.values) : []) + [nextEpisodeFrame].compactMap { $0 },
-          onTap: { visible ? hide() : poke() },
+          onTap: {
+            if moreOpen {
+              closeMore()
+            } else {
+              visible ? hide() : poke()
+            }
+          },
           onDoubleTap: { forward in doubleTapSkip(forward: forward) },
           onSwipe: { right, delta in if swipeGestures { swipeLevel(right: right, delta: delta) } },
           // KP (2026-11-08): a two-finger tap plays or pauses.
@@ -77,8 +86,9 @@ struct PlayerOverlay: View {
         )
         .ignoresSafeArea()
 
-        // KP (2026-11-08): no separate level pill; a swipe moves the volume
-        // capsule (top right) or the brightness capsule (top left), which show.
+        // KP (2026-11-10): a swipe on the right moves the subtle volume slider
+        // (top right); one on the left sets the brightness with nothing drawn.
+        BrightnessLevelMarker(level: level)
         if let skip {
           HStack {
             if skip.forward { Spacer() }
@@ -145,7 +155,10 @@ struct PlayerOverlay: View {
         playerBounds = bounds
       #endif
     }
-    .onAppear { poke() }
+    .onAppear {
+      poke()
+      applyDemo()
+    }
     .onChange(of: player.paused) { _, paused in
       if paused { visible = true } else { poke() }
     }
@@ -371,11 +384,11 @@ struct PlayerOverlay: View {
   // MARK: iPhone (docs/design/iphone-player.png)
 
   #if os(iOS)
-    /// Astra: Infuse-style layout (KP's reference screenshot, 2026-11-07).
-    /// Top left close + PiP, top right a volume capsule; a plain back / play /
-    /// forward cluster in the middle; the episode line and the title bottom
-    /// left, captions and quality in one glass capsule bottom right; the
-    /// timeline with its times along the bottom. Always landscape.
+    /// KP's player mockups (2026-11-10): close and PiP top left, a subtle
+    /// volume slider top right; back 10 / play / forward 10 in the middle;
+    /// the title with a small HD/4K badge bottom left (and "S2 · E4 · Title"
+    /// for an episode), the subtitle button and ⋯ bottom right; the scrubber
+    /// with its times along the bottom. While scrubbing only the scrubber shows.
     private var phoneChrome: some View {
       ZStack {
         VStack(spacing: 0) {
@@ -385,33 +398,55 @@ struct PlayerOverlay: View {
             } label: {
               Image(systemName: "xmark")
             }
-            .astraIconButton(size: 40, variant: .clear)
+            .astraIconButton(size: 44, variant: .clear)
             .accessibilityLabel("Close Player")
-            if PlayerController.supportsPictureInPicture { pipButton(size: 40) }
-            if swipeGestures {
-              PhoneBrightness(level: level, poke: poke)
-                .padding(.leading, 4)
-            }
+            if PlayerController.supportsPictureInPicture { pipButton(size: 44) }
             Spacer()
-            phoneVolume
+            SubtleVolume(player: player, level: level, poke: poke)
+            // KP (2026-11-10): ⋯ top right, very subtle: a bare glyph like the speaker's.
+            Button {
+              if moreOpen { closeMore() } else { openMore() }
+            } label: {
+              Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .frame(width: 36, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .opacity(moreOpen ? 1 : 0.7)
+            .shadow(color: .black.opacity(0.35), radius: 6)
+            .accessibilityLabel("More")
+            .accessibilityIdentifier("astra.player.more")
           }
           .astraGlassGroup(spacing: 12)
+          .overlay(alignment: .topTrailing) {
+            if moreOpen {
+              PlayerMoreMenu(player: player, page: $morePage, onDone: closeMore, poke: poke)
+                .padding(.top, 50)
+                .reportFrame("more", into: $controlFrames)
+                .astraTransition(.opacity.combined(with: .scale(scale: 0.96, anchor: .topTrailing)))
+            }
+          }
+          .zIndex(1)
           .reportFrame("top", into: $controlFrames)
+          .opacity(scrubbing == nil ? 1 : 0)
+          .allowsHitTesting(scrubbing == nil)
           Spacer()
           HStack(alignment: .bottom, spacing: 16) {
             Button {
               player.showDetails()
             } label: {
               VStack(alignment: .leading, spacing: 4) {
-                if let subtitle = player.subtitle {
-                  Text(subtitle).font(.system(size: 13, weight: .semibold)).opacity(0.9).lineLimit(1)
-                }
                 HStack(spacing: 8) {
                   Text(player.title).font(.system(size: 22, weight: .bold)).lineLimit(1)
-                  // Astra (KP, 2026-11-07): the version playing, beside the title.
-                  if shortBadge != "—" { TitleTag(text: shortBadge) }
-                  if let range = player.dynamicRange { PlayerFormatTag(range: range) }
-                  if player.hasAtmos { PlayerAtmosTag() }
+                  // The real resolution of the frames playing; nothing until it is known.
+                  if let badge = resolutionTag { ResolutionTag(text: badge, size: 9) }
+                }
+                // Episodes only: "S2 · E4 · Episode Title". Movies show nothing here.
+                if let subtitle = player.subtitle, !subtitle.isEmpty {
+                  Text(subtitle).font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.65))
+                    .lineLimit(1)
                 }
               }
               .foregroundStyle(.white)
@@ -420,51 +455,60 @@ struct PlayerOverlay: View {
             .buttonStyle(.plain)
             .accessibilityLabel("\(player.title), Details")
             Spacer(minLength: 16)
-            HStack(spacing: 4) {
-              captionsChip
-              versionChip
-            }
-            .padding(.horizontal, 6)
-            .frame(height: 44)
-            .astraGlass(in: Capsule(), variant: .clear)
-            .astraGlassEdge(Capsule(), strength: 0.6)
+            // The subtitle button as it was, in its glass capsule; alone bottom right.
+            captionsChip
+              .padding(.horizontal, 6)
+              .frame(height: 44)
+              .astraGlass(in: Capsule(), variant: .clear)
+              .astraGlassEdge(Capsule(), strength: 0.6)
           }
-          .padding(.bottom, 12)
+          .padding(.bottom, 10)
           .reportFrame("title", into: $controlFrames)
-          // Astra: Infuse's bar (KP's screenshot, 2026-11-07): a thin full-width
-          // white bar with no knob, elapsed and "-remaining" in grey underneath.
-          VStack(spacing: 2) {
-            PlayerTimeline(player: player, scrubbing: $scrubbing, poke: poke, knob: 0, height: 5)
-            HStack {
-              PlayerClock(player: player, scrubbing: scrubbing, remaining: false)
-              Spacer()
-              PlayerClock(player: player, scrubbing: scrubbing, remaining: true)
-            }
-            .font(.system(size: 13, weight: .regular).monospacedDigit())
-            .foregroundStyle(.white.opacity(0.6))
-          }
-          .reportFrame("timeline", into: $controlFrames)
+          .opacity(scrubbing == nil ? 1 : 0)
+          .allowsHitTesting(scrubbing == nil)
+          PhoneScrubber(player: player, scrubbing: $scrubbing, poke: poke)
+            .reportFrame("timeline", into: $controlFrames)
         }
+        // The ⋯ menu (in the top row) sits above the transport buttons.
+        .zIndex(moreOpen ? 1 : 0)
         phoneTransport
           .reportFrame("transport", into: $controlFrames)
+          .opacity(scrubbing == nil ? 1 : 0)
+          .allowsHitTesting(scrubbing == nil)
       }
       // Inside the safe area: clear of the notch / Dynamic Island and the home indicator.
       .padding(.horizontal, 20)
       .padding(.top, 10)
       .padding(.bottom, 6)
+      .astraAnimation(Astra.Motion.fast, value: scrubbing == nil)
+      .astraAnimation(Astra.Motion.fast, value: moreOpen)
+      .onChange(of: moreOpen) { _, open in
+        if !open { controlFrames["more"] = nil }
+      }
+    }
+
+    private func openMore() {
+      morePage = .root
+      moreOpen = true
+      hideTask?.cancel()
+    }
+
+    private func closeMore() {
+      moreOpen = false
+      poke()
     }
 
     /// Back 10 s, play/pause (a spinner in its place while loading), forward 10 s.
     /// No ring around Play (KP, 2026-11-07).
     private var phoneTransport: some View {
-      HStack(spacing: 64) {
+      HStack(spacing: 72) {
         Button {
           player.seek(by: -10)
           poke()
         } label: {
-          Image(systemName: "arrow.counterclockwise").font(.system(size: 26, weight: .medium))
+          Image(systemName: "gobackward.10").font(.system(size: 30, weight: .medium))
         }
-        .buttonStyle(PlayerGlyphButtonStyle(size: 52))
+        .buttonStyle(PlayerGlyphButtonStyle(size: 56))
         .accessibilityLabel("Back 10 Seconds")
 
         Button {
@@ -476,22 +520,22 @@ struct PlayerOverlay: View {
             } else {
               // Swapped at once (no symbol animation), so play/pause feels instant.
               Image(systemName: player.paused ? "play.fill" : "pause.fill")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 44, weight: .bold))
             }
           }
-          .frame(width: 84, height: 84)
+          .frame(width: 76, height: 76)
           .contentShape(Circle())
         }
-        .buttonStyle(PlayerGlyphButtonStyle(size: 84))
+        .buttonStyle(PlayerGlyphButtonStyle(size: 76))
         .accessibilityLabel(player.paused ? "Play" : "Pause")
 
         Button {
           player.seek(by: 10)
           poke()
         } label: {
-          Image(systemName: "arrow.clockwise").font(.system(size: 26, weight: .medium))
+          Image(systemName: "goforward.10").font(.system(size: 30, weight: .medium))
         }
-        .buttonStyle(PlayerGlyphButtonStyle(size: 52))
+        .buttonStyle(PlayerGlyphButtonStyle(size: 56))
         .accessibilityLabel("Forward 10 Seconds")
       }
       .shadow(color: .black.opacity(0.35), radius: 8)
@@ -546,9 +590,6 @@ struct PlayerOverlay: View {
       }
     }
 
-    /// "40%", a short slider and the speaker glyph (mpv's volume; tap the glyph to mute).
-    /// Its own view, so volume changes (a swipe) redraw only this capsule.
-    private var phoneVolume: some View { PhoneVolume(player: player, poke: poke) }
   #endif
 
   // MARK: Shared pieces
@@ -624,11 +665,6 @@ struct PlayerOverlay: View {
           }
         }
       }
-      #if os(iOS)
-        if player.audioTracks.count > 1 {
-          Section("Audio") { audioButtons }
-        }
-      #endif
     } label: {
       // Astra: a speech-bubble captions glyph (KP asked for a new icon); filled when subtitles are on.
       Image(systemName: player.subtitleId == nil ? "captions.bubble" : "captions.bubble.fill")
@@ -681,6 +717,12 @@ struct PlayerOverlay: View {
     .accessibilityLabel("Quality, \(shortBadge)")
   }
 
+  /// iPhone: "4K" or "HD" from the frames mpv is decoding; nil (no badge) until known or below HD.
+  private var resolutionTag: String? {
+    guard let badge = player.resolutionBadge else { return nil }
+    return badge == "4K UHD" ? "4K" : badge
+  }
+
   /// "4K" or "HD" from what mpv is decoding; "SD" below 720.
   private var shortBadge: String {
     guard let badge = player.resolutionBadge else { return player.videoHeight > 0 ? "SD" : "—" }
@@ -716,12 +758,41 @@ struct PlayerOverlay: View {
     hideTask?.cancel()
     hideTask = Task { @MainActor in
       try? await Task.pause(3)
-      guard !Task.isCancelled, !player.paused, scrubbing == nil else { return }
+      guard !Task.isCancelled, !player.paused, scrubbing == nil, !menuOpen else { return }
       hide()
     }
   }
 
+  /// CI screenshots: `-AstraDemoPlayer controls|more|scrub` (iPhone).
+  private func applyDemo() {
+    #if os(iOS)
+      guard let shot = Demo.playerShot else { return }
+      Task { @MainActor in
+        for _ in 0..<60 where !player.hasFirstFrame { try? await Task.pause(0.25) }
+        try? await Task.pause(1)
+        player.setPaused(true)
+        switch shot {
+        case "more": openMore()
+        case "scrub": scrubbing = player.duration * 0.35
+        default: poke()
+        }
+      }
+    #endif
+  }
+
+  /// iPhone: the ⋯ menu is open (the controls stay up while it is).
+  private var menuOpen: Bool {
+    #if os(iOS)
+      moreOpen
+    #else
+      false
+    #endif
+  }
+
   private func hide() {
+    #if os(iOS)
+      moreOpen = false
+    #endif
     visible = false
     #if os(macOS)
       NSCursor.setHiddenUntilMouseMoves(true)
@@ -948,94 +1019,371 @@ extension View {
     }
   }
 
-  /// "40%", a short slider and the speaker glyph (mpv's volume; tap the glyph to mute).
-  struct PhoneVolume: View {
+  /// Top right (KP's mockup, 2026-11-10): a subtle volume slider, no pill and
+  /// no percentage. A thin 3 pt track about 150 pt wide at 70% opacity; while
+  /// dragging (or while a swipe on the right changes the volume) it thickens
+  /// and goes fully opaque. The speaker glyph follows the level; tap it to mute.
+  /// Its own view, so volume changes redraw only this slider.
+  struct SubtleVolume: View {
     var player: PlayerController
+    var level: LevelState
     var poke: () -> Void
+    @State private var dragging = false
+
+    private var value: Double { player.muted ? 0 : player.volume / 100 }
+    /// Dragging here, or swiping on the right side of the picture.
+    private var active: Bool { dragging || (level.shown && level.volume) }
 
     var body: some View {
       HStack(spacing: 10) {
-        Text("\(Int((player.muted ? 0 : player.volume).rounded()))%")
-          .font(.system(size: 15, weight: .medium).monospacedDigit())
-          .frame(minWidth: 42, alignment: .leading)
-        ScrubBar(
-          fraction: player.muted ? 0 : player.volume / 100, knob: 12, height: 3,
-          onChange: { player.setVolume($0 * 100); poke() },
-          onCommit: { player.setVolume($0 * 100) }
-        )
-        .frame(width: 110)
+        GeometryReader { geo in
+          let width = geo.size.width
+          let track: CGFloat = active ? 6 : 3
+          ZStack(alignment: .leading) {
+            Capsule().fill(.white.opacity(0.3)).frame(height: track)
+            Capsule().fill(.white).frame(width: max(track, width * value), height: track)
+          }
+          .frame(maxHeight: .infinity)
+          .contentShape(Rectangle())
+          .gesture(
+            DragGesture(minimumDistance: 0)
+              .onChanged { drag in
+                dragging = true
+                player.setVolume(Double(min(1, max(0, drag.location.x / max(width, 1)))) * 100)
+                poke()
+              }
+              .onEnded { _ in dragging = false }
+          )
+        }
+        .frame(width: 150, height: 44)
         Button {
           player.setMuted(!player.muted)
           poke()
         } label: {
           Image(systemName: symbol).font(.system(size: 15, weight: .semibold))
-            .frame(width: 26, height: 26)
+            .frame(width: 26, height: 44, alignment: .leading)
             .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(player.muted ? "Unmute" : "Mute")
       }
       .foregroundStyle(.white)
-      .padding(.horizontal, 14)
-      .frame(height: 40)
-      .astraGlass(in: Capsule(), variant: .clear)
-      .astraGlassEdge(Capsule(), strength: 0.6)
+      .opacity(active ? 1 : 0.7)
+      .shadow(color: .black.opacity(0.35), radius: 6)
+      .astraAnimation(Astra.Motion.fast, value: active)
       .accessibilityElement(children: .contain)
       .accessibilityLabel("Volume")
+      .accessibilityValue("\(Int((value * 100).rounded())) percent")
       .accessibilityIdentifier("astra.level.volume")
+      .accessibilityAdjustableAction { direction in
+        player.setVolume((value + (direction == .increment ? 0.1 : -0.1)) * 100)
+      }
     }
 
     private var symbol: String {
-      if player.muted || player.volume == 0 { return "speaker.slash.fill" }
-      return player.volume < 34 ? "speaker.wave.1.fill" : player.volume < 67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
+      if value == 0 { return "speaker.slash.fill" }
+      return value < 0.34 ? "speaker.wave.1.fill" : value < 0.67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
     }
   }
 
-  /// The brightness or volume level while swiping: a tall glass pill that fills from the bottom.
+  /// The brightness or volume being swiped. Its own observable object, so a
+  /// swipe redraws only what shows it.
   @Observable final class LevelState {
     var shown = false
     var volume = false
     var value = 0.0
     var start = 0.0
     var generation = 0
-    /// The screen's brightness, shown in the top-left capsule.
+    /// The screen's brightness while a swipe on the left changes it.
     var brightness = Double(UIScreen.main.brightness)
   }
 
-  /// Top left: the screen's brightness, laid out like the volume capsule on
-  /// the right ("40%", a short slider, a sun). A swipe on the left moves it.
-  struct PhoneBrightness: View {
+  /// KP (2026-11-10): no brightness slider on screen. A swipe on the left
+  /// still sets the screen's brightness; this only tells VoiceOver (and the
+  /// UI tests) the level while the swipe lasts. Nothing is drawn.
+  struct BrightnessLevelMarker: View {
     var level: LevelState
-    var poke: () -> Void
 
     var body: some View {
-      HStack(spacing: 10) {
-        Image(systemName: "sun.max.fill").font(.system(size: 15, weight: .semibold))
-          .frame(width: 22, height: 26)
-        ScrubBar(
-          fraction: level.brightness, knob: 12, height: 3,
-          onChange: { set($0); poke() },
-          onCommit: { set($0) }
-        )
-        .frame(width: 90)
-        Text("\(Int((level.brightness * 100).rounded()))%")
-          .font(.system(size: 15, weight: .medium).monospacedDigit())
-          .frame(minWidth: 42, alignment: .trailing)
+      if level.shown && !level.volume {
+        Color.clear
+          .frame(width: 1, height: 1)
+          .accessibilityElement()
+          .accessibilityLabel("Brightness")
+          .accessibilityValue("\(Int((level.brightness * 100).rounded())) percent")
+          .accessibilityIdentifier("astra.level.brightness")
+          .allowsHitTesting(false)
       }
-      .foregroundStyle(.white)
-      .padding(.horizontal, 14)
-      .frame(height: 40)
-      .astraGlass(in: Capsule(), variant: .clear)
-      .astraGlassEdge(Capsule(), strength: 0.6)
+    }
+  }
+
+  /// The iPhone scrubber (KP's mockup 2, 2026-11-10): a 6 pt white track that
+  /// grows to 12 pt while dragging, a 160 pt 16:9 preview above the finger
+  /// (kept on screen) with its time under it, seeking on release. Elapsed time
+  /// on the left; remaining on the right, tap it for "Ends at 6:52 PM".
+  struct PhoneScrubber: View {
+    let player: PlayerController
+    @Binding var scrubbing: Double?
+    var poke: () -> Void
+    @AppStorage("astra.player.showEndsAt") private var showEndsAt = false
+
+    private static let previewWidth: CGFloat = 160
+
+    var body: some View {
+      let shown = scrubbing ?? player.position
+      let fraction = player.duration > 0 ? min(1, max(0, shown / player.duration)) : 0
+      VStack(spacing: 6) {
+        GeometryReader { geo in
+          let width = geo.size.width
+          let track: CGFloat = scrubbing != nil ? 12 : 6
+          ZStack(alignment: .leading) {
+            Capsule().fill(.white.opacity(0.3)).frame(height: track)
+            Capsule().fill(.white).frame(width: max(track, width * fraction), height: track)
+          }
+          .frame(maxHeight: .infinity)
+          .contentShape(Rectangle())
+          .overlay(alignment: .bottomLeading) {
+            if let target = scrubbing {
+              preview(at: target, fraction: fraction, width: width)
+            }
+          }
+          .gesture(
+            DragGesture(minimumDistance: 0)
+              .onChanged { drag in
+                scrubbing = Double(min(1, max(0, drag.location.x / max(width, 1)))) * player.duration
+                poke()
+              }
+              .onEnded { drag in
+                let target = Double(min(1, max(0, drag.location.x / max(width, 1)))) * player.duration
+                player.seek(to: target)
+                scrubbing = nil
+                poke()
+              }
+          )
+        }
+        .frame(height: 28)
+        HStack {
+          Text(PlaybackClock.format(shown))
+          Spacer()
+          Button {
+            showEndsAt.toggle()
+            poke()
+          } label: {
+            Group {
+              if showEndsAt {
+                Text(PlaybackClock.endsAt(remaining: player.duration - shown, speed: player.speed))
+              } else {
+                Text("-" + PlaybackClock.format(max(0, player.duration - shown)))
+              }
+            }
+            .contentTransition(.numericText())
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityHint("Shows when it ends")
+        }
+        .font(.system(size: 13, weight: .medium).monospacedDigit())
+        .foregroundStyle(.white.opacity(0.7))
+      }
+      .astraAnimation(Astra.Motion.fast, value: scrubbing != nil)
       .accessibilityElement(children: .contain)
-      .accessibilityLabel("Brightness")
-      .accessibilityIdentifier("astra.level.brightness")
-      .onAppear { level.brightness = Double(UIScreen.main.brightness) }
+      .accessibilityLabel("Playback Position")
+      .accessibilityValue(PlaybackClock.format(shown))
     }
 
-    private func set(_ value: Double) {
-      level.brightness = min(1, max(0, value))
-      UIScreen.main.brightness = CGFloat(level.brightness)
+    /// The preview and its time, centred on the finger and kept on screen.
+    @ViewBuilder private func preview(at seconds: Double, fraction: Double, width: CGFloat) -> some View {
+      let w = Self.previewWidth
+      let x = min(max(0, width * fraction - w / 2), max(0, width - w))
+      VStack(spacing: 6) {
+        Group {
+          if let image = player.thumbnail(at: seconds) {
+            Image(platformImage: image).resizable().aspectRatio(contentMode: .fill)
+          } else {
+            Rectangle().fill(.ultraThinMaterial)
+          }
+        }
+        .frame(width: w, height: w * 9 / 16)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(.white.opacity(0.3), lineWidth: 1))
+        Text(PlaybackClock.format(seconds))
+          .font(.system(size: 13, weight: .semibold).monospacedDigit())
+          .foregroundStyle(.white)
+      }
+      .shadow(color: .black.opacity(0.45), radius: 12)
+      .frame(width: w)
+      .offset(x: x, y: -26)
+      .allowsHitTesting(false)
+      .transition(.opacity)
+    }
+  }
+
+  /// Which page of the ⋯ menu shows.
+  enum PlayerMorePage: Hashable { case root, audio, quality, speed, chapters }
+
+  /// The ⋯ menu (KP's mockup 2b, 2026-11-10): Audio, Quality, Speed and
+  /// Chapters with what is chosen on the right; a row opens its choices in
+  /// the same panel. Quality only picks between original files (never a transcode).
+  struct PlayerMoreMenu: View {
+    let player: PlayerController
+    @Binding var page: PlayerMorePage
+    var onDone: () -> Void
+    var poke: () -> Void
+
+    private static let width: CGFloat = 270
+    private static let row: CGFloat = 40
+
+    var body: some View {
+      VStack(spacing: 0) {
+        switch page {
+        case .root: root
+        case .audio: list("Audio") { audio }
+        case .quality: list("Quality") { quality }
+        case .speed: list("Speed") { speed }
+        case .chapters: list("Chapters") { chapters }
+        }
+      }
+      .frame(width: Self.width)
+      .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .astraGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), variant: .regular)
+      .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .foregroundStyle(.white)
+      .astraAnimation(Astra.Motion.fast, value: page)
+      .accessibilityIdentifier("astra.player.moreMenu")
+    }
+
+    private var root: some View {
+      VStack(spacing: 0) {
+        rootRow("Audio", value: currentAudio, page: .audio, enabled: !player.audioTracks.isEmpty)
+        Divider().overlay(.white.opacity(0.08))
+        rootRow("Quality", value: player.quality.title, page: .quality)
+        Divider().overlay(.white.opacity(0.08))
+        rootRow("Speed", value: PlayerController.speedLabel(player.speed), page: .speed)
+        Divider().overlay(.white.opacity(0.08))
+        rootRow("Chapters", value: player.chapters.isEmpty ? "None" : nil, page: .chapters, enabled: !player.chapters.isEmpty)
+      }
+    }
+
+    private var currentAudio: String {
+      player.audioTracks.first { $0.id == player.audioId }?.title ?? player.audioTracks.first?.title ?? "—"
+    }
+
+    private func rootRow(_ title: String, value: String?, page target: PlayerMorePage, enabled: Bool = true) -> some View {
+      Button {
+        page = target
+        poke()
+      } label: {
+        HStack(spacing: 12) {
+          Text(title).font(.system(size: 15, weight: .medium))
+          Spacer(minLength: 8)
+          if let value {
+            Text(value).font(.system(size: 13)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+          }
+          if enabled, value == nil || target == .chapters {
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
+          }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: Self.row)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .disabled(!enabled)
+      .accessibilityLabel(value.map { "\(title), \($0)" } ?? title)
+    }
+
+    /// A page of choices under a back row.
+    private func list<Rows: View>(_ title: String, @ViewBuilder rows: () -> Rows) -> some View {
+      VStack(spacing: 0) {
+        Button {
+          page = .root
+          poke()
+        } label: {
+          HStack(spacing: 6) {
+            Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
+            Text(title).font(.system(size: 15, weight: .semibold))
+            Spacer()
+          }
+          .padding(.horizontal, 14)
+          .frame(height: Self.row)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Back")
+        Divider().overlay(.white.opacity(0.08))
+        ScrollView {
+          VStack(spacing: 0) { rows() }
+        }
+        .frame(maxHeight: 200)
+        .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+
+    private func choice(_ title: String, detail: String? = nil, on: Bool, action: @escaping () -> Void) -> some View {
+      Button {
+        action()
+        poke()
+      } label: {
+        HStack(spacing: 10) {
+          Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).opacity(on ? 1 : 0)
+          Text(title).font(.system(size: 14, weight: on ? .semibold : .regular)).lineLimit(1)
+          Spacer(minLength: 8)
+          if let detail {
+            Text(detail).font(.system(size: 13).monospacedDigit()).foregroundStyle(.white.opacity(0.55))
+          }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: Self.row)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private var audio: some View {
+      ForEach(player.audioTracks) { track in
+        choice(track.title, on: player.audioId == track.id) {
+          player.selectAudio(track.id)
+          page = .root
+        }
+      }
+    }
+
+    @ViewBuilder private var quality: some View {
+      ForEach(PlaybackQuality.allCases) { quality in
+        choice(quality.title, on: player.quality == quality) {
+          player.setQuality(quality)
+          page = .root
+        }
+      }
+      // Other original files of this title (another library's 4K copy, say).
+      if player.versions.count > 1 {
+        ForEach(player.versions) { version in
+          choice(version.badge, detail: version.detail, on: version.media.id == player.currentMediaID) {
+            player.playVersion(version)
+            onDone()
+          }
+        }
+      }
+    }
+
+    @ViewBuilder private var speed: some View {
+      ForEach(PlayerController.speeds, id: \.self) { speed in
+        choice(PlayerController.speedLabel(speed), on: player.speed == speed) {
+          player.setSpeed(speed)
+          page = .root
+        }
+      }
+    }
+
+    @ViewBuilder private var chapters: some View {
+      let current = player.currentChapter?.id
+      ForEach(player.chapters) { chapter in
+        choice(chapter.title, detail: PlaybackClock.format(chapter.start), on: chapter.id == current) {
+          player.seek(to: chapter.start)
+          onDone()
+        }
+      }
     }
   }
 

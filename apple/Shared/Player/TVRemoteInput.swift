@@ -24,6 +24,15 @@
     var remoteEnabled: Bool = true
     /// Shows the controls and restarts their hide timer.
     var poke: () -> Void
+    /// Back (Menu). When set it decides everything (KP, 2026-11-10: Back exits
+    /// the player); otherwise: cancel a scrub, hide the controls, close.
+    var onBack: (() -> Void)? = nil
+    /// A swipe down on the touch surface (opens the player's top menu).
+    var onSwipeDown: () -> Void = {}
+    /// A long press on the click pad (the "Ends at" time toggle).
+    var onLongSelect: () -> Void = {}
+    /// After a click left or right skipped 10 s (forward = right), for the "+10" flash.
+    var onSkipped: (_ forward: Bool) -> Void = { _ in }
     @ViewBuilder var content: () -> Content
 
     @State private var scrubStart: Double?
@@ -41,10 +50,13 @@
           onSkip: { forward in
             cancelScrub()
             player.seek(by: forward ? NowPlaying.skipSeconds : -NowPlaying.skipSeconds)
+            onSkipped(forward)
             poke()
           },
           onMenu: menu,
-          onSwipe: swipe
+          onSwipe: swipe,
+          onSwipeDown: onSwipeDown,
+          onLongSelect: onLongSelect
         )
         .ignoresSafeArea()
         content()
@@ -63,6 +75,11 @@
 
     /// Menu: undoes the innermost thing first; with nothing open, closes the player.
     private func menu() {
+      if let onBack {
+        scrubStart = nil
+        onBack()
+        return
+      }
       if scrubbing != nil {
         cancelScrub()
         poke()
@@ -104,6 +121,8 @@
     /// A horizontal swipe as a fraction of the surface's width (right is
     /// positive), from where it started; nil when the finger lifts.
     var onSwipe: (_ fraction: Double?) -> Void
+    var onSwipeDown: () -> Void = {}
+    var onLongSelect: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -121,6 +140,8 @@
       coordinator.onSkip = onSkip
       coordinator.onMenu = onMenu
       coordinator.onSwipe = onSwipe
+      coordinator.onSwipeDown = onSwipeDown
+      coordinator.onLongSelect = onLongSelect
       coordinator.setEnabled(enabled)
     }
 
@@ -142,6 +163,10 @@
       var onSkip: (Bool) -> Void = { _ in }
       var onMenu: () -> Void = {}
       var onSwipe: (Double?) -> Void = { _ in }
+      var onSwipeDown: () -> Void = {}
+      var onLongSelect: () -> Void = {}
+      /// A long press just fired: the click that ends it doesn't also play or pause.
+      private var longPressedAt = Date.distantPast
       private var recognizers: [UIGestureRecognizer] = []
       private var enabled = true
 
@@ -156,7 +181,16 @@
         let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
         pan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirect.rawValue)]
         pan.delegate = self
+        let down = UISwipeGestureRecognizer(target: self, action: #selector(swipedDown))
+        down.direction = .down
+        down.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirect.rawValue)]
+        let long = UILongPressGestureRecognizer(target: self, action: #selector(longPressed(_:)))
+        long.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
+        long.allowedTouchTypes = []
+        long.minimumPressDuration = 0.6
         recognizers = [
+          down,
+          long,
           press(.select, #selector(selected)),
           press(.playPause, #selector(playPaused)),
           press(.leftArrow, #selector(left)),
@@ -187,7 +221,16 @@
         return abs(v.x) > abs(v.y) * 1.5
       }
 
-      @objc func selected() { onSelect() }
+      @objc func selected() {
+        if Date().timeIntervalSince(longPressedAt) < 1 { return }
+        onSelect()
+      }
+      @objc func swipedDown() { onSwipeDown() }
+      @objc func longPressed(_ recognizer: UILongPressGestureRecognizer) {
+        guard recognizer.state == .began else { return }
+        longPressedAt = Date()
+        onLongSelect()
+      }
       @objc func playPaused() { onPlayPause() }
       @objc func left() { onSkip(false) }
       @objc func right() { onSkip(true) }

@@ -50,6 +50,12 @@ final class PlayerController {
   private(set) var volume: Double = 100
   private(set) var muted = false
   private(set) var speed: Double = 1
+  /// The file's chapters (mpv's `chapter-list`), for the player's ⋯ menu.
+  private(set) var chapters: [PlayerChapter] = []
+  /// Subtitles → Size / Style (saved per device) and Sync (this file only).
+  private(set) var subtitleSize: SubtitleSize = .current()
+  private(set) var subtitleLook: SubtitleLook = .current()
+  private(set) var subtitleDelay: Double = 0
   /// iPhone Picture in Picture, or the Mac's small floating window.
   private(set) var isPictureInPicture = false
   var lastError: String?
@@ -119,6 +125,15 @@ final class PlayerController {
 
   /// The item playing, for switching between its versions.
   @ObservationIgnored private var item: PlexMetadata?
+
+  /// What is playing (the Apple TV top menu's Info tab). Set with `title`, so it redraws with it.
+  var nowPlayingItem: PlexMetadata? { _ = title; return item }
+
+  /// The poster of what is playing (the show's for an episode).
+  var posterURL: URL? {
+    guard let item = nowPlayingItem else { return nil }
+    return (playbackServer ?? server)?.imageURL(item.grandparentThumb ?? item.thumb, width: 300, height: 450)
+  }
   private(set) var currentMediaID: Int?
 
   /// One original file the player can switch to (another version of the same
@@ -229,7 +244,7 @@ final class PlayerController {
 
     for (name, format) in [
       ("time-pos", "double"), ("duration", "double"), ("pause", "flag"), ("paused-for-cache", "flag"),
-      ("eof-reached", "flag"), ("volume", "double"), ("mute", "flag"), ("speed", "double"), ("width", "double"), ("height", "double"), ("track-list", "node"), ("aid", "string"), ("sid", "string"),
+      ("eof-reached", "flag"), ("volume", "double"), ("mute", "flag"), ("speed", "double"), ("width", "double"), ("height", "double"), ("track-list", "node"), ("aid", "string"), ("sid", "string"), ("chapter-list", "node"),
     ] {
       core.observeProperty(name, format: format)
     }
@@ -259,6 +274,14 @@ final class PlayerController {
     for (name, value) in SubtitlePreference.current().mpvOptions(languages: Locale.preferredLanguages) {
       core.setProperty(name, value: value)
     }
+    // Subtitles → Size and Style (saved), Sync back to zero for a new file.
+    subtitleSize = .current()
+    subtitleLook = .current()
+    subtitleDelay = 0
+    chapters = []
+    core.setProperty("sub-scale", value: String(subtitleSize.scale))
+    for (name, value) in subtitleLook.mpvOptions { core.setProperty(name, value: value) }
+    core.setProperty("sub-delay", value: "0")
     core.command(["loadfile", source.mpvURL ?? source.url.absoluteString, "replace"])
     core.setVisible(true)
     #if os(macOS)
@@ -372,6 +395,8 @@ final class PlayerController {
     isPictureInPicture = false
     previews?.close()
     previews = nil
+    bif = nil
+    bifCache = [:]
     previewCache = [:]
     lastPreview = nil
     requestedSlot = nil
@@ -527,6 +552,7 @@ final class PlayerController {
       let part = full.media.flatMap(\.parts).first { $0.id == source.part.id && !$0.streams.isEmpty }
       guard let self, let part, self.source?.url == started else { return }
       self.selection = StreamSelection(part: part)
+      self.relabelAudio()
       self.applyStreamsIfReady()
     }
   }
@@ -605,6 +631,36 @@ final class PlayerController {
   }
 
   static let speeds: [Double] = [0.5, 0.75, 1, 1.25, 1.5, 2]
+
+  /// "Normal", "1.5×".
+  static func speedLabel(_ speed: Double) -> String {
+    speed == 1 ? "Normal" : String(format: "%g×", speed)
+  }
+
+  /// Subtitles → Size: saved, and the subtitles on screen change at once.
+  func setSubtitleSize(_ size: SubtitleSize) {
+    size.save()
+    subtitleSize = size
+    core?.setProperty("sub-scale", value: String(size.scale))
+  }
+
+  /// Subtitles → Style: saved, and the subtitles on screen change at once.
+  func setSubtitleLook(_ look: SubtitleLook) {
+    look.save()
+    subtitleLook = look
+    for (name, value) in look.mpvOptions { core?.setProperty(name, value: value) }
+  }
+
+  /// Subtitles → Sync, in 0.1 s steps (this file only).
+  func adjustSubtitleDelay(by steps: Int) {
+    subtitleDelay = SubtitleSync.adjusted(subtitleDelay, by: steps)
+    core?.setProperty("sub-delay", value: String(format: "%.1f", subtitleDelay))
+  }
+
+  /// The chapter playing now, from the position.
+  var currentChapter: PlayerChapter? {
+    chapters.last { $0.start <= position + 0.5 }
+  }
 
   static var supportsPictureInPicture: Bool {
     #if os(iOS) || os(tvOS)
@@ -688,6 +744,7 @@ final class PlayerController {
     case "aid": audioId = (value as? String).flatMap { Int($0) }
     case "sid": subtitleId = (value as? String).flatMap { Int($0) }
     case "track-list": updateTracks(value as? [Any] ?? [])
+    case "chapter-list": chapters = PlayerChapter.list(from: value as? [Any] ?? [])
     default: break
     }
   }
@@ -740,14 +797,42 @@ final class PlayerController {
     previewCache = [:]
     lastPreview = nil
     requestedSlot = nil
+    bif = nil
+    bifCache = [:]
     previews = SeekPreviewGenerator(url: source.url, mpvURL: source.mpvURL, headers: source.headers)
+    // Plex's own seek previews (BIF) first: one download, then every frame is
+    // instant. Single-file titles only (the BIF belongs to one part). Without
+    // them, Astra decodes previews from the file itself as before.
+    guard !local, source.mpvURL == nil, source.part.id > 0, let server = playbackServer ?? server else { return }
+    let started = source.url
+    let partID = source.part.id
+    Task { [weak self] in
+      guard let thumbs = try? await server.seekThumbnails(partID: partID), !thumbs.frames.isEmpty else { return }
+      guard let self, self.source?.url == started else { return }
+      self.bif = thumbs
+      self.previewVersion &+= 1
+    }
   }
+
+  /// Plex's seek previews for the file playing, when the server made them.
+  @ObservationIgnored private var bif: SeekThumbnails?
+  /// Decoded BIF frames by index.
+  @ObservationIgnored private var bifCache: [Int: PlatformImage] = [:]
 
   /// The preview for a time on the timeline: the decoded frame for its
   /// 2-second slot, else the newest one while that slot decodes.
   func thumbnail(at seconds: Double) -> PlatformImage? {
     _ = previewVersion
-    guard let previews, seconds.isFinite else { return nil }
+    guard seconds.isFinite else { return nil }
+    if let bif, let index = bif.frameIndex(at: seconds) {
+      if let hit = bifCache[index] { return hit }
+      if let data = bif.jpeg(index), let image = PlatformImage(data: data) {
+        if bifCache.count > 400 { bifCache.removeAll() }
+        bifCache[index] = image
+        return image
+      }
+    }
+    guard let previews else { return nil }
     let slot = Int(max(0, seconds) / 2)
     if let hit = previewCache[slot] { return hit }
     if requestedSlot != slot {
@@ -774,8 +859,33 @@ final class PlayerController {
     #endif
   }
 
+  /// mpv's track-list entries for the audio tracks, to name them again once Plex's names arrive.
+  @ObservationIgnored private var audioEntries: [Int: [String: Any]] = [:]
+
+  /// "English · Dolby Atmos 7.1": the language, format and channels (KP's mockups, 2026-11-10).
+  private func audioLabel(id: Int, entry: [String: Any], fallback: String) -> String {
+    let lang = (entry["lang"] as? String).map { Locale.current.localizedString(forLanguageCode: $0) ?? $0 }
+    let ffIndex = (entry["ff-index"] as? Int) ?? (entry["ff-index"] as? Int64).map(Int.init)
+    let channels = (entry["demux-channel-count"] as? Int) ?? (entry["demux-channel-count"] as? Int64).map(Int.init)
+    let label = AudioTrackLabel.make(
+      language: lang, codec: entry["codec"] as? String, channels: channels,
+      profile: entry["codec-profile"] as? String,
+      plexTitle: ffIndex.flatMap { selection?.audioTitles[$0] },
+      trackTitle: entry["title"] as? String)
+    return label == "Unknown" ? fallback : label
+  }
+
+  /// Names the audio tracks again (Plex's stream names arrived after mpv's list).
+  private func relabelAudio() {
+    audioTracks = audioTracks.map { track in
+      guard let entry = audioEntries[track.id] else { return track }
+      return Track(id: track.id, title: audioLabel(id: track.id, entry: entry, fallback: track.title))
+    }
+  }
+
   private func updateTracks(_ list: [Any]) {
     var audio: [Track] = []
+    audioEntries = [:]
     var subs: [Track] = []
     trackInfo = [:]
     for case let entry as [String: Any] in list {
@@ -785,7 +895,10 @@ final class PlayerController {
       trackInfo["\(type):\(id)"] = TrackInfo(ffIndex: ffIndex, externalFile: entry["external-filename"] as? String)
       let lang = (entry["lang"] as? String).map { Locale.current.localizedString(forLanguageCode: $0) ?? $0 }
       let label = [entry["title"] as? String, lang].compactMap { $0 }.first ?? "Track \(id)"
-      if type == "audio" { audio.append(Track(id: id, title: label)) }
+      if type == "audio" {
+        audioEntries[id] = entry
+        audio.append(Track(id: id, title: audioLabel(id: id, entry: entry, fallback: label)))
+      }
       if type == "sub" { subs.append(Track(id: id, title: label)) }
     }
     audioTracks = audio

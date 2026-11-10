@@ -14,8 +14,10 @@ struct HomeView: View {
   @State private var showsTopBar = true
   /// The hero title on screen; the frosted page background follows it.
   @State private var heroItem: PlexMetadata?
-  /// Only moved by the CI demo (`-AstraDemoScroll`), to screenshot the rows below the hero.
-  @State private var scrollPosition = ScrollPosition(edge: .top)
+  #if os(iOS)
+    /// Only moved by the CI demo (`-AstraDemoScroll`), to screenshot the rows below the hero.
+    @State private var scrollPosition = ScrollPosition(edge: .top)
+  #endif
 
   private var heroHeight: CGFloat {
     min(Astra.Layout.heroHeight, max(380, viewport * Astra.Layout.heroShare))
@@ -25,6 +27,21 @@ struct HomeView: View {
     // The page runs under the title bar / status bar; the switcher above it stays inside the safe area.
     ZStack(alignment: .top) {
       page
+      #if os(iOS)
+        // KP (2026-11-09): the tabs vanished on bright artwork. A blur runs
+        // down from the Dynamic Island, behind the bar while it shows and
+        // under the status bar once the page scrolls, fading out softly.
+        TopEdgeBlur()
+          .frame(height: showsTopBar ? 112 : 34)
+          .ignoresSafeArea(edges: .top)
+          .allowsHitTesting(false)
+          .astraAnimation(Astra.Motion.base, value: showsTopBar)
+      #endif
+      #if os(iOS)
+        // KP (2026-11-09): rows soften under the tab bar instead of meeting it.
+        BottomEdgeBlur()
+          .frame(maxHeight: .infinity, alignment: .bottom)
+      #endif
       topBar
         .opacity(showsTopBar ? 1 : 0)
         .offset(y: showsTopBar ? 0 : -12)
@@ -129,11 +146,13 @@ struct HomeView: View {
       .onGeometryChange(for: Bool.self, of: { $0.frame(in: .scrollView).minY > -60 }) { showsTopBar = $0 }
     }
     .scrollIndicators(.never)
-    .scrollPosition($scrollPosition)
-    .task {
-      guard let y = Demo.homeScroll, (try? await Task.pause(12)) != nil else { return }
-      scrollPosition.scrollTo(y: y)
-    }
+    #if os(iOS)
+      .scrollPosition($scrollPosition)
+      .task {
+        guard let y = Demo.homeScroll, (try? await Task.pause(12)) != nil else { return }
+        scrollPosition.scrollTo(y: y)
+      }
+    #endif
     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewport = $0 }
     .overlay {
       if library.isLoadingHome || (library.isLoadingService && !library.homeHasSections) {
@@ -166,21 +185,9 @@ struct HomeView: View {
 
   private var topBar: some View {
     #if os(iOS)
-      // KP's mockup (2026-11-09): the top left stays clear (no logo), the
-      // Plex Watchlist is a round glass button top right, and the streaming
-      // tabs run full width on the line below.
-      VStack(alignment: .leading, spacing: Astra.Spacing.s) {
-        HStack {
-          Spacer()
-          Button {
-            showWatchlist = true
-          } label: {
-            Image(systemName: "bookmark")
-          }
-          .astraIconButton(size: 40, variant: .clear)
-          .accessibilityLabel("Watchlist")
-        }
-        .padding(.trailing, Astra.Spacing.pageTrailing)
+      // KP's mockup (2026-11-09): only the streaming pills up top, right under
+      // the Dynamic Island; the Watchlist lives in Library.
+      VStack(alignment: .leading, spacing: 0) {
         if library.tmdb != nil {
           ServicePill(library: library)
         }
@@ -202,6 +209,29 @@ struct HomeView: View {
   }
 }
 
+#if os(iOS)
+  /// A blur at the top of the screen that fades out downwards, with the
+  /// page colour laid over it so white tabs and the clock always read.
+  struct TopEdgeBlur: View {
+    var body: some View {
+      ZStack {
+        Rectangle().fill(.regularMaterial)
+        LinearGradient(
+          colors: [Astra.Color.bg.opacity(0.7), Astra.Color.bg.opacity(0.35)],
+          startPoint: .top, endPoint: .bottom)
+      }
+      .mask {
+        LinearGradient(
+          stops: [
+            .init(color: .black, location: 0), .init(color: .black, location: 0.6),
+            .init(color: .clear, location: 1),
+          ],
+          startPoint: .top, endPoint: .bottom)
+      }
+    }
+  }
+#endif
+
 // MARK: - Streaming-service switcher
 
 /// The floating glass switcher at the top of Home: For You and each service's logo.
@@ -214,35 +244,33 @@ struct ServicePill: View {
 
   var body: some View {
     #if os(iOS)
-      // Astra: iPhone shows a rail of separate glass chips that scrolls to the
-      // right, each logo in its brand colour; the chosen one is outlined in it
-      // (KP's mockup, 2026-11-07).
+      // KP's mockup (2026-11-09): each tab is its own glass pill, evenly
+      // sized; logos are white, and the chosen service shows its real colour
+      // on brighter glass. For You, when chosen, is a white pill.
       ScrollView(.horizontal) {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
           railChip(nil, label: "For You") {
-            Text("For You").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+            Text("For You")
+              .font(.system(size: 14.5, weight: .bold))
+              .foregroundStyle(library.selectedService == nil ? Color.black : Color.white)
           }
           ForEach(StreamingService.all) { service in
+            let selected = library.selectedService == service
             railChip(service, label: service.label) {
               Image(service.logo)
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
                 .frame(height: service.logoHeight * 0.85)
-                .foregroundStyle(logoColors ? Color(hex: service.accent) : .white)
+                .foregroundStyle(selected && logoColors ? Color(hex: service.accent) : Color.white)
             }
           }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .padding(.trailing, 16)
       }
       .scrollIndicators(.never)
-      // Astra: the rail fades out at the screen's right edge.
-      .mask {
-        LinearGradient(
-          stops: [.init(color: .black, location: 0.92), .init(color: .clear, location: 1)],
-          startPoint: .leading, endPoint: .trailing)
-      }
+      .scrollClipDisabled()
       .astraAnimation(.snappy(duration: 0.22), value: library.selectedService)
     #else
       ViewThatFits(in: .horizontal) {
@@ -260,21 +288,24 @@ struct ServicePill: View {
       _ service: StreamingService?, label: String, @ViewBuilder content: () -> Label
     ) -> some View {
       let selected = library.selectedService == service
-      let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
       return Button {
         library.select(service)
       } label: {
-        // KP's mockup (2026-11-09): the chosen tab sits in a glass capsule
-        // with a thin line of its brand colour; the others are bare.
         content()
-          .padding(.horizontal, 16)
-          .frame(height: 36)
-          .opacity(selected ? 1 : 0.72)
+          .padding(.horizontal, service == nil ? 18 : 14)
+          .frame(minWidth: service == nil ? nil : 80)
+          .frame(height: 38)
           .background {
-            if selected {
-              Capsule().fill(Astra.Color.ink.opacity(0.14))
-                .astraGlass(in: Capsule(), variant: .clear, interactive: true)
-                .overlay(Capsule().strokeBorder(brand.opacity(0.55), lineWidth: 1))
+            if selected && service == nil {
+              Capsule().fill(.white)
+            } else {
+              // A dark tint under the glass keeps white logos readable on
+              // bright artwork (KP, 2026-11-09).
+              Capsule().fill(selected ? Color.white.opacity(0.22) : Color.black.opacity(0.28))
+                .astraGlass(in: Capsule(), variant: .clear)
+                .overlay {
+                  if selected { Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 1.5) }
+                }
             }
           }
           .contentShape(Capsule())
@@ -499,30 +530,39 @@ struct TopTenCard: View {
   }
 }
 
-/// The big Top 10 rank (KP's mockup, 2026-11-09): a solid, condensed
-/// number in a soft grey gradient, standing behind the poster on its
-/// baseline. Uses the page's ink, so it reads in every theme.
+/// The big Top 10 rank (KP, 2026-11-09: "a mix of white and frosted
+/// glass"): the digits are cut from a frosted blur of whatever is behind
+/// them, washed with white that is bright at the top and fades into the
+/// glass towards the foot. Uses the page's ink, so Light keeps dark digits.
 struct RankNumber: View {
   var rank: Int
   var size: CGFloat = 150
 
   var body: some View {
-    Text("\(rank)")
+    let digits = Text("\(rank)")
       .font(.system(size: size, weight: .heavy))
       .fontWidth(.condensed)
       .monospacedDigit()
       .tracking(rank >= 10 ? -size * 0.08 : 0)
-      .foregroundStyle(
-        LinearGradient(
-          colors: [Astra.Color.ink.opacity(0.42), Astra.Color.ink.opacity(0.12)],
-          startPoint: .top, endPoint: .bottom)
-      )
       .lineLimit(1)
       .fixedSize()
-      // The glyphs carry space under the baseline; pull the number down so its
-      // foot lines up with the poster's bottom edge.
-      .padding(.bottom, -size * 0.14)
-      .accessibilityHidden(true)
+    ZStack {
+      // Frosted glass in the shape of the digits.
+      digits.hidden()
+        .background(.ultraThinMaterial)
+        .mask(digits)
+      // The white wash over it.
+      digits.foregroundStyle(
+        LinearGradient(
+          colors: [Astra.Color.ink.opacity(0.92), Astra.Color.ink.opacity(0.5), Astra.Color.ink.opacity(0.12)],
+          startPoint: .top, endPoint: .bottom))
+    }
+    .fixedSize()
+    .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+    // The glyphs carry space under the baseline; pull the number down so its
+    // foot lines up with the poster's bottom edge.
+    .padding(.bottom, -size * 0.14)
+    .accessibilityHidden(true)
   }
 }
 
@@ -570,6 +610,78 @@ struct HeroInfo: View {
   #endif
 
   var body: some View {
+    #if os(iOS)
+      phoneBody
+    #else
+      wideBody
+    #endif
+  }
+
+  #if os(iOS)
+    /// KP's iPhone mockup (2026-11-09): logo centred right above the info,
+    /// "2026 • 1h 41m • [PG] [HD]", the genres under it, then a white Play
+    /// and the round + / ✓. Every box has a fixed height, so the hero's
+    /// faces can be framed above the logo for any title.
+    static let logoBox = CGSize(width: 240, height: 150)
+    /// From the top of the logo box to the bottom of the buttons.
+    static let blockHeight: CGFloat = 150 + 14 + 24 + 6 + 18 + 18 + 50
+
+    private var phoneBody: some View {
+      VStack(spacing: 0) {
+        Button {
+          openItem(item)
+        } label: {
+          HeroTitle(
+            library: library, item: item, maxWidth: Self.logoBox.width, maxHeight: Self.logoBox.height,
+            alignment: .bottom
+          )
+          .frame(maxWidth: .infinity)
+          .frame(height: Self.logoBox.height, alignment: .bottom)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(item.displayTitle), Details")
+        HStack(spacing: 8) {
+          DetailMetaLine(
+            item: shown, library: library, showsGenres: false, fontSize: 14, separator: "  •  ",
+            ratingAfter: true, greyRating: true)
+          FormatBadges(item: shown)
+        }
+        .frame(height: 24)
+        .padding(.top, 14)
+        .task(id: item.id) {
+          full = nil
+          let key = item.isCatalogOnly ? library.indexMatch(item)?.ratingKey : item.ratingKey
+          guard let key else { return }
+          let found = try? await library.details(key)
+          guard !Task.isCancelled else { return }
+          full = found
+        }
+        Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
+          .astraFont(size: 13.5)
+          .foregroundStyle(Astra.Color.ink.opacity(0.62))
+          .lineLimit(1)
+          .frame(height: 18)
+          .padding(.top, 6)
+        HStack(spacing: 20) {
+          Button {
+            playItem(item)
+          } label: {
+            Label(item.progress != nil ? "Resume" : "Play", systemImage: "play.fill")
+              .frame(width: 156)
+          }
+          .buttonStyle(SolidCapsuleButtonStyle())
+          .disabled(!playable)
+          WatchlistButton(item: item, size: 48)
+        }
+        .frame(height: 50)
+        .padding(.top, 18)
+      }
+      .frame(maxWidth: .infinity)
+    }
+  #endif
+
+  private var wideBody: some View {
     VStack(alignment: .leading, spacing: 14) {
       // Fixed boxes for the title and the meta: every title takes the same
       // height, so the buttons and pager never move when the hero switches.
@@ -655,9 +767,11 @@ struct HeroBlend: View {
           .init(color: Astra.Color.bg.opacity(0), location: 0.4),
           .init(color: Astra.Color.bg.opacity(0.5), location: 1),
         ], startPoint: .top, endPoint: .bottom)
-      LinearGradient(
-        colors: [Astra.Color.bg.opacity(0.8), Astra.Color.bg.opacity(0)], startPoint: .leading,
-        endPoint: .init(x: 0.6, y: 0.5))
+      #if !os(iOS)
+        LinearGradient(
+          colors: [Astra.Color.bg.opacity(0.8), Astra.Color.bg.opacity(0)], startPoint: .leading,
+          endPoint: .init(x: 0.6, y: 0.5))
+      #endif
     }
     .allowsHitTesting(false)
   }
@@ -853,12 +967,21 @@ struct WatchlistButton: View {
       let shown = items.isEmpty ? [] : [items[base]] + (base + 1 < count && mix > 0.001 ? [items[base + 1]] : [])
       return ZStack {
         ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
-          ArtworkImage(
-            library: library, item: item, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear
-          )
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .clipped()
-          .opacity(i == 0 ? 1 : mix)
+          #if os(iOS)
+            // KP (2026-11-09): the faces always end above the logo, for any title.
+            FramedArtwork(
+              library: library, item: item, kind: .heroBackdrop, zoneHeight: height,
+              limitY: height - 30 - HeroInfo.blockHeight - 6, topOffset: 24, minTop: 110
+            )
+            .opacity(i == 0 ? 1 : mix)
+          #else
+            ArtworkImage(
+              library: library, item: item, kind: .heroBackdrop, width: 1920, height: 1080, placeholder: Color.clear
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .opacity(i == 0 ? 1 : mix)
+          #endif
         }
         // Mid-swipe the two blur together; scrolling down blurs into the
         // frosted background below (KP, 2026-11-09).

@@ -23,6 +23,10 @@ enum Demo {
   }
   /// `-AstraDemoPlay <path>`: a local video file to open in the player at launch (UI tests).
   static var videoPath: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlay") : nil }
+  /// `-AstraDemoPlayer <state>`: once the demo video plays, pause it and show a player state for a
+  /// screenshot: `controls`, `more` (iPhone ⋯ menu), `scrub`, or the Apple TV top menu's
+  /// `info`, `settings`, `subtitles`.
+  static var playerShot: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlayer") : nil }
 
   /// The demo movie and a source that plays `videoPath` from disk.
   static func playback() -> (PlexMetadata, PlaybackSource)? {
