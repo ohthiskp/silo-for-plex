@@ -184,11 +184,14 @@ struct PlayerOverlay: View {
     ZStack {
       // Scrims so white text reads over any frame.
       VStack(spacing: 0) {
-        LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 160)
-        Spacer()
+        // Heights are caps, not minimums: a short window (a wide film on the
+        // Mac) would otherwise be overflowed by them and push the controls out.
+        LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom)
+          .frame(maxHeight: 160)
+        Spacer(minLength: 0)
         // Light at the bottom: the Mac panel is clear glass and carries its own contrast.
         LinearGradient(colors: [.clear, .black.opacity(Self.bottomScrim)], startPoint: .top, endPoint: .bottom)
-          .frame(height: 200)
+          .frame(maxHeight: 200)
       }
       .ignoresSafeArea()
       .allowsHitTesting(false)
