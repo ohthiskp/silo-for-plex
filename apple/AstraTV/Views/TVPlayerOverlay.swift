@@ -106,7 +106,8 @@ struct PlayerOverlay: View {
           topMenu
           Spacer(minLength: 0)
         }
-        .ignoresSafeArea(edges: .top)
+        // Edge to edge, like the mockup (not inset by the TV's safe area).
+        .ignoresSafeArea(edges: [.top, .horizontal])
         .transition(.move(edge: .top).combined(with: .opacity))
       }
     }
@@ -374,7 +375,7 @@ struct PlayerOverlay: View {
     .background(
       UnevenRoundedRectangle(bottomLeadingRadius: 40, bottomTrailingRadius: 40, style: .continuous)
         .fill(Color(white: 0.09).opacity(0.94))
-        .ignoresSafeArea(edges: .top)
+        .ignoresSafeArea(edges: [.top, .horizontal])
     )
     .shadow(color: .black.opacity(0.4), radius: 30, y: 10)
   }

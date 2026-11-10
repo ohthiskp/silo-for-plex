@@ -469,6 +469,8 @@ struct PlayerOverlay: View {
           PhoneScrubber(player: player, scrubbing: $scrubbing, poke: poke)
             .reportFrame("timeline", into: $controlFrames)
         }
+        // The ⋯ menu (in the top row) sits above the transport buttons.
+        .zIndex(moreOpen ? 1 : 0)
         phoneTransport
           .reportFrame("transport", into: $controlFrames)
           .opacity(scrubbing == nil ? 1 : 0)
@@ -1243,7 +1245,7 @@ extension View {
         }
       }
       .frame(width: Self.width)
-      .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
       .astraGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), variant: .regular)
       .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
       .foregroundStyle(.white)
