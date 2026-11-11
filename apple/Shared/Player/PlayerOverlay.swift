@@ -86,6 +86,14 @@ struct PlayerOverlay: View {
         // (top right); one on the left shows a brightness level top left, only
         // while the finger is down.
         BrightnessIndicator(level: level)
+        // Whether the controls show, for the UI tests (hidden controls stay in
+        // the accessibility tree, so the buttons alone can't tell).
+        Color.clear
+          .frame(width: 1, height: 1)
+          .accessibilityElement()
+          .accessibilityIdentifier("astra.player.controls")
+          .accessibilityValue(visible ? "shown" : "hidden")
+          .allowsHitTesting(false)
         if let skip {
           HStack {
             if skip.forward { Spacer() }
@@ -102,8 +110,6 @@ struct PlayerOverlay: View {
       chrome
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible)
-        // Hidden controls aren't there for VoiceOver (or the UI tests) either.
-        .accessibilityHidden(!visible)
 
       // Astra 4.0: Next Episode in the last 15 s of an episode, tap only.
       // Only in the tree for an episode with a next one, so it never sits

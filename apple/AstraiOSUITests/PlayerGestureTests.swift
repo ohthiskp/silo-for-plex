@@ -61,14 +61,14 @@ final class PlayerGestureTests: XCTestCase {
 
   /// Whether a control is on screen. Not `isHittable`: while the controls fade
   /// in or out it can throw ("Activation point invalid") instead of answering,
-  /// which failed tests on a busy runner. Hidden controls are hidden from
-  /// accessibility too, so being there with a frame inside the window is enough.
+  /// which failed tests on a busy runner. The player reports whether its
+  /// controls show on an invisible marker ("astra.player.controls").
   private func showing(_ element: XCUIElement) -> Bool {
+    let marker = app.descendants(matching: .any)["astra.player.controls"]
+    guard marker.exists, (marker.value as? String) == "shown" else { return false }
     guard element.exists else { return false }
     let frame = element.frame
-    guard !frame.isEmpty, frame.minX.isFinite, frame.minY.isFinite else { return false }
-    let window = app.windows.firstMatch.frame
-    return window.isEmpty || window.contains(CGPoint(x: frame.midX, y: frame.midY))
+    return !frame.isEmpty && frame.minX.isFinite && frame.minY.isFinite
   }
 
   func testSingleTapTogglesControls() {
