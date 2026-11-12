@@ -156,6 +156,11 @@ jobs:
           }
           shot mac-player-controls -AstraDemoPlayer controls
           shot mac-player-scrub -AstraDemoPlayer scrub
+          "$BIN" -AstraDemo YES -AstraDemoTab settings > /dev/null 2>&1 &
+          pid=$!
+          sleep 25
+          screencapture -x "$RUNNER_TEMP/shots/mac-settings.png" || true
+          kill "$pid" 2>/dev/null || true
           for f in "$RUNNER_TEMP"/shots/*.png; do
             [ -f "$f" ] || continue
             sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null

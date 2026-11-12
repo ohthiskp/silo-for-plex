@@ -598,8 +598,8 @@ struct SettingsPage: View {
       AstraSectionHeader(title: "Settings")
         .padding(.leading, leading)
       SettingsView()
-        .frame(maxWidth: 600, alignment: .leading)
         // The form's own inset is ~20 pt; line its rows up with the title.
+        // Full width (KP, 2026-11-12): a 600 pt stack drew stray lines.
         .padding(.leading, max(0, leading - 20))
     }
     .padding(.top, Astra.Spacing.pageTop)

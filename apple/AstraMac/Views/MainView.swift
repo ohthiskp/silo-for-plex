@@ -35,7 +35,7 @@ struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
 
-  @State private var selection: SidebarItem = .home
+  @State private var selection: SidebarItem = Demo.tab.flatMap(SidebarItem.init(rawValue:)) ?? .home
   /// Pages stay alive once opened, so switching back is instant: no reload,
   /// no re-decoding artwork, scroll position kept.
   @State private var opened: [SidebarItem] = [.home]

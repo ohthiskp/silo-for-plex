@@ -8,7 +8,7 @@ import Foundation
 ///
 /// Launch arguments:
 /// - `-AstraDemo YES`: use the demo server.
-/// - `-AstraDemoTab home|search|libraries`: the tab to open on.
+/// - `-AstraDemoTab home|search|libraries`: the tab to open on (Mac: home|search|library|settings).
 /// - `-AstraDemoQuery <text>`: text typed into Search.
 /// - `-AstraDemoOpen <ratingKey>`: open that title's details on Home.
 /// - `-AstraDemoScroll <points>`: scroll Home down this far (rows below the hero).

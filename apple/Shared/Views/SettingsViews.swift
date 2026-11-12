@@ -64,7 +64,11 @@ struct SettingsView: View {
 
   var body: some View {
     #if os(macOS)
+      // KP (2026-11-12): the stack spans the whole page, so it draws no edge
+      // line of its own; only the rows keep a readable width.
       NavigationStack { root }
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .astraPageBackground()
     #else
       root
     #endif
@@ -120,6 +124,7 @@ struct SettingsView: View {
     #if !os(tvOS)
       .scrollContentBackground(.hidden)
     #endif
+    .settingsColumn()
     // Same background as every Settings page (it showed the system grey before).
     .astraPageBackground()
     .settingsBottomRoom()
@@ -199,6 +204,7 @@ private struct SettingsForm<Content: View>: View {
       #if !os(tvOS)
         .scrollContentBackground(.hidden)
       #endif
+      .settingsColumn()
       .astraPageBackground()
       .settingsBottomRoom()
   }
@@ -208,6 +214,18 @@ extension View {
   /// iPhone: room under the last row for the floating tab bar, which is an
   /// overlay and not a safe-area inset, so About and Reset to Default never
   /// end up behind it when Settings is a tab.
+  /// Mac: Settings rows keep a readable width at the leading edge of a
+  /// full-width page, with no hard scroll-edge line under the title.
+  @ViewBuilder func settingsColumn() -> some View {
+    #if os(macOS)
+      scrollEdgeEffectHidden(true, for: .all)
+        .frame(maxWidth: Astra.Layout.settingsWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    #else
+      self
+    #endif
+  }
+
   @ViewBuilder func settingsBottomRoom() -> some View {
     #if os(iOS)
       contentMargins(.bottom, Astra.Layout.tabBarRoom, for: .scrollContent)
