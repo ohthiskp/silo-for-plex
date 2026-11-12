@@ -159,7 +159,6 @@ jobs:
             sleep 3
           }
           nav mac-nav-home -AstraDemoTab home
-          nav mac-nav-rows -AstraDemoTab home -AstraDemoScroll 700
           nav mac-nav-library -AstraDemoTab libraries
           nav mac-nav-search -AstraDemoTab search -AstraDemoQuery dune
           nav mac-nav-settings -AstraDemoTab settings
