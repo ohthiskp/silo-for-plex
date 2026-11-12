@@ -454,7 +454,7 @@ struct PlayerOverlay: View {
         let ended = level.generation
         Task { @MainActor in
           // The UI tests (demo mode) need longer to read it.
-          try? await Task.pause(Demo.isOn ? 4 : 0.5)
+          try? await Task.pause(Demo.isOn ? 8 : 0.5)
           if level.generation == ended { level.shown = false }
         }
         return

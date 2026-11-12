@@ -89,15 +89,17 @@ final class PlayerGestureTests: XCTestCase {
 
   func testSwipeOnTheRightChangesVolume() {
     point(0.85, 0.7).press(forDuration: 0.05, thenDragTo: point(0.85, 0.3))
+    // Checked before the screenshot: on a busy runner a screenshot can outlast the level.
+    let found = badge("astra.level.volume").waitForExistence(timeout: 5)
     shot("after-swipe-right")
-    XCTAssertTrue(badge("astra.level.volume").waitForExistence(timeout: 2), "No volume level after a swipe on the right")
+    XCTAssertTrue(found, "No volume level after a swipe on the right")
   }
 
   func testSwipeOnTheLeftChangesBrightness() {
     point(0.15, 0.3).press(forDuration: 0.05, thenDragTo: point(0.15, 0.7))
+    let found = badge("astra.level.brightness").waitForExistence(timeout: 5)
     shot("after-swipe-left")
-    XCTAssertTrue(
-      badge("astra.level.brightness").waitForExistence(timeout: 2), "No brightness level after a swipe on the left")
+    XCTAssertTrue(found, "No brightness level after a swipe on the left")
   }
 
   /// KP (2026-11-10): no ⋯ on iPhone, and the subtitle button's menu is
