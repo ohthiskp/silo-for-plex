@@ -38,7 +38,7 @@ struct MainView: View {
   @State private var selection: SidebarItem = Demo.tab.flatMap(SidebarItem.init(rawValue:)) ?? .home
   /// Pages stay alive once opened, so switching back is instant: no reload,
   /// no re-decoding artwork, scroll position kept.
-  @State private var opened: [SidebarItem] = [.home]
+  @State private var opened: [SidebarItem] = Array(Set([.home, Demo.tab.flatMap(SidebarItem.init(rawValue:)) ?? .home]))
   @State private var path: [Route] = []
 
   var body: some View {
