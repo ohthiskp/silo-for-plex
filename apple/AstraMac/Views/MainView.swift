@@ -64,6 +64,22 @@ struct MainView: View {
   }
 
   var body: some View {
+    // The window sets the size; a page or card that asks for more width
+    // can't grow the window or push the bar off screen (it runs off the right edge instead).
+    GeometryReader { window in
+      layers.frame(width: window.size.width, height: window.size.height)
+    }
+    .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { safeTop = $0 }
+    .background(Astra.Color.bg.ignoresSafeArea())
+    .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
+    .environment(\.openItem) { item in
+      // A TMDB-only title opens too; its page finds it on the server or greys out Play.
+      astraWithAnimation(Self.cardMotion) { path.append(.details(item)) }
+    }
+    .environment(\.playItem) { app.play($0) }
+  }
+
+  private var layers: some View {
     ZStack(alignment: .top) {
       ZStack(alignment: .leading) {
         ForEach(opened) { item in
@@ -84,8 +100,10 @@ struct MainView: View {
             .allowsHitTesting(path.isEmpty)
         }
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
       cards
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
       MacTopBar(selection: selection) { item in
         if !opened.contains(item) { opened.append(item) }
@@ -98,14 +116,6 @@ struct MainView: View {
       .padding(.top, Astra.Sidebar.barTop)
       .ignoresSafeArea(edges: .top)
     }
-    .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { safeTop = $0 }
-    .background(Astra.Color.bg.ignoresSafeArea())
-    .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
-    .environment(\.openItem) { item in
-      // A TMDB-only title opens too; its page finds it on the server or greys out Play.
-      astraWithAnimation(Self.cardMotion) { path.append(.details(item)) }
-    }
-    .environment(\.playItem) { app.play($0) }
   }
 
   static let cardMotion = Animation.spring(response: 0.42, dampingFraction: 0.9)
