@@ -52,7 +52,8 @@ struct MainView: View {
   @State private var selection: SidebarItem = SidebarItem.demo
   /// Pages stay alive once opened, so switching back is instant: no reload,
   /// no re-decoding artwork, scroll position kept.
-  @State private var opened: [SidebarItem] = [SidebarItem.demo]
+  /// Home is always laid out first: the window takes its size from Home, as at a normal launch.
+  @State private var opened: [SidebarItem] = SidebarItem.demo == .home ? [.home] : [.home, SidebarItem.demo]
   @State private var path: [Route] = Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
   /// The window's own top inset (the hidden title bar); pages leave room for the bar below it.
   @State private var safeTop: CGFloat = 28
