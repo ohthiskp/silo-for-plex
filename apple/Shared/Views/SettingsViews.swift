@@ -67,7 +67,7 @@ struct SettingsView: View {
       // KP (2026-11-12): the stack spans the whole page, so it draws no edge
       // line of its own; only the rows keep a readable width.
       NavigationStack { root }
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .settingsToolbarHidden()
         .astraPageBackground()
     #else
       root
@@ -218,13 +218,25 @@ extension View {
   /// full-width page, with no hard scroll-edge line under the title.
   @ViewBuilder func settingsColumn() -> some View {
     #if os(macOS)
-      scrollEdgeEffectHidden(true, for: .all)
+      Group {
+        if #available(macOS 26.0, *) { scrollEdgeEffectHidden(true, for: .all) } else { self }
+      }
         .frame(maxWidth: Astra.Layout.settingsWidth, alignment: .leading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     #else
       self
     #endif
   }
+
+  #if os(macOS)
+    @ViewBuilder fileprivate func settingsToolbarHidden() -> some View {
+      if #available(macOS 15.0, *) {
+        toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+      } else {
+        self
+      }
+    }
+  #endif
 
   @ViewBuilder func settingsBottomRoom() -> some View {
     #if os(iOS)
