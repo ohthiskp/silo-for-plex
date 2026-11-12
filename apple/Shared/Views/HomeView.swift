@@ -14,7 +14,7 @@ struct HomeView: View {
   @State private var showsTopBar = true
   /// The hero title on screen; the frosted page background follows it.
   @State private var heroItem: PlexMetadata?
-  #if os(iOS)
+  #if os(iOS) || os(macOS)
     /// Only moved by the CI demo (`-AstraDemoScroll`), to screenshot the rows below the hero.
     @State private var scrollPosition = ScrollPosition(edge: .top)
   #endif
@@ -43,11 +43,15 @@ struct HomeView: View {
         BottomEdgeBlur()
           .frame(maxHeight: .infinity, alignment: .bottom)
       #endif
-      topBar
-        .opacity(showsTopBar ? 1 : 0)
-        .offset(y: showsTopBar ? 0 : -12)
-        .allowsHitTesting(showsTopBar)
-        .astraAnimation(Astra.Motion.base, value: showsTopBar)
+      #if !os(macOS)
+        topBar
+          .opacity(showsTopBar ? 1 : 0)
+          .offset(y: showsTopBar ? 0 : -12)
+          .allowsHitTesting(showsTopBar)
+          .astraAnimation(Astra.Motion.base, value: showsTopBar)
+      #endif
+      // Mac (KP, 2026-11-12): the streaming services are circles down the
+      // left (MacServiceRail in MainView), as on Apple TV.
     }
     // KP (2026-11-09): frosted Liquid Glass over the hero's artwork, not flat black.
     .background(AmbientBackdrop(library: library, item: heroItem ?? library.homeHero.first))
@@ -147,7 +151,7 @@ struct HomeView: View {
       .onGeometryChange(for: Bool.self, of: { $0.frame(in: .scrollView).minY > -60 }) { showsTopBar = $0 }
     }
     .scrollIndicators(.never)
-    #if os(iOS)
+    #if os(iOS) || os(macOS)
       .scrollPosition($scrollPosition)
       .task {
         guard let y = Demo.homeScroll, (try? await Task.pause(12)) != nil else { return }

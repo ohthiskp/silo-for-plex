@@ -1,8 +1,10 @@
 import AstraKit
 import SwiftUI
 
-/// The sidebar destinations, in order. Astra (KP, 2026-11-07): like the
-/// iPhone tabs, Movies, Shows and Downloads live inside Library.
+/// The Mac's pages, in the top bar (KP, 2026-11-12: "make the menus how
+/// Apple TV is"): Search, Home and Library centred, Settings as a round
+/// button at the far right. Movies, Shows, Watchlist and Downloads live
+/// inside Library, as on iPhone.
 enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
   case home, search, library, settings
 
@@ -28,46 +30,74 @@ enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
 
   /// ⌘1 to ⌘4.
   var shortcut: KeyEquivalent { KeyEquivalent(Character(String((Self.allCases.firstIndex(of: self) ?? 0) + 1))) }
+
+  /// `-AstraDemoTab` for the CI screenshots.
+  static var demo: SidebarItem {
+    switch Demo.tab {
+    case "search": .search
+    case "libraries", "library", "movies", "shows", "watchlist": .library
+    case "settings": .settings
+    default: .home
+    }
+  }
 }
 
-/// The signed-in app: a docked glass sidebar, the pages, and details as stacked cards.
+/// The signed-in app, laid out like Apple TV (KP, 2026-11-12): the main tabs
+/// in a glass bar along the top, the streaming services as circles down the
+/// left of Home, and details as stacked cards under the bar.
 struct MainView: View {
   @Environment(AppModel.self) private var app
   var library: LibraryStore
 
-  @State private var selection: SidebarItem = .home
+  @State private var selection: SidebarItem = SidebarItem.demo
   /// Pages stay alive once opened, so switching back is instant: no reload,
   /// no re-decoding artwork, scroll position kept.
-  @State private var opened: [SidebarItem] = [.home]
-  @State private var path: [Route] = []
+  @State private var opened: [SidebarItem] = [SidebarItem.demo]
+  @State private var path: [Route] = Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
+  /// The window's own top inset (the hidden title bar); pages leave room for the bar below it.
+  @State private var safeTop: CGFloat = 28
+
+  /// How far below the safe area pages and cards start, so they clear the bar.
+  private var barClearance: CGFloat {
+    max(0, Astra.Sidebar.barTop + Astra.Sidebar.barHeight + 14 - safeTop)
+  }
 
   var body: some View {
-    ZStack(alignment: .leading) {
-      ZStack {
+    ZStack(alignment: .top) {
+      ZStack(alignment: .leading) {
         ForEach(opened) { item in
           let current = item == selection
           page(for: item)
             // Behind cards or another page: timers and the hero pause.
             .environment(\.isPageActive, current && path.isEmpty)
+            .environment(\.contentLeading, item == .home ? Astra.Sidebar.contentInset : Astra.Sidebar.pageInset)
             .opacity(current ? 1 : 0)
             .allowsHitTesting(current && path.isEmpty)
             .accessibilityHidden(!current || !path.isEmpty)
         }
+
+        if selection == .home, library.tmdb != nil {
+          // As on Apple TV: For You and each service down the left of Home.
+          MacServiceRail(library: library)
+            .padding(.leading, Astra.Sidebar.margin)
+            .allowsHitTesting(path.isEmpty)
+        }
       }
-      .environment(\.contentLeading, Astra.Sidebar.contentInset)
 
       cards
 
-      Sidebar(selection: $selection) { item in
+      MacTopBar(selection: selection) { item in
         if !opened.contains(item) { opened.append(item) }
-        // Instant: the page and the sidebar both switch without animation.
+        // Instant: the page and the bar both switch without animation.
         selection = item
         astraWithAnimation(Self.cardMotion) { path.removeAll() }
         // Astra (KP, 2026-11-07): clicking Home always goes back to For You.
         if item == .home, library.selectedService != nil { library.select(nil) }
       }
-      .padding(.leading, Astra.Sidebar.margin)
+      .padding(.top, Astra.Sidebar.barTop)
+      .ignoresSafeArea(edges: .top)
     }
+    .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { safeTop = $0 }
     .background(Astra.Color.bg.ignoresSafeArea())
     .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     .environment(\.openItem) { item in
@@ -82,8 +112,8 @@ struct MainView: View {
   /// edges of the ones below show.
   private static let cardStep: CGFloat = 26
 
-  /// Details open as cards sliding in from the right over the page, leaving
-  /// the sidebar and a strip of the page visible. Opening another title from
+  /// Details open as cards sliding in from the right over the page, under
+  /// the top bar. Opening another title from
   /// a card stacks a new card on top; X (or Esc, or a click on the dimmed
   /// page) closes the top one.
   private var cards: some View {
@@ -102,9 +132,10 @@ struct MainView: View {
           .id("\(depth)|\(route.hashValue)")
           // Only the top card answers Return (Play) and Esc (Close).
           .environment(\.isPageActive, isTop)
-          .padding(.leading, Astra.Sidebar.contentInset + 24 + CGFloat(depth) * Self.cardStep)
+          .padding(.leading, 14 + CGFloat(depth) * Self.cardStep)
           .padding(.trailing, 14)
-          .padding(.vertical, 14)
+          .padding(.top, barClearance)
+          .padding(.bottom, 14)
           // Cards under the top one sink back a little.
           .scaleEffect(isTop ? 1 : 0.985, anchor: .leading)
           .brightness(isTop ? 0 : -0.12)
@@ -142,105 +173,109 @@ struct MainView: View {
     case .home:
       HomeView(library: library)
     case .library:
-      LibraryPage(library: library)
+      LibraryPage(library: library).safeAreaPadding(.top, barClearance)
     case .search:
-      SearchView(library: library)
+      SearchView(library: library).safeAreaPadding(.top, barClearance)
     case .settings:
-      SettingsPage()
+      SettingsPage().safeAreaPadding(.top, barClearance)
     }
   }
 }
 
-// MARK: - Sidebar
+// MARK: - Top bar
 
-/// Liquid Glass sidebar: icons only, and icons plus names while the pointer
-/// is over it (KP, 2026-11-08). It floats over the page, so expanding never
-/// moves the content. Astra (KP, 2026-11-07): no sliding pill; a click lights
-/// the chosen icon at once, with no animation.
-struct Sidebar: View {
-  @Binding var selection: SidebarItem
+/// The top bar from Apple TV, made for the pointer: Search, Home and Library
+/// centred on one glass capsule, Settings as a round glass button at the far
+/// right. The open page is a white pill; the pointer lights an item softly.
+/// Astra (KP, 2026-11-07): no sliding pill; a click lights the item at once.
+struct MacTopBar: View {
+  var selection: SidebarItem
   var choose: (SidebarItem) -> Void
   @Environment(AppModel.self) private var app
-  @State private var expanded = false
-
-  private static let spacing: CGFloat = Astra.Spacing.xs
-  /// The collapsed bar is a capsule; the same radius keeps its ends round when it widens.
-  private static let shape = RoundedRectangle(cornerRadius: Astra.Sidebar.collapsedWidth / 2, style: .continuous)
 
   var body: some View {
-    VStack(spacing: Self.spacing) {
-      ForEach(SidebarItem.allCases) { item in
-        SidebarButton(
-          symbol: item.symbol, title: item.title, selected: selection == item, expanded: expanded,
-          count: item == .library ? app.downloads.jobs.count : 0
-        ) {
-          choose(item)
-        }
-        .keyboardShortcut(item.shortcut, modifiers: .command)
+    ZStack {
+      HStack(spacing: 2) {
+        item(.search, iconOnly: true)
+        item(.home)
+        item(.library, count: app.downloads.jobs.count)
       }
+      .padding(4)
+      .astraGlass(in: Capsule(), variant: .clear)
+      .astraGlassEdge(Capsule(), strength: 0.6)
+
+      HStack {
+        Spacer()
+        item(.settings, iconOnly: true)
+          .padding(4)
+          .astraGlass(in: Circle(), variant: .clear)
+          .astraGlassEdge(Circle(), strength: 0.6)
+      }
+      .padding(.trailing, Astra.Spacing.pageTrailing)
     }
-    // Selection changes light at once; only the hover expand animates.
+    .frame(height: Astra.Sidebar.barHeight)
+    // Selection changes light at once.
     .transaction(value: selection) { $0.animation = nil }
-    .padding(9)
-    .frame(width: expanded ? Astra.Sidebar.expandedWidth : Astra.Sidebar.collapsedWidth, alignment: .leading)
-    // Clear glass with a light edge, like the player's panel (KP's reference card).
-    .astraGlass(in: Self.shape, variant: .clear)
-    .astraGlassEdge(Self.shape)
-    .contentShape(Self.shape)
-    .onHover { hovering in astraWithAnimation(Astra.Motion.base) { expanded = hovering } }
-    .frame(maxHeight: .infinity)
+  }
+
+  private func item(_ page: SidebarItem, iconOnly: Bool = false, count: Int = 0) -> some View {
+    MacBarButton(
+      symbol: page.symbol, title: page.title, iconOnly: iconOnly, selected: selection == page, count: count
+    ) { choose(page) }
+    .keyboardShortcut(page.shortcut, modifiers: .command)
   }
 }
 
-/// One sidebar button: a 44 pt icon, with its name beside it when the sidebar
-/// is expanded. Its colour comes only from `selected`.
-struct SidebarButton: View {
+/// One top-bar item: an icon and its name (or the icon alone for Search and
+/// Settings). Its colour comes only from `selected`.
+struct MacBarButton: View {
   var symbol: String
   var title: String
+  var iconOnly = false
   var selected: Bool
-  var expanded = false
-  /// Astra (KP, 2026-11-07): Library shows how many downloads are running, like the iPhone tab.
+  /// Astra (KP, 2026-11-07): Library shows how many downloads are running.
   var count = 0
   var action: () -> Void
+  @State private var hovering = false
+
+  private var height: CGFloat { Astra.Sidebar.barHeight - 8 }
 
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 4) {
+      HStack(spacing: 7) {
         Image(systemName: symbol)
-          .font(.system(size: 17, weight: .semibold))
-          .frame(width: 44, height: 44)
-          .overlay(alignment: .topTrailing) {
-            if count > 0 {
-              Text("\(count)")
-                .font(.system(size: 10, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(Astra.Color.onAccent)
-                .padding(.horizontal, 5)
-                .frame(minWidth: 16, minHeight: 16)
-                .background(Capsule().fill(Astra.Color.accent))
-                .overlay(Capsule().stroke(Color.black.opacity(0.25)))
-                .offset(x: 2, y: 2)
-                .astraTransition(.scale.combined(with: .opacity))
-            }
-          }
-          .astraAnimation(.snappy(duration: 0.2), value: count)
-        if expanded {
+          .font(.system(size: 14, weight: .semibold))
+        if !iconOnly {
           Text(title)
             .font(.system(size: 14, weight: .semibold))
             .lineLimit(1)
             .fixedSize()
-            .transition(.opacity)
-          Spacer(minLength: 0)
+        }
+        if count > 0 {
+          Text("\(count)")
+            .font(.system(size: 10, weight: .bold))
+            .monospacedDigit()
+            .foregroundStyle(selected ? Astra.Color.theme : Astra.Color.onAccent)
+            .padding(.horizontal, 5)
+            .frame(minWidth: 16, minHeight: 16)
+            .background(Capsule().fill(selected ? Astra.Color.onTheme : Astra.Color.accent))
+            .astraTransition(.scale.combined(with: .opacity))
         }
       }
-      .frame(width: expanded ? nil : 44, height: 44)
-      .frame(maxWidth: expanded ? .infinity : nil, alignment: .leading)
-      .foregroundStyle(selected ? Astra.Color.onTheme : Astra.Color.muted)
-      // A white fill (Settings → Appearance → Theme), not glass: it sits on the sidebar's glass.
-      .background { if selected { Capsule().fill(Astra.Color.theme) } }
+      .padding(.horizontal, iconOnly ? 0 : 16)
+      .frame(width: iconOnly ? height : nil, height: height)
+      .foregroundStyle(selected ? Astra.Color.onTheme : (hovering ? Astra.Color.ink : Astra.Color.muted))
+      .background {
+        if selected {
+          Capsule().fill(Astra.Color.theme)
+        } else if hovering {
+          Capsule().fill(.white.opacity(0.1))
+        }
+      }
       .contentShape(Capsule())
     }
-    .buttonStyle(SidebarButtonStyle())
+    .buttonStyle(MacBarButtonStyle())
+    .onHover { hovering = $0 }
     .help(title)
     .accessibilityLabel(count > 0 ? "\(title), \(count)" : title)
     .accessibilityAddTraits(selected ? .isSelected : [])
@@ -248,10 +283,92 @@ struct SidebarButton: View {
 }
 
 /// No dimming on press (that read as a flicker); a slight scale instead.
-private struct SidebarButtonStyle: ButtonStyle {
+private struct MacBarButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .scaleEffect(configuration.isPressed ? 0.92 : 1)
+      .scaleEffect(configuration.isPressed ? 0.94 : 1)
       .astraAnimation(.snappy(duration: 0.12), value: configuration.isPressed)
+  }
+}
+
+// MARK: - Streaming services
+
+/// For You and the streaming services as floating glass circles down the
+/// left of Home, as on Apple TV (KP, 2026-11-12). Logos are white until
+/// chosen; the chosen one shows its brand colour with a ring. Scrolls when
+/// the window is too short for all of them.
+struct MacServiceRail: View {
+  var library: LibraryStore
+  @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
+
+  var body: some View {
+    ViewThatFits(in: .vertical) {
+      circles
+      ScrollView(.vertical) { circles.padding(.vertical, 8) }
+        .scrollIndicators(.never)
+        .frame(width: Astra.Sidebar.collapsedWidth + 16)
+    }
+    .frame(maxHeight: .infinity, alignment: .center)
+    .padding(.top, Astra.Sidebar.barTop + Astra.Sidebar.barHeight)
+  }
+
+  private var circles: some View {
+    VStack(spacing: 10) {
+      circle(nil)
+      ForEach(StreamingService.all) { circle($0) }
+    }
+  }
+
+  private func circle(_ service: StreamingService?) -> some View {
+    let selected = library.selectedService == service
+    let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
+    return MacServiceCircle(selected: selected, brand: brand, label: service?.label ?? "For You") {
+      library.select(service)
+    } content: {
+      if let service {
+        Image(service.logo)
+          .renderingMode(.template)
+          .resizable()
+          .scaledToFit()
+          .frame(width: Astra.Sidebar.collapsedWidth * 0.66, height: min(service.logoHeight * 0.7, 18))
+          .foregroundStyle(selected ? brand : .white)
+      } else {
+        Image(systemName: "sparkles")
+          .font(.system(size: 17, weight: .semibold))
+          .foregroundStyle(.white)
+      }
+    }
+  }
+}
+
+/// One streaming circle: clear glass over a dark tint, lighter under the
+/// pointer, the chosen one ringed in its brand colour.
+private struct MacServiceCircle<Content: View>: View {
+  var selected: Bool
+  var brand: Color
+  var label: String
+  var action: () -> Void
+  @ViewBuilder var content: Content
+  @State private var hovering = false
+
+  var body: some View {
+    let size = Astra.Sidebar.collapsedWidth
+    Button(action: action) {
+      content
+        .frame(width: size, height: size)
+        .background { Circle().fill(.black.opacity(hovering ? 0.15 : 0.3)) }
+        .background { if hovering { Circle().fill(.white.opacity(0.18)) } }
+        .astraGlass(in: Circle(), variant: .clear)
+        .overlay { if selected { Circle().strokeBorder(brand, lineWidth: 2.5) } }
+        .overlay { if !selected { Circle().strokeBorder(.white.opacity(0.14), lineWidth: 1) } }
+        .contentShape(Circle())
+        .scaleEffect(hovering ? 1.06 : 1)
+        .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+    }
+    .buttonStyle(MacBarButtonStyle())
+    .onHover { h in astraWithAnimation(.snappy(duration: 0.18)) { hovering = h } }
+    .help(label)
+    .accessibilityLabel(label)
+    .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }

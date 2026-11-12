@@ -139,6 +139,39 @@ jobs:
           name: Astra-SwiftUI-macOS
           path: Astra-SwiftUI.zip
 
+      - name: Navigation screenshots (Mac)
+        # KP (2026-11-12): the Mac's tabs along the top and the streaming
+        # circles down the left, like Apple TV. Printed into the log as JPEGs
+        # (ASTRA-SHOT-BEGIN … END) for review before shipping.
+        continue-on-error: true
+        working-directory: apple
+        run: |
+          APP=".build/Build/Products/Release/Astra.app"
+          BIN="$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
+          mkdir -p "$RUNNER_TEMP/nav"
+          nav() {
+            name=$1; shift
+            "$BIN" -AstraDemo YES "$@" > /dev/null 2>&1 &
+            pid=$!
+            sleep 30
+            screencapture -x "$RUNNER_TEMP/nav/$name.png" || true
+            kill "$pid" 2>/dev/null || true
+            sleep 3
+          }
+          nav mac-nav-home -AstraDemoTab home
+          nav mac-nav-rows -AstraDemoTab home -AstraDemoScroll 700
+          nav mac-nav-library -AstraDemoTab libraries
+          nav mac-nav-search -AstraDemoTab search -AstraDemoQuery dune
+          nav mac-nav-settings -AstraDemoTab settings
+          nav mac-nav-details -AstraDemoTab home -AstraDemoOpen 101
+          for f in "$RUNNER_TEMP"/nav/*.png; do
+            [ -f "$f" ] || continue
+            sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "ASTRA-SHOT-BEGIN $(basename "${f%.png}")"
+            base64 -i "${f%.png}.jpg" | fold -w 4000
+            echo "ASTRA-SHOT-END"
+          done
+
       - name: Upload build log
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
