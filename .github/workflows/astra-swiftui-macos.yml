@@ -163,7 +163,8 @@ jobs:
           }
           nav mac-nav-home 30 -AstraDemoTab home
           nav mac-nav-home-late 70 -AstraDemoTab home
-          nav mac-nav-library 30 -AstraDemoTab libraries
+          nav mac-nav-movies 30 -AstraDemoTab movies
+          nav mac-nav-watchlist 30 -AstraDemoTab watchlist
           nav mac-nav-search 30 -AstraDemoTab search -AstraDemoQuery dune
           nav mac-nav-settings 30 -AstraDemoTab settings
           nav mac-nav-details 30 -AstraDemoTab home -AstraDemoOpen 101

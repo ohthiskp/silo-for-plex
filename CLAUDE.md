@@ -79,8 +79,9 @@ Hard rules:
 
 - No purple or violet anywhere. Only Apple's official Liquid Glass.
 - Always play original files: never transcode or downscale; quality picks between existing versions.
-- Navigation = Home, Library (Libraries / Watchlist / Downloads), Search, Settings. Mac (KP, 2026-11-12) is laid
-  out like Apple TV: main tabs in a glass bar along the top, streaming circles down the left of Home;
+- Navigation = Home, Library (Libraries / Watchlist / Downloads), Search, Settings. Mac (KP, 2026-11-12/13) is laid
+  out like Apple TV: a glass top bar with search, Home, Movies, Shows, Watchlist, plus round Downloads and
+  Settings at the right; streaming circles down the left of Home;
   no hover expand, no sliding indicator. iPhone tabs are customizable (Home and Library always stay).
 - Home (4.0): Hero, Continue Watching, Top Trending, Recently Released, All-Time Greats, each with its own
   Movies | Series switch; full cineby/TMDB lists (titles not on Plex show greyed Play); no View All.

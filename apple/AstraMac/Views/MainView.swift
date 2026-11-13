@@ -1,20 +1,22 @@
 import AstraKit
 import SwiftUI
 
-/// The Mac's pages, in the top bar (KP, 2026-11-12: "make the menus how
-/// Apple TV is"): Search, Home and Library centred, Settings as a round
-/// button at the far right. Movies, Shows, Watchlist and Downloads live
-/// inside Library, as on iPhone.
+/// The Mac's pages, in the top bar like Apple TV (KP, 2026-11-13): the search
+/// icon, then Home, Movies, Shows and Watchlist centred; Downloads and
+/// Settings as round buttons at the far right.
 enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
-  case home, search, library, settings
+  case home, movies, shows, watchlist, search, downloads, settings
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
     case .home: "Home"
+    case .movies: "Movies"
+    case .shows: "Shows"
+    case .watchlist: "Watchlist"
     case .search: "Search"
-    case .library: "Library"
+    case .downloads: "Downloads"
     case .settings: "Settings"
     }
   }
@@ -22,22 +24,24 @@ enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
   var symbol: String {
     switch self {
     case .home: "house.fill"
+    case .movies: "film.fill"
+    case .shows: "tv.fill"
+    case .watchlist: "bookmark.fill"
     case .search: "magnifyingglass"
-    case .library: "square.stack.fill"
+    case .downloads: "arrow.down.circle.fill"
     case .settings: "gearshape.fill"
     }
   }
 
-  /// ⌘1 to ⌘4.
+  /// ⌘1 to ⌘7, in the order above.
   var shortcut: KeyEquivalent { KeyEquivalent(Character(String((Self.allCases.firstIndex(of: self) ?? 0) + 1))) }
 
   /// `-AstraDemoTab` for the CI screenshots.
   static var demo: SidebarItem {
     switch Demo.tab {
-    case "search": .search
-    case "libraries", "library", "movies", "shows", "watchlist": .library
-    case "settings": .settings
-    default: .home
+    case "libraries", "library", "movies": .movies
+    case let tab?: SidebarItem(rawValue: tab) ?? .home
+    case nil: .home
     }
   }
 }
@@ -183,8 +187,24 @@ struct MainView: View {
     switch item {
     case .home:
       HomeView(library: library)
-    case .library:
-      LibraryPage(library: library).safeAreaPadding(.top, barClearance)
+    case .movies, .shows:
+      AstraPage {
+        AstraSectionHeader(title: item.title)
+        LibraryGridContent(library: library, kind: item == .movies ? "movie" : "show")
+      }
+      .safeAreaPadding(.top, barClearance)
+    case .watchlist:
+      AstraPage {
+        AstraSectionHeader(title: "Watchlist")
+        WatchlistContent(library: library)
+      }
+      .safeAreaPadding(.top, barClearance)
+    case .downloads:
+      AstraPage {
+        AstraSectionHeader(title: "Downloads")
+        DownloadsContent()
+      }
+      .safeAreaPadding(.top, barClearance)
     case .search:
       SearchView(library: library).safeAreaPadding(.top, barClearance)
     case .settings:
@@ -195,10 +215,11 @@ struct MainView: View {
 
 // MARK: - Top bar
 
-/// The top bar from Apple TV, made for the pointer: Search, Home and Library
-/// centred on one glass capsule, Settings as a round glass button at the far
-/// right. The open page is a white pill; the pointer lights an item softly.
-/// Astra (KP, 2026-11-07): no sliding pill; a click lights the item at once.
+/// The top bar from Apple TV, made for the pointer: the search icon, Home,
+/// Movies, Shows and Watchlist centred on one glass capsule; Downloads and
+/// Settings as round glass buttons at the far right. The open page is a
+/// white pill. Astra (KP, 2026-11-07): no sliding pill; a click lights the
+/// item at once.
 struct MacTopBar: View {
   var selection: SidebarItem
   var choose: (SidebarItem) -> Void
@@ -209,24 +230,31 @@ struct MacTopBar: View {
       HStack(spacing: 2) {
         item(.search, iconOnly: true)
         item(.home)
-        item(.library, count: app.downloads.jobs.count)
+        item(.movies)
+        item(.shows)
+        item(.watchlist)
       }
       .padding(4)
       .astraGlass(in: Capsule(), variant: .clear)
       .astraGlassEdge(Capsule(), strength: 0.6)
 
-      HStack {
+      HStack(spacing: 10) {
         Spacer()
-        item(.settings, iconOnly: true)
-          .padding(4)
-          .astraGlass(in: Circle(), variant: .clear)
-          .astraGlassEdge(Circle(), strength: 0.6)
+        round(.downloads, count: app.downloads.jobs.count)
+        round(.settings)
       }
       .padding(.trailing, Astra.Spacing.pageTrailing)
     }
     .frame(height: Astra.Sidebar.barHeight)
     // Selection changes light at once.
     .transaction(value: selection) { $0.animation = nil }
+  }
+
+  private func round(_ page: SidebarItem, count: Int = 0) -> some View {
+    item(page, iconOnly: true, count: count)
+      .padding(4)
+      .astraGlass(in: Circle(), variant: .clear)
+      .astraGlassEdge(Circle(), strength: 0.6)
   }
 
   private func item(_ page: SidebarItem, iconOnly: Bool = false, count: Int = 0) -> some View {
@@ -251,6 +279,17 @@ struct MacBarButton: View {
 
   private var height: CGFloat { Astra.Sidebar.barHeight - 8 }
 
+  private var badge: some View {
+    Text("\(count)")
+      .font(.system(size: 10, weight: .bold))
+      .monospacedDigit()
+      .foregroundStyle(selected && !iconOnly ? Astra.Color.theme : Astra.Color.onAccent)
+      .padding(.horizontal, 5)
+      .frame(minWidth: 16, minHeight: 16)
+      .background(Capsule().fill(selected && !iconOnly ? Astra.Color.onTheme : Astra.Color.accent))
+      .astraTransition(.scale.combined(with: .opacity))
+  }
+
   var body: some View {
     Button(action: action) {
       HStack(spacing: 7) {
@@ -262,19 +301,14 @@ struct MacBarButton: View {
             .lineLimit(1)
             .fixedSize()
         }
-        if count > 0 {
-          Text("\(count)")
-            .font(.system(size: 10, weight: .bold))
-            .monospacedDigit()
-            .foregroundStyle(selected ? Astra.Color.theme : Astra.Color.onAccent)
-            .padding(.horizontal, 5)
-            .frame(minWidth: 16, minHeight: 16)
-            .background(Capsule().fill(selected ? Astra.Color.onTheme : Astra.Color.accent))
-            .astraTransition(.scale.combined(with: .opacity))
-        }
+        if count > 0, !iconOnly { badge }
       }
       .padding(.horizontal, iconOnly ? 0 : 16)
       .frame(width: iconOnly ? height : nil, height: height)
+      // Downloads: how many are running, on the round button's corner.
+      .overlay(alignment: .topTrailing) {
+        if count > 0, iconOnly { badge.offset(x: 4, y: -4) }
+      }
       .foregroundStyle(selected ? Astra.Color.onTheme : (hovering ? Astra.Color.ink : Astra.Color.muted))
       .background {
         if selected {
