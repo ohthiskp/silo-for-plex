@@ -449,6 +449,9 @@ struct PlaybackSettings: View {
       } footer: {
         Text("Automatic shows what the file marks as forced or default. Always picks your language.")
       }
+      #if os(iOS)
+        SubtitleStyleSection()
+      #endif
       Section {
         Toggle("Next Episode Button", isOn: $nextEpisode).tint(Astra.Color.switchOn)
       } header: {
@@ -474,6 +477,41 @@ struct PlaybackSettings: View {
     }
   }
 }
+
+#if os(iOS)
+  /// Settings → Playback → Subtitle Style (KP, 2026-11-13): font, size,
+  /// colour and background, with a sample drawn the way the player draws it.
+  struct SubtitleStyleSection: View {
+    @Environment(AppModel.self) private var app
+    @State private var style = SubtitleStyle.current()
+
+    var body: some View {
+      Section {
+        if let library = app.library {
+          SubtitleSample(library: library, style: style)
+            .listRowInsets(EdgeInsets())
+        }
+        Picker("Font", selection: $style.font) {
+          ForEach(SubtitleFont.allCases) { Text($0.title).tag($0) }
+        }
+        Picker("Size", selection: $style.size) {
+          ForEach(SubtitleSize.allCases) { Text($0.title).tag($0) }
+        }
+        LabeledContent("Colour") { SubtitleColorPicker(selection: $style.color) }
+        Picker("Background", selection: $style.background) {
+          ForEach(SubtitleBackground.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+      } header: {
+        Text("Subtitle Style")
+      }
+      .onChange(of: style) {
+        style.save()
+        app.player.applySubtitleStyle()
+      }
+    }
+  }
+#endif
 
 // MARK: - Library
 

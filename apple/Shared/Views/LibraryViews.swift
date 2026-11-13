@@ -594,6 +594,15 @@ struct SettingsPage: View {
   @Environment(\.contentLeading) private var leading
 
   var body: some View {
+    // KP (2026-11-13): the Mac's own Settings page (MacSettingsPage).
+    #if os(macOS)
+      MacSettingsPage()
+    #else
+      listPage
+    #endif
+  }
+
+  private var listPage: some View {
     VStack(alignment: .leading, spacing: Astra.Spacing.m) {
       AstraSectionHeader(title: "Settings")
         .padding(.leading, leading)
