@@ -55,6 +55,60 @@ struct AstraPage<Content: View>: View {
   }
 }
 
+/// A row of choices on one clear glass capsule: the chosen one is a white
+/// pill with dark text, the rest muted until the pointer is over them.
+struct GlassChoices: View {
+  /// (tag, title, SF Symbol).
+  var options: [(String, String, String?)]
+  @Binding var selection: String
+
+  var body: some View {
+    HStack(spacing: 2) {
+      ForEach(options, id: \.0) { option in
+        GlassChoice(title: option.1, symbol: option.2, selected: selection == option.0) { selection = option.0 }
+      }
+    }
+    .padding(4)
+    .astraGlass(in: Capsule(), variant: .clear)
+    .astraGlassEdge(Capsule(), strength: 0.6)
+    .fixedSize()
+    .transaction(value: selection) { $0.animation = nil }
+  }
+}
+
+private struct GlassChoice: View {
+  var title: String
+  var symbol: String?
+  var selected: Bool
+  var action: () -> Void
+  @State private var hovering = false
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 6) {
+        if let symbol { Image(systemName: symbol).font(.system(size: 12, weight: .semibold)) }
+        Text(title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+      }
+      .padding(.horizontal, 14)
+      .frame(height: 30)
+      .foregroundStyle(selected ? Astra.Color.onTheme : (hovering ? Astra.Color.ink : Astra.Color.muted))
+      .background {
+        if selected {
+          Capsule().fill(Astra.Color.theme)
+        } else if hovering {
+          Capsule().fill(Astra.Color.ink.opacity(0.1))
+        }
+      }
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    #if os(macOS)
+      .onHover { hovering = $0 }
+    #endif
+    .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+}
+
 /// A quiet centred message for empty and unavailable states.
 struct EmptyState: View {
   var symbol: String
@@ -107,24 +161,26 @@ struct LibraryGridContent: View {
     sections.first { $0.key == sectionKey } ?? sections.first
   }
   private var noun: String { kind == "show" ? "Shows" : "Movies" }
+
+  /// Plex sort keys, their names and icons.
+  static let sorts: [(String, String, String?)] = [
+    ("addedAt:desc", "Recently Added", "clock"),
+    ("titleSort", "A–Z", "textformat"),
+    ("originallyAvailableAt:desc", "Release Date", "calendar"),
+    ("audienceRating:desc", "Rating", "star"),
+  ]
+
   var body: some View {
     VStack(alignment: .leading, spacing: Astra.Spacing.l) {
+      // KP (2026-11-13): "make the sort by view way sleeker and modern":
+      // one glass capsule of choices instead of a menu, the chosen one lit.
       HStack(spacing: Astra.Spacing.s) {
         if sections.count > 1 {
-          Picker("Library", selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 })) {
-            ForEach(sections) { Text($0.title).tag($0.key) }
-          }
-          .labelsHidden()
-          .fixedSize()
+          GlassChoices(
+            options: sections.map { ($0.key, $0.title, nil) },
+            selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 }))
         }
-        Picker("Sort", selection: $sort) {
-          Text("Recently Added").tag("addedAt:desc")
-          Text("Title").tag("titleSort")
-          Text("Release Date").tag("originallyAvailableAt:desc")
-          Text("Rating").tag("audienceRating:desc")
-        }
-        .labelsHidden()
-        .fixedSize()
+        GlassChoices(options: Self.sorts, selection: $sort)
       }
 
       if sections.isEmpty {
