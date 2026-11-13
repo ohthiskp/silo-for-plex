@@ -13,6 +13,7 @@ import SwiftUI
 
     var body: some View {
       NavigationStack {
+        ScrollViewReader { proxy in
         ScrollView {
           VStack(alignment: .leading, spacing: 28) {
             Text("Settings")
@@ -21,7 +22,11 @@ import SwiftUI
             ServerStatusBand()
             if let library = app.library {
               AppearanceBlock(library: library)
-              HStack(alignment: .top, spacing: 24) {
+              // Three columns in a wide window, fewer as it narrows.
+              LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 330), spacing: 24, alignment: .top)],
+                alignment: .leading, spacing: 24
+              ) {
                 VStack(alignment: .leading, spacing: 24) {
                   PlaybackBlock()
                   DownloadsBlock()
@@ -29,6 +34,7 @@ import SwiftUI
                 SubtitleBlock(library: library)
                 LibraryBlock()
               }
+              .id("lower")
             }
             SettingsFooter()
           }
@@ -40,6 +46,13 @@ import SwiftUI
           .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(.hidden)
+        .task {
+          // CI screenshots (`-AstraDemoScroll`): show the lower half.
+          guard Demo.homeScroll != nil else { return }
+          try? await Task.pause(2)
+          proxy.scrollTo("lower", anchor: .top)
+        }
+        }
         .astraPageBackground()
         .navigationDestination(for: SettingsPane.self) { pane in
           Group {
@@ -267,8 +280,20 @@ import SwiftUI
     var body: some View {
       VStack(alignment: .leading, spacing: 12) {
         Text("Appearance").astraFont(size: 22, weight: .bold).foregroundStyle(Astra.Color.ink)
-        HStack(alignment: .top, spacing: 24) {
-          preview
+        ViewThatFits(in: .horizontal) {
+          HStack(alignment: .top, spacing: 24) {
+            preview.frame(minWidth: 480)
+            side.frame(width: 300)
+          }
+          VStack(alignment: .leading, spacing: 16) {
+            preview
+            side
+          }
+        }
+      }
+    }
+
+    private var side: some View {
           VStack(spacing: 12) {
             SettingsCard {
               ForEach(AppTheme.allCases) { theme in themeRow(theme) }
@@ -278,9 +303,6 @@ import SwiftUI
               SettingSwitch(title: "Coloured logos", isOn: $logoColors)
             }
           }
-          .frame(width: 300)
-        }
-      }
     }
 
     /// Home's real hero, in the theme in use: the same artwork, logo, badges
