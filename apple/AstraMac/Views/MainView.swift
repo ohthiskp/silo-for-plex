@@ -232,7 +232,7 @@ struct MacTopBar: View {
         item(.home)
         item(.movies)
         item(.shows)
-        item(.watchlist)
+        item(.watchlist, iconOnly: true)
       }
       .padding(4)
       .astraGlass(in: Capsule(), variant: .clear)
