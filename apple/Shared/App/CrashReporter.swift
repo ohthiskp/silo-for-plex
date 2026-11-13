@@ -1,4 +1,5 @@
 #if os(iOS) || os(macOS)
+  import AstraKit
   import Darwin
   import Foundation
   import MachO
@@ -82,7 +83,8 @@
         parts.append(signal.components(separatedBy: "\n").map(Self.readableTime).joined(separator: "\n"))
       }
       if let exception { parts.append(exception) }
-      return "Astra crashed\n\n" + parts.joined(separator: "\n")
+      // Readable crash lines: Swift names demangled, Astra's frames with their offset.
+      return CrashReportText.tidy("Astra crashed\n\n" + parts.joined(separator: "\n"))
     }
 
     private static func readableTime(_ line: String) -> String {

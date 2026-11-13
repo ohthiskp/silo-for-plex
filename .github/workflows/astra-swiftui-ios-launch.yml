@@ -116,6 +116,7 @@ jobs:
           xcrun simctl launch "$UDID" "$BID" -AstraDemo YES -AstraDemoCrash YES > /dev/null
           sleep 12
           shot crash-report
+          shot crash-report-details -AstraDemoCrashDetails YES
           xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
           CRASHES="$(xcrun simctl get_app_container "$UDID" "$BID" data)/Library/Application Support/CrashReports"
           echo "--- crash report"; cat "$CRASHES/last-crash.txt" 2>/dev/null || echo "(none written)"
