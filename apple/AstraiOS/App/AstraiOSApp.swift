@@ -7,10 +7,16 @@ struct AstraiOSApp: App {
   @UIApplicationDelegateAdaptor(AstraAppDelegate.self) private var delegate
   @State private var app = AppModel()
 
+  init() {
+    // First, so a crash anywhere after this is caught (KP, 2026-11-12).
+    CrashReporter.shared.install()
+  }
+
   var body: some Scene {
     WindowGroup {
       RootView()
         .environment(app)
+        .crashReportSheet()
         // Colour scheme and tint follow the app theme (RootView).
         .task { await app.start() }
         // Astra: the player is landscape only on iPhone (KP, 2026-11-07).
