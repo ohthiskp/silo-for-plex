@@ -311,8 +311,12 @@ import SwiftUI
       ZStack(alignment: .bottomLeading) {
         Astra.Color.bg
         if let item = library.homeHero.first {
-          ArtworkImage(
-            library: library, item: item, kind: .heroBackdrop, width: 1280, height: 720, placeholder: Color.clear)
+          // Sized by the box, never by the picture: a filled image would widen the page.
+          Color.clear.overlay {
+            ArtworkImage(
+              library: library, item: item, kind: .heroBackdrop, width: 1280, height: 720, placeholder: Color.clear)
+          }
+          .clipped()
           HeroScrim()
           HeroInfo(library: library, item: item)
             .padding(28)
@@ -366,8 +370,11 @@ import SwiftUI
       ZStack {
         palette.bg
         if let item = library.homeHero.first {
-          ArtworkImage(library: library, item: item, kind: .heroBackdrop, width: 160, height: 90, placeholder: Color.clear)
-            .opacity(palette.ambient > 0 ? 1 : 0.85)
+          Color.clear.overlay {
+            ArtworkImage(library: library, item: item, kind: .heroBackdrop, width: 160, height: 90, placeholder: Color.clear)
+          }
+          .clipped()
+          .opacity(palette.ambient > 0 ? 1 : 0.85)
         }
         LinearGradient(
           stops: [.init(color: palette.bg.opacity(0), location: 0.3), .init(color: palette.bg, location: 0.95)],
@@ -529,8 +536,11 @@ struct SubtitleSample: View {
     ZStack(alignment: .bottom) {
       Color.black
       if let item = library.homeHero.first {
-        ArtworkImage(library: library, item: item, kind: .scenery, width: 640, height: 360, placeholder: Color.clear)
-          .opacity(0.8)
+        Color.clear.overlay {
+          ArtworkImage(library: library, item: item, kind: .scenery, width: 640, height: 360, placeholder: Color.clear)
+        }
+        .clipped()
+        .opacity(0.8)
       }
       Text("I'll be right back. Don't go anywhere.")
         .font(.custom(style.font.family, size: 17 * style.size.scale))
@@ -545,6 +555,7 @@ struct SubtitleSample: View {
         .padding(.bottom, 16)
         .padding(.horizontal, 12)
     }
+    .frame(maxWidth: .infinity)
     .frame(height: 132)
     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Astra.Color.hairline, lineWidth: 1))
