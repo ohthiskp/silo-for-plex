@@ -201,7 +201,16 @@
       .padding(.bottom, Astra.Spacing.xs)
       .frame(maxWidth: 520)
       .frame(maxWidth: .infinity)
-      .background(Astra.Color.bg.opacity(0.92).ignoresSafeArea())
+      .background {
+        // Solid behind the buttons, fading out above them so the details scroll under cleanly.
+        VStack(spacing: 0) {
+          LinearGradient(colors: [Astra.Color.bg.opacity(0), Astra.Color.bg], startPoint: .top, endPoint: .bottom)
+            .frame(height: Astra.Spacing.l)
+          Astra.Color.bg
+        }
+        .padding(.top, -Astra.Spacing.l)
+        .ignoresSafeArea()
+      }
     }
 
     private func copy() {

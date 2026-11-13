@@ -55,7 +55,7 @@ public enum CrashReportText {
 
   static func tidyLine(_ frame: Frame, base: UInt?, demangle: (String) -> String?) -> String {
     let index = frame.index.padding(toLength: max(3, frame.index.count + 1), withPad: " ", startingAt: 0)
-    let image = frame.image.padding(toLength: max(14, frame.image.count + 1), withPad: " ", startingAt: 0)
+    let image = frame.image.padding(toLength: max(26, frame.image.count + 1), withPad: " ", startingAt: 0)
     let appOffset: String? = {
       guard frame.image == "Astra", let base, frame.address >= base else { return nil }
       return "Astra + \(frame.address - base)"
