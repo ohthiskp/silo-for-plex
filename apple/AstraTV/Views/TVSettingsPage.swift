@@ -535,7 +535,7 @@ private struct TVSettingsFooter: View {
       Text("Astra \(SettingsView.versionText)")
         .font(.system(size: 23))
         .foregroundStyle(Astra.Color.ink.opacity(0.42))
-      Button("Sign Out") { app.signOut() }
+      SignOutButton()
         .buttonStyle(TVPillStyle(prominent: false))
     }
     .frame(maxWidth: .infinity)

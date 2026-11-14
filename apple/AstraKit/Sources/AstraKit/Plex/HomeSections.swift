@@ -27,6 +27,16 @@ public struct HomeShelf: Sendable, Equatable {
 
   /// Every title's dedupe key.
   public var keys: Set<String> { Set((movies + shows).map(HomeSections.key)) }
+
+  /// The shelf without the titles in `row` (QA P2-4: Continue Watching). An
+  /// episode or season there takes its show out too (`dedupKeys`).
+  public func excluding(titlesIn row: [PlexMetadata]) -> HomeShelf {
+    let taken = Set(row.flatMap(\.dedupKeys))
+    guard !taken.isEmpty else { return self }
+    return HomeShelf(
+      movies: movies.filter { taken.isDisjoint(with: $0.dedupKeys) },
+      shows: shows.filter { taken.isDisjoint(with: $0.dedupKeys) })
+  }
 }
 
 public enum HomeSections {
