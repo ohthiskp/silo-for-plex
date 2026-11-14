@@ -198,7 +198,9 @@ final class SessionWatch: @unchecked Sendable {
   /// How much more memory iOS would let Astra use.
   static func memoryLeftMB() -> Int? {
     #if os(iOS) || os(tvOS)
-      return Int(os_proc_available_memory() / 1_048_576)
+      // 0 means no limit applies (the simulator) or unknown, not "nothing left".
+      let left = os_proc_available_memory()
+      return left > 0 ? Int(left / 1_048_576) : nil
     #else
       return nil
     #endif
