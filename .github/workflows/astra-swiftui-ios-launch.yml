@@ -1,0 +1,176 @@
+name: Astra SwiftUI iPhone launch check
+run-name: SwiftUI iPhone launch check ${{ github.sha }}
+
+# Builds the SwiftUI iPhone app for the iOS simulator, launches it for 20 s and
+# prints any crash report, so launch crashes can be seen without a phone.
+on:
+  push:
+    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s]
+    paths:
+      - "apple/**"
+      - ".github/workflows/astra-swiftui-ios-launch.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launch:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            apple/.build/SourcePackages
+          key: astra-swiftui-ios-sim-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apple/project.yml') }}
+
+      - name: Build for the simulator
+        working-directory: apple
+        env:
+          # TMDB artwork and the Top 10 in the demo screenshots.
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          set -o pipefail
+          brew install xcodegen
+          xcodegen generate
+          # build-for-testing: the app plus its UI tests (player gestures).
+          xcodebuild build-for-testing \
+            -project Astra.xcodeproj -scheme AstraiOS -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            TMDB_TOKEN="$TMDB_TOKEN" \
+            | tee "$RUNNER_TEMP/build.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name "Astra.app" -maxdepth 2 | head -1)
+          test -n "$APP" || { tail -80 "$RUNNER_TEMP/build.log"; exit 1; }
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Launch and watch for a crash
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];print(next(x["udid"] for k,v in d.items() if "iOS" in k for x in v if "iPhone" in x["name"]))')
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP"
+          BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          xcrun simctl spawn "$UDID" log stream --level error --predicate 'process == "Astra"' > "$RUNNER_TEMP/app.log" 2>&1 &
+          # The first launch after boot can be slow; launch waits until the app has a pid.
+          PID=$(xcrun simctl launch "$UDID" "$BID" | awk '{print $NF}')
+          echo "Launched pid $PID"
+          sleep 20
+          xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/screen.png" || true
+                    echo "--- errors"; tail -60 "$RUNNER_TEMP/app.log" || true
+          REPORTS=$(find ~/Library/Logs/DiagnosticReports -name "Astra*" -newer "$APP" 2>/dev/null)
+          if [ -n "$REPORTS" ]; then
+            for r in $REPORTS; do echo "--- $r"; head -150 "$r"; done
+            echo "::error::Astra crashed in the simulator"
+            exit 1
+          fi
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo "::error::Astra is not running after 20 s"
+            exit 1
+          fi
+          echo "Astra is still running after 20 s."
+
+      - name: Demo screenshots
+        if: success()
+        run: |
+          # Astra: the app against its built-in demo server (Shared/App/Demo.swift),
+          # one screenshot per screen, so the UI can be checked without a phone.
+          UDID=$(xcrun simctl list devices booted -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];print(next(x["udid"] for v in d.values() for x in v))')
+          BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          mkdir -p "$RUNNER_TEMP/shots"
+          shot() {
+            name=$1; shift
+            xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$BID" -AstraDemo YES "$@" > /dev/null
+            sleep 25
+            xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shots/$name.png" || true
+          }
+          shot home
+          shot home-rows -AstraDemoScroll 640
+          shot search -AstraDemoTab search
+          shot search-dune -AstraDemoTab search -AstraDemoQuery dune
+          shot libraries -AstraDemoTab libraries
+          shot details-movie -AstraDemoOpen 101
+          shot details-show -AstraDemoOpen 205
+          # Settings (KP's mockup, 2026-11-14): top, then scrolled to Subtitles and to Gestures.
+          shot settings -AstraDemoTab settings
+          shot settings-subtitles -AstraDemoTab settings -AstraDemoScroll 1
+          shot settings-gestures -AstraDemoTab settings -AstraDemoScroll 2
+          # The player (KP's 2026-11-10 redesign) over a 1 h 56 m test video, paused in each state.
+          brew install ffmpeg > /dev/null 2>&1 || true
+          ffmpeg -loglevel error -f lavfi -i testsrc2=duration=6960:size=1280x720:rate=1 \
+            -c:v libx264 -preset ultrafast -g 10 -pix_fmt yuv420p "$RUNNER_TEMP/player.mp4" || true
+          if [ -f "$RUNNER_TEMP/player.mp4" ]; then
+            shot player-controls -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer controls
+            shot player-scrub -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer scrub
+          fi
+          # The crash report screen (KP, 2026-11-12): crash on purpose, then the next
+          # launch shows the report. Cleared afterwards so the UI tests start clean.
+          xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+          xcrun simctl launch "$UDID" "$BID" -AstraDemo YES -AstraDemoCrash YES > /dev/null
+          sleep 12
+          shot crash-report
+          shot crash-report-details -AstraDemoCrashDetails YES
+          xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+          CRASHES="$(xcrun simctl get_app_container "$UDID" "$BID" data)/Library/Application Support/CrashReports"
+          echo "--- crash report"; cat "$CRASHES/last-crash.txt" 2>/dev/null || echo "(none written)"
+          rm -rf "$CRASHES"
+          ls -la "$RUNNER_TEMP/shots"
+          # Small JPEGs printed into the log, for reviewers who can read logs but not artifacts.
+          for f in "$RUNNER_TEMP"/shots/*.png; do
+            sips -s format jpeg -s formatOptions 55 -Z 1000 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "ASTRA-SHOT-BEGIN $(basename "${f%.png}")"
+            base64 -i "${f%.png}.jpg" | fold -w 4000
+            echo "ASTRA-SHOT-END"
+          done
+
+      - name: Player gesture UI tests
+        if: always() && env.APP != ''
+        working-directory: apple
+        run: |
+          # A two-minute test video (mpv plays it from the host path).
+          brew install ffmpeg > /dev/null 2>&1 || true
+          ffmpeg -loglevel error -f lavfi -i testsrc=duration=120:size=1280x720:rate=30 \
+            -c:v libx264 -pix_fmt yuv420p "$RUNNER_TEMP/demo.mp4"
+          UDID=$(xcrun simctl list devices booted -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];print(next(x["udid"] for v in d.values() for x in v))')
+          set +e
+          TEST_RUNNER_ASTRA_DEMO_VIDEO="$RUNNER_TEMP/demo.mp4" xcodebuild test-without-building \
+            -project Astra.xcodeproj -scheme AstraiOS -configuration Release \
+            -destination "id=$UDID" -derivedDataPath "$RUNNER_TEMP/dd" \
+            -resultBundlePath "$RUNNER_TEMP/ui.xcresult" 2>&1 | tee "$RUNNER_TEMP/ui.log" \
+            | grep -E "Test Case|error:|XCTAssert|TEST (SUCCEEDED|FAILED)|\*\* TEST"
+          STATUS=${PIPESTATUS[0]}
+          echo "--- gesture log"
+          xcrun simctl spawn "$UDID" log show --last 15m --style compact \
+            --predicate 'eventMessage CONTAINS "Astra gesture"' | tail -80
+          # Screenshots the tests took, printed small for log readers.
+          mkdir -p "$RUNNER_TEMP/uishots"
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/ui.xcresult" \
+            --output-path "$RUNNER_TEMP/uishots" > /dev/null 2>&1 || true
+          for f in "$RUNNER_TEMP"/uishots/*.png; do
+            [ -f "$f" ] || continue
+            sips -s format jpeg -s formatOptions 50 -Z 900 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "ASTRA-SHOT-BEGIN ui-$(basename "${f%.png}")"
+            base64 -i "${f%.png}.jpg" | fold -w 4000
+            echo "ASTRA-SHOT-END"
+          done
+          exit $STATUS
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: ios-launch
+          path: |
+            ${{ runner.temp }}/screen.png
+            ${{ runner.temp }}/app.log
+            ${{ runner.temp }}/shots

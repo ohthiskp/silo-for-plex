@@ -56,13 +56,15 @@ jobs:
           echo "build=$(( 100 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
 
       - name: Build Astra.app
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
         run: >
           flutter build macos --release
           --build-name=${{ steps.ver.outputs.name }}
           --build-number=${{ steps.ver.outputs.build }}
           --dart-define=ENABLE_UPDATE_CHECK=true
           --dart-define=SUPPORTER_MODE=unlocked
-          --dart-define=TMDB_TOKEN=${{ secrets.TMDB_TOKEN }}
+          --dart-define=TMDB_TOKEN="$TMDB_TOKEN"
           --dart-define=GIT_COMMIT=${{ github.sha }}
 
       - name: Sign to run locally (ad-hoc)

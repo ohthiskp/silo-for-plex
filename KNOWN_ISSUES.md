@@ -3,6 +3,26 @@
 Severity: **P0** core flow broken (no new features until fixed) · **P1** wrong behavior · **P2** polish.
 The orchestrator keeps this file current. Newest first within each severity.
 
+## SwiftUI app (`apple/`), 2026-11-07
+Tracked in the stabilization plan (ROADMAP "S" milestones). Verified = CI build + `swift test`; nothing below
+has been clicked through on a Mac by Claude (no Swift or screen access here).
+
+| Sev | Issue | State |
+|---|---|---|
+| P0 | Change Server breaks Home/Shows (spinner, "No shows library") | **Fixed in code** (S1, e11f36f): validate before commit, old session kept on failure, generation tokens. Unit-tested; not yet tried by KP |
+| P0 | Streaming-service switching slow, times out, endless spinner | **Fixed in code** (S1): paged shared library index, cancellable loads, errors with Try Again. Not yet tried by KP |
+| P1 | Downloads stuck at 0%, second click cancels silently | **Fixed in code** (S3, 34d13cf): progress from bytes when size unknown, file checked on finish, reasons shown with Retry, cancel asks first, queue survives relaunch. Not yet tried by KP |
+| P1 | Player black ~8 s before first frame | **Partly fixed** (S2): "Starting…" shows until mpv's first frame instead of black. Startup time itself not measured |
+| P1 | Mac player window too big, not draggable; mini window keeps mini controls when enlarged | **Fixed in code** (S2): ~70% default size fitted to the video, drag anywhere, mini exits when resized past 720 pt or on full screen. Not yet tried by KP |
+| P1 | Sidebar shows two selections / icons vanish mid-switch | **Fixed in code** (S4, 9f69097): one sliding white pill. Not yet tried by KP; snapshot tests not added |
+| P2 | Streaming switcher overlaps hero title when scrolled | **Fixed in code** (S4): fades out once scrolled. Not yet tried by KP |
+| P2 | Blue system accent | Fixed in 2f1d436, not yet confirmed by KP |
+| P2 | No seek thumbnails; loading screen still the old one | **Fixed in code** (S5, c776f03): Plex BIF previews, white/grey loading screen ending on "Connected". Not yet tried by KP |
+| P1 | No in-app updates | **Added** (Sparkle 2.6.4, feed branch `appcast-swiftui`, secret `SPARKLE_SWIFTUI_ED_SEED`). KP must install one build by hand. End-to-end update not tested |
+| P2 | Hero showed old films | **Fixed in code**: TMDB trending matched to the library; fallback limited to the last 2 years |
+| P2 | For You hero waits for the full library index on big libraries | Open |
+| P3 | Downloads queued for a different server stay queued with no label until that server is chosen | Open |
+
 ## Test baseline (2026-11-06)
 Full `flutter test` on Linux, Flutter 3.47.1, branch `astra-rename`: **8,287 passed, 8 skipped, 116 failed**
 (the same suite on `main` has 118 failures; the rename fixed 2 and added none). A change may not add failures.
