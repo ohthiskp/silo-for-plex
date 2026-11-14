@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Astra Settings Wireframes</title>
+<!--
+  Low-to-mid fidelity Settings directions for iPhone and Apple TV (design-audit/05).
+  Grayscale on purpose: layout, labels, selection and focus only. Not production UI.
+  Annotations are the dashed orange notes. Real option labels from the code (apple/).
+-->
+<style>
+  :root { --bg:#f2f2f2; --ink:#111; --mid:#6b6b6b; --line:#cfcfcf; --card:#fff; --fill:#e6e6e6; --dark:#2a2a2a; --note:#c2410c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.35 -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; padding:24px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:18px; margin:36px 0 4px; }
+  .lede { color:var(--mid); margin:0 0 14px; max-width:980px; }
+  .row { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .cap { font-size:12px; font-weight:600; color:var(--mid); margin:0 0 6px; text-transform:uppercase; letter-spacing:.04em; }
+  /* iPhone frame: 390 x 844 at 0.62 scale feel; drawn at 300 x 650 */
+  .phone { width:300px; height:650px; background:var(--card); border:2px solid var(--dark); border-radius:38px; position:relative; overflow:hidden; padding:44px 14px 70px; }
+  .island { position:absolute; top:10px; left:50%; transform:translateX(-50%); width:92px; height:24px; background:var(--dark); border-radius:14px; }
+  .tabbar { position:absolute; left:14px; right:14px; bottom:12px; height:46px; border:1.5px solid var(--dark); border-radius:24px; display:flex; justify-content:space-around; align-items:center; font-size:10px; color:var(--mid); background:#fafafa; }
+  .tabbar b { color:var(--ink); }
+  .nav { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--mid); margin-bottom:6px; }
+  .title { font-size:26px; font-weight:700; margin:2px 0 10px; }
+  .title.s { font-size:20px; }
+  .sect { font-size:11px; color:var(--mid); text-transform:uppercase; letter-spacing:.04em; margin:12px 4px 4px; }
+  .group { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
+  .r { display:flex; justify-content:space-between; align-items:center; padding:9px 11px; border-top:1px solid var(--line); font-size:13px; gap:8px; min-height:38px; }
+  .r:first-child { border-top:0; }
+  .v { color:var(--mid); font-size:12px; white-space:nowrap; }
+  .chev::after { content:" ›"; color:var(--mid); }
+  .foot { font-size:11px; color:var(--mid); margin:4px 6px 0; }
+  .sw { width:32px; height:19px; border-radius:10px; background:var(--dark); position:relative; flex:none; }
+  .sw::after { content:""; position:absolute; right:2px; top:2px; width:15px; height:15px; border-radius:50%; background:#fff; }
+  .sw.off { background:var(--fill); } .sw.off::after { left:2px; right:auto; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:11px; flex:none; }
+  .seg span { padding:3px 8px; } .seg .on { background:var(--dark); color:#fff; }
+  .art { background:repeating-linear-gradient(135deg,#d9d9d9 0 8px,#cdcdcd 8px 16px); border-radius:12px; position:relative; color:#444; font-size:11px; display:flex; align-items:flex-end; padding:8px; }
+  .status { border:1px solid var(--line); border-radius:12px; padding:10px 11px; background:#fff; }
+  .status b { font-size:15px; }
+  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--dark); margin-right:5px; }
+  .bar { height:5px; background:var(--fill); border-radius:3px; margin:7px 0 4px; } .bar i { display:block; height:100%; width:100%; background:var(--dark); border-radius:3px; }
+  .btn { display:inline-block; border:1.5px solid var(--dark); border-radius:16px; padding:3px 10px; font-size:12px; font-weight:600; }
+  .btn.p { background:var(--dark); color:#fff; }
+  .check::after { content:"✓"; font-weight:700; }
+  .note { position:absolute; border:1.5px dashed var(--note); color:var(--note); background:#fff7f2; font-size:10.5px; line-height:1.25; padding:4px 6px; border-radius:6px; max-width:150px; z-index:5; }
+  .tiles { display:flex; gap:8px; } .tiles > div { flex:1; text-align:center; font-size:11px; }
+  .tiles .sq { height:56px; border-radius:9px; border:1px solid var(--line); background:var(--fill); margin-bottom:4px; }
+  .tiles .sel .sq { outline:2px solid var(--dark); outline-offset:2px; }
+  .big { font-size:30px; font-weight:800; line-height:1.05; }
+  .muted { color:var(--mid); }
+  /* Apple TV frame: 1920 x 1080 drawn at 640 x 360 */
+  .tv { width:640px; height:360px; background:var(--card); border:2px solid var(--dark); border-radius:10px; position:relative; overflow:hidden; padding:16px 32px; font-size:11px; }
+  .topbar { display:flex; justify-content:center; gap:16px; font-size:10.5px; color:var(--mid); margin-bottom:10px; position:relative; }
+  .topbar b { color:var(--ink); border:1.5px solid var(--dark); border-radius:10px; padding:0 7px; }
+  .topbar .gear { position:absolute; right:0; top:-2px; width:18px; height:18px; border-radius:50%; background:var(--dark); }
+  .tvr { display:flex; justify-content:space-between; align-items:center; padding:5px 9px; border-top:1px solid var(--line); min-height:22px; gap:6px; }
+  .tvr:first-child { border-top:0; }
+  .focus { background:var(--dark); color:#fff; border-radius:7px; transform:scale(1.035); box-shadow:0 4px 10px rgba(0,0,0,.35); border-top-color:transparent; }
+  .focus .v { color:#ddd; }
+  .pill { display:inline-block; border:1px solid var(--line); border-radius:9px; padding:1px 7px; margin-left:3px; font-size:10px; }
+  .pill.sel { border:1.5px solid var(--dark); font-weight:700; }
+  .pill.sel::before { content:"✓ "; }
+  .pill.f { background:var(--dark); color:#fff; border-color:var(--dark); transform:scale(1.08); display:inline-block; }
+  .col { display:flex; gap:14px; }
+  .legend { font-size:12px; color:var(--mid); margin-top:8px; }
+  .shelf { display:flex; gap:10px; }
+  .shelf > div { width:96px; height:64px; border-radius:8px; border:1px solid var(--line); background:var(--fill); display:flex; align-items:flex-end; padding:5px; font-weight:600; font-size:10.5px; }
+  .shelf > div.f { background:var(--dark); color:#fff; transform:scale(1.1); box-shadow:0 5px 12px rgba(0,0,0,.35); }
+</style>
+</head>
+<body>
+<h1>Astra Settings, three directions per platform</h1>
+<p class="lede">Grayscale wireframes for design-audit/05-settings-directions.md. Same settings, same words, three different structures. Dashed orange boxes are annotations, not UI. On Apple TV the black filled row is the remote's focus; a tick is the saved choice. Nothing here is built.</p>
+
+<!-- ============================ iPHONE ============================ -->
+<h2 id="iphone-a">iPhone A. Ultra-native, minimal</h2>
+<p class="lede">Apple's own Settings pattern: one grouped list, every row shows its current value, sub-pages are native forms with footers. Least "Astra", most predictable.</p>
+<div class="row">
+  <div><p class="cap">Root</p>
+  <div class="phone"><div class="island"></div>
+    <div class="title">Settings</div>
+    <div class="group">
+      <div class="r chev"><div><b>Omega</b><br><span class="v"><span class="dot"></span>Connected · Local network</span></div></div>
+      <div class="r"><span>Library index</span><span class="v">Up to date · 2,418 titles</span></div>
+    </div>
+    <div class="sect">Preferences</div>
+    <div class="group">
+      <div class="r chev"><span>Appearance</span><span class="v">Frosted Glass</span></div>
+      <div class="r chev"><span>Playback</span><span class="v">Auto</span></div>
+      <div class="r chev"><span>Subtitles</span><span class="v">Automatic · Standard M</span></div>
+      <div class="r chev"><span>Library</span><span class="v">HD</span></div>
+      <div class="r chev"><span>Downloads</span><span class="v">3 · 12.4 GB</span></div>
+      <div class="r chev"><span>Tab Bar</span><span class="v">Home, Search, Library</span></div>
+    </div>
+    <div class="group" style="margin-top:12px"><div class="r chev"><span>About</span><span class="v">3.1.0</span></div></div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+    <div class="note" style="right:6px;top:118px">Every row shows its current value (H6)</div>
+  </div></div>
+
+  <div><p class="cap">Appearance</p>
+  <div class="phone"><div class="island"></div>
+    <div class="nav">‹ Settings</div><div class="title s">Appearance</div>
+    <div class="sect">Theme</div>
+    <div class="group">
+      <div class="r"><span>▭ Frosted Glass</span><span class="check"></span></div>
+      <div class="r"><span>▭ OLED</span></div>
+      <div class="r"><span>▭ Light</span></div>
+      <div class="r"><span>▭ Violet</span></div>
+    </div>
+    <div class="foot">Changes the whole app: backgrounds, glass, text and buttons.</div>
+    <div class="sect">Streaming services</div>
+    <div class="group">
+      <div class="r"><span>Service colours</span><span class="sw"></span></div>
+      <div class="r"><span>Coloured logos</span><span class="sw"></span></div>
+    </div>
+    <div class="foot">Colours tint a service's Home page. Off: plain white logos on glass.</div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+  </div></div>
+
+  <div><p class="cap">Playback</p>
+  <div class="phone"><div class="island"></div>
+    <div class="nav">‹ Settings</div><div class="title s">Playback</div>
+    <div class="sect">Version to play</div>
+    <div class="group"><div class="r"><span>Preferred version</span><span class="seg"><span class="on">Auto</span><span>HD</span><span>4K</span></span></div></div>
+    <div class="foot">Astra always plays the original file. When a title has an HD and a 4K file, this picks one. Auto follows Library.</div>
+    <div class="sect">Shows</div>
+    <div class="group"><div class="r"><span>Next Episode button</span><span class="sw"></span></div></div>
+    <div class="sect">Gestures</div>
+    <div class="group">
+      <div class="r"><span>Double-tap skips</span><span class="seg"><span class="on">10 s</span><span>15 s</span><span>30 s</span></span></div>
+      <div class="r"><span>Swipe for brightness and volume</span><span class="sw"></span></div>
+      <div class="r"><span>Two-finger tap to pause</span><span class="sw"></span></div>
+    </div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+  </div></div>
+
+  <div><p class="cap">Server and index</p>
+  <div class="phone"><div class="island"></div>
+    <div class="nav">‹ Settings</div><div class="title s">Omega</div>
+    <div class="group">
+      <div class="r"><span>Status</span><span class="v"><span class="dot"></span>Connected</span></div>
+      <div class="r"><span>Connection</span><span class="v">Local network</span></div>
+      <div class="r"><span>Address</span><span class="v">192.168.1.20</span></div>
+    </div>
+    <div class="sect">Library index</div>
+    <div class="group">
+      <div class="r"><span>Status</span><span class="v">Up to date</span></div>
+      <div class="r"><span>Titles</span><span class="v">2,418</span></div>
+      <div class="r"><span>Last full read</span><span class="v">Today, 09:12</span></div>
+      <div class="r"><span>Index Now</span></div>
+    </div>
+    <div class="group" style="margin-top:12px">
+      <div class="r"><span>Change Server…</span></div>
+      <div class="r"><span style="color:#b91c1c">Sign Out</span></div>
+    </div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+  </div></div>
+</div>
+
+<h2 id="iphone-b">iPhone B. Cinematic editorial</h2>
+<p class="lede">Settings as a short magazine: a full-bleed art header carries the server status, each category is a chapter with a big title, one sentence and a large preview. Most "Astra", longest scroll.</p>
+<div class="row">
+  <div><p class="cap">Root</p>
+  <div class="phone" style="padding-top:0"><div class="island"></div>
+    <div class="art" style="height:210px;border-radius:0;margin:0 -14px 10px;align-items:flex-end">
+      <div><div class="big">Omega</div><span class="dot"></span>Connected · Local · 2,418 titles ready</div>
+    </div>
+    <div class="big" style="font-size:22px">Look</div>
+    <div class="muted" style="font-size:12px">Frosted Glass, service colours on</div>
+    <div class="art" style="height:70px;margin:6px 0 12px">Theme carousel ›</div>
+    <div class="big" style="font-size:22px">Watch</div>
+    <div class="muted" style="font-size:12px">Auto version · Subtitles automatic · Next Episode on</div>
+    <div class="art" style="height:70px;margin:6px 0">Player preview with subtitle sample</div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+    <div class="note" style="right:8px;top:150px">Status lives on the art header</div>
+  </div></div>
+
+  <div><p class="cap">Appearance (Look)</p>
+  <div class="phone"><div class="island"></div>
+    <div class="nav">‹ Settings</div><div class="big">Look</div>
+    <div class="muted" style="margin:4px 0 8px;font-size:12px">Pick how every page feels.</div>
+    <div style="display:flex;gap:8px;overflow:hidden;margin:0 -14px 0 0">
+      <div class="art" style="min-width:190px;height:300px;outline:2px solid #111;outline-offset:2px">Frosted Glass ✓</div>
+      <div class="art" style="min-width:190px;height:300px">OLED</div>
+    </div>
+    <div class="muted" style="text-align:center;font-size:11px;margin:6px 0">● ○ ○ ○  swipe for OLED, Light, Violet</div>
+    <div class="group"><div class="r"><span>Service colours</span><span class="sw"></span></div><div class="r"><span>Coloured logos</span><span class="sw"></span></div></div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+  </div></div>
+
+  <div><p class="cap">Playback (Watch)</p>
+  <div class="phone"><div class="island"></div>
+    <div class="nav">‹ Settings</div><div class="big">Watch</div>
+    <div class="art" style="height:150px;margin:8px 0;justify-content:center">“I'll be right back.” (subtitle sample)</div>
+    <div class="sect">Version</div>
+    <div style="display:flex;gap:6px"><span class="btn p">Auto</span><span class="btn">HD</span><span class="btn">4K</span></div>
+    <div class="foot">Original files only. Auto follows Library.</div>
+    <div class="sect">Subtitles</div>
+    <div style="display:flex;gap:6px"><span class="btn p">Automatic</span><span class="btn">Always</span><span class="btn">Off</span></div>
+    <div class="sect">Style</div>
+    <div class="muted" style="font-size:12px">Standard · M · White · Outline ›</div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+  </div></div>
+
+  <div><p class="cap">Server and index</p>
+  <div class="phone"><div class="island"></div>
+    <div class="nav">‹ Settings</div>
+    <div style="text-align:center;margin:20px 0">
+      <div style="width:120px;height:120px;border-radius:50%;border:10px solid #2a2a2a;margin:0 auto;display:flex;align-items:center;justify-content:center;font-weight:800">100%</div>
+      <div class="big" style="font-size:24px;margin-top:10px">Omega</div>
+      <div class="muted">Connected on your network<br>2,418 titles open instantly</div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center"><span class="btn p">Index Now</span><span class="btn">Change Server</span></div>
+    <div class="foot" style="text-align:center;margin-top:12px">Last full read today 09:12, took 4 min</div>
+    <div class="group" style="margin-top:14px"><div class="r"><span style="color:#b91c1c">Sign Out</span></div></div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+  </div></div>
+</div>
+
+<h2 id="iphone-c">iPhone C. Refined hybrid (recommended)</h2>
+<p class="lede">Keeps what KP liked in the shipped page (server band first, a live preview, quiet cards, no icon tiles) but puts each preview inside its own page, so the root fits on one screen and every value is visible.</p>
+<div class="row">
+  <div><p class="cap">Root</p>
+  <div class="phone"><div class="island"></div>
+    <div class="title">Settings</div>
+    <div class="status">
+      <div style="display:flex;justify-content:space-between"><b>Omega</b><span class="v chev"></span></div>
+      <div class="v"><span class="dot"></span>Connected · Local network</div>
+      <div class="bar"><i></i></div>
+      <div style="display:flex;justify-content:space-between" class="v"><span>2,418 titles ready</span><b style="color:#111">Index Now</b></div>
+    </div>
+    <div class="group" style="margin-top:14px">
+      <div class="r chev"><span>Appearance</span><span class="v">Frosted Glass</span></div>
+      <div class="r chev"><span>Playback</span><span class="v">Auto · Next Episode on</span></div>
+      <div class="r chev"><span>Subtitles</span><span class="v">Automatic · M</span></div>
+      <div class="r chev"><span>Library</span><span class="v">HD · badges on</span></div>
+      <div class="r chev"><span>Downloads</span><span class="v">3 · 12.4 GB</span></div>
+    </div>
+    <div class="group" style="margin-top:12px">
+      <div class="r chev"><span>Tab Bar</span><span class="v">3 tabs</span></div>
+      <div class="r chev"><span>About</span></div>
+    </div>
+    <div class="foot" style="text-align:center;margin-top:12px">Astra 3.1.0 (202611141643)</div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+    <div class="note" style="right:10px;bottom:70px">Whole root fits above the tab bar</div>
+  </div></div>
+
+  <div><p class="cap">Appearance</p>
+  <div class="phone"><div class="island"></div>
+    <div class="nav">‹ Settings</div><div class="title s">Appearance</div>
+    <div class="art" style="height:190px">Live Home hero in the chosen theme (real artwork, logo, badges)</div>
+    <div class="tiles" style="margin-top:10px">
+      <div class="sel"><div class="sq"></div>Frosted ✓</div><div><div class="sq"></div>OLED</div><div><div class="sq"></div>Light</div><div><div class="sq"></div>Violet</div>
+    </div>
+    <div class="sect">Streaming services</div>
+    <div class="group"><div class="r"><span>Service colours</span><span class="sw"></span></div><div class="r"><span>Coloured logos</span><span class="sw"></span></div></div>
+    <div class="foot">Colours tint each service's Home page.</div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+    <div class="note" style="right:4px;top:96px">Preview 190 pt, not 420</div>
+  </div></div>
+
+  <div><p class="cap">Playback</p>
+  <div class="phone"><div class="island"></div>
+    <div class="nav">‹ Settings</div><div class="title s">Playback</div>
+    <div class="group"><div class="r"><span>Preferred version</span><span class="seg"><span class="on">Auto</span><span>HD</span><span>4K</span></span></div></div>
+    <div class="foot">Original files only. Picks between the server's HD and 4K files; Auto follows Library. Change it for one film from the player.</div>
+    <div class="group" style="margin-top:12px"><div class="r"><span>Next Episode button</span><span class="sw"></span></div></div>
+    <div class="foot">Shows in the last 15 s. Never plays on its own.</div>
+    <div class="sect">Gestures in the player</div>
+    <div class="group">
+      <div class="r"><span>Double-tap skips</span><span class="seg"><span class="on">10 s</span><span>15 s</span><span>30 s</span></span></div>
+      <div class="r"><span>Swipe for brightness and volume</span><span class="sw"></span></div>
+      <div class="r"><span>Two-finger tap to pause</span><span class="sw"></span></div>
+    </div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+    <div class="note" style="right:10px;bottom:70px">Default here; per-film change stays in the player</div>
+  </div></div>
+
+  <div><p class="cap">Server and index</p>
+  <div class="phone"><div class="island"></div>
+    <div class="nav">‹ Settings</div><div class="title s">Server</div>
+    <div class="status"><b>Omega</b><div class="v"><span class="dot"></span>Connected · Local network · 192.168.1.20</div></div>
+    <div class="sect">Library index</div>
+    <div class="group">
+      <div class="r"><span>Movies</span><span class="v">1,904 titles</span></div>
+      <div class="r"><span>TV Shows</span><span class="v">514 titles</span></div>
+      <div class="r"><span>Last full read</span><span class="v">Today 09:12 · 4 min</span></div>
+      <div class="r"><span>Opening a title</span><span class="v">typical 0.3 s</span></div>
+      <div class="r"><b>Index Now</b></div>
+    </div>
+    <div class="foot">Astra reads your library in the background, so titles open at once.</div>
+    <div class="group" style="margin-top:12px"><div class="r"><span>Change Server…</span></div><div class="r"><span style="color:#b91c1c">Sign Out…</span></div></div>
+    <div class="tabbar"><span>Home</span><span>Search</span><b>Library</b></div>
+  </div></div>
+</div>
+
+<!-- ============================ APPLE TV ============================ -->
+<h2 id="tv-a">Apple TV A. Ultra-native, minimal</h2>
+<p class="lede">tvOS's own Settings layout: a big context picture on the left, a focusable list on the right. Select opens a choice list with ticks; nothing cycles in place.</p>
+<div class="row">
+  <div><p class="cap">Root (focus on Playback)</p>
+  <div class="tv">
+    <div class="topbar">⌕ <span>Home</span><span>Movies</span><span>Shows</span><span>Watchlist</span><span class="gear"></span></div>
+    <div class="col">
+      <div style="width:250px"><div class="art" style="height:150px">Playback picture</div><div class="muted" style="margin-top:6px">Which file plays, subtitles and the Next Episode button.</div></div>
+      <div style="flex:1"><div class="title s" style="font-size:16px;margin:0 0 6px">Settings</div>
+        <div class="group">
+          <div class="tvr"><span>Omega</span><span class="v">● Connected</span></div>
+          <div class="tvr"><span>Appearance</span><span class="v">Frosted Glass ›</span></div>
+          <div class="tvr focus"><span>Playback</span><span class="v">Auto ›</span></div>
+          <div class="tvr"><span>Subtitles</span><span class="v">Automatic ›</span></div>
+          <div class="tvr"><span>Library</span><span class="v">4K ›</span></div>
+          <div class="tvr"><span>About</span><span class="v">3.1.0 ›</span></div>
+        </div></div>
+    </div>
+  </div></div>
+  <div><p class="cap">Playback &gt; Preferred version (choice list)</p>
+  <div class="tv">
+    <div class="col">
+      <div style="width:250px"><div class="art" style="height:150px">4K / HD file picture</div><div class="muted" style="margin-top:6px">Astra always plays the original file. When a title has an HD and a 4K file, this picks one.</div></div>
+      <div style="flex:1"><div class="title s" style="font-size:16px;margin:0 0 6px">Preferred Version</div>
+        <div class="group">
+          <div class="tvr focus"><span>Auto</span><span>✓</span></div>
+          <div class="tvr"><span>HD</span><span></span></div>
+          <div class="tvr"><span>4K</span><span></span></div>
+        </div><div class="muted" style="margin-top:6px">Menu goes back. The tick moves when you press Select.</div></div>
+    </div>
+  </div></div>
+</div>
+<div class="row" style="margin-top:14px">
+  <div><p class="cap">Appearance</p>
+  <div class="tv">
+    <div class="col">
+      <div style="width:250px"><div class="art" style="height:150px">Live Home hero in the focused theme</div></div>
+      <div style="flex:1"><div class="title s" style="font-size:16px;margin:0 0 6px">Appearance</div>
+        <div class="group">
+          <div class="tvr"><span>Frosted Glass</span><span>✓</span></div>
+          <div class="tvr focus"><span>OLED</span><span></span></div>
+          <div class="tvr"><span>Light</span><span></span></div>
+          <div class="tvr"><span>Violet</span><span></span></div>
+          <div class="tvr"><span>Service colours</span><span class="v">On</span></div>
+          <div class="tvr"><span>Coloured logos</span><span class="v">On</span></div>
+        </div></div>
+    </div>
+  </div></div>
+  <div><p class="cap">Server</p>
+  <div class="tv">
+    <div class="col">
+      <div style="width:250px"><div class="art" style="height:150px">Server status picture</div><div class="muted" style="margin-top:6px">Omega · Connected · Local network<br>Library index up to date, 2,418 titles</div></div>
+      <div style="flex:1"><div class="title s" style="font-size:16px;margin:0 0 6px">Omega</div>
+        <div class="group">
+          <div class="tvr focus"><span>Index Now</span><span class="v"></span></div>
+          <div class="tvr"><span>Index details</span><span class="v">›</span></div>
+          <div class="tvr"><span>Change Server</span><span class="v">›</span></div>
+          <div class="tvr"><span>Sign Out</span><span class="v"></span></div>
+        </div></div>
+    </div>
+  </div></div>
+</div>
+
+<h2 id="tv-b">Apple TV B. Cinematic editorial</h2>
+<p class="lede">Settings as a shelf of big category cards over a full-bleed backdrop. Focusing a card fills the screen behind it with that category's live preview; Select opens a full-screen page with large type.</p>
+<div class="row">
+  <div><p class="cap">Root (focus on Appearance)</p>
+  <div class="tv" style="background:repeating-linear-gradient(135deg,#e2e2e2 0 10px,#d6d6d6 10px 20px)">
+    <div class="topbar">⌕ <span>Home</span><span>Movies</span><span>Shows</span><span>Watchlist</span><span class="gear"></span></div>
+    <div class="big" style="margin-top:40px">Appearance</div>
+    <div class="muted">Frosted Glass. The backdrop shows Home in the focused theme.</div>
+    <div class="shelf" style="margin-top:60px">
+      <div>Omega<br>● Connected</div><div class="f">Appearance</div><div>Playback</div><div>Subtitles</div><div>Library</div><div>About</div>
+    </div>
+  </div></div>
+  <div><p class="cap">Playback page</p>
+  <div class="tv">
+    <div class="big" style="font-size:24px">Playback</div>
+    <div class="muted">Original files only.</div>
+    <div style="margin-top:16px"><b>Preferred version</b> <span class="pill sel f">Auto</span><span class="pill">HD</span><span class="pill">4K</span></div>
+    <div style="margin-top:12px"><b>Subtitles</b> <span class="pill sel">Automatic</span><span class="pill">Always</span><span class="pill">Off</span></div>
+    <div style="margin-top:12px"><b>Next Episode button</b> <span class="pill sel">On</span><span class="pill">Off</span></div>
+    <div class="art" style="position:absolute;right:30px;top:40px;width:230px;height:130px">Player frame preview</div>
+  </div></div>
+</div>
+<div class="row" style="margin-top:14px">
+  <div><p class="cap">Appearance page</p>
+  <div class="tv" style="padding:0">
+    <div class="art" style="height:100%;border-radius:0;align-items:flex-start;padding:24px 32px;flex-direction:column;justify-content:flex-end">
+      <div class="big" style="font-size:22px">Frosted Glass</div>
+      <div class="shelf" style="margin-top:12px"><div class="f">Frosted ✓</div><div>OLED</div><div>Light</div><div>Violet</div></div>
+      <div style="margin-top:10px">Service colours <span class="pill sel">On</span> · Coloured logos <span class="pill sel">On</span></div>
+    </div>
+  </div></div>
+  <div><p class="cap">Server page</p>
+  <div class="tv">
+    <div class="big" style="font-size:28px">Omega</div>
+    <div class="muted">● Connected on your network</div>
+    <div class="bar" style="width:60%;height:8px;margin-top:20px"><i></i></div>
+    <div>2,418 titles open instantly · last read today 09:12</div>
+    <div style="margin-top:22px"><span class="pill f">Index Now</span> <span class="pill">Change Server</span> <span class="pill">Sign Out</span></div>
+  </div></div>
+</div>
+
+<h2 id="tv-c">Apple TV C. Refined hybrid (recommended)</h2>
+<p class="lede">Keeps the top bar and the server band KP approved, but splits the long page into a left category list and a right pane. Every choice is its own focusable pill (left and right move along it), so nothing cycles blind; focus is the only white fill on screen.</p>
+<div class="row">
+  <div><p class="cap">Root = Appearance selected (focus in the list)</p>
+  <div class="tv">
+    <div class="topbar">⌕ <span>Home</span><span>Movies</span><span>Shows</span><span>Watchlist</span><span class="gear"></span></div>
+    <div class="status" style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px">
+      <span><b style="font-size:12px">Omega</b> <span class="v">● Connected · Local</span></span>
+      <span style="flex:1;margin:0 14px"><span class="bar" style="display:block;margin:0"><i></i></span><span class="v">2,418 titles ready</span></span>
+      <span class="pill">Index Now</span><span class="pill">Change Server</span>
+    </div>
+    <div class="col" style="margin-top:10px">
+      <div style="width:150px" class="group">
+        <div class="tvr focus"><span>Appearance</span></div>
+        <div class="tvr"><span>Playback</span></div>
+        <div class="tvr"><span>Subtitles</span></div>
+        <div class="tvr"><span>Library</span></div>
+        <div class="tvr"><span>About</span></div>
+      </div>
+      <div style="flex:1">
+        <div class="art" style="height:118px">Live Home hero in the chosen theme</div>
+        <div style="margin-top:8px">Theme <span class="pill sel">Frosted Glass</span><span class="pill">OLED</span><span class="pill">Light</span><span class="pill">Violet</span></div>
+        <div style="margin-top:6px">Service colours <span class="pill sel">On</span><span class="pill">Off</span> · Coloured logos <span class="pill sel">On</span><span class="pill">Off</span></div>
+      </div>
+    </div>
+    <div class="note" style="left:200px;bottom:10px;max-width:260px">→ moves focus into the pane; Menu returns to the list</div>
+  </div></div>
+  <div><p class="cap">Playback (focus on HD)</p>
+  <div class="tv">
+    <div class="topbar">⌕ <span>Home</span><span>Movies</span><span>Shows</span><span>Watchlist</span><span class="gear"></span></div>
+    <div class="col" style="margin-top:46px">
+      <div style="width:150px" class="group">
+        <div class="tvr"><span>Appearance</span></div>
+        <div class="tvr" style="font-weight:700">Playback ▸</div>
+        <div class="tvr"><span>Subtitles</span></div>
+        <div class="tvr"><span>Library</span></div>
+        <div class="tvr"><span>About</span></div>
+      </div>
+      <div style="flex:1">
+        <div class="group">
+          <div class="tvr"><span>Preferred version</span><span><span class="pill sel">Auto</span><span class="pill f">HD</span><span class="pill">4K</span></span></div>
+          <div class="tvr"><span>Next Episode button</span><span><span class="pill sel">On</span><span class="pill">Off</span></span></div>
+        </div>
+        <div class="muted" style="margin-top:6px">Original files only. Picks between the server's HD and 4K files. Auto follows Library. Select on HD saves it; the tick moves.</div>
+      </div>
+    </div>
+    <div class="note" style="right:20px;bottom:14px">Server band scrolls away with the page; top bar fades over a scrim</div>
+  </div></div>
+</div>
+<div class="row" style="margin-top:14px">
+  <div><p class="cap">Subtitles</p>
+  <div class="tv">
+    <div class="col" style="margin-top:20px">
+      <div style="width:150px" class="group">
+        <div class="tvr"><span>Appearance</span></div><div class="tvr"><span>Playback</span></div>
+        <div class="tvr" style="font-weight:700">Subtitles ▸</div><div class="tvr"><span>Library</span></div><div class="tvr"><span>About</span></div>
+      </div>
+      <div style="flex:1">
+        <div class="art" style="height:80px;justify-content:center">“I'll be right back.” sample</div>
+        <div class="group" style="margin-top:6px">
+          <div class="tvr"><span>When to show</span><span><span class="pill sel">Automatic</span><span class="pill">Always</span><span class="pill">Off</span></span></div>
+          <div class="tvr"><span>Font</span><span><span class="pill sel">Standard</span><span class="pill f">Rounded</span><span class="pill">Serif</span><span class="pill">Condensed</span></span></div>
+          <div class="tvr"><span>Size</span><span><span class="pill">S</span><span class="pill sel">M</span><span class="pill">L</span><span class="pill">XL</span></span></div>
+          <div class="tvr"><span>Colour</span><span>○ ○ ○ ○ ○</span></div>
+          <div class="tvr"><span>Background</span><span><span class="pill sel">Outline</span><span class="pill">Box</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <div><p class="cap">Library (confirm before a reload)</p>
+  <div class="tv">
+    <div class="col" style="margin-top:20px">
+      <div style="width:150px" class="group">
+        <div class="tvr"><span>Appearance</span></div><div class="tvr"><span>Playback</span></div><div class="tvr"><span>Subtitles</span></div>
+        <div class="tvr" style="font-weight:700">Library ▸</div><div class="tvr"><span>About</span></div>
+      </div>
+      <div style="flex:1">
+        <div class="group">
+          <div class="tvr"><span>Library quality</span><span><span class="pill">HD</span><span class="pill sel f">4K</span></span></div>
+          <div class="tvr"><span>HD and 4K badges</span><span><span class="pill sel">On</span><span class="pill">Off</span></span></div>
+          <div class="tvr"><span>Age ratings</span><span><span class="pill sel">On</span><span class="pill">Off</span></span></div>
+        </div>
+        <div class="muted" style="margin-top:6px">4K: one copy of each title, the 4K one when there is one. HD hides 4K libraries on this device. Switching reloads your library (asks first).</div>
+      </div>
+    </div>
+  </div></div>
+</div>
+<p class="legend">Legend: black filled row or pill = remote focus (Apple TV) · ✓ or bold outline = saved choice · ▭ = theme swatch · striped box = real artwork in production.</p>
+</body>
+</html>
