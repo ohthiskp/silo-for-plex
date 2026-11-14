@@ -153,8 +153,8 @@ struct MainView: View {
     case .shows: TVLibraryGridPage(library: library, kind: "show")
     case .watchlist: TVWatchlistPage(library: library)
     case .settings:
-      SettingsView(showsTitle: true)
-        .safeAreaPadding(.horizontal, TVLayout.leading)
+      // KP's mockup (2026-11-14): one page under the top bar, no category list.
+      TVSettingsPage()
         .safeAreaPadding(.top, TVLayout.barSpace - 40)
         .astraPageBackground()
     }

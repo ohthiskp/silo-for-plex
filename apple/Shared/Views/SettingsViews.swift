@@ -69,8 +69,11 @@ struct SettingsView: View {
       NavigationStack { root }
         .settingsToolbarHidden()
         .astraPageBackground()
+    #elseif os(iOS)
+      // KP's mockup (2026-11-14): one scrolling page, no list of categories.
+      PhoneSettingsPage(showsTitle: showsTitle)
     #else
-      root
+      TVSettingsPage()
     #endif
   }
 
@@ -131,25 +134,7 @@ struct SettingsView: View {
   }
 
   @ViewBuilder private func page(_ pane: SettingsPane) -> some View {
-    Group {
-      switch pane {
-      case .appearance: AppearanceSettings()
-      case .tabs:
-        #if os(iOS)
-          TabsSettings()
-        #endif
-      case .playback: PlaybackSettings()
-      case .library: LibrarySettings()
-      case .downloads: DownloadSettings()
-      case .sources: SourcesSettings()
-      case .about: AboutSettings()
-      }
-    }
-    .navigationTitle(pane.title)
-    #if os(iOS)
-      .navigationBarTitleDisplayMode(.large)
-      .toolbar(.visible, for: .navigationBar)
-    #endif
+    SettingsPaneView(pane: pane)
   }
 
   /// "0.1.0 (202611070245)": the marketing version and the build that updates compare.
@@ -700,5 +685,32 @@ struct AboutSettings: View {
         Text("The last requests Astra made, newest first. Tokens are never shown or saved.")
       }
     }
+  }
+}
+
+/// One Settings page (Appearance, Sources, About …), pushed from Settings.
+struct SettingsPaneView: View {
+  var pane: SettingsPane
+
+  var body: some View {
+    Group {
+      switch pane {
+      case .appearance: AppearanceSettings()
+      case .tabs:
+        #if os(iOS)
+          TabsSettings()
+        #endif
+      case .playback: PlaybackSettings()
+      case .library: LibrarySettings()
+      case .downloads: DownloadSettings()
+      case .sources: SourcesSettings()
+      case .about: AboutSettings()
+      }
+    }
+    .navigationTitle(pane.title)
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.large)
+      .toolbar(.visible, for: .navigationBar)
+    #endif
   }
 }

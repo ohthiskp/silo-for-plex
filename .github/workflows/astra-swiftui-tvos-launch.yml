@@ -108,6 +108,7 @@ jobs:
           shot details-show-episodes -AstraDemoOpen 205
           shot watchlist -AstraDemoTab watchlist
           shot settings -AstraDemoTab settings
+          shot settings-lower -AstraDemoTab settings -AstraDemoScroll 1
           # The player (KP's 2026-11-10 redesign) over a 1 h 56 m test video, paused in each state.
           brew install ffmpeg > /dev/null 2>&1 || true
           ffmpeg -loglevel error -f lavfi -i testsrc2=duration=6960:size=1920x1080:rate=1 \

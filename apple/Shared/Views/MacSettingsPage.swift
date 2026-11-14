@@ -187,69 +187,6 @@ import SwiftUI
     }
   }
 
-  /// "Reading TV Shows 61 %" with a white bar, or the last full read once done.
-  private struct IndexProgress: View {
-    var library: LibraryStore
-
-    var body: some View {
-      let status = library.indexStatus
-      VStack(alignment: .leading, spacing: 8) {
-        HStack {
-          Text(headline(status)).astraFont(size: 13, weight: .semibold).foregroundStyle(Astra.Color.ink)
-          Spacer()
-          if let fraction = fraction(status) {
-            Text(fraction.formatted(.percent.precision(.fractionLength(0))))
-              .astraFont(size: 13)
-              .monospacedDigit()
-              .foregroundStyle(Astra.Color.muted)
-          }
-        }
-        GeometryReader { proxy in
-          ZStack(alignment: .leading) {
-            Capsule().fill(Astra.Color.ink.opacity(0.12))
-            Capsule().fill(Astra.Color.ink).frame(width: proxy.size.width * (fraction(status) ?? (status.complete ? 1 : 0)))
-          }
-        }
-        .frame(height: 5)
-        Text(detail(status))
-          .astraFont(size: 12)
-          .foregroundStyle(Astra.Color.muted)
-          .lineLimit(1)
-      }
-      .frame(maxWidth: .infinity)
-      .astraAnimation(Astra.Motion.base, value: status.itemCount)
-    }
-
-    private func headline(_ status: LibraryIndexStatus) -> String {
-      switch status.phase {
-      case .indexing:
-        if let current = status.libraries.first(where: { !$0.complete }) { return "Reading \(current.title)" }
-        return "Checking for changes"
-      case .complete: return "Library indexed"
-      case .failed: return status.complete ? "Library indexed, last check failed" : "Paused, will retry"
-      case .idle: return status.complete ? "Library indexed" : "Not indexed yet"
-      }
-    }
-
-    /// Share read of the libraries with a known size, while reading.
-    private func fraction(_ status: LibraryIndexStatus) -> Double? {
-      guard status.phase == .indexing else { return nil }
-      let known = status.libraries.compactMap { lib in lib.total.map { (lib.fetched, $0) } }
-      let total = known.reduce(0) { $0 + $1.1 }
-      guard total > 0 else { return nil }
-      return min(1, Double(known.reduce(0) { $0 + $1.0 }) / Double(total))
-    }
-
-    private func detail(_ status: LibraryIndexStatus) -> String {
-      let titles = "\(status.itemCount.formatted()) titles open instantly"
-      if status.phase == .indexing { return titles }
-      if let last = status.lastSuccess {
-        return "\(titles) · read \(last.formatted(.relative(presentation: .named)))"
-      }
-      return status.lastError ?? titles
-    }
-  }
-
   /// Capsule buttons for the band: white for the main action, glass for the other.
   private struct SettingsPillStyle: ButtonStyle {
     var prominent: Bool
@@ -358,33 +295,6 @@ import SwiftUI
       .buttonStyle(.plain)
       .accessibilityLabel(theme.title)
       .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-  }
-
-  /// A theme as a thumbnail: Home's artwork under that theme's own ground.
-  private struct ThemeSwatch: View {
-    var library: LibraryStore
-    var palette: ThemePalette
-
-    var body: some View {
-      ZStack {
-        palette.bg
-        if let item = library.homeHero.first {
-          Color.clear.overlay {
-            ArtworkImage(library: library, item: item, kind: .heroBackdrop, width: 160, height: 90, placeholder: Color.clear)
-          }
-          .clipped()
-          .opacity(palette.ambient > 0 ? 1 : 0.85)
-        }
-        LinearGradient(
-          stops: [.init(color: palette.bg.opacity(0), location: 0.3), .init(color: palette.bg, location: 0.95)],
-          startPoint: .top, endPoint: .bottom)
-        if let tint = palette.glassTint { tint }
-      }
-      .frame(width: 52, height: 32)
-      .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-      .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Astra.Color.hairline, lineWidth: 1))
-      .accessibilityHidden(true)
     }
   }
 
@@ -527,10 +437,116 @@ import SwiftUI
 
   #endif
 
+/// "Reading TV Shows 61 %" with a white bar, or the last full read once done.
+struct IndexProgress<Accessory: View>: View {
+  var library: LibraryStore
+  /// 1 on the Mac; larger on iPhone and Apple TV.
+  var scale: CGFloat = 1
+  /// Shown at the end of the detail line (Index Now on iPhone).
+  @ViewBuilder var accessory: Accessory
+
+  var body: some View {
+    let status = library.indexStatus
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text(headline(status)).astraFont(size: 13 * scale, weight: .semibold).foregroundStyle(Astra.Color.ink)
+        Spacer()
+        if let fraction = fraction(status) {
+          Text(fraction.formatted(.percent.precision(.fractionLength(0))))
+            .astraFont(size: 13 * scale)
+            .monospacedDigit()
+            .foregroundStyle(Astra.Color.muted)
+        }
+      }
+      GeometryReader { proxy in
+        ZStack(alignment: .leading) {
+          Capsule().fill(Astra.Color.ink.opacity(0.12))
+          Capsule().fill(Astra.Color.ink).frame(width: proxy.size.width * (fraction(status) ?? (status.complete ? 1 : 0)))
+        }
+      }
+      .frame(height: 5 * scale)
+      Text(detail(status))
+        .astraFont(size: 12)
+        .foregroundStyle(Astra.Color.muted)
+        .lineLimit(1)
+    }
+    .frame(maxWidth: .infinity)
+    .astraAnimation(Astra.Motion.base, value: status.itemCount)
+  }
+
+  private func headline(_ status: LibraryIndexStatus) -> String {
+    switch status.phase {
+    case .indexing:
+      if let current = status.libraries.first(where: { !$0.complete }) { return "Reading \(current.title)" }
+      return "Checking for changes"
+    case .complete: return "Library indexed"
+    case .failed: return status.complete ? "Library indexed, last check failed" : "Paused, will retry"
+    case .idle: return status.complete ? "Library indexed" : "Not indexed yet"
+    }
+  }
+
+  /// Share read of the libraries with a known size, while reading.
+  private func fraction(_ status: LibraryIndexStatus) -> Double? {
+    guard status.phase == .indexing else { return nil }
+    let known = status.libraries.compactMap { lib in lib.total.map { (lib.fetched, $0) } }
+    let total = known.reduce(0) { $0 + $1.1 }
+    guard total > 0 else { return nil }
+    return min(1, Double(known.reduce(0) { $0 + $1.0 }) / Double(total))
+  }
+
+  private func detail(_ status: LibraryIndexStatus) -> String {
+    let titles = "\(status.itemCount.formatted()) titles open instantly"
+    if status.phase == .indexing { return titles }
+    if let last = status.lastSuccess {
+      return "\(titles) · read \(last.formatted(.relative(presentation: .named)))"
+    }
+    return status.lastError ?? titles
+  }
+}
+
+extension IndexProgress where Accessory == EmptyView {
+  init(library: LibraryStore, scale: CGFloat = 1) {
+    self.init(library: library, scale: scale) { EmptyView() }
+  }
+}
+
+/// A theme as a thumbnail: Home's artwork under that theme's own ground.
+struct ThemeSwatch: View {
+  var library: LibraryStore
+  var palette: ThemePalette
+  /// nil fills the width it is given.
+  var width: CGFloat? = 52
+  var height: CGFloat = 32
+  var radius: CGFloat = 7
+
+  var body: some View {
+    ZStack {
+      palette.bg
+      if let item = library.homeHero.first {
+        Color.clear.overlay {
+          ArtworkImage(library: library, item: item, kind: .heroBackdrop, width: 320, height: 180, placeholder: Color.clear)
+        }
+        .clipped()
+        .opacity(palette.ambient > 0 ? 1 : 0.85)
+      }
+      LinearGradient(
+        stops: [.init(color: palette.bg.opacity(0), location: 0.3), .init(color: palette.bg, location: 0.95)],
+        startPoint: .top, endPoint: .bottom)
+      if let tint = palette.glassTint { tint }
+    }
+    .frame(width: width, height: height)
+    .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Astra.Color.hairline, lineWidth: 1))
+    .accessibilityHidden(true)
+  }
+}
+
 /// A line of dialogue over Home's artwork, drawn the way mpv will draw it.
 struct SubtitleSample: View {
   var library: LibraryStore
   var style: SubtitleStyle
+  /// 1 on the Mac; larger on iPhone and Apple TV.
+  var scale: CGFloat = 1
 
   var body: some View {
     ZStack(alignment: .bottom) {
@@ -543,7 +559,7 @@ struct SubtitleSample: View {
         .opacity(0.8)
       }
       Text("I'll be right back. Don't go anywhere.")
-        .font(.custom(style.font.family, size: 17 * style.size.scale))
+        .font(.custom(style.font.family, size: 17 * scale * style.size.scale))
         .foregroundStyle(Color(hex: style.color.rgb))
         .multilineTextAlignment(.center)
         .shadow(color: .black.opacity(style.background == .outline ? 0.95 : 0), radius: 1.2)
@@ -552,13 +568,13 @@ struct SubtitleSample: View {
         .padding(.vertical, style.background == .box ? 3 : 0)
         .background(
           RoundedRectangle(cornerRadius: 4).fill(.black.opacity(style.background == .box ? 0.7 : 0)))
-        .padding(.bottom, 16)
-        .padding(.horizontal, 12)
+        .padding(.bottom, 16 * scale)
+        .padding(.horizontal, 12 * scale)
     }
     .frame(maxWidth: .infinity)
-    .frame(height: 132)
-    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Astra.Color.hairline, lineWidth: 1))
+    .frame(height: 132 * scale)
+    .clipShape(RoundedRectangle(cornerRadius: 14 * scale, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: 14 * scale, style: .continuous).strokeBorder(Astra.Color.hairline, lineWidth: 1))
     .astraAnimation(Astra.Motion.fast, value: style)
     .accessibilityElement()
     .accessibilityLabel("Subtitle sample")
@@ -568,6 +584,7 @@ struct SubtitleSample: View {
 /// The subtitle colours as small round swatches; the chosen one has a ring.
 struct SubtitleColorPicker: View {
   @Binding var selection: SubtitleColor
+  var size: CGFloat = 20
 
   var body: some View {
     HStack(spacing: 8) {
@@ -578,7 +595,7 @@ struct SubtitleColorPicker: View {
         } label: {
           Circle()
             .fill(Color(hex: color.rgb))
-            .frame(width: 20, height: 20)
+            .frame(width: size, height: size)
             .padding(3)
             .overlay(Circle().strokeBorder(isOn ? Astra.Color.ink : .clear, lineWidth: 2))
             .contentShape(Circle())
