@@ -45,6 +45,37 @@ final class PlayerOptionsTests: XCTestCase {
     XCTAssertTrue(SubtitleLook.whiteOnBlack.mpvOptions.contains { $0.0 == "sub-border-style" && $0.1 == "background-box" })
   }
 
+  func testSubtitleStyleSavesEachPart() throws {
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: "SubtitleStyleTests"))
+    defaults.removePersistentDomain(forName: "SubtitleStyleTests")
+    XCTAssertEqual(SubtitleStyle.current(defaults), SubtitleStyle())
+    let style = SubtitleStyle(font: .serif, color: .cyan, background: .box, size: .large)
+    style.save(defaults)
+    XCTAssertEqual(SubtitleStyle.current(defaults), style)
+    let options = Dictionary(style.mpvOptions, uniquingKeysWith: { $1 })
+    XCTAssertEqual(options["sub-font"], "Georgia")
+    XCTAssertEqual(options["sub-color"], "#FF64D2FF")
+    XCTAssertEqual(options["sub-border-style"], "background-box")
+    XCTAssertEqual(options["sub-scale"], "1.25")
+  }
+
+  /// A look saved by the Apple TV menu before Settings → Subtitles existed still applies.
+  func testOldSubtitleLookCarriesOver() throws {
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: "SubtitleLookMigration"))
+    defaults.removePersistentDomain(forName: "SubtitleLookMigration")
+    defaults.set("whiteOnBlack", forKey: SubtitleLook.storageKey)
+    XCTAssertEqual(SubtitleStyle.current(defaults).background, .box)
+    XCTAssertEqual(SubtitleStyle.current(defaults).color, .white)
+    defaults.set("yellow", forKey: SubtitleLook.storageKey)
+    XCTAssertEqual(SubtitleStyle.current(defaults).color, .yellow)
+    XCTAssertEqual(SubtitleStyle.current(defaults).background, .outline)
+    // Picking a look keeps the chosen font.
+    SubtitleStyle(font: .rounded).save(defaults)
+    SubtitleLook.whiteOnBlack.save(defaults)
+    XCTAssertEqual(SubtitleStyle.current(defaults).font, .rounded)
+    XCTAssertEqual(SubtitleStyle.current(defaults).look, .whiteOnBlack)
+  }
+
   func testSubtitleSync() {
     XCTAssertEqual(SubtitleSync.adjusted(0, by: 3), 0.3, accuracy: 0.0001)
     XCTAssertEqual(SubtitleSync.adjusted(0.3, by: -5), -0.2, accuracy: 0.0001)

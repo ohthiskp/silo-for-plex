@@ -133,6 +133,48 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" ../Astra-SwiftUI.zip
 
+      - name: Player screenshots (Mac)
+        # KP (2026-11-10): screenshots of the Mac player before it ships, printed
+        # into the log as JPEGs (ASTRA-SHOT-BEGIN … END) like the iPhone and TV ones.
+        continue-on-error: true
+        working-directory: apple
+        run: |
+          APP=".build/Build/Products/Release/Astra.app"
+          BIN="$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
+          brew install ffmpeg > /dev/null 2>&1 || true
+          ffmpeg -loglevel error -f lavfi -i testsrc2=duration=6960:size=1920x800:rate=1 \
+            -c:v libx264 -preset ultrafast -g 10 -pix_fmt yuv420p "$RUNNER_TEMP/player.mp4"
+          mkdir -p "$RUNNER_TEMP/shots"
+          shot() {
+            name=$1; shift
+            "$BIN" -AstraDemo YES -AstraDemoPlay "$RUNNER_TEMP/player.mp4" "$@" > /dev/null 2>&1 &
+            pid=$!
+            sleep 30
+            screencapture -x "$RUNNER_TEMP/shots/$name.png" || true
+            kill "$pid" 2>/dev/null || true
+            sleep 3
+          }
+          shot mac-player-controls -AstraDemoPlayer controls
+          shot mac-player-scrub -AstraDemoPlayer scrub
+          "$BIN" -AstraDemo YES -AstraDemoTab settings > /dev/null 2>&1 &
+          pid=$!
+          sleep 25
+          screencapture -x "$RUNNER_TEMP/shots/mac-settings.png" || true
+          kill "$pid" 2>/dev/null || true
+          sleep 3
+          "$BIN" -AstraDemo YES -AstraDemoTab settings -AstraDemoScroll 1 > /dev/null 2>&1 &
+          pid=$!
+          sleep 25
+          screencapture -x "$RUNNER_TEMP/shots/mac-settings-lower.png" || true
+          kill "$pid" 2>/dev/null || true
+          for f in "$RUNNER_TEMP"/shots/*.png; do
+            [ -f "$f" ] || continue
+            sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "ASTRA-SHOT-BEGIN $(basename "${f%.png}")"
+            base64 -i "${f%.png}.jpg" | fold -w 4000
+            echo "ASTRA-SHOT-END"
+          done
+
       - name: Upload build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

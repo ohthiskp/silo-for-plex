@@ -64,9 +64,16 @@ struct SettingsView: View {
 
   var body: some View {
     #if os(macOS)
+      // KP (2026-11-12): the stack spans the whole page, so it draws no edge
+      // line of its own; only the rows keep a readable width.
       NavigationStack { root }
+        .settingsToolbarHidden()
+        .astraPageBackground()
+    #elseif os(iOS)
+      // KP's mockup (2026-11-14): one scrolling page, no list of categories.
+      PhoneSettingsPage(showsTitle: showsTitle)
     #else
-      root
+      TVSettingsPage()
     #endif
   }
 
@@ -120,31 +127,14 @@ struct SettingsView: View {
     #if !os(tvOS)
       .scrollContentBackground(.hidden)
     #endif
+    .settingsColumn()
     // Same background as every Settings page (it showed the system grey before).
     .astraPageBackground()
     .settingsBottomRoom()
   }
 
   @ViewBuilder private func page(_ pane: SettingsPane) -> some View {
-    Group {
-      switch pane {
-      case .appearance: AppearanceSettings()
-      case .tabs:
-        #if os(iOS)
-          TabsSettings()
-        #endif
-      case .playback: PlaybackSettings()
-      case .library: LibrarySettings()
-      case .downloads: DownloadSettings()
-      case .sources: SourcesSettings()
-      case .about: AboutSettings()
-      }
-    }
-    .navigationTitle(pane.title)
-    #if os(iOS)
-      .navigationBarTitleDisplayMode(.large)
-      .toolbar(.visible, for: .navigationBar)
-    #endif
+    SettingsPaneView(pane: pane)
   }
 
   /// "0.1.0 (202611070245)": the marketing version and the build that updates compare.
@@ -199,6 +189,7 @@ private struct SettingsForm<Content: View>: View {
       #if !os(tvOS)
         .scrollContentBackground(.hidden)
       #endif
+      .settingsColumn()
       .astraPageBackground()
       .settingsBottomRoom()
   }
@@ -208,6 +199,30 @@ extension View {
   /// iPhone: room under the last row for the floating tab bar, which is an
   /// overlay and not a safe-area inset, so About and Reset to Default never
   /// end up behind it when Settings is a tab.
+  /// Mac: Settings rows keep a readable width at the leading edge of a
+  /// full-width page, with no hard scroll-edge line under the title.
+  @ViewBuilder func settingsColumn() -> some View {
+    #if os(macOS)
+      Group {
+        if #available(macOS 26.0, *) { scrollEdgeEffectHidden(true, for: .all) } else { self }
+      }
+        .frame(maxWidth: Astra.Layout.settingsWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    #else
+      self
+    #endif
+  }
+
+  #if os(macOS)
+    @ViewBuilder fileprivate func settingsToolbarHidden() -> some View {
+      if #available(macOS 15.0, *) {
+        toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+      } else {
+        self
+      }
+    }
+  #endif
+
   @ViewBuilder func settingsBottomRoom() -> some View {
     #if os(iOS)
       contentMargins(.bottom, Astra.Layout.tabBarRoom, for: .scrollContent)
@@ -419,6 +434,9 @@ struct PlaybackSettings: View {
       } footer: {
         Text("Automatic shows what the file marks as forced or default. Always picks your language.")
       }
+      #if os(iOS)
+        SubtitleStyleSection()
+      #endif
       Section {
         Toggle("Next Episode Button", isOn: $nextEpisode).tint(Astra.Color.switchOn)
       } header: {
@@ -444,6 +462,41 @@ struct PlaybackSettings: View {
     }
   }
 }
+
+#if os(iOS)
+  /// Settings → Playback → Subtitle Style (KP, 2026-11-13): font, size,
+  /// colour and background, with a sample drawn the way the player draws it.
+  struct SubtitleStyleSection: View {
+    @Environment(AppModel.self) private var app
+    @State private var style = SubtitleStyle.current()
+
+    var body: some View {
+      Section {
+        if let library = app.library {
+          SubtitleSample(library: library, style: style)
+            .listRowInsets(EdgeInsets())
+        }
+        Picker("Font", selection: $style.font) {
+          ForEach(SubtitleFont.allCases) { Text($0.title).tag($0) }
+        }
+        Picker("Size", selection: $style.size) {
+          ForEach(SubtitleSize.allCases) { Text($0.title).tag($0) }
+        }
+        LabeledContent("Colour") { SubtitleColorPicker(selection: $style.color) }
+        Picker("Background", selection: $style.background) {
+          ForEach(SubtitleBackground.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+      } header: {
+        Text("Subtitle Style")
+      }
+      .onChange(of: style) {
+        style.save()
+        app.player.applySubtitleStyle()
+      }
+    }
+  }
+#endif
 
 // MARK: - Library
 
@@ -632,5 +685,32 @@ struct AboutSettings: View {
         Text("The last requests Astra made, newest first. Tokens are never shown or saved.")
       }
     }
+  }
+}
+
+/// One Settings page (Appearance, Sources, About …), pushed from Settings.
+struct SettingsPaneView: View {
+  var pane: SettingsPane
+
+  var body: some View {
+    Group {
+      switch pane {
+      case .appearance: AppearanceSettings()
+      case .tabs:
+        #if os(iOS)
+          TabsSettings()
+        #endif
+      case .playback: PlaybackSettings()
+      case .library: LibrarySettings()
+      case .downloads: DownloadSettings()
+      case .sources: SourcesSettings()
+      case .about: AboutSettings()
+      }
+    }
+    .navigationTitle(pane.title)
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.large)
+      .toolbar(.visible, for: .navigationBar)
+    #endif
   }
 }

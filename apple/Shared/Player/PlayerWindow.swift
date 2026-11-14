@@ -65,8 +65,9 @@
 
     func show() {
       window.makeKeyAndOrderFront(nil)
-      // Follow the main window into full screen.
-      if mainWindow?.styleMask.contains(.fullScreen) == true, !window.styleMask.contains(.fullScreen) {
+      // KP (2026-11-12): the player starts full screen. Leaving full screen
+      // (F or the green button) gives the window its normal size over the app.
+      if !window.styleMask.contains(.fullScreen) {
         window.toggleFullScreen(nil)
       }
     }

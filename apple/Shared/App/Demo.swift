@@ -8,7 +8,7 @@ import Foundation
 ///
 /// Launch arguments:
 /// - `-AstraDemo YES`: use the demo server.
-/// - `-AstraDemoTab home|search|libraries`: the tab to open on.
+/// - `-AstraDemoTab home|search|libraries`: the tab to open on (Mac: home|search|library|settings).
 /// - `-AstraDemoQuery <text>`: text typed into Search.
 /// - `-AstraDemoOpen <ratingKey>`: open that title's details on Home.
 /// - `-AstraDemoScroll <points>`: scroll Home down this far (rows below the hero).
@@ -24,7 +24,7 @@ enum Demo {
   /// `-AstraDemoPlay <path>`: a local video file to open in the player at launch (UI tests).
   static var videoPath: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlay") : nil }
   /// `-AstraDemoPlayer <state>`: once the demo video plays, pause it and show a player state for a
-  /// screenshot: `controls`, `more` (iPhone ⋯ menu), `scrub`, or the Apple TV top menu's
+  /// screenshot: `controls`, `scrub` (iPhone and Mac), or the Apple TV top menu's
   /// `info`, `settings`, `subtitles`.
   static var playerShot: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlayer") : nil }
 
