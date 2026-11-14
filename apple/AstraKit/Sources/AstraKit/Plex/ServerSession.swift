@@ -180,11 +180,19 @@ public struct LibraryIndexSnapshot: Codable, Sendable {
   public var items: [String: PlexMetadata]
   /// How long the full read took (Settings → Sources); nil in older files.
   public var duration: TimeInterval?
+  /// Each library's title count (Plex's totalSize) when it was read, by
+  /// section key, so a later launch can tell the library hasn't changed
+  /// with one tiny request per library (`LibraryIndexCheck`). Nil in older
+  /// files: those are read again in full, as before.
+  public var totals: [String: Int]?
 
-  public init(savedAt: Date, items: [String: PlexMetadata], duration: TimeInterval? = nil) {
+  public init(
+    savedAt: Date, items: [String: PlexMetadata], duration: TimeInterval? = nil, totals: [String: Int]? = nil
+  ) {
     self.savedAt = savedAt
     self.items = items
     self.duration = duration
+    self.totals = totals
   }
 
   /// `…/Astra/LibraryIndex/<server>.json`.

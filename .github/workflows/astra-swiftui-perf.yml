@@ -1,0 +1,100 @@
+name: Astra SwiftUI performance probe
+run-name: SwiftUI performance probe ${{ github.sha }}
+
+# Astra (KP, 2026-11-10, performance audit): builds the iPhone app for the
+# simulator and runs it against the demo server (Shared/App/Demo.swift) with
+# PerfProbe on (Shared/App/PerfProbe.swift), printing every ASTRA-PERF line:
+# cold launch, Home, streaming-tab switches, Details, Search and playback
+# start, plus request, image, CPU and main-thread totals. The demo server
+# answers after 150 ms, like a remote Plex server; TMDB and cineby are live.
+on:
+  push:
+    branches: [claude/project-thread-0nn44y]
+    paths:
+      - "apple/**"
+      - ".github/workflows/astra-swiftui-perf.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            apple/.build/SourcePackages
+          key: astra-swiftui-ios-sim-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apple/project.yml') }}
+
+      - name: Build for the simulator
+        working-directory: apple
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          set -o pipefail
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild build \
+            -project Astra.xcodeproj -scheme AstraiOS -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            TMDB_TOKEN="$TMDB_TOKEN" \
+            | tee "$RUNNER_TEMP/build.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name "Astra.app" -maxdepth 2 | head -1)
+          test -n "$APP" || { tail -80 "$RUNNER_TEMP/build.log"; exit 1; }
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Probe
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];print(next(x["udid"] for k,v in d.items() if "iOS" in k for x in v if "iPhone" in x["name"]))')
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          brew install ffmpeg > /dev/null 2>&1 || true
+          ffmpeg -loglevel error -f lavfi -i testsrc2=duration=600:size=1920x1080:rate=24 \
+            -c:v libx264 -preset ultrafast -pix_fmt yuv420p "$RUNNER_TEMP/play.mp4" || true
+          COMMON="-AstraDemo YES -AstraPerf YES -AstraDemoLatency 150"
+          run() {
+            name=$1; secs=$2; shift 2
+            xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+            sleep 2
+            xcrun simctl spawn "$UDID" log stream --style compact \
+              --predicate 'eventMessage CONTAINS "ASTRA-PERF"' > "$RUNNER_TEMP/$name.log" 2>&1 &
+            LOGPID=$!
+            sleep 2
+            xcrun simctl launch "$UDID" "$BID" $COMMON "$@" > /dev/null
+            sleep "$secs"
+            kill $LOGPID 2>/dev/null || true
+            echo "=== $name"
+            grep -o 'ASTRA-PERF .*' "$RUNNER_TEMP/$name.log" | sed "s/^ASTRA-PERF /[$name] /"
+          }
+          # A fresh install: no saved index, trending, rows or images.
+          xcrun simctl install "$UDID" "$APP"
+          run cold 42 -AstraPerfSwitch YES
+          # The same app again: everything saved by the first launch.
+          run warm1 42 -AstraPerfSwitch YES
+          run warm2 42
+          run details 22 -AstraDemoOpen 101
+          run details-show 22 -AstraDemoOpen 205
+          run search 22 -AstraDemoTab search -AstraDemoQuery dune
+          if [ -f "$RUNNER_TEMP/play.mp4" ]; then
+            run playback 22 -AstraDemoPlay "$RUNNER_TEMP/play.mp4"
+          fi
+          REPORTS=$(find ~/Library/Logs/DiagnosticReports -name "Astra*" -newer "$APP" 2>/dev/null)
+          if [ -n "$REPORTS" ]; then
+            for r in $REPORTS; do echo "--- $r"; head -80 "$r"; done
+            echo "::error::Astra crashed during the probe"
+            exit 1
+          fi

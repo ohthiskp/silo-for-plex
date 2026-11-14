@@ -18,7 +18,12 @@ struct MainView: View {
     .home: Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
   ]
 
-  private var tabs: [TabID] { TabLayout.tabs(from: storedTabs) }
+  private var tabs: [TabID] {
+    let stored = TabLayout.tabs(from: storedTabs)
+    // CI screenshots (`-AstraDemoTab settings`): Settings as a tab of its own.
+    if Demo.tab == TabID.settings.rawValue, !stored.contains(.settings) { return stored + [.settings] }
+    return stored
+  }
 
   private func path(_ id: TabID) -> Binding<[Route]> {
     Binding(get: { paths[id] ?? [] }, set: { paths[id] = $0 })

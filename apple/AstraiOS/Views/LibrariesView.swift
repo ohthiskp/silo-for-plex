@@ -116,6 +116,8 @@ struct LibraryBrowser: View {
   @State private var loaded = 0
   @State private var reachedEnd = false
   @State private var loading = false
+  /// QA P1-1: why the last page didn't load, so an outage never reads as "Nothing matches".
+  @State private var loadError: String?
 
   private var sections: [PlexLibrarySection] { library.sections.filter { $0.type == kind } }
   private var section: PlexLibrarySection? { sections.first { $0.key == sectionKey } ?? sections.first }
@@ -150,6 +152,10 @@ struct LibraryBrowser: View {
         EmptyState(
           symbol: isMovies ? "film" : "tv", title: "No \(noun.lowercased()) library",
           message: "This Plex server has no \(noun.lowercased()) library.")
+      } else if items.isEmpty, let loadError {
+        EmptyState(
+          symbol: "wifi.exclamationmark", title: "\(noun) didn't load", message: loadError,
+          action: ("Try Again", { Task { await loadMore() } }))
       } else if items.isEmpty && reachedEnd {
         EmptyState(symbol: "line.3.horizontal.decrease", title: "Nothing matches", message: "Try other filters.")
       } else if grid {
@@ -167,12 +173,21 @@ struct LibraryBrowser: View {
           }
         }
       }
-      if loading { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12) }
+      if loading {
+        ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12)
+      } else if !items.isEmpty, loadError != nil {
+        // A later page failed: the titles already shown stay, with a way to carry on.
+        Button("Couldn't load more. Try Again") { Task { await loadMore() } }
+          .astraSecondaryButton()
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 12)
+      }
     }
     .task(id: reloadKey) {
       items = []
       loaded = 0
       reachedEnd = false
+      loadError = nil
       total = nil
       async let count = countItems()
       await loadMore()
@@ -256,9 +271,16 @@ struct LibraryBrowser: View {
     guard let section, !loading, !reachedEnd else { return }
     loading = true
     defer { loading = false }
-    let raw =
-      (try? await library.client.libraryItems(
-        sectionKey: section.key, sort: sort.rawValue, start: loaded, filters: filters)) ?? []
+    let raw: [PlexMetadata]
+    do {
+      raw = try await library.client.libraryItems(
+        sectionKey: section.key, sort: sort.rawValue, start: loaded, filters: filters)
+      loadError = nil
+    } catch {
+      // Not the end of the library: keep paging possible and say why.
+      if !Task.isCancelled { loadError = PlexError.describe(error, server: library.client.serverName) }
+      return
+    }
     reachedEnd = raw.isEmpty
     loaded += raw.count
     // Library Quality (4K swaps in a movie's 4K copy); paging counts the raw page.

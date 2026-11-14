@@ -69,6 +69,8 @@ enum Astra {
 
   /// Sizes that differ between the Mac (docked sidebar, big window) and iPhone.
   enum Layout {
+    /// Mac Settings: the rows' readable width at the page's leading edge.
+    static let settingsWidth: CGFloat = 600
     #if os(macOS)
       /// Left inset of page content, clear of the collapsed sidebar. Screens
       /// read `\.contentLeading`, which follows the sidebar's width.

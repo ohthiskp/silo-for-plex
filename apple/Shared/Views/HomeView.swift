@@ -24,6 +24,7 @@ struct HomeView: View {
   }
 
   var body: some View {
+    let _ = PerfProbe.count("HomeView.body")
     // The page runs under the title bar / status bar; the switcher above it stays inside the safe area.
     ZStack(alignment: .top) {
       page
@@ -122,6 +123,15 @@ struct HomeView: View {
           EmptyState(
             symbol: "tv", title: "Nothing from \(service.label)",
             message: "TMDB returned no titles for \(service.label). Try again in a moment.")
+        }
+
+        if library.selectedService == nil, library.homeError == nil, !library.isLoadingHome, !library.isLoadingHero,
+          library.homeContinueWatching.isEmpty, !library.homeHasSections
+        {
+          // QA P3-9: a server with nothing Home can show says so, instead of a blank page.
+          EmptyState(
+            symbol: "film.stack", title: "Nothing to show yet",
+            message: "Home fills in once your Plex server has movies or shows.")
         }
 
         if library.selectedService == nil, let error = library.homeError {
