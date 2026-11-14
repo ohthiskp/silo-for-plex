@@ -982,7 +982,7 @@ struct WatchlistButton: View {
             // KP (2026-11-09): the faces always end above the logo, for any title.
             FramedArtwork(
               library: library, item: item, kind: .heroBackdrop, zoneHeight: height,
-              limitY: height - 30 - HeroInfo.blockHeight - 6, topOffset: 24, minTop: 110
+              limitY: height - 30 - HeroInfo.blockHeight - 16, topOffset: 24, minTop: 110
             )
             .opacity(i == 0 ? 1 : mix)
           #else

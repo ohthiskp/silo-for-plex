@@ -46,6 +46,11 @@ struct DetailView: View {
   private var shown: PlexMetadata { item ?? seed }
 
   var body: some View {
+    // KP (2026-11-14): Details stays Frosted Glass, even on the Light theme.
+    page.astraDetailsTheme()
+  }
+
+  @ViewBuilder private var page: some View {
     ScrollView(.vertical) {
       // A plain VStack: a lazy one guesses row heights and makes the page jump while scrolling.
       VStack(alignment: .leading, spacing: sectionSpacing) {

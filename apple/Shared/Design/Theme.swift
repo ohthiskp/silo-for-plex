@@ -304,7 +304,18 @@ struct ThemePalette {
     appTheme = defaults.string(forKey: Self.themeKey).flatMap(AppTheme.init(rawValue:)) ?? .frosted
   }
 
-  var palette: ThemePalette { appTheme.palette }
+  /// How many Details pages are on screen. KP (2026-11-14): "Details pages
+  /// will remain as frosted glass as default", so while one shows, the Light
+  /// theme looks like Frosted Glass (the whole screen, so the tab bar and
+  /// system glass match it). The other themes are already dark.
+  private(set) var detailsShowing = 0
+
+  var palette: ThemePalette {
+    appTheme == .light && detailsShowing > 0 ? AppTheme.frosted.palette : appTheme.palette
+  }
+
+  func detailsAppeared() { detailsShowing += 1 }
+  func detailsDisappeared() { detailsShowing = max(0, detailsShowing - 1) }
   var colorScheme: ColorScheme { palette.colorScheme }
   var accentHex: RGBHex { palette.accentHex }
   var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
@@ -321,6 +332,19 @@ struct ThemePalette {
       defaults.set(theme.rawValue, forKey: Self.themeKey)
     }
   }
+}
+
+private struct DetailsTheme: ViewModifier {
+  func body(content: Content) -> some View {
+    content
+      .onAppear { AstraAppearance.shared.detailsAppeared() }
+      .onDisappear { AstraAppearance.shared.detailsDisappeared() }
+  }
+}
+
+extension View {
+  /// Marks a Details page, which keeps the Frosted Glass look on the Light theme.
+  func astraDetailsTheme() -> some View { modifier(DetailsTheme()) }
 }
 
 extension EnvironmentValues {
