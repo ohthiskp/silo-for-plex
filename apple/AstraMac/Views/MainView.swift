@@ -226,16 +226,22 @@ struct MacTopBar: View {
 
   var body: some View {
     ZStack {
-      HStack(spacing: 2) {
-        item(.search, iconOnly: true)
-        item(.home)
-        item(.movies)
-        item(.shows)
-        item(.watchlist, iconOnly: true)
+      // KP (2026-11-14): Search and Watchlist are their own glass droplets
+      // just off the ends of the bar, close enough that Liquid Glass draws
+      // them pulling towards it, so they read as apart yet together.
+      HStack(spacing: 6) {
+        round(.search)
+        HStack(spacing: 2) {
+          item(.home)
+          item(.movies)
+          item(.shows)
+        }
+        .padding(4)
+        .astraGlass(in: Capsule(), variant: .clear)
+        .astraGlassEdge(Capsule(), strength: 0.6)
+        round(.watchlist)
       }
-      .padding(4)
-      .astraGlass(in: Capsule(), variant: .clear)
-      .astraGlassEdge(Capsule(), strength: 0.6)
+      .astraGlassGroup(spacing: 14)
 
       HStack(spacing: 10) {
         Spacer()
