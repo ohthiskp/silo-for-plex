@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Astra</title>
+    <item>
+      <title>Astra 0.1.0</title>
+      <pubDate>Sat, 14 Nov 2026 17:35:37 +0000</pubDate>
+      <sparkle:version>202611141731</sparkle:version>
+      <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/ohthiskp/silo-for-plex/releases/tag/swiftui-v0.1.0-build.202611141731</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/ohthiskp/silo-for-plex/releases/download/swiftui-v0.1.0-build.202611141731/Astra-SwiftUI.zip" length="51078206" type="application/octet-stream" sparkle:edSignature="ry8BxJnNOSXdg/XtGfT5yr/eZM9XsfIt0+BMrd0eGSQ37Y4k5OVOyouYUV3Ed7ebagxqL1v4O8l+gnCE/P9HAw=="/>
+    </item>
+  </channel>
+</rss>
