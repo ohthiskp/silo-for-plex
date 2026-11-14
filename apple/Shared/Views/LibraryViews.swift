@@ -55,6 +55,46 @@ struct AstraPage<Content: View>: View {
   }
 }
 
+/// Sort for Movies and Shows: one glass capsule of four choices. The chosen
+/// one is a white pill with an arrow for its order; clicking it again flips
+/// the order (newest/oldest, A–Z/Z–A, highest/lowest).
+struct SortControl: View {
+  /// The Plex sort key, "field:desc" or "field" (ascending).
+  @Binding var sort: String
+
+  /// Plex field, name, icon, and the order it starts in.
+  private static let fields: [(String, String, String, Bool)] = [
+    ("addedAt", "Recently Added", "clock", true),
+    ("titleSort", "Title", "textformat", false),
+    ("originallyAvailableAt", "Release Date", "calendar", true),
+    ("audienceRating", "Rating", "star", true),
+  ]
+
+  private var field: String { String(sort.split(separator: ":").first ?? "addedAt") }
+  private var descending: Bool { sort.hasSuffix(":desc") }
+
+  var body: some View {
+    HStack(spacing: 2) {
+      ForEach(Self.fields, id: \.0) { item in
+        let chosen = field == item.0
+        GlassChoice(
+          title: item.1, symbol: item.2, selected: chosen,
+          trailingSymbol: chosen ? (descending ? "arrow.down" : "arrow.up") : nil
+        ) {
+          let flip = chosen ? !descending : item.3
+          sort = flip ? "\(item.0):desc" : item.0
+        }
+        .help(chosen ? "Click again to reverse the order" : "Sort by \(item.1)")
+      }
+    }
+    .padding(4)
+    .astraGlass(in: Capsule(), variant: .clear)
+    .astraGlassEdge(Capsule(), strength: 0.6)
+    .fixedSize()
+    .transaction(value: sort) { $0.animation = nil }
+  }
+}
+
 /// A row of choices on one clear glass capsule: the chosen one is a white
 /// pill with dark text, the rest muted until the pointer is over them.
 struct GlassChoices: View {
@@ -76,10 +116,12 @@ struct GlassChoices: View {
   }
 }
 
-private struct GlassChoice: View {
+struct GlassChoice: View {
   var title: String
   var symbol: String?
   var selected: Bool
+  /// The chosen sort's order arrow.
+  var trailingSymbol: String? = nil
   var action: () -> Void
   @State private var hovering = false
 
@@ -88,6 +130,11 @@ private struct GlassChoice: View {
       HStack(spacing: 6) {
         if let symbol { Image(systemName: symbol).font(.system(size: 12, weight: .semibold)) }
         Text(title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+        if let trailingSymbol {
+          Image(systemName: trailingSymbol)
+            .font(.system(size: 11, weight: .bold))
+            .contentTransition(.symbolEffect(.replace))
+        }
       }
       .padding(.horizontal, 14)
       .frame(height: 30)
@@ -147,8 +194,12 @@ struct LibraryGridContent: View {
   var library: LibraryStore
   /// "movie" or "show".
   var kind: String
+  /// The page title. Given, the title, the count and the sort share one
+  /// header row (the Mac's Movies and Shows pages).
+  var title: String? = nil
 
   @State private var sectionKey: String?
+  @State private var total: Int?
   @State private var items: [PlexMetadata] = []
   @State private var reachedEnd = false
   /// Items read from the server so far (the next page starts here).
@@ -162,25 +213,31 @@ struct LibraryGridContent: View {
   }
   private var noun: String { kind == "show" ? "Shows" : "Movies" }
 
-  /// Plex sort keys, their names and icons.
-  static let sorts: [(String, String, String?)] = [
-    ("addedAt:desc", "Recently Added", "clock"),
-    ("titleSort", "A–Z", "textformat"),
-    ("originallyAvailableAt:desc", "Release Date", "calendar"),
-    ("audienceRating:desc", "Rating", "star"),
-  ]
-
   var body: some View {
     VStack(alignment: .leading, spacing: Astra.Spacing.l) {
-      // KP (2026-11-13): "make the sort by view way sleeker and modern":
-      // one glass capsule of choices instead of a menu, the chosen one lit.
-      HStack(spacing: Astra.Spacing.s) {
-        if sections.count > 1 {
-          GlassChoices(
-            options: sections.map { ($0.key, $0.title, nil) },
-            selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 }))
+      // KP (2026-11-13): "make the sort by view way sleeker and modern",
+      // then "still make it better": the title and how many titles on the
+      // left, the sort on the right of the same row; a second click on the
+      // chosen sort flips its order.
+      if let title {
+        ViewThatFits(in: .horizontal) {
+          HStack(alignment: .bottom, spacing: Astra.Spacing.l) {
+            titleBlock(title)
+            Spacer(minLength: Astra.Spacing.l)
+            SortControl(sort: $sort)
+          }
+          VStack(alignment: .leading, spacing: Astra.Spacing.m) {
+            titleBlock(title)
+            SortControl(sort: $sort)
+          }
         }
-        GlassChoices(options: Self.sorts, selection: $sort)
+      } else {
+        SortControl(sort: $sort)
+      }
+      if sections.count > 1 {
+        GlassChoices(
+          options: sections.map { ($0.key, $0.title, nil) },
+          selection: Binding(get: { section?.key ?? "" }, set: { sectionKey = $0 }))
       }
 
       if sections.isEmpty {
@@ -201,11 +258,27 @@ struct LibraryGridContent: View {
       }
       if loading { ProgressView().frame(maxWidth: .infinity) }
     }
+    .task(id: section?.key) {
+      total = nil
+      guard let section else { return }
+      total = try? await library.client.libraryCount(sectionKey: section.key)
+    }
     .task(id: "\(section?.key ?? "")|\(sort)") {
       items = []
       loaded = 0
       reachedEnd = false
       await loadMore()
+    }
+  }
+
+  private func titleBlock(_ title: String) -> some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text(title).astraDisplay(Astra.Layout.pageTitleSize, tracking: 6).lineLimit(1)
+      Text(total.map { "\($0) \($0 == 1 ? String(noun.dropLast()) : noun)" } ?? " ")
+        .astraFont(size: 14, weight: .medium)
+        .foregroundStyle(Astra.Color.muted)
+        .monospacedDigit()
+        .contentTransition(.numericText())
     }
   }
 

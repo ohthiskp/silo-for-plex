@@ -189,8 +189,7 @@ struct MainView: View {
       HomeView(library: library)
     case .movies, .shows:
       AstraPage {
-        AstraSectionHeader(title: item.title)
-        LibraryGridContent(library: library, kind: item == .movies ? "movie" : "show")
+        LibraryGridContent(library: library, kind: item == .movies ? "movie" : "show", title: item.title)
       }
       .safeAreaPadding(.top, barClearance)
     case .watchlist:
