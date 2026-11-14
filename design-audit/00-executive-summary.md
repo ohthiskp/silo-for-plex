@@ -25,7 +25,7 @@ platforms; Settings UX is 52 (iPhone) and 47 (TV). The structure is the problem 
 3. **Apple TV focus is ambiguous**: white means focused *and* selected *and* "primary"; Index Now looks focused at
    rest. (P0)
 4. **Apple TV cycles values blind** on Select, and one stray press on Library quality reloads the whole library.
-5. **10-foot legibility on TV**: chips, captions, badges and the provider rail are 16 to 22 px at 1080p.
+5. **10-foot legibility on TV**: chips, captions and badges are 18 to 22 px text at 1080p, and the provider rail never names the focused service.
 6. **Library on iPhone stacks four rows of controls** before the first poster; Settings hides behind its gear.
 7. **System states are thin**: "Checking…" never settles in any capture; TV Watchlist loads with plain text only;
    no captures exist for offline or empty states.

@@ -47,7 +47,7 @@ from this audit, it says so; those need KP's OK.
 - Focus lift: 1.04 for rows, 1.08 for pills, shadow on focus only (existing `TVSettingRowStyle`, `TVPillStyle`).
 - **Select never cycles a value with more than two options**; choices are visible pills or a pushed list. Proposal.
 - Anything that reloads data or signs out asks first.
-- Type floor at 1080p: body 29 px, captions 25 px, nothing under 23 px. Badges ≥ 28 px tall. Proposal.
+- Type floor at 1080p: body 29 px, captions 25 px, nothing under 23 px. Badge text ≥ 22 px. Proposal.
 - Top bar: search icon, Home, Movies, Shows, Watchlist, gear on the right (KP 2026-11-09); scrim behind it when
   content scrolls under. Every page has a defined initial focus.
 - No touch-only interactions; no downloads (KP 2026-11-08).
