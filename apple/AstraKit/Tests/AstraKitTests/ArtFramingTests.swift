@@ -54,6 +54,17 @@ final class ArtFramingTests: XCTestCase {
     XCTAssertGreaterThanOrEqual(r.minY + focus.minY * r.height, 100 - 0.001)
   }
 
+  func testFacesClearTheBigHeroLogo() {
+    // KP (2026-11-14): iPhone hero, 700 pt art area, the bigger logo's top at
+    // 354 pt; Mario's faces run down to 84 % of the picture.
+    let focus = CGRect(x: 0.3, y: 0.15, width: 0.4, height: 0.69)
+    let r = ArtFraming.frame(
+      boxWidth: 393, zoneHeight: 700, aspect: 16.0 / 9.0, limitY: 354, topOffset: 24, minTop: 110, focus: focus)
+    XCTAssertLessThanOrEqual(r.minY + focus.maxY * r.height, 354.5)
+    XCTAssertLessThanOrEqual(r.minX, 0)
+    XCTAssertGreaterThanOrEqual(r.maxX, 393)
+  }
+
   func testBadInputGivesZero() {
     XCTAssertEqual(ArtFraming.frame(boxWidth: 0, zoneHeight: 410, aspect: 1.7, limitY: 300), .zero)
   }

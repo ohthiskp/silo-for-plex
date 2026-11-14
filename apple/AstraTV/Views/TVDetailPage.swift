@@ -42,6 +42,11 @@ struct TVDetailPage: View {
   private var isSeries: Bool { shown.type == .show || shown.type == .season || shown.type == .episode }
 
   var body: some View {
+    // KP (2026-11-14): Details stays Frosted Glass, even on the Light theme.
+    page.astraDetailsTheme()
+  }
+
+  @ViewBuilder private var page: some View {
     ScrollView(.vertical, showsIndicators: false) {
       VStack(alignment: .leading, spacing: TVLayout.sectionSpacing) {
         header

@@ -25,6 +25,8 @@ struct RootView: View {
 
         if app.player.isActive {
           PlayerOverlay()
+            // Over video the controls are always white, whatever the theme.
+            .environment(\.colorScheme, .dark)
             .transition(.opacity)
         }
       #endif
@@ -68,7 +70,7 @@ struct RootView: View {
     #if os(macOS)
       .onAppear {
         app.player.makeOverlay = { [app] in
-          AnyView(PlayerOverlay().environment(app).preferredColorScheme(.dark).tint(.white))
+          AnyView(PlayerOverlay().environment(app).environment(\.colorScheme, .dark).preferredColorScheme(.dark).tint(.white))
         }
       }
     #endif

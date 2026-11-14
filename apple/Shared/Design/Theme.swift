@@ -30,6 +30,16 @@ enum Astra {
     @MainActor static var theme: SwiftUI.Color { AstraAppearance.shared.accent }
     @MainActor static var onTheme: SwiftUI.Color { AstraAppearance.shared.onAccent }
     @MainActor static var hairline: SwiftUI.Color { AstraAppearance.shared.palette.hairline }
+    /// The chosen pill in a switcher (Movies | Series, scopes, segments): white
+    /// with black text on the dark themes, near-black with white text on Light.
+    @MainActor static var selection: SwiftUI.Color {
+      AstraAppearance.shared.palette.isLight ? AstraAppearance.shared.palette.ink : .white
+    }
+    @MainActor static var onSelection: SwiftUI.Color { AstraAppearance.shared.palette.isLight ? .white : .black }
+    /// A soft drop shadow under titles and logos; much lighter on Light.
+    @MainActor static var shadow: SwiftUI.Color {
+      .black.opacity(AstraAppearance.shared.palette.isLight ? 0.14 : 0.45)
+    }
   }
 
   /// Fixed-size fonts. Text in views uses `.astraFont(_:)`, the same sizes
@@ -192,7 +202,7 @@ extension View {
     font(Astra.Font.display(size))
       .tracking(size >= 30 ? -0.4 : 0)
       .foregroundStyle(Astra.Color.ink)
-      .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
+      .shadow(color: Astra.Color.shadow, radius: 12, y: 4)
   }
 }
 
@@ -294,7 +304,18 @@ struct ThemePalette {
     appTheme = defaults.string(forKey: Self.themeKey).flatMap(AppTheme.init(rawValue:)) ?? .frosted
   }
 
-  var palette: ThemePalette { appTheme.palette }
+  /// How many Details pages are on screen. KP (2026-11-14): "Details pages
+  /// will remain as frosted glass as default", so while one shows, the Light
+  /// theme looks like Frosted Glass (the whole screen, so the tab bar and
+  /// system glass match it). The other themes are already dark.
+  private(set) var detailsShowing = 0
+
+  var palette: ThemePalette {
+    appTheme == .light && detailsShowing > 0 ? AppTheme.frosted.palette : appTheme.palette
+  }
+
+  func detailsAppeared() { detailsShowing += 1 }
+  func detailsDisappeared() { detailsShowing = max(0, detailsShowing - 1) }
   var colorScheme: ColorScheme { palette.colorScheme }
   var accentHex: RGBHex { palette.accentHex }
   var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
@@ -311,6 +332,19 @@ struct ThemePalette {
       defaults.set(theme.rawValue, forKey: Self.themeKey)
     }
   }
+}
+
+private struct DetailsTheme: ViewModifier {
+  func body(content: Content) -> some View {
+    content
+      .onAppear { AstraAppearance.shared.detailsAppeared() }
+      .onDisappear { AstraAppearance.shared.detailsDisappeared() }
+  }
+}
+
+extension View {
+  /// Marks a Details page, which keeps the Frosted Glass look on the Light theme.
+  func astraDetailsTheme() -> some View { modifier(DetailsTheme()) }
 }
 
 extension EnvironmentValues {

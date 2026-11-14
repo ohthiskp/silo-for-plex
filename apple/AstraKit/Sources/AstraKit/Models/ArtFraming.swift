@@ -6,6 +6,8 @@ import Foundation
 public enum ArtFraming {
   /// Faces spread wider than this share of the picture aren't one subject.
   public static let groupWidth: CGFloat = 0.3
+  /// The smallest share of the art area the picture may shrink to.
+  public static let minShare: Double = 0.55
 
   /// The rect to draw an image of `aspect` (width / height) in, inside a box
   /// `boxWidth` wide whose art area is `zoneHeight` tall.
@@ -28,8 +30,10 @@ public enum ArtFraming {
     var top = topOffset
     if let focus, focus.maxY > 0 {
       // Shrink until the faces end above the logo, but never narrower than the
-      // screen, and never below three quarters of the art area.
-      let minHeight = min(cover, max(boxWidth / aspect, (zoneHeight - topOffset) * 0.75))
+      // screen, and never below `minShare` of the art area (a blurred copy
+      // fills in below). KP (2026-11-14): with the bigger logo, faces must
+      // still clear it, so the picture may shrink further than before.
+      let minHeight = min(cover, max(boxWidth / aspect, (zoneHeight - topOffset) * Self.minShare))
       let wanted = (limitY - top) / Double(focus.maxY)
       height = min(cover, max(minHeight, wanted))
       // Still too low: slide the image up, without pushing the faces under the top bar.

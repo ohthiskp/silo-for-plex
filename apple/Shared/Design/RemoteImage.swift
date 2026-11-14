@@ -175,7 +175,7 @@ struct RemoteImage<Placeholder: View>: View {
 
 extension RemoteImage where Placeholder == SwiftUI.Color {
   init(url: URL?, contentMode: ContentMode = .fill) {
-    self.init(url: url, contentMode: contentMode, placeholder: Astra.Color.surface)
+    self.init(url: url, contentMode: contentMode, placeholder: Astra.Color.surface2)
   }
 }
 
@@ -217,6 +217,6 @@ extension ArtworkImage where Placeholder == SwiftUI.Color {
   ) {
     self.init(
       library: library, item: item, kind: kind, width: width, height: height, contentMode: contentMode,
-      placeholder: Astra.Color.surface)
+      placeholder: Astra.Color.surface2)
   }
 }
