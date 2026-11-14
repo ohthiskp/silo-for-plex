@@ -702,12 +702,17 @@ struct HeroInfo: View {
       }
       .buttonStyle(.plain)
       .accessibilityLabel("\(item.displayTitle), Details")
-      // "2025 · 2h 8m · Sci-Fi [PG-13] [4K]" on one line, as in the mockup.
+      // Same as the iPhone hero and Details (KP, 2026-11-14): "2026 • 1h 41m
+      // [PG] [4K]" with the rating in the grey box, the genres on the line below.
       HStack(spacing: 10) {
-        DetailMetaLine(item: shown, library: library, fontSize: 14.5, genreLimit: 1, ratingAfter: true)
-          .layoutPriority(1)
+        DetailMetaLine(
+          item: shown, library: library, showsGenres: false, fontSize: 15, separator: "  •  ",
+          ratingAfter: true, greyRating: true
+        )
+        .layoutPriority(1)
         FormatBadges(item: shown)
       }
+      .frame(maxWidth: .infinity)
       .task(id: item.id) {
         full = nil
         let key = item.isCatalogOnly ? library.indexMatch(item)?.ratingKey : item.ratingKey
@@ -717,7 +722,14 @@ struct HeroInfo: View {
         full = found
       }
       // Same height for every title, so the buttons never move.
-      .frame(height: 26 * Astra.Layout.textScale, alignment: .leading)
+      .frame(height: 26 * Astra.Layout.textScale)
+      Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
+        .astraFont(size: 14)
+        .foregroundStyle(Astra.Color.ink.opacity(0.62))
+        .lineLimit(1)
+        .frame(maxWidth: .infinity)
+        .frame(height: 18 * Astra.Layout.textScale)
+        .padding(.top, -8)
       HStack(spacing: 12) {
         Button {
           playItem(item)
