@@ -5,7 +5,7 @@ run-name: SwiftUI iPhone launch check ${{ github.sha }}
 # prints any crash report, so launch crashes can be seen without a phone.
 on:
   push:
-    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r]
+    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s]
     paths:
       - "apple/**"
       - ".github/workflows/astra-swiftui-ios-launch.yml"
@@ -110,6 +110,17 @@ jobs:
             shot player-controls -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer controls
             shot player-scrub -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer scrub
           fi
+          # The crash report screen (KP, 2026-11-12): crash on purpose, then the next
+          # launch shows the report. Cleared afterwards so the UI tests start clean.
+          xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+          xcrun simctl launch "$UDID" "$BID" -AstraDemo YES -AstraDemoCrash YES > /dev/null
+          sleep 12
+          shot crash-report
+          shot crash-report-details -AstraDemoCrashDetails YES
+          xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+          CRASHES="$(xcrun simctl get_app_container "$UDID" "$BID" data)/Library/Application Support/CrashReports"
+          echo "--- crash report"; cat "$CRASHES/last-crash.txt" 2>/dev/null || echo "(none written)"
+          rm -rf "$CRASHES"
           ls -la "$RUNNER_TEMP/shots"
           # Small JPEGs printed into the log, for reviewers who can read logs but not artifacts.
           for f in "$RUNNER_TEMP"/shots/*.png; do

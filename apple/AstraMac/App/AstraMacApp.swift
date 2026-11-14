@@ -7,10 +7,16 @@ struct AstraMacApp: App {
   @State private var app = AppModel()
   private let updater = AppUpdater.shared
 
+  init() {
+    // First, so a crash anywhere after this is caught (KP, 2026-11-12).
+    CrashReporter.shared.install()
+  }
+
   var body: some Scene {
     WindowGroup("Astra") {
       RootView()
         .environment(app)
+        .crashReportSheet()
         .frame(minWidth: 960, minHeight: 600)
         // Colour scheme and tint follow the app theme (RootView).
         .environment(\.checkForUpdates) { [updater] in updater.checkForUpdates() }
