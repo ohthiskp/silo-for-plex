@@ -167,6 +167,20 @@ jobs:
           sleep 25
           screencapture -x "$RUNNER_TEMP/shots/mac-settings-lower.png" || true
           kill "$pid" 2>/dev/null || true
+          sleep 3
+          # Show details (KP, 2026-11-14): the picked episode up top, then the season list.
+          mshot() {
+            name=$1; shift
+            "$BIN" -AstraDemo YES "$@" > /dev/null 2>&1 &
+            pid=$!
+            sleep 25
+            screencapture -x "$RUNNER_TEMP/shots/$name.png" || true
+            kill "$pid" 2>/dev/null || true
+            sleep 3
+          }
+          mshot mac-details-show -AstraDemoOpen 205
+          mshot mac-details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
+          mshot mac-details-episode -AstraDemoOpen 303
           for f in "$RUNNER_TEMP"/shots/*.png; do
             [ -f "$f" ] || continue
             sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null

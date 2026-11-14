@@ -19,6 +19,10 @@ struct TVDetailPage: View {
   @State private var seasons: [PlexMetadata] = []
   @State private var selectedSeason: PlexMetadata?
   @State private var episodes: [PlexMetadata] = []
+  /// A show's picked episode (KP, 2026-11-14): the header shows its details and
+  /// Play / Resume plays it. Selecting an episode picks it and moves focus up
+  /// to Play, so a second press plays it.
+  @State private var focus: PlexMetadata?
   @State private var related: [PlexHub] = []
   @State private var notOnServer = false
   @State private var error: String?
@@ -27,14 +31,24 @@ struct TVDetailPage: View {
 
   private var shown: PlexMetadata { item ?? seed }
 
+  /// The show on an episode's or season's page: its logo, backdrop, facts and cast.
+  private var titleItem: PlexMetadata {
+    if shown.type == .episode || shown.type == .season, let parentShow { return parentShow }
+    return shown
+  }
+
+  private var playTarget: PlexMetadata { focus ?? shown }
+
+  private var isSeries: Bool { shown.type == .show || shown.type == .season || shown.type == .episode }
+
   var body: some View {
     ScrollView(.vertical, showsIndicators: false) {
       VStack(alignment: .leading, spacing: TVLayout.sectionSpacing) {
         header
-        if (shown.type == .show || shown.type == .season), !episodes.isEmpty || !seasons.isEmpty {
+        if isSeries, !episodes.isEmpty || !seasons.isEmpty {
           episodesSection
         }
-        if !shown.roles.isEmpty {
+        if !titleItem.roles.isEmpty {
           castSection
         }
         ForEach(related) { hub in
@@ -48,9 +62,9 @@ struct TVDetailPage: View {
     .scrollClipDisabled()
     .background {
       ZStack(alignment: .top) {
-        AmbientBackdrop(library: library, item: shown)
+        AmbientBackdrop(library: library, item: titleItem)
         ArtworkImage(
-          library: library, item: shown, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear
+          library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear
         )
         .frame(maxWidth: .infinity)
         .frame(height: 1080)
@@ -72,9 +86,9 @@ struct TVDetailPage: View {
       guard let key, parentShow?.ratingKey != key else { return }
       parentShow = try? await library.details(key)
     }
-    .task(id: shown.id) {
-      guard shown.officialRating == nil, shown.type == .movie || shown.type == .show else { return }
-      certification = await library.tmdbArtwork(for: shown)?.certification
+    .task(id: titleItem.id) {
+      guard titleItem.officialRating == nil, titleItem.type == .movie || titleItem.type == .show else { return }
+      certification = await library.tmdbArtwork(for: titleItem)?.certification
     }
   }
 
@@ -82,14 +96,14 @@ struct TVDetailPage: View {
 
   private var header: some View {
     VStack(alignment: .leading, spacing: 20) {
-      TVLogoTitle(library: library, item: shown, maxWidth: 700, maxHeight: 200, textSize: 90)
+      TVLogoTitle(library: library, item: titleItem, maxWidth: 700, maxHeight: 200, textSize: 90)
         .padding(.bottom, 6)
 
       HStack(spacing: 16) {
-        if let rating = shown.officialRating ?? certification {
+        if let rating = titleItem.officialRating ?? certification {
           RatingBox(text: rating, fontSize: 20)
         }
-        let facts = TVFacts.line(shown).replacingOccurrences(of: " · ", with: "  •  ")
+        let facts = TVFacts.line(titleItem).replacingOccurrences(of: " · ", with: "  •  ")
         if !facts.isEmpty {
           Text(facts)
             .font(.system(size: 26, weight: .medium))
@@ -97,11 +111,25 @@ struct TVDetailPage: View {
             .lineLimit(1)
         }
       }
-      TVFormatChips(item: shown, fontSize: 18, showsRating: false)
+      TVFormatChips(item: playTarget, fontSize: 18, showsRating: false)
+
+      if let focus, focus.type == .episode {
+        VStack(alignment: .leading, spacing: 6) {
+          Text([focus.episodeLabel, focus.durationLabel].compactMap { $0 }.joined(separator: "  ·  "))
+            .font(.system(size: 22, weight: .semibold))
+            .foregroundStyle(Astra.Color.muted)
+          Text(focus.title)
+            .font(.system(size: 36, weight: .bold))
+            .foregroundStyle(Astra.Color.ink)
+            .lineLimit(1)
+        }
+        .id(focus.ratingKey)
+        .transition(.opacity)
+      }
 
       HStack(alignment: .top, spacing: 28) {
         Button {
-          playItem(shown)
+          playItem(playTarget)
         } label: {
           Label(playLabel, systemImage: "play.fill")
             .font(.system(size: 30, weight: .semibold))
@@ -110,7 +138,7 @@ struct TVDetailPage: View {
         }
         .buttonStyle(TVGlassButtonStyle(prominent: true))
         .focused($playFocused)
-        .disabled(notOnServer || !app.canPlay(shown))
+        .disabled(notOnServer || !app.canPlay(playTarget))
 
         if let target = watchlistTarget {
           TVLabeledRound(label: app.isOnWatchlist(target) ? "In My List" : "My List") {
@@ -120,7 +148,7 @@ struct TVDetailPage: View {
         if !shown.isCatalogOnly, !notOnServer {
           TVLabeledRound(label: "More") {
             Menu {
-              ItemMenuItems(library: library, item: shown, onDetails: true)
+              ItemMenuItems(library: library, item: playTarget, onDetails: true)
             } label: {
               Image(systemName: "ellipsis")
                 .font(.system(size: 30, weight: .semibold))
@@ -145,7 +173,7 @@ struct TVDetailPage: View {
         }
       }
 
-      if let summary = shown.summary, !summary.isEmpty {
+      if let summary = headerSummary {
         Text(summary)
           .font(.system(size: 26))
           .foregroundStyle(Astra.Color.ink.opacity(0.88))
@@ -154,7 +182,7 @@ struct TVDetailPage: View {
           .fixedSize(horizontal: false, vertical: true)
           .frame(maxWidth: 1100, alignment: .leading)
       }
-      if let director = shown.directors.first?.tag {
+      if let director = playTarget.directors.first?.tag {
         (Text("Directed by ").foregroundStyle(Astra.Color.muted)
           + Text(director).foregroundStyle(Astra.Color.ink).bold())
           .font(.system(size: 24))
@@ -178,8 +206,16 @@ struct TVDetailPage: View {
     return nil
   }
 
+  /// The picked episode's synopsis on a show, else the title's own.
+  private var headerSummary: String? {
+    if let text = focus?.summary, !text.isEmpty { return text }
+    if let text = shown.summary, !text.isEmpty { return text }
+    return titleItem.summary?.isEmpty == false ? titleItem.summary : nil
+  }
+
   /// How far into the movie or the next episode.
   private var resumeTarget: PlexMetadata? {
+    if let focus { return focus }
     if shown.type == .movie || shown.type == .episode { return shown }
     return episodes.first { ($0.viewOffset ?? 0) > 0 }
   }
@@ -197,6 +233,11 @@ struct TVDetailPage: View {
 
   /// "Play", "Resume", or a show's next episode ("Play S1 E3").
   private var playLabel: String {
+    if let focus {
+      let verb = focus.progress != nil ? "Resume" : "Play"
+      guard let label = focus.episodeLabel else { return verb }
+      return "\(verb) \(label.replacingOccurrences(of: " · ", with: " "))"
+    }
     if shown.type == .movie || shown.type == .episode { return shown.progress != nil ? "Resume" : "Play" }
     if let next = episodes.first(where: { ($0.viewOffset ?? 0) > 0 }) ?? episodes.first(where: { !$0.isWatched }),
       let label = next.episodeLabel
@@ -208,34 +249,62 @@ struct TVDetailPage: View {
 
   // MARK: Episodes
 
+  /// KP (2026-11-14): a season dropdown, then the whole season.
   private var episodesSection: some View {
     VStack(alignment: .leading, spacing: 0) {
-      if seasons.count > 1 {
-        ScrollView(.horizontal, showsIndicators: false) {
-          HStack(spacing: 12) {
+      HStack(spacing: 24) {
+        if seasons.count > 1 {
+          Menu {
             ForEach(seasons) { season in
               Button {
                 Task { await selectSeason(season) }
               } label: {
-                Text(season.title)
-                  .font(.system(size: 22, weight: .semibold))
-                  .padding(.horizontal, 24)
-                  .frame(height: 50)
+                if season.id == selectedSeason?.id {
+                  Label(season.title, systemImage: "checkmark")
+                } else {
+                  Text(season.title)
+                }
               }
-              .buttonStyle(TVGlassButtonStyle(chip: true, selected: season.id == selectedSeason?.id))
+            }
+          } label: {
+            HStack(spacing: 12) {
+              Text(selectedSeason?.title ?? "Season")
+              Image(systemName: "chevron.down").font(.system(size: 18, weight: .bold))
+            }
+            .font(.system(size: 26, weight: .semibold))
+            .padding(.horizontal, 28)
+            .frame(height: 60)
+          }
+          .buttonStyle(TVGlassButtonStyle(chip: true))
+          .accessibilityLabel("Season, \(selectedSeason?.title ?? "")")
+        } else {
+          Text(selectedSeason?.title ?? "Episodes")
+            .font(.system(size: 30, weight: .bold))
+            .foregroundStyle(Astra.Color.ink)
+        }
+        if !episodes.isEmpty {
+          Text("\(episodes.count) Episode\(episodes.count == 1 ? "" : "s")")
+            .font(.system(size: 22, weight: .medium))
+            .foregroundStyle(Astra.Color.muted)
+        }
+      }
+      .padding(.horizontal, TVLayout.leading)
+      .padding(.vertical, 12)
+      .focusSection()
+      ScrollView(.horizontal, showsIndicators: false) {
+        LazyHStack(alignment: .top, spacing: 36) {
+          ForEach(episodes) { episode in
+            TVEpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
+              withAnimation(.easeInOut(duration: 0.25)) { focus = episode }
+              playFocused = true
             }
           }
-          .padding(.horizontal, TVLayout.leading)
-          .padding(.vertical, 12)
         }
-        .scrollClipDisabled()
-        .focusSection()
+        .padding(.horizontal, TVLayout.leading)
+        .padding(.vertical, 20)
       }
-      TVRow(title: selectedSeason?.title ?? "Episodes", spacing: 36) {
-        ForEach(episodes) { episode in
-          TVEpisodeCard(library: library, item: episode)
-        }
-      }
+      .scrollClipDisabled()
+      .focusSection()
     }
   }
 
@@ -243,7 +312,7 @@ struct TVDetailPage: View {
 
   private var castSection: some View {
     TVRow(title: "Cast", spacing: 32) {
-      ForEach(Array(shown.roles.prefix(24).enumerated()), id: \.offset) { _, role in
+      ForEach(Array(titleItem.roles.prefix(24).enumerated()), id: \.offset) { _, role in
         TVCastTile(name: role.tag, role: role.role, photo: role.thumb)
       }
     }
@@ -268,21 +337,52 @@ struct TVDetailPage: View {
       let full = try await library.details(key)
       withAnimation(.easeInOut(duration: 0.2)) { item = full }
       library.recordOpen(seconds: Date().timeIntervalSince(opened))
+      // KP (2026-11-14): a show, season or episode (Continue Watching) opens on
+      // that episode's season with the episode picked.
       switch full.type {
       case .show:
-        seasons = try await library.children(of: full.ratingKey).filter { $0.type == .season }
-        let start = seasons.first { !$0.isWatched && ($0.index ?? 0) > 0 } ?? seasons.first
-        if let start { await selectSeason(start) }
+        try await loadSeasons(show: full.ratingKey, season: nil, episode: nil)
       case .season:
-        selectedSeason = full
-        episodes = try await library.children(of: full.ratingKey)
+        if let show = full.parentRatingKey {
+          try await loadSeasons(show: show, season: full.ratingKey, episode: nil)
+        } else {
+          selectedSeason = full
+          episodes = try await library.children(of: full.ratingKey)
+          pickDefaultEpisode(nil)
+        }
+      case .episode:
+        if let show = full.grandparentRatingKey {
+          try await loadSeasons(show: show, season: full.parentRatingKey, episode: full.ratingKey)
+        }
+        if focus == nil { focus = full }
       default:
         break
       }
-      related = await library.related(full.ratingKey)
+      let relatedKey =
+        (full.type == .episode ? full.grandparentRatingKey : full.type == .season ? full.parentRatingKey : nil)
+        ?? full.ratingKey
+      related = await library.related(relatedKey)
     } catch {
       self.error = error.localizedDescription
     }
+  }
+
+  /// The show's seasons, opened on `season` (else the first one not watched
+  /// yet) with `episode` picked (else the one to watch next).
+  private func loadSeasons(show: String, season: String?, episode: String?) async throws {
+    seasons = try await library.children(of: show).filter { $0.type == .season }
+    let start =
+      season.flatMap { key in seasons.first { $0.ratingKey == key } }
+      ?? seasons.first { !$0.isWatched && ($0.index ?? 0) > 0 } ?? seasons.first
+    if let start { await selectSeason(start) }
+    pickDefaultEpisode(episode)
+  }
+
+  private func pickDefaultEpisode(_ key: String?) {
+    let found =
+      key.flatMap { key in episodes.first { $0.ratingKey == key } }
+      ?? episodes.first { ($0.viewOffset ?? 0) > 0 } ?? episodes.first { !library.isWatched($0) } ?? episodes.first
+    if let found { focus = found }
   }
 
   private func selectSeason(_ season: PlexMetadata) async {
@@ -311,17 +411,20 @@ private struct TVLabeledRound<Content: View>: View {
 }
 
 /// An episode: its still with the progress line, "1. Title" and the length,
-/// and two lines of its summary. Selecting plays it.
+/// and two lines of its summary. Selecting picks it (KP, 2026-11-14:
+/// don't play on a click); pressing the picked one again plays it.
 private struct TVEpisodeCard: View {
   var library: LibraryStore
   var item: PlexMetadata
+  var selected: Bool
+  var onSelect: () -> Void
   @Environment(\.playItem) private var playItem
 
   var body: some View {
     Button {
-      playItem(item)
+      if selected { playItem(item) } else { onSelect() }
     } label: {
-      TVEpisodeLabel(library: library, item: item)
+      TVEpisodeLabel(library: library, item: item, selected: selected)
     }
     .buttonStyle(TVCardButtonStyle(scale: 1.05))
     .itemMenu(library: library, item: item)
@@ -331,6 +434,7 @@ private struct TVEpisodeCard: View {
 private struct TVEpisodeLabel: View {
   var library: LibraryStore
   var item: PlexMetadata
+  var selected = false
   @Environment(\.isFocused) private var focused
 
   var body: some View {
@@ -353,7 +457,8 @@ private struct TVEpisodeLabel: View {
         }
         .overlay(
           RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)
-            .strokeBorder(.white.opacity(focused ? 0.8 : 0.08), lineWidth: focused ? 4 : 1))
+            .strokeBorder(
+              Astra.Color.ink.opacity(focused ? 0.8 : selected ? 0.55 : 0.08), lineWidth: focused || selected ? 4 : 1))
       HStack(spacing: 10) {
         Text([item.index.map { "\($0)." }, item.title].compactMap { $0 }.joined(separator: " "))
           .font(.system(size: 24, weight: .semibold))

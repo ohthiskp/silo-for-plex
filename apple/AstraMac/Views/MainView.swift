@@ -39,7 +39,8 @@ struct MainView: View {
   /// Pages stay alive once opened, so switching back is instant: no reload,
   /// no re-decoding artwork, scroll position kept.
   @State private var opened: [SidebarItem] = Array(Set([.home, Demo.tab.flatMap(SidebarItem.init(rawValue:)) ?? .home]))
-  @State private var path: [Route] = []
+  /// `-AstraDemoOpen <ratingKey>` opens that title's card at launch (CI screenshots).
+  @State private var path: [Route] = Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
 
   var body: some View {
     ZStack(alignment: .leading) {
