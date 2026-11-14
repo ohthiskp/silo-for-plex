@@ -125,6 +125,15 @@ struct HomeView: View {
             message: "TMDB returned no titles for \(service.label). Try again in a moment.")
         }
 
+        if library.selectedService == nil, library.homeError == nil, !library.isLoadingHome, !library.isLoadingHero,
+          library.homeContinueWatching.isEmpty, !library.homeHasSections
+        {
+          // QA P3-9: a server with nothing Home can show says so, instead of a blank page.
+          EmptyState(
+            symbol: "film.stack", title: "Nothing to show yet",
+            message: "Home fills in once your Plex server has movies or shows.")
+        }
+
         if library.selectedService == nil, let error = library.homeError {
           // Only a page with nothing at all gets the big message; otherwise a
           // quiet line (it retries by itself).

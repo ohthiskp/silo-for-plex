@@ -59,12 +59,16 @@ final class PlayerGestureTests: XCTestCase {
     XCTAssertTrue(found, "No +10 s badge when the controls were showing")
   }
 
-  /// Whether `element` is on screen and tappable. Hidden controls can leave
-  /// the button with no valid frame, and `isHittable` then fails the test
-  /// ("Failed to determine hittability") instead of returning false.
+  /// Whether a control is on screen. Not `isHittable`: while the controls fade
+  /// in or out it can throw ("Activation point invalid") instead of answering,
+  /// which failed tests on a busy runner. The player reports whether its
+  /// controls show on an invisible marker ("astra.player.controls").
   private func showing(_ element: XCUIElement) -> Bool {
-    guard element.exists, !element.frame.isEmpty, element.frame.minX.isFinite else { return false }
-    return element.isHittable
+    let marker = app.descendants(matching: .any)["astra.player.controls"]
+    guard marker.exists, (marker.value as? String) == "shown" else { return false }
+    guard element.exists else { return false }
+    let frame = element.frame
+    return !frame.isEmpty && frame.minX.isFinite && frame.minY.isFinite
   }
 
   func testSingleTapTogglesControls() {
@@ -85,15 +89,17 @@ final class PlayerGestureTests: XCTestCase {
 
   func testSwipeOnTheRightChangesVolume() {
     point(0.85, 0.7).press(forDuration: 0.05, thenDragTo: point(0.85, 0.3))
+    // Checked before the screenshot: on a busy runner a screenshot can outlast the level.
+    let found = badge("astra.level.volume").waitForExistence(timeout: 5)
     shot("after-swipe-right")
-    XCTAssertTrue(badge("astra.level.volume").waitForExistence(timeout: 2), "No volume level after a swipe on the right")
+    XCTAssertTrue(found, "No volume level after a swipe on the right")
   }
 
   func testSwipeOnTheLeftChangesBrightness() {
     point(0.15, 0.3).press(forDuration: 0.05, thenDragTo: point(0.15, 0.7))
+    let found = badge("astra.level.brightness").waitForExistence(timeout: 5)
     shot("after-swipe-left")
-    XCTAssertTrue(
-      badge("astra.level.brightness").waitForExistence(timeout: 2), "No brightness level after a swipe on the left")
+    XCTAssertTrue(found, "No brightness level after a swipe on the left")
   }
 
   /// KP (2026-11-10): no ⋯ on iPhone, and the subtitle button's menu is

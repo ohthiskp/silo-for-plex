@@ -141,11 +141,15 @@ public enum SubtitleLook: String, CaseIterable, Sendable, Identifiable {
     }
   }
 
+  /// Read from the saved `SubtitleStyle` (Settings → Subtitles), which owns colour and background now.
   public static func current(_ defaults: UserDefaults = .standard) -> SubtitleLook {
-    defaults.string(forKey: storageKey).flatMap(SubtitleLook.init(rawValue:)) ?? .whiteNoBackground
+    SubtitleStyle.current(defaults).look
   }
 
-  public func save(_ defaults: UserDefaults = .standard) { defaults.set(rawValue, forKey: Self.storageKey) }
+  public func save(_ defaults: UserDefaults = .standard) {
+    defaults.set(rawValue, forKey: Self.storageKey)
+    SubtitleStyle.current(defaults).with(self).save(defaults)
+  }
 }
 
 /// Subtitles → Sync: mpv's `sub-delay`, in 0.1 s steps between −10 and +10 s.
