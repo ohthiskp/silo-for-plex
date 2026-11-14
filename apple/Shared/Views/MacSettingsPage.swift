@@ -465,10 +465,14 @@ struct IndexProgress<Accessory: View>: View {
         }
       }
       .frame(height: 5 * scale)
-      Text(detail(status))
-        .astraFont(size: 12)
-        .foregroundStyle(Astra.Color.muted)
-        .lineLimit(1)
+      HStack(spacing: 12) {
+        Text(detail(status))
+          .astraFont(size: 12 * scale)
+          .foregroundStyle(Astra.Color.muted)
+          .lineLimit(1)
+        Spacer(minLength: 0)
+        accessory
+      }
     }
     .frame(maxWidth: .infinity)
     .astraAnimation(Astra.Motion.base, value: status.itemCount)

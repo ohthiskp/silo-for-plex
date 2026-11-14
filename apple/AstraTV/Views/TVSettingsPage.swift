@@ -9,6 +9,7 @@ import SwiftUI
 /// or tab bar here, because the TV app has none.
 struct TVSettingsPage: View {
   @Environment(AppModel.self) private var app
+  @Environment(\.tvScrolledDown) private var scrolledDown
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -44,6 +45,8 @@ struct TVSettingsPage: View {
         .padding(.bottom, 80)
       }
       .scrollClipDisabled()
+      // The top bar fades away once the page scrolls, as on every other page.
+      .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y > 60 }) { _, down in scrolledDown(down) }
       .task {
         // CI screenshots (`-AstraDemoScroll 1`): the lower half.
         guard Demo.homeScroll != nil, (try? await Task.pause(3)) != nil else { return }
