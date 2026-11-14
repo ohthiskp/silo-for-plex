@@ -54,7 +54,7 @@ struct LibrarySegmentPill: View {
           .frame(height: 38 * Astra.Layout.controlScale)
           .background {
             if segment == item {
-              Capsule().fill(.white.opacity(0.16)).matchedGeometryEffect(id: "segment", in: pill)
+              Capsule().fill(Astra.Color.ink.opacity(0.16)).matchedGeometryEffect(id: "segment", in: pill)
             }
           }
           .contentShape(Capsule())
@@ -91,11 +91,11 @@ struct LibraryKindSwitch: View {
         } label: {
           Text(item.title)
             .astraFont(size: 13, weight: .semibold)
-            .foregroundStyle(kind == item ? Color.black : Astra.Color.ink)
+            .foregroundStyle(kind == item ? Astra.Color.onSelection : Astra.Color.ink)
             .padding(.horizontal, 16 * Astra.Layout.controlScale)
             .frame(height: 30 * Astra.Layout.controlScale)
             .background {
-              if kind == item { Capsule().fill(.white).matchedGeometryEffect(id: "kind", in: kindPill) }
+              if kind == item { Capsule().fill(Astra.Color.selection).matchedGeometryEffect(id: "kind", in: kindPill) }
             }
             .astraGlass(in: Capsule(), variant: .clear, interactive: true)
             .contentShape(Capsule())

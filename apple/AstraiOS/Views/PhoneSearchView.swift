@@ -124,11 +124,11 @@ struct PhoneSearchView: View {
         } label: {
           Text(item.title)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(scope == item ? Color.black : Astra.Color.ink)
+            .foregroundStyle(scope == item ? Astra.Color.onSelection : Astra.Color.ink)
             .frame(maxWidth: .infinity)
             .frame(height: 36)
             .background {
-              if scope == item { Capsule().fill(.white).matchedGeometryEffect(id: "scope", in: scopePill) }
+              if scope == item { Capsule().fill(Astra.Color.selection).matchedGeometryEffect(id: "scope", in: scopePill) }
             }
             .astraGlass(in: Capsule(), variant: .clear, interactive: true)
             .contentShape(Capsule())
@@ -384,10 +384,10 @@ extension View {
   fileprivate func searchChip(selected: Bool) -> some View {
     self
       .font(.system(size: 14, weight: .semibold))
-      .foregroundStyle(selected ? Color.black : Astra.Color.ink)
+      .foregroundStyle(selected ? Astra.Color.onSelection : Astra.Color.ink)
       .padding(.horizontal, 16)
       .frame(height: 34)
-      .background { if selected { Capsule().fill(.white) } }
+      .background { if selected { Capsule().fill(Astra.Color.selection) } }
       .astraGlass(in: Capsule(), variant: .clear, interactive: true)
       .contentShape(Capsule())
   }
@@ -443,8 +443,8 @@ private struct ResultRow: View {
                     .foregroundStyle(Astra.Color.ink)
                     .padding(.horizontal, 8)
                     .frame(height: 22)
-                    .background(Capsule().fill(.white.opacity(0.12)))
-                    .overlay(Capsule().stroke(.white.opacity(0.18)))
+                    .background(Capsule().fill(Astra.Color.ink.opacity(0.12)))
+                    .overlay(Capsule().stroke(Astra.Color.ink.opacity(0.18)))
                 }
               }
             }
@@ -470,7 +470,7 @@ private struct ResultRow: View {
       .accessibilityLabel("Play \(item.displayTitle)")
     }
     .padding(10)
-    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(0.04)))
+    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Astra.Color.ink.opacity(0.04)))
     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Astra.Color.hairline))
     .itemMenu(library: library, item: item)
   }

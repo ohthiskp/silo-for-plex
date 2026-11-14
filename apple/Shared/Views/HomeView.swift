@@ -355,12 +355,12 @@ struct ServicePill: View {
       library.select(service)
     } label: {
       content()
-        .foregroundStyle(selected ? Color.black : Color.white.opacity(0.9))
+        .foregroundStyle(selected ? Astra.Color.onSelection : Astra.Color.ink.opacity(0.9))
         .padding(.horizontal, 14 * Astra.Layout.controlScale)
         .frame(height: 34 * Astra.Layout.controlScale)
         .background {
           if selected {
-            Capsule().fill(.white).matchedGeometryEffect(id: "chip", in: selection)
+            Capsule().fill(Astra.Color.selection).matchedGeometryEffect(id: "chip", in: selection)
           }
         }
         .contentShape(Capsule())
@@ -435,11 +435,11 @@ struct KindSwitch: View {
         } label: {
           Text(isSeries ? "Series" : "Movies")
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(series == isSeries ? Color.black : Astra.Color.ink)
+            .foregroundStyle(series == isSeries ? Astra.Color.onSelection : Astra.Color.ink)
             .padding(.horizontal, 12)
             .frame(height: 28)
             .background {
-              if series == isSeries { Capsule().fill(.white).matchedGeometryEffect(id: "kind", in: kindPill) }
+              if series == isSeries { Capsule().fill(Astra.Color.selection).matchedGeometryEffect(id: "kind", in: kindPill) }
             }
             .contentShape(Capsule())
         }
@@ -584,11 +584,12 @@ struct HeroInfo: View {
   var item: PlexMetadata
 
   #if os(macOS)
-    static let titleBox: CGFloat = 130
-    static let logoWidth: CGFloat = 400
+    // KP (2026-11-14): the title logo bigger and more prominent.
+    static let titleBox: CGFloat = 170
+    static let logoWidth: CGFloat = 500
   #elseif os(tvOS)
-    static let titleBox: CGFloat = 180
-    static let logoWidth: CGFloat = 680
+    static let titleBox: CGFloat = 230
+    static let logoWidth: CGFloat = 820
   #else
     static let titleBox: CGFloat = 104
     static let logoWidth: CGFloat = 300
@@ -614,9 +615,9 @@ struct HeroInfo: View {
   #if os(iOS)
     static let blockWidth: CGFloat = .infinity
   #elseif os(tvOS)
-    static let blockWidth: CGFloat = 760
+    static let blockWidth: CGFloat = 820
   #else
-    static let blockWidth: CGFloat = 440
+    static let blockWidth: CGFloat = 500
   #endif
 
   var body: some View {
@@ -632,9 +633,12 @@ struct HeroInfo: View {
     /// "2026 • 1h 41m • [PG] [HD]", the genres under it, then a white Play
     /// and the round + / ✓. Every box has a fixed height, so the hero's
     /// faces can be framed above the logo for any title.
-    static let logoBox = CGSize(width: 240, height: 150)
+    /// KP (2026-11-14): the logo big and prominent, nearly edge to edge
+    /// (like Super Mario's), right under the faces. A wide logo fills the
+    /// width; a tall one stops at the box's height.
+    static let logoBox = CGSize(width: 380, height: 180)
     /// From the top of the logo box to the bottom of the buttons.
-    static let blockHeight: CGFloat = 150 + 14 + 24 + 6 + 18 + 18 + 50
+    static let blockHeight: CGFloat = 180 + 14 + 24 + 6 + 18 + 18 + 50
 
     private var phoneBody: some View {
       VStack(spacing: 0) {
@@ -924,8 +928,6 @@ struct WatchlistButton: View {
     var onCurrent: (PlexMetadata) -> Void = { _ in }
 
     @State private var position: Int?
-    /// How far the page has scrolled the hero up; it blurs and fades by it.
-    @State private var scrolled: CGFloat = 0
     /// Pages scrolled, fractional while dragging (1.5 = halfway to the third).
     @State private var progress: CGFloat = 0
     @Environment(\.contentLeading) private var leading
@@ -950,7 +952,6 @@ struct WatchlistButton: View {
       .scrollPosition(id: $position)
       .scrollIndicators(.never)
       .modifier(PageProgressReader(progress: $progress, position: position))
-      .modifier(ScrolledAway(offset: $scrolled))
       .onAppear { if let first = items.first { onCurrent(first) } }
       .onChange(of: position) { _, now in
         if let now, items.indices.contains(now) { onCurrent(items[now]) }
@@ -993,9 +994,9 @@ struct WatchlistButton: View {
             .opacity(i == 0 ? 1 : mix)
           #endif
         }
-        // Mid-swipe the two blur together; scrolling down blurs into the
-        // frosted background below (KP, 2026-11-09).
-        .blur(radius: sin(mix * .pi) * 22 + min(30, scrolled / 12))
+        // Mid-swipe the two blur together (KP, 2026-11-09). Scrolling down
+        // no longer blurs it: the hero stays still and sharp (KP, 2026-11-14).
+        .blur(radius: sin(mix * .pi) * 22)
         HeroBlend()
       }
       // The bottom dissolves into the frosted background (the same

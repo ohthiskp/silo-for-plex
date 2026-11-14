@@ -321,11 +321,11 @@ struct SearchView: View {
         } label: {
           Text(item.title)
             .astraFont(size: 13, weight: .semibold)
-            .foregroundStyle(scope == item ? Color.black : Astra.Color.ink)
+            .foregroundStyle(scope == item ? Astra.Color.onSelection : Astra.Color.ink)
             .padding(.horizontal, 18 * Astra.Layout.controlScale)
             .frame(height: 32 * Astra.Layout.controlScale)
             .background {
-              if scope == item { Capsule().fill(.white).matchedGeometryEffect(id: "scope", in: scopePill) }
+              if scope == item { Capsule().fill(Astra.Color.selection).matchedGeometryEffect(id: "scope", in: scopePill) }
             }
             .astraGlass(in: Capsule(), variant: .clear, interactive: true)
             .contentShape(Capsule())
@@ -349,10 +349,10 @@ struct SearchView: View {
         } label: {
           Text(filter.title)
             .astraFont(size: 13, weight: .semibold)
-            .foregroundStyle(on ? Color.black : Astra.Color.ink)
+            .foregroundStyle(on ? Astra.Color.onSelection : Astra.Color.ink)
             .padding(.horizontal, 16 * Astra.Layout.controlScale)
             .frame(height: 30 * Astra.Layout.controlScale)
-            .background { if on { Capsule().fill(.white) } }
+            .background { if on { Capsule().fill(Astra.Color.selection) } }
             .astraGlass(in: Capsule(), variant: .clear, interactive: true)
             .contentShape(Capsule())
             .tvFocusLift()
