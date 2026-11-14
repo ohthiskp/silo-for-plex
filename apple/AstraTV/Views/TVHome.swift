@@ -157,7 +157,7 @@ private struct TVHeroInfo: View {
 
   private enum Field: Hashable { case play, plus }
 
-  private static let blockWidth: CGFloat = 760
+  private static let blockWidth: CGFloat = 820
 
   private var playable: Bool { library.availability(of: item) != .notOnServer && app.canPlay(item) }
   private var firstFocus: Field { playable || item.tmdbKey == nil ? .play : .plus }
@@ -166,7 +166,8 @@ private struct TVHeroInfo: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
       VStack(spacing: 22) {
-        TVLogoTitle(library: library, item: item, maxWidth: 700, maxHeight: 200, textSize: 90, centered: true)
+        // KP (2026-11-14): a bigger, more prominent title logo.
+        TVLogoTitle(library: library, item: item, maxWidth: 820, maxHeight: 240, textSize: 90, centered: true)
           .frame(maxWidth: .infinity)
         HStack(spacing: 14) {
           DetailMetaLine(item: shown, library: library, fontSize: 26, genreLimit: 1, ratingAfter: true)

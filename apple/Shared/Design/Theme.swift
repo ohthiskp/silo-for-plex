@@ -30,6 +30,16 @@ enum Astra {
     @MainActor static var theme: SwiftUI.Color { AstraAppearance.shared.accent }
     @MainActor static var onTheme: SwiftUI.Color { AstraAppearance.shared.onAccent }
     @MainActor static var hairline: SwiftUI.Color { AstraAppearance.shared.palette.hairline }
+    /// The chosen pill in a switcher (Movies | Series, scopes, segments): white
+    /// with black text on the dark themes, near-black with white text on Light.
+    @MainActor static var selection: SwiftUI.Color {
+      AstraAppearance.shared.palette.isLight ? AstraAppearance.shared.palette.ink : .white
+    }
+    @MainActor static var onSelection: SwiftUI.Color { AstraAppearance.shared.palette.isLight ? .white : .black }
+    /// A soft drop shadow under titles and logos; much lighter on Light.
+    @MainActor static var shadow: SwiftUI.Color {
+      .black.opacity(AstraAppearance.shared.palette.isLight ? 0.14 : 0.45)
+    }
   }
 
   /// Fixed-size fonts. Text in views uses `.astraFont(_:)`, the same sizes
@@ -192,7 +202,7 @@ extension View {
     font(Astra.Font.display(size))
       .tracking(size >= 30 ? -0.4 : 0)
       .foregroundStyle(Astra.Color.ink)
-      .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
+      .shadow(color: Astra.Color.shadow, radius: 12, y: 4)
   }
 }
 
