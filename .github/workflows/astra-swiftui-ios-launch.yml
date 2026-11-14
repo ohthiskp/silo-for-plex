@@ -102,6 +102,8 @@ jobs:
           shot libraries -AstraDemoTab libraries
           shot details-movie -AstraDemoOpen 101
           shot details-show -AstraDemoOpen 205
+          shot details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
+          shot details-episode -AstraDemoOpen 303
           # Settings (KP's mockup, 2026-11-14): top, then scrolled to Subtitles and to Gestures.
           shot settings -AstraDemoTab settings
           shot settings-subtitles -AstraDemoTab settings -AstraDemoScroll 1
