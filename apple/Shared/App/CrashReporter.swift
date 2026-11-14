@@ -281,12 +281,15 @@
       previous = .allocate(capacity: 32)
       previous!.initialize(repeating: sigaction(), count: 32)
 
-      // Room to run even when the crash is a stack overflow.
-      let stackSize = 256 * 1024
-      if let stack = malloc(stackSize) {
-        var alt = stack_t(ss_sp: stack, ss_size: stackSize, ss_flags: 0)
-        sigaltstack(&alt, nil)
-      }
+      // Room to run even when the crash is a stack overflow (not on tvOS,
+      // where sigaltstack is unavailable; a stack overflow there goes unreported).
+      #if !os(tvOS)
+        let stackSize = 256 * 1024
+        if let stack = malloc(stackSize) {
+          var alt = stack_t(ss_sp: stack, ss_size: stackSize, ss_flags: 0)
+          sigaltstack(&alt, nil)
+        }
+      #endif
 
       for sig in watched {
         var action = sigaction()
