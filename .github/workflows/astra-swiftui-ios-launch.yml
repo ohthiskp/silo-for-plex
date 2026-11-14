@@ -5,7 +5,7 @@ run-name: SwiftUI iPhone launch check ${{ github.sha }}
 # prints any crash report, so launch crashes can be seen without a phone.
 on:
   push:
-    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s]
+    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s, claude/project-thread-7lc0du]
     paths:
       - "apple/**"
       - ".github/workflows/astra-swiftui-ios-launch.yml"
@@ -102,6 +102,16 @@ jobs:
           shot libraries -AstraDemoTab libraries
           shot details-movie -AstraDemoOpen 101
           shot details-show -AstraDemoOpen 205
+          # The Light theme (KP, 2026-11-14: "light mode is a disaster"). The theme is a
+          # UserDefaults key, so a launch argument sets it for that launch only.
+          LIGHT="-astra.appearance.appTheme light"
+          shot light-home $LIGHT
+          shot light-home-rows -AstraDemoScroll 640 $LIGHT
+          shot light-search -AstraDemoTab search $LIGHT
+          shot light-libraries -AstraDemoTab libraries $LIGHT
+          shot light-details-movie -AstraDemoOpen 101 $LIGHT
+          shot light-details-show -AstraDemoOpen 205 $LIGHT
+          shot light-settings -AstraDemoTab settings $LIGHT
           # Settings (KP's mockup, 2026-11-14): top, then scrolled to Subtitles and to Gestures.
           shot settings -AstraDemoTab settings
           shot settings-subtitles -AstraDemoTab settings -AstraDemoScroll 1
