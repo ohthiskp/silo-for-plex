@@ -102,10 +102,11 @@ jobs:
           shot libraries -AstraDemoTab libraries
           shot details-movie -AstraDemoOpen 101
           shot details-show -AstraDemoOpen 205
-          # Settings (KP's mockup, 2026-11-14): top, then scrolled to Subtitles and to Gestures.
+          # Settings, Direction C (KP, 2026-11-14): the root, then each page it opens.
           shot settings -AstraDemoTab settings
-          shot settings-subtitles -AstraDemoTab settings -AstraDemoScroll 1
-          shot settings-gestures -AstraDemoTab settings -AstraDemoScroll 2
+          for page in appearance playback subtitles library downloads server; do
+            shot "settings-$page" -AstraDemoTab settings -AstraDemoSettings "$page"
+          done
           # The player (KP's 2026-11-10 redesign) over a 1 h 56 m test video, paused in each state.
           brew install ffmpeg > /dev/null 2>&1 || true
           ffmpeg -loglevel error -f lavfi -i testsrc2=duration=6960:size=1280x720:rate=1 \
