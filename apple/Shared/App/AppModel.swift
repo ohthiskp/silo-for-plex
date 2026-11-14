@@ -65,6 +65,11 @@ final class AppModel {
       let platform = "macOS"
       let device = "Mac"
       let deviceName = Host.current().localizedName ?? "Mac"
+    #elseif os(tvOS)
+      // QA P3-6: Plex lists the Apple TV as tvOS, not iOS.
+      let platform = "tvOS"
+      let device = "Apple TV"
+      let deviceName = UIDevice.current.name
     #else
       let platform = "iOS"
       let device = UIDevice.current.model
@@ -508,7 +513,13 @@ final class AppModel {
   /// Astra (KP, 2026-11-07): the + adds to the Plex Watchlist, ✓ takes it
   /// off. The button flips at once; on failure it flips back.
   func toggleWatchlist(_ item: PlexMetadata) async {
-    guard let accountToken, let key = item.tmdbKey else { return }
+    guard let accountToken else { return }
+    guard let key = item.tmdbKey else {
+      // QA P3-2: Plex's Watchlist only takes titles it knows (a TMDB match),
+      // so a home video or an unmatched item can't go on it. Say so.
+      player.lastError = "\(item.displayTitle) isn't in Plex's catalogue, so it can't go on your Watchlist."
+      return
+    }
     let adding = !watchlistKeys.contains(key)
     if adding { watchlistKeys.insert(key) } else { watchlistKeys.remove(key) }
     // The Watchlist page changes at once too, with no refetch.

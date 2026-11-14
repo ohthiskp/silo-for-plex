@@ -8,10 +8,17 @@ import SwiftUI
 struct AstraTVApp: App {
   @State private var app = AppModel()
 
+  init() {
+    // First, so a crash anywhere after this is caught; the next launch shows
+    // the report, as on iPhone and Mac (QA P2-3, 2026-11-14).
+    CrashReporter.shared.install()
+  }
+
   var body: some Scene {
     WindowGroup {
       TVRootView()
         .environment(app)
+        .crashReportSheet()
         // Colour scheme and tint follow the app theme (RootView).
         .task { await app.start() }
     }

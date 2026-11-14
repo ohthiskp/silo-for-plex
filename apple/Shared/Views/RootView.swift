@@ -55,6 +55,14 @@ struct RootView: View {
       }
     }
     .astraAnimation(Astra.Motion.page, value: app.player.lastError ?? app.downloads.lastError)
+    // QA P2-1: the message goes away by itself after a few seconds (on Apple
+    // TV its X is hard to reach with the remote). A new message restarts the wait.
+    .task(id: app.player.lastError ?? app.downloads.lastError) {
+      let shown = app.player.lastError ?? app.downloads.lastError
+      guard shown != nil, (try? await Task.pause(Self.messageSeconds)) != nil, !Task.isCancelled else { return }
+      if app.player.lastError == shown { app.player.lastError = nil }
+      if app.downloads.lastError == shown { app.downloads.lastError = nil }
+    }
     .background { (app.player.isActive && !Self.playerHasOwnWindow ? Color.clear : Astra.Color.bg).ignoresSafeArea() }
     .background(WindowAccessor { app.player.window = $0 })
     #if os(macOS)
@@ -85,6 +93,9 @@ struct RootView: View {
     // Controls stay inside the safe area (clear of the Mac title bar and the
     // iPhone status bar); only artwork and backgrounds extend under it.
   }
+
+  /// How long an error message stays at the bottom of the screen.
+  static let messageSeconds: Double = 6
 
   #if os(macOS)
     static let playerHasOwnWindow = true

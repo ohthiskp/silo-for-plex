@@ -100,6 +100,9 @@ struct LibraryGridContent: View {
   /// Items read from the server so far (the next page starts here).
   @State private var loaded = 0
   @State private var loading = false
+  /// QA P1-1: why the last page didn't load (server down, no network), so an
+  /// outage never reads as "This library is empty".
+  @State private var loadError: String?
   @AppStorage("astra.libraries.macSort") private var sort = "addedAt:desc"
 
   private var sections: [PlexLibrarySection] { library.sections.filter { $0.type == kind } }
@@ -131,6 +134,10 @@ struct LibraryGridContent: View {
         EmptyState(
           symbol: kind == "show" ? "tv" : "film", title: "No \(noun.lowercased()) library",
           message: "This Plex server has no \(noun.lowercased()) library.")
+      } else if items.isEmpty, let loadError {
+        EmptyState(
+          symbol: "wifi.exclamationmark", title: "\(noun) didn't load", message: loadError,
+          action: ("Try Again", { Task { await loadMore() } }))
       } else if items.isEmpty && reachedEnd {
         EmptyState(symbol: "square.stack", title: "Nothing here yet", message: "This library is empty.")
       } else {
@@ -143,12 +150,20 @@ struct LibraryGridContent: View {
           }
         }
       }
-      if loading { ProgressView().frame(maxWidth: .infinity) }
+      if loading {
+        ProgressView().frame(maxWidth: .infinity)
+      } else if !items.isEmpty, loadError != nil {
+        // A later page failed: the titles already shown stay, with a way to carry on.
+        Button("Couldn't load more. Try Again") { Task { await loadMore() } }
+          .astraSecondaryButton()
+          .frame(maxWidth: .infinity)
+      }
     }
     .task(id: "\(section?.key ?? "")|\(sort)") {
       items = []
       loaded = 0
       reachedEnd = false
+      loadError = nil
       await loadMore()
     }
   }
@@ -157,7 +172,15 @@ struct LibraryGridContent: View {
     guard let section, !loading, !reachedEnd else { return }
     loading = true
     defer { loading = false }
-    let raw = (try? await library.client.libraryItems(sectionKey: section.key, sort: sort, start: loaded)) ?? []
+    let raw: [PlexMetadata]
+    do {
+      raw = try await library.client.libraryItems(sectionKey: section.key, sort: sort, start: loaded)
+      loadError = nil
+    } catch {
+      // Not the end of the library: keep paging possible and say why.
+      if !Task.isCancelled { loadError = PlexError.describe(error, server: library.client.serverName) }
+      return
+    }
     reachedEnd = raw.isEmpty
     // Astra: Library Quality (4K swaps in a movie's 4K copy); paging counts the raw page.
     loaded += raw.count
@@ -184,6 +207,8 @@ struct SearchView: View {
   @State private var people: [TMDBPerson] = []
   @State private var searched = false
   @State private var peopleSearched = false
+  /// QA P1-1: TMDB couldn't be reached (offline): the server's own matches stay, and "No results" says why.
+  @State private var searchFailed = false
   /// A person picked from the results: their TMDB filmography replaces the results.
   @State private var person: TMDBPerson?
   @State private var credits: [PlexMetadata] = []
@@ -394,7 +419,9 @@ struct SearchView: View {
     } else if titles.isEmpty && found.isEmpty {
       EmptyState(
         symbol: "magnifyingglass", title: "No results",
-        message: scope == .people
+        message: searchFailed
+          ? "Search couldn't reach the internet, and nothing on your server matches “\(query)”."
+          : scope == .people
           ? "No one matches “\(query)”."
           : filters.isEmpty
             ? "Nothing matches “\(query)”."
@@ -468,6 +495,7 @@ struct SearchView: View {
   /// greyed out. A spinner shows until TMDB answers, never "No results".
   private func runSearch() async {
     let text = query.trimmingCharacters(in: .whitespaces)
+    searchFailed = false
     guard text.count >= 2 else {
       results = []
       people = []
@@ -497,11 +525,18 @@ struct SearchView: View {
     }
     let found = try? await tmdb.searchMulti(text)
     guard !Task.isCancelled else { return }
-    let shownPeople = Array((found?.people ?? []).filter { $0.profilePath != nil }.prefix(12))
-    if let found { SearchCache.shared[text] = (found.items, shownPeople) }
-    remember(languagesOf: found?.items ?? [])
+    searchFailed = found == nil
+    guard let found else {
+      // Offline or TMDB down: keep the titles on the server that already matched.
+      searched = true
+      peopleSearched = true
+      return
+    }
+    let shownPeople = Array(found.people.filter { $0.profilePath != nil }.prefix(12))
+    SearchCache.shared[text] = (found.items, shownPeople)
+    remember(languagesOf: found.items)
     astraWithAnimation(Astra.Motion.base) {
-      results = library.searchResults(found?.items ?? [], text: text)
+      results = library.searchResults(found.items, text: text)
       people = shownPeople
       searched = true
       peopleSearched = true

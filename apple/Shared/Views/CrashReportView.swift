@@ -1,7 +1,7 @@
-#if os(iOS) || os(macOS)
+#if os(iOS) || os(macOS) || os(tvOS)
   import AstraKit
   import SwiftUI
-  #if os(iOS)
+  #if os(iOS) || os(tvOS)
     import UIKit
   #else
     import AppKit
@@ -25,7 +25,7 @@
         CrashReportView(report: reporter.pending ?? "") { reporter.dismiss() }
           #if os(macOS)
             .frame(width: 520, height: 640)
-          #else
+          #elseif os(iOS)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
           #endif
@@ -49,7 +49,10 @@
         VStack(spacing: Astra.Spacing.l) {
           header
           summaryCard
-          details
+          // Apple TV (QA P2-3): no clipboard or share sheet there, so no raw report either.
+          #if !os(tvOS)
+            details
+          #endif
         }
         .padding(.horizontal, Astra.Spacing.l)
         .padding(.top, Astra.Spacing.xl)
@@ -74,7 +77,7 @@
           .astraFont(size: 24, weight: .bold)
           .foregroundStyle(Astra.Color.ink)
           .multilineTextAlignment(.center)
-        Text("Sorry about that. Send this report and it can be fixed.")
+        Text(Self.apology)
           .astraFont(size: 15)
           .foregroundStyle(Astra.Color.muted)
           .multilineTextAlignment(.center)
@@ -82,6 +85,12 @@
       }
       .padding(.bottom, Astra.Spacing.xs)
     }
+
+    #if os(tvOS)
+      static let apology = "Sorry about that. If it happens again, note what you were doing and when."
+    #else
+      static let apology = "Sorry about that. Send this report and it can be fixed."
+    #endif
 
     private var summaryCard: some View {
       let s = summary
@@ -137,6 +146,7 @@
       .padding(.vertical, Astra.Spacing.m - 2)
     }
 
+    #if !os(tvOS)
     private var details: some View {
       VStack(alignment: .leading, spacing: Astra.Spacing.s) {
         Button {
@@ -173,9 +183,16 @@
       }
       .padding(.horizontal, Astra.Spacing.xs)
     }
+    #endif
 
     private var actions: some View {
       VStack(spacing: Astra.Spacing.s) {
+        #if os(tvOS)
+          Button(action: close) {
+            Text("Close").frame(maxWidth: .infinity)
+          }
+          .buttonStyle(PlayButtonStyle())
+        #else
         HStack(spacing: Astra.Spacing.s) {
           Button(action: copy) {
             Label(copied ? "Copied" : "Copy Report", systemImage: copied ? "checkmark" : "doc.on.doc")
@@ -190,11 +207,13 @@
           }
           .buttonStyle(FallbackGlassButtonStyle())
         }
-        Button("Not Now", action: close)
+        // QA P2-6: closing deletes the report, so the button says Close, not "Not Now".
+        Button("Close", action: close)
           .buttonStyle(.plain)
           .astraFont(size: 15, weight: .medium)
           .foregroundStyle(Astra.Color.muted)
           .frame(height: 36)
+        #endif
       }
       .padding(.horizontal, Astra.Spacing.l)
       .padding(.top, Astra.Spacing.s)
@@ -213,6 +232,7 @@
       }
     }
 
+    #if !os(tvOS)
     private func copy() {
       #if os(iOS)
         UIPasteboard.general.string = report
@@ -226,6 +246,7 @@
         withAnimation(Astra.Motion.fast) { copied = false }
       }
     }
+    #endif
   }
 
   extension String {

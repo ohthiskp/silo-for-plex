@@ -587,7 +587,7 @@ struct SourcesSettings: View {
       }
       Section {
         Button("Change Server…") { Task { await app.chooseServer() } }
-        Button("Sign Out", role: .destructive) { app.signOut() }
+        SignOutButton(role: .destructive)
       }
     }
   }

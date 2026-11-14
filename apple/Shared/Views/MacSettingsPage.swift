@@ -381,7 +381,7 @@ import SwiftUI
         dot
         NavigationLink("About and Licenses", value: SettingsPane.about).buttonStyle(.plain)
         dot
-        Button("Sign Out") { app.signOut() }.buttonStyle(.plain)
+        SignOutButton().buttonStyle(.plain)
       }
       .astraFont(size: 12.5)
       .foregroundStyle(Astra.Color.ink.opacity(0.42))

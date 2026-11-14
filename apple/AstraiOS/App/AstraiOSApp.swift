@@ -21,7 +21,9 @@ struct AstraiOSApp: App {
         .task { await app.start() }
         // Astra: the player is landscape only on iPhone (KP, 2026-11-07).
         .onChange(of: app.player.isActive, initial: true) { _, active in
-          OrientationLock.set(active ? .landscape : .all)
+          // Outside the player the iPhone app stays upright (QA, 2026-11-14:
+          // Home and Details are laid out for portrait). iPad keeps every orientation.
+          OrientationLock.set(active ? .landscape : .portrait)
         }
     }
   }
