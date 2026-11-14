@@ -787,7 +787,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let rowSpacing: CGFloat = 14
 
     /// A dark floor behind the floating tab bar: content fades out above it.
-    static var tabBarFloor: some View {
+    @MainActor static var tabBarFloor: some View {
       LinearGradient(
         stops: [
           .init(color: Astra.Color.bg.opacity(0), location: 0),
@@ -981,7 +981,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
 
     /// A light shade on the lower artwork so the logo and meta line stay readable.
-    static var backdropShade: some View {
+    @MainActor static var backdropShade: some View {
       LinearGradient(
         stops: [
           .init(color: Astra.Color.bg.opacity(0), location: 0.35),
