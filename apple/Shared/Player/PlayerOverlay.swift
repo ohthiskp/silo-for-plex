@@ -44,16 +44,6 @@ struct PlayerOverlay: View {
     /// The system volume: what a swipe on the right and the slider set (instant, unlike mpv's).
     @State private var systemVolume = SystemVolume.shared
   #endif
-  #if os(macOS)
-    // Astra: the control panel can be dragged anywhere over the video (KP, 2026-11-07).
-    @AppStorage("player.panelX") private var panelX = 0.0
-    @AppStorage("player.panelY") private var panelY = 0.0
-    @State private var panelDragStart: CGSize?
-    /// The panel's offset while it is being dragged; saved when the drag ends.
-    @State private var panelLive: CGSize?
-    @State private var panelRest: CGRect = .zero
-    @State private var playerBounds: CGRect = .zero
-  #endif
 
   private var player: PlayerController { app.player }
 
@@ -93,8 +83,17 @@ struct PlayerOverlay: View {
         .ignoresSafeArea()
 
         // KP (2026-11-10): a swipe on the right moves the subtle volume slider
-        // (top right); one on the left sets the brightness with nothing drawn.
-        BrightnessLevelMarker(level: level)
+        // (top right); one on the left shows a brightness level top left, only
+        // while the finger is down.
+        BrightnessIndicator(level: level)
+        // Whether the controls show, for the UI tests (hidden controls stay in
+        // the accessibility tree, so the buttons alone can't tell).
+        Color.clear
+          .frame(width: 1, height: 1)
+          .accessibilityElement()
+          .accessibilityIdentifier("astra.player.controls")
+          .accessibilityValue(visible ? "shown" : "hidden")
+          .allowsHitTesting(false)
         if let skip {
           HStack {
             if skip.forward { Spacer() }
@@ -157,11 +156,6 @@ struct PlayerOverlay: View {
       }
     #endif
     .coordinateSpace(.named(Self.space))
-    .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .local) }) { bounds in
-      #if os(macOS)
-        playerBounds = bounds
-      #endif
-    }
     .onAppear {
       poke()
       applyDemo()
@@ -198,11 +192,14 @@ struct PlayerOverlay: View {
     ZStack {
       // Scrims so white text reads over any frame.
       VStack(spacing: 0) {
-        LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom).frame(height: 160)
-        Spacer()
+        // Heights are caps, not minimums: a short window (a wide film on the
+        // Mac) would otherwise be overflowed by them and push the controls out.
+        LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom)
+          .frame(maxHeight: 160)
+        Spacer(minLength: 0)
         // Light at the bottom: the Mac panel is clear glass and carries its own contrast.
         LinearGradient(colors: [.clear, .black.opacity(Self.bottomScrim)], startPoint: .top, endPoint: .bottom)
-          .frame(height: 200)
+          .frame(maxHeight: 200)
       }
       .ignoresSafeArea()
       .allowsHitTesting(false)
@@ -215,136 +212,106 @@ struct PlayerOverlay: View {
     }
   }
 
-  #if os(macOS)
-    private static let bottomScrim = 0.3
-  #else
-    private static let bottomScrim = 0.7
-  #endif
+  /// Both platforms: bare white controls over the picture need the same shade under them.
+  private static let bottomScrim = 0.7
 
-  // MARK: Mac (docs/design/desktop-player.png)
+  // MARK: Mac (KP, 2026-11-10: the iPhone player's design on the Mac)
 
   #if os(macOS)
+    /// The same layout as the iPhone player (KP's 2026-11-10 mockups): close
+    /// top left, a subtle volume slider top right; back 10 / play / forward 10
+    /// in the middle; the title with its HD/4K badge bottom left (and
+    /// "S2 · E4 · Title" for an episode); bare subtitle, PiP and full-screen
+    /// glyphs bottom right; the scrubber with its times along the bottom.
+    /// While scrubbing only the scrubber shows.
     private var macChrome: some View {
-      VStack(spacing: 0) {
-        HStack(spacing: 16) {
-          Button {
-            player.close()
-          } label: {
-            Image(systemName: "chevron.left")
+      ZStack {
+        VStack(spacing: 0) {
+          HStack(alignment: .center, spacing: 12) {
+            Button {
+              player.close()
+            } label: {
+              Image(systemName: "xmark")
+            }
+            .astraIconButton(size: 36, variant: .clear)
+            .keyboardShortcut(.cancelAction)
+            .help("Close (Esc)")
+            .accessibilityLabel("Close Player")
+            Spacer()
+            MacVolume(player: player, poke: poke)
           }
-          .astraIconButton(size: 32, variant: .clear)
-          .keyboardShortcut(.cancelAction)
-          .help("Back (Esc)")
-          .accessibilityLabel("Close Player")
-          VStack(alignment: .leading, spacing: 2) {
+          // Below the traffic lights (the title-bar strip is ~28 pt).
+          .padding(.top, 40)
+          .opacity(scrubbing == nil ? 1 : 0)
+          .allowsHitTesting(scrubbing == nil)
+          Spacer()
+          HStack(alignment: .bottom, spacing: 16) {
+            Button {
+              player.showDetails()
+            } label: {
+              VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                  Text(player.title).font(.system(size: 24, weight: .bold)).lineLimit(1)
+                  // The real resolution of the frames playing; nothing until it is known.
+                  if let badge = resolutionTag { ResolutionTag(text: badge, size: 10) }
+                }
+                if let subtitle = player.subtitle, !subtitle.isEmpty {
+                  Text(subtitle).font(.system(size: 14, weight: .medium)).foregroundStyle(.white.opacity(0.65))
+                    .lineLimit(1)
+                }
+              }
+              .foregroundStyle(.white)
+              .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Details")
+            .accessibilityLabel("\(player.title), Details")
+            Spacer(minLength: 16)
             HStack(spacing: 6) {
-              Text(player.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-              // Astra (KP, 2026-11-07): the version and its HDR format beside the title, as on iPhone.
-              if shortBadge != "—" { TitleTag(text: shortBadge) }
-              if let range = player.dynamicRange { PlayerFormatTag(range: range) }
-                  if player.hasAtmos { PlayerAtmosTag() }
-            }
-            .foregroundStyle(.white)
-            if let subtitle = player.subtitle {
-              Text(subtitle).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.75))
-                .lineLimit(1)
+              captionsChip
+              macGlyph(
+                player.isPictureInPicture ? "pip.exit" : "pip.enter", label: "Picture in Picture",
+                help: "Picture in Picture"
+              ) { player.togglePictureInPicture() }
+              macGlyph("arrow.up.left.and.arrow.down.right", label: "Full Screen", help: "Full Screen (F)") {
+                player.toggleFullScreen()
+              }
+              .keyboardShortcut("f", modifiers: [])
             }
           }
-          Spacer(minLength: 16)
-          HStack(spacing: 12) {
-            pipButton(size: 32)
-            moreMenu
-          }
-          .astraGlassGroup(spacing: 12)
+          .padding(.bottom, 10)
+          .opacity(scrubbing == nil ? 1 : 0)
+          .allowsHitTesting(scrubbing == nil)
+          PhoneScrubber(player: player, scrubbing: $scrubbing, poke: poke)
+            .frame(maxWidth: 1400)
         }
-        // Clear of the traffic lights.
-        .padding(.top, 34)
-        Spacer()
-        macPanel
+        transport(small: 28, large: 42, gap: 64, framedPause: false)
+          .opacity(scrubbing == nil ? 1 : 0)
+          .allowsHitTesting(scrubbing == nil)
       }
-      .padding(.horizontal, 24)
-      .padding(.bottom, 20)
+      .padding(.horizontal, 28)
+      .padding(.bottom, 18)
+      // Laid out against the window's own edges, not its title-bar safe area,
+      // so a short window (a wide film) keeps the X clear of the traffic lights
+      // and the times under the scrubber on screen.
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .ignoresSafeArea()
+      .astraAnimation(Astra.Motion.fast, value: scrubbing == nil)
     }
 
-    /// The glass control panel along the bottom.
-    private var macPanel: some View {
-      // Astra: one slim row, Infuse-style (KP, 2026-11-07: "wayyyy smaller").
-      HStack(spacing: 10) {
-        transport(small: 15, large: 18, gap: 4, framedPause: false)
-        PlayerClock(player: player, scrubbing: scrubbing, remaining: false)
-          .frame(minWidth: 44, alignment: .trailing)
-        timeline
-        PlayerClock(player: player, scrubbing: scrubbing, remaining: true)
-          .frame(minWidth: 48, alignment: .leading)
-        Button {
-          player.setMuted(!player.muted)
-        } label: {
-          Image(systemName: volumeSymbol).font(.system(size: 13, weight: .semibold))
-        }
-        .buttonStyle(PlayerGlyphButtonStyle(size: 26))
-        .accessibilityLabel(player.muted ? "Unmute" : "Mute")
-        ScrubBar(
-          fraction: player.muted ? 0 : player.volume / 100, knob: 10, height: 3,
-          onChange: { player.setVolume($0 * 100) }, onCommit: { player.setVolume($0 * 100) }
-        )
-        .frame(width: 64)
-        .accessibilityLabel("Volume")
-        captionsChip
-        versionChip
-        Button {
-          player.toggleFullScreen()
-        } label: {
-          Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 13, weight: .semibold))
-        }
-        .buttonStyle(PlayerGlyphButtonStyle(size: 26))
-        .keyboardShortcut("f", modifiers: [])
-        .help("Full Screen (F)")
-        .accessibilityLabel("Full Screen")
+    /// A bare white glyph like the iPhone's subtitle button: no box or glass.
+    private func macGlyph(_ symbol: String, label: String, help: String, action: @escaping () -> Void) -> some View {
+      Button(action: action) {
+        Image(systemName: symbol)
+          .font(.system(size: 17, weight: .medium))
+          .frame(width: 36, height: 36)
+          .contentShape(Rectangle())
       }
-      .font(.system(size: 12, weight: .medium).monospacedDigit())
+      .buttonStyle(.plain)
       .foregroundStyle(.white)
-      .padding(.horizontal, 14)
-      .frame(height: 46)
-      .shadow(color: .black.opacity(0.45), radius: 4)  // keeps white glyphs crisp on clear glass
-      .contentShape(Capsule())
-      .astraGlass(in: Capsule(), variant: .clear)
-      .astraGlassEdge(Capsule())
-      .shadow(color: .black.opacity(0.2), radius: 16, y: 4)
-      .frame(maxWidth: 820)
-      .offset(panelOffset)
-      .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .named(Self.space)) }) { panelRest = $0 }
-      .gesture(panelDrag)
-      .onTapGesture(count: 2) { setPanelOffset(.zero) }
-      .help("Drag to move the controls; double-click to put them back")
-      .astraAnimation(panelDragStart == nil ? Astra.Motion.base : nil, value: panelOffset)
-    }
-
-    /// Where the panel is, kept inside the player even after the window shrinks.
-    private var panelOffset: CGSize {
-      PlayerGeometry.panelOffset(
-        panelLive ?? CGSize(width: panelX, height: panelY), panel: panelRest, in: playerBounds)
-    }
-
-    private var panelDrag: some Gesture {
-      DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.space))
-        .onChanged { drag in
-          let start = panelDragStart ?? panelOffset
-          panelDragStart = start
-          panelLive = CGSize(
-            width: start.width + drag.translation.width, height: start.height + drag.translation.height)
-          poke()
-        }
-        .onEnded { _ in
-          if let panelLive { setPanelOffset(panelLive) }
-          panelLive = nil
-          panelDragStart = nil
-        }
-    }
-
-    private func setPanelOffset(_ offset: CGSize) {
-      let clamped = PlayerGeometry.panelOffset(offset, panel: panelRest, in: playerBounds)
-      panelX = clamped.width
-      panelY = clamped.height
+      .shadow(color: .black.opacity(0.4), radius: 6)
+      .help(help)
+      .accessibilityLabel(label)
     }
 
     /// The small floating window: play/pause and a button back to full size.
@@ -360,37 +327,6 @@ struct PlayerOverlay: View {
         }
         .padding(10)
       }
-    }
-
-    private var volumeSymbol: String {
-      if player.muted || player.volume == 0 { return "speaker.slash" }
-      return player.volume < 34 ? "speaker.wave.1" : player.volume < 67 ? "speaker.wave.2" : "speaker.wave.3"
-    }
-
-    /// Audio track and playback speed.
-    private var moreMenu: some View {
-      Menu {
-        if player.audioTracks.count > 1 {
-          Section("Audio") { audioButtons }
-        }
-        Section("Speed") {
-          ForEach(PlayerController.speeds, id: \.self) { speed in
-            Button {
-              player.setSpeed(speed)
-            } label: {
-              checked(speed == 1 ? "Normal" : String(format: "%g×", speed), player.speed == speed)
-            }
-          }
-        }
-      } label: {
-        Image(systemName: "ellipsis")
-      }
-      .menuStyle(.button)
-      .buttonStyle(GlassIconButtonStyle(size: 32, variant: .clear))
-      .menuIndicator(.hidden)
-      .fixedSize()
-      .help("More")
-      .accessibilityLabel("More")
     }
   #endif
 
@@ -518,7 +454,7 @@ struct PlayerOverlay: View {
         let ended = level.generation
         Task { @MainActor in
           // The UI tests (demo mode) need longer to read it.
-          try? await Task.pause(Demo.isOn ? 4 : 0.5)
+          try? await Task.pause(Demo.isOn ? 8 : 0.5)
           if level.generation == ended { level.shown = false }
         }
         return
@@ -530,7 +466,9 @@ struct PlayerOverlay: View {
         level.value = level.start
         if !right { level.brightness = level.start }
         level.shown = true
-        poke()
+        // Volume shows on the slider among the controls; brightness has its own
+        // indicator, so a swipe on the left leaves the controls as they are.
+        if right || visible { poke() }
         return
       }
       let value = min(1, max(0, level.start + delta))
@@ -544,7 +482,7 @@ struct PlayerOverlay: View {
         level.brightness = value
         UIScreen.main.brightness = CGFloat(value)
       }
-      poke()
+      if right || visible { poke() }
     }
 
     /// Skips 10 s; quick repeated double taps on the same side add up (10, 20, 30…).
@@ -650,10 +588,14 @@ struct PlayerOverlay: View {
           .contentShape(Rectangle())
           .shadow(color: .black.opacity(0.4), radius: 6)
       #else
+        // Mac (KP, 2026-11-10): the same bare glyph, beside PiP and full screen.
         Image(systemName: player.subtitleId == nil ? "captions.bubble" : "captions.bubble.fill")
-          .font(.system(size: 15, weight: .semibold))
+          .font(.system(size: 17, weight: .medium))
+          .foregroundStyle(.white)
           .contentTransition(.symbolEffect(.replace))
-          .playerChip()
+          .frame(width: 36, height: 36)
+          .contentShape(Rectangle())
+          .shadow(color: .black.opacity(0.4), radius: 6)
       #endif
     }
     .menuStyle(.button)
@@ -747,22 +689,19 @@ struct PlayerOverlay: View {
     }
   }
 
-  /// CI screenshots: `-AstraDemoPlayer controls|scrub` (iPhone).
+  /// CI screenshots: `-AstraDemoPlayer controls|scrub` (iPhone and Mac).
   private func applyDemo() {
-    #if os(iOS)
-      guard let shot = Demo.playerShot else { return }
-      Task { @MainActor in
-        for _ in 0..<60 where !player.hasFirstFrame { try? await Task.pause(0.25) }
-        try? await Task.pause(1)
-        player.setPaused(true)
-        switch shot {
-        case "scrub": scrubbing = player.duration * 0.35
-        default: poke()
-        }
+    guard let shot = Demo.playerShot else { return }
+    Task { @MainActor in
+      for _ in 0..<60 where !player.hasFirstFrame { try? await Task.pause(0.25) }
+      try? await Task.pause(1)
+      player.setPaused(true)
+      switch shot {
+      case "scrub": scrubbing = player.duration * 0.35
+      default: poke()
       }
-    #endif
+    }
   }
-
 
   private func hide() {
     visible = false
@@ -1115,124 +1054,45 @@ extension View {
     var brightness = Double(UIScreen.main.brightness)
   }
 
-  /// KP (2026-11-10): no brightness slider on screen. A swipe on the left
-  /// still sets the screen's brightness; this only tells VoiceOver (and the
-  /// UI tests) the level while the swipe lasts. Nothing is drawn.
-  struct BrightnessLevelMarker: View {
+  /// KP (2026-11-10): a brightness level top left, beside the close button,
+  /// only while a swipe on the left changes it. It matches the volume slider:
+  /// a sun that follows the level and a thin white track, no percentage.
+  struct BrightnessIndicator: View {
     var level: LevelState
 
-    var body: some View {
-      if level.shown && !level.volume {
-        Color.clear
-          .frame(width: 1, height: 1)
-          .accessibilityElement()
-          .accessibilityLabel("Brightness")
-          .accessibilityValue("\(Int((level.brightness * 100).rounded())) percent")
-          .accessibilityIdentifier("astra.level.brightness")
-          .allowsHitTesting(false)
-      }
-    }
-  }
-
-  /// The iPhone scrubber (KP's mockup 2, 2026-11-10): a 6 pt white track that
-  /// grows to 12 pt while dragging, a 160 pt 16:9 preview above the finger
-  /// (kept on screen) with its time under it, seeking on release. Elapsed time
-  /// on the left; remaining on the right, tap it for "Ends at 6:52 PM".
-  struct PhoneScrubber: View {
-    let player: PlayerController
-    @Binding var scrubbing: Double?
-    var poke: () -> Void
-    @AppStorage("astra.player.showEndsAt") private var showEndsAt = false
-
-    private static let previewWidth: CGFloat = 160
+    private static let width: CGFloat = 150
 
     var body: some View {
-      let shown = scrubbing ?? player.position
-      let fraction = player.duration > 0 ? min(1, max(0, shown / player.duration)) : 0
-      VStack(spacing: 6) {
-        GeometryReader { geo in
-          let width = geo.size.width
-          let track: CGFloat = scrubbing != nil ? 12 : 6
-          ZStack(alignment: .leading) {
-            Capsule().fill(.white.opacity(0.3)).frame(height: track)
-            Capsule().fill(.white).frame(width: max(track, width * fraction), height: track)
-          }
-          .frame(maxHeight: .infinity)
-          .contentShape(Rectangle())
-          .overlay(alignment: .bottomLeading) {
-            if let target = scrubbing {
-              preview(at: target, fraction: fraction, width: width)
-            }
-          }
-          .gesture(
-            DragGesture(minimumDistance: 0)
-              .onChanged { drag in
-                scrubbing = Double(min(1, max(0, drag.location.x / max(width, 1)))) * player.duration
-                poke()
-              }
-              .onEnded { drag in
-                let target = Double(min(1, max(0, drag.location.x / max(width, 1)))) * player.duration
-                player.seek(to: target)
-                scrubbing = nil
-                poke()
-              }
-          )
-        }
-        .frame(height: 28)
+      VStack {
         HStack {
-          Text(PlaybackClock.format(shown))
-          Spacer()
-          Button {
-            showEndsAt.toggle()
-            poke()
-          } label: {
-            Group {
-              if showEndsAt {
-                Text(PlaybackClock.endsAt(remaining: player.duration - shown, speed: player.speed))
-              } else {
-                Text("-" + PlaybackClock.format(max(0, player.duration - shown)))
+          if level.shown && !level.volume {
+            HStack(spacing: 10) {
+              Image(systemName: level.brightness < 0.5 ? "sun.min.fill" : "sun.max.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 22)
+              ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.3)).frame(width: Self.width, height: 6)
+                Capsule().fill(.white).frame(width: max(6, Self.width * level.brightness), height: 6)
               }
             }
-            .contentTransition(.numericText())
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
+            .frame(height: 44)
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.35), radius: 6)
+            .accessibilityElement()
+            .accessibilityLabel("Brightness")
+            .accessibilityValue("\(Int((level.brightness * 100).rounded())) percent")
+            .accessibilityIdentifier("astra.level.brightness")
+            .transition(.opacity)
           }
-          .buttonStyle(.plain)
-          .accessibilityHint("Shows when it ends")
+          Spacer(minLength: 0)
         }
-        .font(.system(size: 13, weight: .medium).monospacedDigit())
-        .foregroundStyle(.white.opacity(0.7))
+        Spacer(minLength: 0)
       }
-      .astraAnimation(Astra.Motion.fast, value: scrubbing != nil)
-      .accessibilityElement(children: .contain)
-      .accessibilityLabel("Playback Position")
-      .accessibilityValue(PlaybackClock.format(shown))
-    }
-
-    /// The preview and its time, centred on the finger and kept on screen.
-    @ViewBuilder private func preview(at seconds: Double, fraction: Double, width: CGFloat) -> some View {
-      let w = Self.previewWidth
-      let x = min(max(0, width * fraction - w / 2), max(0, width - w))
-      VStack(spacing: 6) {
-        Group {
-          if let image = player.thumbnail(at: seconds) {
-            Image(platformImage: image).resizable().aspectRatio(contentMode: .fill)
-          } else {
-            Rectangle().fill(.ultraThinMaterial)
-          }
-        }
-        .frame(width: w, height: w * 9 / 16)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(.white.opacity(0.3), lineWidth: 1))
-        Text(PlaybackClock.format(seconds))
-          .font(.system(size: 13, weight: .semibold).monospacedDigit())
-          .foregroundStyle(.white)
-      }
-      .shadow(color: .black.opacity(0.45), radius: 12)
-      .frame(width: w)
-      .offset(x: x, y: -26)
+      // Beside the close button (20 pt edge + 44 pt button + 12 pt gap), on its row.
+      .padding(.leading, 76)
+      .padding(.top, 10)
       .allowsHitTesting(false)
-      .transition(.opacity)
+      .astraAnimation(Astra.Motion.fast, value: level.shown && !level.volume)
     }
   }
 
@@ -1330,6 +1190,9 @@ extension View {
         guard let window = recognizer.view else { return false }
         // KP (2026-11-10): the whole right side is volume and the whole left side
         // brightness, over the controls too (the swipe is vertical; the sliders are not).
+        // KP (2026-11-10): with the subtitle menu open, a drag on it must not
+        // change the volume (or a tap toggle the controls).
+        if !isPlayerTouch(touch, in: window) { return false }
         if recognizer === pan { return true }
         let point = touch.location(in: window)
         let allowed = !blocked.contains { $0.insetBy(dx: -8, dy: -8).contains(point) }
@@ -1337,6 +1200,20 @@ extension View {
           NSLog("Astra gesture: touch at %@ allowed=%d blocked=%@", NSCoder.string(for: point), allowed ? 1 : 0, blocked.description)
         #endif
         return allowed
+      }
+
+      /// Whether a touch landed on the player itself, not on a menu UIKit put
+      /// in the same window over it (the subtitle menu). The video sits under
+      /// the SwiftUI views in the same window, so it is matched by what the
+      /// menu is, not by where the player is.
+      private func isPlayerTouch(_ touch: UITouch, in window: UIView) -> Bool {
+        var view: UIView? = touch.view
+        while let current = view, current !== window {
+          let name = NSStringFromClass(type(of: current))
+          if name.contains("Menu") || name.contains("Platter") { return false }
+          view = current.superview
+        }
+        return true
       }
 
       func gestureRecognizer(
@@ -1395,6 +1272,183 @@ extension View {
     /// Reports this view's frame in window coordinates under `key`.
     func reportFrame(_ key: String, into frames: Binding<[String: CGRect]>) -> some View {
       onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { frames.wrappedValue[key] = $0 }
+    }
+  }
+#endif
+
+/// The iPhone scrubber (KP's mockup 2, 2026-11-10): a 6 pt white track that
+/// grows to 12 pt while dragging, a 160 pt 16:9 preview above the finger
+/// (kept on screen) with its time under it, seeking on release. Elapsed time
+/// on the left; remaining on the right, tap it for "Ends at 6:52 PM".
+struct PhoneScrubber: View {
+  let player: PlayerController
+  @Binding var scrubbing: Double?
+  var poke: () -> Void
+  @AppStorage("astra.player.showEndsAt") private var showEndsAt = false
+
+  /// 160 pt on iPhone (KP's mockup); larger on the Mac's bigger window.
+  #if os(macOS)
+    private static let previewWidth: CGFloat = 256
+  #else
+    private static let previewWidth: CGFloat = 160
+  #endif
+
+  var body: some View {
+    let shown = scrubbing ?? player.position
+    let fraction = player.duration > 0 ? min(1, max(0, shown / player.duration)) : 0
+    VStack(spacing: 6) {
+      GeometryReader { geo in
+        let width = geo.size.width
+        let track: CGFloat = scrubbing != nil ? 12 : 6
+        ZStack(alignment: .leading) {
+          Capsule().fill(.white.opacity(0.3)).frame(height: track)
+          Capsule().fill(.white).frame(width: max(track, width * fraction), height: track)
+        }
+        .frame(maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .overlay(alignment: .bottomLeading) {
+          if let target = scrubbing {
+            preview(at: target, fraction: fraction, width: width)
+          }
+        }
+        .gesture(
+          DragGesture(minimumDistance: 0)
+            .onChanged { drag in
+              scrubbing = Double(min(1, max(0, drag.location.x / max(width, 1)))) * player.duration
+              poke()
+            }
+            .onEnded { drag in
+              let target = Double(min(1, max(0, drag.location.x / max(width, 1)))) * player.duration
+              player.seek(to: target)
+              scrubbing = nil
+              poke()
+            }
+        )
+      }
+      .frame(height: 28)
+      HStack {
+        Text(PlaybackClock.format(shown))
+        Spacer()
+        Button {
+          showEndsAt.toggle()
+          poke()
+        } label: {
+          Group {
+            if showEndsAt {
+              Text(PlaybackClock.endsAt(remaining: player.duration - shown, speed: player.speed))
+            } else {
+              Text("-" + PlaybackClock.format(max(0, player.duration - shown)))
+            }
+          }
+          .contentTransition(.numericText())
+          .padding(.vertical, 4)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows when it ends")
+      }
+      .font(.system(size: 13, weight: .medium).monospacedDigit())
+      .foregroundStyle(.white.opacity(0.7))
+    }
+    .astraAnimation(Astra.Motion.fast, value: scrubbing != nil)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Playback Position")
+    .accessibilityValue(PlaybackClock.format(shown))
+  }
+
+  /// The preview and its time, centred on the finger and kept on screen.
+  @ViewBuilder private func preview(at seconds: Double, fraction: Double, width: CGFloat) -> some View {
+    let w = Self.previewWidth
+    let x = min(max(0, width * fraction - w / 2), max(0, width - w))
+    VStack(spacing: 6) {
+      Group {
+        if let image = player.thumbnail(at: seconds) {
+          Image(platformImage: image).resizable().aspectRatio(contentMode: .fill)
+        } else {
+          Rectangle().fill(.ultraThinMaterial)
+        }
+      }
+      .frame(width: w, height: w * 9 / 16)
+      .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(.white.opacity(0.3), lineWidth: 1))
+      Text(PlaybackClock.format(seconds))
+        .font(.system(size: 13, weight: .semibold).monospacedDigit())
+        .foregroundStyle(.white)
+    }
+    .shadow(color: .black.opacity(0.45), radius: 12)
+    .frame(width: w)
+    .offset(x: x, y: -26)
+    .allowsHitTesting(false)
+    .transition(.opacity)
+  }
+}
+
+#if os(macOS)
+  /// The Mac's volume, top right (KP, 2026-11-10: the iPhone's subtle slider):
+  /// a thin 3 pt track about 150 pt wide at 70% opacity that thickens while
+  /// dragged, and a speaker that follows the level (click it to mute). It sets
+  /// mpv's volume; no percentage.
+  struct MacVolume: View {
+    let player: PlayerController
+    var poke: () -> Void
+    @State private var dragging = false
+    @State private var hovering = false
+
+    private var value: Double { player.muted ? 0 : player.volume / 100 }
+    private var active: Bool { dragging || hovering }
+
+    var body: some View {
+      HStack(spacing: 10) {
+        GeometryReader { geo in
+          let width = geo.size.width
+          let track: CGFloat = dragging ? 6 : 3
+          ZStack(alignment: .leading) {
+            Capsule().fill(.white.opacity(0.3)).frame(height: track)
+            Capsule().fill(.white).frame(width: max(track, width * value), height: track)
+          }
+          .frame(maxHeight: .infinity)
+          .contentShape(Rectangle())
+          .gesture(
+            DragGesture(minimumDistance: 0)
+              .onChanged { drag in
+                dragging = true
+                player.setVolume(Double(min(1, max(0, drag.location.x / max(width, 1)))) * 100)
+                poke()
+              }
+              .onEnded { _ in dragging = false }
+          )
+        }
+        .frame(width: 150, height: 36)
+        Button {
+          player.setMuted(!player.muted)
+          poke()
+        } label: {
+          Image(systemName: symbol).font(.system(size: 15, weight: .semibold))
+            .frame(width: 26, height: 36, alignment: .leading)
+            .contentTransition(.symbolEffect(.replace))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(player.muted ? "Unmute" : "Mute")
+        .accessibilityLabel(player.muted ? "Unmute" : "Mute")
+      }
+      .foregroundStyle(.white)
+      .opacity(active ? 1 : 0.7)
+      .shadow(color: .black.opacity(0.35), radius: 6)
+      .onHover { hovering = $0 }
+      .astraAnimation(Astra.Motion.fast, value: active)
+      .astraAnimation(Astra.Motion.fast, value: dragging)
+      .accessibilityElement(children: .contain)
+      .accessibilityLabel("Volume")
+      .accessibilityValue("\(Int((value * 100).rounded())) percent")
+      .accessibilityAdjustableAction { direction in
+        player.setVolume((value + (direction == .increment ? 0.1 : -0.1)) * 100)
+      }
+    }
+
+    private var symbol: String {
+      if value == 0 { return "speaker.slash.fill" }
+      return value < 0.34 ? "speaker.wave.1.fill" : value < 0.67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
     }
   }
 #endif

@@ -102,6 +102,10 @@ jobs:
           shot libraries -AstraDemoTab libraries
           shot details-movie -AstraDemoOpen 101
           shot details-show -AstraDemoOpen 205
+          # Settings (KP's mockup, 2026-11-14): top, then scrolled to Subtitles and to Gestures.
+          shot settings -AstraDemoTab settings
+          shot settings-subtitles -AstraDemoTab settings -AstraDemoScroll 1
+          shot settings-gestures -AstraDemoTab settings -AstraDemoScroll 2
           # The player (KP's 2026-11-10 redesign) over a 1 h 56 m test video, paused in each state.
           brew install ffmpeg > /dev/null 2>&1 || true
           ffmpeg -loglevel error -f lavfi -i testsrc2=duration=6960:size=1280x720:rate=1 \

@@ -279,8 +279,8 @@ final class PlayerController {
     subtitleLook = .current()
     subtitleDelay = 0
     chapters = []
-    core.setProperty("sub-scale", value: String(subtitleSize.scale))
-    for (name, value) in subtitleLook.mpvOptions { core.setProperty(name, value: value) }
+    // Settings → Subtitles: font, colour, background and size.
+    for (name, value) in SubtitleStyle.current().mpvOptions { core.setProperty(name, value: value) }
     core.setProperty("sub-delay", value: "0")
     core.command(["loadfile", source.mpvURL ?? source.url.absoluteString, "replace"])
     core.setVisible(true)
@@ -648,7 +648,15 @@ final class PlayerController {
   func setSubtitleLook(_ look: SubtitleLook) {
     look.save()
     subtitleLook = look
-    for (name, value) in look.mpvOptions { core?.setProperty(name, value: value) }
+    applySubtitleStyle()
+  }
+
+  /// Settings → Subtitles changed: the subtitles on screen follow at once.
+  func applySubtitleStyle() {
+    let style = SubtitleStyle.current()
+    subtitleSize = style.size
+    subtitleLook = style.look
+    for (name, value) in style.mpvOptions { core?.setProperty(name, value: value) }
   }
 
   /// Subtitles → Sync, in 0.1 s steps (this file only).
