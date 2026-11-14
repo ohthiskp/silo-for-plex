@@ -99,11 +99,12 @@ enum Demo {
     show("206", "The Bear", 2022, 136315, "Comedy", 3),
   ]
 
-  /// Season 1 episodes of Severance, two partly watched shows for Continue Watching.
+  /// Severance: six Season 1 episodes (two partly watched shows for Continue
+  /// Watching), then four of Season 2 for the season picker.
   nonisolated(unsafe) static let episodes: [JSON] = (1...6).map { n in
     var e: JSON = [
       "ratingKey": "30\(n)", "key": "/library/metadata/30\(n)", "type": "episode",
-      "title": "Episode \(n)", "index": n, "parentIndex": 1, "duration": 3_000_000,
+      "title": seasonOneTitles[n - 1], "index": n, "parentIndex": 1, "duration": 3_000_000,
       "grandparentTitle": "Severance", "grandparentRatingKey": "205", "parentRatingKey": "2051",
       "parentTitle": "Season 1", "librarySectionID": 2, "year": 2022,
       "summary": "Mark and his team at Lumon dig deeper into the mysteries of the severed floor.",
@@ -113,6 +114,22 @@ enum Demo {
     if n < 3 { e["viewCount"] = 1 }
     return e
   }
+    + (1...4).map { n in
+      [
+        "ratingKey": "40\(n)", "key": "/library/metadata/40\(n)", "type": "episode",
+        "title": seasonTwoTitles[n - 1], "index": n, "parentIndex": 2, "duration": 3_300_000,
+        "grandparentTitle": "Severance", "grandparentRatingKey": "205", "parentRatingKey": "2052",
+        "parentTitle": "Season 2", "librarySectionID": 2, "year": 2025,
+        "summary": "Mark returns to Lumon, where the severed floor has changed in his absence.",
+        "Media": [media(id: 400 + n, resolution: "4k", seconds: 3300)],
+      ]
+    }
+
+  private static let seasonOneTitles = [
+    "Good News About Hell", "Half Loop", "In Perpetuity", "The You You Are",
+    "The Grim Barbarity of Optics and Design", "Hide and Seek",
+  ]
+  private static let seasonTwoTitles = ["Hello, Ms. Cobel", "Goodbye, Mrs. Selvig", "Who Is Alive?", "Woe's Hollow"]
 
   private static func movie(
     _ key: String, _ title: String, _ year: Int, _ tmdb: Int, _ genre: String, _ seconds: Int, _ resolution: String
@@ -213,11 +230,16 @@ enum Demo {
             "Metadata": [
               ["ratingKey": "2051", "key": "/library/metadata/2051/children", "type": "season", "title": "Season 1",
                "index": 1, "parentRatingKey": "205", "parentTitle": "Severance", "leafCount": 6,
-               "viewedLeafCount": 2]
+               "viewedLeafCount": 2],
+              ["ratingKey": "2052", "key": "/library/metadata/2052/children", "type": "season", "title": "Season 2",
+               "index": 2, "parentRatingKey": "205", "parentTitle": "Severance", "leafCount": 4,
+               "viewedLeafCount": 0],
             ]
           ]
         }
-        if key == "2051" { return ["Metadata": episodes] }
+        if key == "2051" || key == "2052" {
+          return ["Metadata": episodes.filter { $0["parentRatingKey"] as? String == key }]
+        }
         return ["Metadata": []]
       }
       if let raw = (all + episodes).first(where: { $0["ratingKey"] as? String == key }) {

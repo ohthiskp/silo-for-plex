@@ -13,6 +13,10 @@ struct DetailView: View {
   @State private var seasons: [PlexMetadata] = []
   @State private var selectedSeason: PlexMetadata?
   @State private var episodes: [PlexMetadata] = []
+  /// A show's picked episode (KP, 2026-11-14): the header shows its details and
+  /// Resume / Play plays it. Tapping an episode picks it; only Play or a
+  /// double tap plays.
+  @State private var focus: PlexMetadata?
   @State private var related: [PlexHub] = []
   @State private var error: String?
   /// A TMDB title that isn't on the Plex server: shown, but nothing to play.
@@ -45,33 +49,74 @@ struct DetailView: View {
 
   private var shown: PlexMetadata { item ?? seed }
 
+  /// Whose logo, backdrop, meta line, cast and related titles the page shows:
+  /// the show itself on an episode's or season's page.
+  private var titleItem: PlexMetadata {
+    if shown.type == .episode || shown.type == .season, let parentShow { return parentShow }
+    return shown
+  }
+
+  /// What the header describes and Play / Resume plays.
+  private var playTarget: PlexMetadata { focus ?? shown }
+
+  private var isSeries: Bool { shown.type == .show || shown.type == .season || shown.type == .episode }
+
+  /// The picked episode's synopsis on a show, else the title's own.
+  private var headerSummary: String? {
+    if let text = focus?.summary, !text.isEmpty { return text }
+    if let text = shown.summary, !text.isEmpty { return text }
+    return titleItem.summary
+  }
+
+  /// Picks an episode without playing it, and brings the header with its details into view.
+  private func pick(_ episode: PlexMetadata, scroll: ScrollViewProxy) {
+    astraWithAnimation(Astra.Motion.base) {
+      focus = episode
+      summaryExpanded = false
+    }
+    astraWithAnimation(.smooth(duration: 0.45)) { scroll.scrollTo(Self.headerID, anchor: .top) }
+  }
+
+  private static let headerID = "details.header"
+  private static let episodesID = "details.episodes"
+
   var body: some View {
-    ScrollView(.vertical) {
-      // A plain VStack: a lazy one guesses row heights and makes the page jump while scrolling.
-      VStack(alignment: .leading, spacing: sectionSpacing) {
-        deviceHeader
-        // Astra (KP, 2026-11-07): the backdrop stays still while the page
-        // scrolls, so everything below the header covers it as it rises.
+    ScrollViewReader { scroll in
+      ScrollView(.vertical) {
+        // A plain VStack: a lazy one guesses row heights and makes the page jump while scrolling.
         VStack(alignment: .leading, spacing: sectionSpacing) {
-          if shown.type == .show || shown.type == .season, !seasons.isEmpty || !episodes.isEmpty {
-            episodesSection
+          deviceHeader
+            .id(Self.headerID)
+          // Astra (KP, 2026-11-07): the backdrop stays still while the page
+          // scrolls, so everything below the header covers it as it rises.
+          VStack(alignment: .leading, spacing: sectionSpacing) {
+            if isSeries, !seasons.isEmpty || !episodes.isEmpty {
+              episodesSection(scroll: scroll)
+                .id(Self.episodesID)
+            }
+            if !titleItem.roles.isEmpty {
+              deviceCastRow
+            }
+            ForEach(related) { hub in
+              deviceRelatedRow(hub)
+            }
           }
-          if !shown.roles.isEmpty {
-            deviceCastRow
-          }
-          ForEach(related) { hub in
-            deviceRelatedRow(hub)
-          }
+          .padding(.bottom, bottomRoom)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          // iPhone: no flat black under the rows; the frosted artwork shows through (KP, 2026-11-09).
+          .background(narrow ? Color.clear : Astra.Color.bg)
         }
-        .padding(.bottom, bottomRoom)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // iPhone: no flat black under the rows; the frosted artwork shows through (KP, 2026-11-09).
-        .background(narrow ? Color.clear : Astra.Color.bg)
+      }
+      .scrollIndicators(.never)
+      .modifier(ScrollOffsetReader(offset: $scrolled))
+      .astraScrollEdges()
+      // CI screenshots: `-AstraDemoOpen <show> -AstraDemoScroll 1` shows the season list.
+      .task(id: episodes.count) {
+        guard Demo.openKey != nil, Demo.homeScroll != nil, !episodes.isEmpty else { return }
+        try? await Task.pause(1)
+        scroll.scrollTo(Self.episodesID, anchor: .top)
       }
     }
-    .scrollIndicators(.never)
-    .modifier(ScrollOffsetReader(offset: $scrolled))
-    .astraScrollEdges()
     .onGeometryChange(for: CGSize.self, of: { $0.size }) {
       viewport = $0.height
       pageWidth = $0.width
@@ -119,7 +164,7 @@ struct DetailView: View {
       .overlay(alignment: .bottom) {
         if narrow { BottomEdgeBlur() }
       }
-      .sheet(isPresented: $showAllCast) { PhoneCastList(roles: shown.roles) }
+      .sheet(isPresented: $showAllCast) { PhoneCastList(roles: titleItem.roles) }
       .sheet(item: $allRelated) { hub in
         PhoneRelatedGrid(library: library, hub: hub) { picked in
           allRelated = nil
@@ -146,7 +191,7 @@ struct DetailView: View {
   /// the same actions as a long-press on a title.
   private var moreMenu: some View {
     Menu {
-      ItemMenuItems(library: library, item: shown, onDetails: true)
+      ItemMenuItems(library: library, item: playTarget, onDetails: true)
     } label: {
       Image(systemName: "ellipsis")
     }
@@ -162,7 +207,7 @@ struct DetailView: View {
   @ViewBuilder private var pageBackground: some View {
     #if os(iOS)
       if narrow {
-        PhoneFrostedBackground(library: library, item: shown)
+        PhoneFrostedBackground(library: library, item: titleItem)
       } else {
         Astra.Color.bg.ignoresSafeArea()
       }
@@ -226,11 +271,12 @@ struct DetailView: View {
     // the tagline, the summary with More, then Resume and Download side by
     // side and the progress bar with the time left.
     VStack(alignment: .leading, spacing: 12) {
-      HeroTitle(library: library, item: shown, maxWidth: narrow ? 250 : 380, maxHeight: narrow ? 92 : 120)
+      HeroTitle(library: library, item: titleItem, maxWidth: narrow ? 250 : 380, maxHeight: narrow ? 92 : 120)
         .padding(.bottom, 4)
-      DetailMetaLine(item: shown, library: library)
-      FormatBadges(item: shown)
-      if let tagline = shown.tagline, !tagline.isEmpty {
+      DetailMetaLine(item: titleItem, library: library)
+      FormatBadges(item: playTarget)
+      episodeHeading
+      if focus == nil, let tagline = titleItem.tagline, !tagline.isEmpty {
         Text(tagline)
           .astraFont(size: 15, weight: .semibold)
           .italic()
@@ -239,12 +285,13 @@ struct DetailView: View {
           .fixedSize(horizontal: false, vertical: true)
           .padding(.top, 4)
       }
-      if let summary = shown.summary, !summary.isEmpty {
+      if let summary = headerSummary, !summary.isEmpty {
         ExpandableSummary(text: summary)
+          .id(playTarget.ratingKey)
       }
       HStack(spacing: 12) {
         Button {
-          playItem(shown)
+          playItem(playTarget)
         } label: {
           Label(playLabel, systemImage: "play.fill")
             .frame(maxWidth: .infinity)
@@ -253,7 +300,7 @@ struct DetailView: View {
         #if !os(tvOS)
           .keyboardShortcut(isActive ? .defaultAction : nil)
         #endif
-        .disabled(shown.isCatalogOnly || !app.canPlay(shown))
+        .disabled(shown.isCatalogOnly || !app.canPlay(playTarget))
 
         if shown.type != .collection, !shown.isCatalogOnly {
           DownloadButton(item: shown, round: true)
@@ -281,8 +328,8 @@ struct DetailView: View {
         }
         .frame(maxWidth: narrow ? .infinity : 560)
       }
-      if !shown.directors.isEmpty {
-        Text("Directed by \(shown.directors.map(\.tag).joined(separator: ", "))")
+      if !playTarget.directors.isEmpty {
+        Text("Directed by \(playTarget.directors.map(\.tag).joined(separator: ", "))")
           .astraFont(size: 13).foregroundStyle(Astra.Color.muted).lineLimit(1)
       }
       if notOnServer {
@@ -300,7 +347,7 @@ struct DetailView: View {
     .frame(maxWidth: .infinity, minHeight: min(Astra.Layout.detailHeaderHeight, viewport * 0.72), alignment: .bottomLeading)
     .background {
       ZStack {
-        ArtworkImage(library: library, item: shown, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
+        ArtworkImage(library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .clipped()
           // Darkens a little as the page rises over it.
@@ -315,6 +362,7 @@ struct DetailView: View {
 
   /// How far into the movie or the next episode, for the bar under the buttons.
   private var resumeTarget: PlexMetadata? {
+    if let focus { return focus }
     if shown.type == .movie || shown.type == .episode { return shown }
     return episodes.first { ($0.viewOffset ?? 0) > 0 }
   }
@@ -337,6 +385,11 @@ struct DetailView: View {
   }
 
   private var playLabel: String {
+    if let focus {
+      let verb = focus.progress != nil ? "Resume" : "Play"
+      guard let label = focus.episodeLabel else { return verb }
+      return "\(verb) \(label.replacingOccurrences(of: " · ", with: " "))"
+    }
     if shown.type == .movie || shown.type == .episode { return shown.progress != nil ? "Resume" : "Play" }
     if let next = episodes.first(where: { ($0.viewOffset ?? 0) > 0 }) ?? episodes.first(where: { !$0.isWatched }),
       let label = next.episodeLabel
@@ -348,54 +401,102 @@ struct DetailView: View {
 
   // MARK: Episodes
 
-  private var episodesSection: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      if seasons.count > 1 {
-        ScrollView(.horizontal) {
-          HStack(spacing: 8) {
-            ForEach(seasons) { season in
-              let selected = season.id == selectedSeason?.id
-              Button(season.title) {
-                Task { await selectSeason(season) }
-              }
-              .buttonStyle(.plain)
-              .font(.system(size: 13, weight: .semibold))
-              .foregroundStyle(selected ? Astra.Color.onAccent : Astra.Color.muted)
-              .padding(.horizontal, 16)
-              .frame(height: 34)
-              .background {
-                if selected { Capsule().fill(Astra.Color.accent) } else { Capsule().fill(.white.opacity(0.08)) }
-              }
-              .astraAnimation(Astra.Motion.base, value: selected)
-            }
-          }
-          .padding(.horizontal, leading)
-        }
-        .scrollIndicators(.never)
-        .scrollClipDisabled()
-      }
-      HStack(spacing: Astra.Spacing.m) {
-        Text(selectedSeason?.title ?? "Episodes")
-          .astraFont(.rowTitle)
+  /// "S1 · E3 · 52m" over the picked episode's title, above its synopsis.
+  @ViewBuilder private var episodeHeading: some View {
+    if let focus, focus.type == .episode {
+      VStack(alignment: .leading, spacing: 3) {
+        Text([focus.episodeLabel, focus.durationLabel].compactMap { $0 }.joined(separator: "  ·  "))
+          .astraFont(size: 13, weight: .semibold)
+          .foregroundStyle(Astra.Color.muted)
+        Text(focus.title)
+          .astraFont(size: narrow ? 20 : 22, weight: .bold)
           .foregroundStyle(Astra.Color.ink)
-          .lineLimit(1)
+          .lineLimit(2)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .accessibilityElement(children: .combine)
+      .id(focus.ratingKey)
+      .transition(.opacity)
+    }
+  }
+
+  private var rowLeading: CGFloat {
+    #if os(iOS)
+      narrow ? PhoneDetail.margin : leading
+    #else
+      leading
+    #endif
+  }
+
+  private var rowTrailing: CGFloat {
+    #if os(iOS)
+      narrow ? PhoneDetail.trailing : Astra.Spacing.pageTrailing
+    #else
+      Astra.Spacing.pageTrailing
+    #endif
+  }
+
+  /// KP (2026-11-14): a season dropdown, then the whole season. Tapping an
+  /// episode shows its details up top; Play / Resume or a double tap plays it.
+  private func episodesSection(scroll: ScrollViewProxy) -> some View {
+    VStack(alignment: .leading, spacing: 14) {
+      HStack(spacing: 12) {
+        SeasonPicker(seasons: seasons, selected: selectedSeason) { season in
+          Task { await selectSeason(season) }
+        }
+        if !episodes.isEmpty {
+          Text("\(episodes.count) Episode\(episodes.count == 1 ? "" : "s")")
+            .astraFont(size: 13, weight: .medium)
+            .foregroundStyle(Astra.Color.muted)
+            .lineLimit(1)
+        }
+        Spacer(minLength: 0)
         if let selectedSeason, seasons.count > 1 {
           DownloadButton(item: selectedSeason, compact: true)
         }
       }
-      .padding(.leading, leading)
-      // The row stays in place when the season changes; only its cards are replaced.
-      ScrollView(.horizontal) {
-        LazyHStack(alignment: .top, spacing: 14) {
+      .padding(.leading, rowLeading)
+      .padding(.trailing, rowTrailing)
+      episodeList(scroll: scroll)
+    }
+  }
+
+  @ViewBuilder private func episodeList(scroll: ScrollViewProxy) -> some View {
+    #if os(iOS)
+      if narrow {
+        // iPhone: the season as a list, one episode per line.
+        VStack(spacing: 6) {
           ForEach(episodes) { episode in
-            EpisodeCard(library: library, item: episode)
+            PhoneEpisodeRow(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
+              pick(episode, scroll: scroll)
+            }
           }
         }
-        .padding(.horizontal, leading)
+        .padding(.horizontal, PhoneDetail.margin - PhoneEpisodeRow.inset)
+      } else {
+        episodeCardRow(scroll: scroll)
       }
-      .scrollIndicators(.never)
-      .scrollClipDisabled()
+    #else
+      episodeCardRow(scroll: scroll)
+    #endif
+  }
+
+  /// Mac and iPad: the season as a row of stills. The row stays in place when
+  /// the season changes; only its cards are replaced.
+  private func episodeCardRow(scroll: ScrollViewProxy) -> some View {
+    ScrollView(.horizontal) {
+      LazyHStack(alignment: .top, spacing: 14) {
+        ForEach(episodes) { episode in
+          EpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
+            pick(episode, scroll: scroll)
+          }
+        }
+      }
+      .padding(.horizontal, leading)
     }
+    .scrollIndicators(.never)
+    .scrollClipDisabled()
   }
 
   private var castRow: some View {
@@ -403,7 +504,7 @@ struct DetailView: View {
       Text("Cast").astraFont(.rowTitle).foregroundStyle(Astra.Color.ink).padding(.leading, leading)
       ScrollView(.horizontal) {
         LazyHStack(alignment: .top, spacing: 16) {
-          ForEach(Array(shown.roles.prefix(20).enumerated()), id: \.offset) { _, role in
+          ForEach(Array(titleItem.roles.prefix(20).enumerated()), id: \.offset) { _, role in
             VStack(spacing: 6) {
               RemoteImage(url: role.thumb.flatMap { URL(string: $0) })
                 .frame(width: 84, height: 84)
@@ -454,86 +555,194 @@ struct DetailView: View {
         library.recordOpen(seconds: Date().timeIntervalSince(opened))
         PerfProbe.value("details.full.ms", Date().timeIntervalSince(opened) * 1000)
       }
+      // KP (2026-11-14): a show, season or episode (Continue Watching) opens on
+      // that episode's season with the episode picked.
+      let keep = refresh ? focus?.ratingKey : nil
       switch full.type {
       case .show:
-        seasons = try await library.children(of: full.ratingKey).filter { $0.type == .season }
-        let start = seasons.first { !$0.isWatched && ($0.index ?? 0) > 0 } ?? seasons.first
-        if let start { await selectSeason(start) }
+        try await loadSeasons(show: full.ratingKey, season: nil, episode: keep)
       case .season:
-        episodes = try await library.children(of: full.ratingKey)
+        if let show = full.parentRatingKey {
+          try await loadSeasons(show: show, season: full.ratingKey, episode: keep)
+        } else {
+          selectedSeason = full
+          episodes = try await library.children(of: full.ratingKey)
+          pickDefaultEpisode(keep)
+        }
+      case .episode:
+        if let show = full.grandparentRatingKey {
+          try await loadSeasons(show: show, season: full.parentRatingKey, episode: keep ?? full.ratingKey)
+        }
+        if focus == nil { focus = full }
       default:
         break
       }
-      related = await library.related(full.ratingKey)
+      let relatedKey =
+        (full.type == .episode ? full.grandparentRatingKey : full.type == .season ? full.parentRatingKey : nil)
+        ?? full.ratingKey
+      related = await library.related(relatedKey)
       if !refresh { PerfProbe.value("details.complete.ms", Date().timeIntervalSince(opened) * 1000) }
     } catch {
       self.error = error.localizedDescription
     }
   }
 
+  /// The show's seasons, opened on `season` (else the first one not watched
+  /// yet) with `episode` picked (else the one to watch next).
+  private func loadSeasons(show: String, season: String?, episode: String?) async throws {
+    seasons = try await library.children(of: show).filter { $0.type == .season }
+    let start =
+      season.flatMap { key in seasons.first { $0.ratingKey == key } }
+      ?? seasons.first { !$0.isWatched && ($0.index ?? 0) > 0 } ?? seasons.first
+    if let start { await selectSeason(start) }
+    pickDefaultEpisode(episode)
+  }
+
+  /// `key` when the season has it, else the episode in progress, else the first unwatched one.
+  private func pickDefaultEpisode(_ key: String?) {
+    let found =
+      key.flatMap { key in episodes.first { $0.ratingKey == key } }
+      ?? episodes.first { ($0.viewOffset ?? 0) > 0 } ?? episodes.first { !library.isWatched($0) } ?? episodes.first
+    if let found { astraWithAnimation(Astra.Motion.base) { focus = found } }
+  }
+
   private func selectSeason(_ season: PlexMetadata) async {
     selectedSeason = season
-    episodes = (try? await library.children(of: season.ratingKey)) ?? []
+    let list = (try? await library.children(of: season.ratingKey)) ?? []
+    astraWithAnimation(Astra.Motion.base) { episodes = list }
   }
 }
 
+/// "Season 1 ⌄": a glass capsule that opens the list of seasons (KP, 2026-11-14).
+/// A show with one season shows its name without the dropdown.
+struct SeasonPicker: View {
+  var seasons: [PlexMetadata]
+  var selected: PlexMetadata?
+  var onPick: (PlexMetadata) -> Void
+
+  private var title: String { selected?.title ?? seasons.first?.title ?? "Episodes" }
+
+  var body: some View {
+    if seasons.count > 1 {
+      Menu {
+        ForEach(seasons) { season in
+          Button {
+            onPick(season)
+          } label: {
+            if season.id == selected?.id {
+              Label(season.title, systemImage: "checkmark")
+            } else {
+              Text(season.title)
+            }
+          }
+        }
+      } label: {
+        HStack(spacing: 8) {
+          Text(title).astraFont(size: 16, weight: .semibold).lineLimit(1)
+          Image(systemName: "chevron.down").font(.system(size: 12, weight: .bold))
+        }
+        .foregroundStyle(Astra.Color.ink)
+        .padding(.horizontal, 16)
+        .frame(height: 38)
+        .contentShape(Capsule())
+        .astraGlass(in: Capsule(), variant: .regular, interactive: true)
+      }
+      .menuStyle(.button)
+      .buttonStyle(.plain)
+      .menuIndicator(.hidden)
+      .fixedSize()
+      .accessibilityLabel("Season, \(title)")
+      .accessibilityHint("Choose a season")
+    } else {
+      Text(title)
+        .astraFont(.rowTitle)
+        .foregroundStyle(Astra.Color.ink)
+        .lineLimit(1)
+    }
+  }
+}
+
+/// One episode in a season's row (Mac, iPad). KP (2026-11-14): a tap picks it
+/// and shows its details up top; a double tap or Play plays it.
 struct EpisodeCard: View {
   var library: LibraryStore
   var item: PlexMetadata
+  var selected = false
   var width: CGFloat = Astra.Layout.episodeCard.width
   var height: CGFloat = Astra.Layout.episodeCard.height
+  var onSelect: () -> Void = {}
 
   @Environment(\.playItem) private var playItem
 
   var body: some View {
-    Button {
-      playItem(item)
-    } label: {
-      VStack(alignment: .leading, spacing: 8) {
-        RemoteImage(url: library.imageURL(item.thumb, width: width, height: height))
-          .frame(width: width, height: height)
-          .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
-          .overlay(alignment: .bottomLeading) {
-            if let progress = item.progress { ProgressBar(value: progress).padding(10) }
-          }
-          .overlay(alignment: .topTrailing) {
-            if library.isWatched(item) {
-              Image(systemName: "checkmark.circle.fill")
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(.black, .white)
-                .font(.system(size: 18))
-                .padding(8)
-            }
-          }
-          .overlay(
-            RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))
-          .pressable(hoverScale: 1.03)
-        HStack(spacing: 8) {
-          if let index = item.index {
-            Text("\(index).").astraFont(size: 13, weight: .bold).foregroundStyle(Astra.Color.muted)
-          }
-          Text(item.title).astraFont(size: 13, weight: .semibold).foregroundStyle(Astra.Color.ink).lineLimit(1)
-          Spacer(minLength: 0)
-          if let duration = item.durationLabel {
-            Text(duration).font(.system(size: 12)).foregroundStyle(Astra.Color.muted)
-          }
-          // Room for the download button drawn over this corner.
-          Color.clear.frame(width: 30, height: 1)
+    VStack(alignment: .leading, spacing: 8) {
+      RemoteImage(url: library.imageURL(item.thumb, width: width, height: height))
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
+        .overlay(alignment: .bottomLeading) {
+          if let progress = item.progress { ProgressBar(value: progress).padding(10) }
         }
-        if let summary = item.summary, !summary.isEmpty {
-          Text(summary).astraFont(size: 12).foregroundStyle(Astra.Color.muted).lineLimit(2)
+        .overlay(alignment: .topTrailing) {
+          if library.isWatched(item) { EpisodeWatchedMark().padding(8) }
         }
+        .overlay {
+          RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous)
+            .strokeBorder(selected ? Astra.Color.ink : Astra.Color.hairline, lineWidth: selected ? 2.5 : 1)
+        }
+        .pressable(hoverScale: 1.03)
+      HStack(spacing: 8) {
+        if let index = item.index {
+          Text("\(index).").astraFont(size: 13, weight: .bold).foregroundStyle(Astra.Color.muted)
+        }
+        Text(item.title).astraFont(size: 13, weight: .semibold).foregroundStyle(Astra.Color.ink).lineLimit(1)
+        Spacer(minLength: 0)
+        if let duration = item.durationLabel {
+          Text(duration).font(.system(size: 12)).foregroundStyle(Astra.Color.muted)
+        }
+        // Room for the download button drawn over this corner.
+        Color.clear.frame(width: 30, height: 1)
       }
-      .frame(width: width, alignment: .leading)
-      .contentShape(Rectangle())
+      if let summary = item.summary, !summary.isEmpty {
+        Text(summary).astraFont(size: 12).foregroundStyle(Astra.Color.muted).lineLimit(2)
+      }
     }
-    .buttonStyle(AstraCardButtonStyle())
+    .frame(width: width, alignment: .leading)
+    .contentShape(Rectangle())
+    .episodeTaps(item: item, selected: selected, onSelect: onSelect, play: playItem)
+    .astraAnimation(Astra.Motion.fast, value: selected)
     .itemMenu(library: library, item: item)
-    // Outside the card's button, so it gets its own clicks.
+    // Outside the card's taps, so it gets its own clicks.
     .overlay(alignment: .topTrailing) {
       DownloadButton(item: item, compact: true)
         .offset(x: 4, y: height + 1)
     }
+  }
+}
+
+/// The white tick on a watched episode's still.
+struct EpisodeWatchedMark: View {
+  var body: some View {
+    Image(systemName: "checkmark.circle.fill")
+      .symbolRenderingMode(.palette)
+      .foregroundStyle(.black, .white)
+      .font(.system(size: 18))
+      .accessibilityHidden(true)
+  }
+}
+
+extension View {
+  /// A single tap picks the episode at once; a double tap plays it (KP, 2026-11-14).
+  func episodeTaps(
+    item: PlexMetadata, selected: Bool, onSelect: @escaping () -> Void, play: @escaping (PlexMetadata) -> Void
+  ) -> some View {
+    self
+      .onTapGesture(count: 2) { play(item) }
+      .simultaneousGesture(TapGesture().onEnded { onSelect() })
+      .accessibilityElement(children: .combine)
+      .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+      .accessibilityHint("Shows this episode's details")
+      .accessibilityAction { onSelect() }
+      .accessibilityAction(named: "Play") { play(item) }
   }
 }
 
@@ -811,7 +1020,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       let logoTop = min(360, max(280, viewport * 0.377))
       return VStack(alignment: .leading, spacing: 0) {
         HeroTitle(
-          library: library, item: shown, maxWidth: PhoneDetail.logoBox.width, maxHeight: PhoneDetail.logoBox.height,
+          library: library, item: titleItem, maxWidth: PhoneDetail.logoBox.width, maxHeight: PhoneDetail.logoBox.height,
           alignment: .bottom
         )
         .frame(maxWidth: .infinity)
@@ -819,15 +1028,15 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         // "2024 • 2h 46m • [PG-13] [HD] [Dolby Atmos]", the genres under it.
         HStack(spacing: 8) {
           DetailMetaLine(
-            item: shown, library: library, showsGenres: false, fontSize: 14, separator: "  •  ", ratingAfter: true,
+            item: titleItem, library: library, showsGenres: false, fontSize: 14, separator: "  •  ", ratingAfter: true,
             greyRating: true)
-          FormatBadges(item: shown)
+          FormatBadges(item: playTarget)
         }
         .minimumScaleFactor(0.85)
         .frame(maxWidth: .infinity)
         .padding(.top, 12)
-        if !shown.genres.isEmpty {
-          Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
+        if !titleItem.genres.isEmpty {
+          Text(titleItem.genres.prefix(3).map(\.tag).joined(separator: " · "))
             .astraFont(size: 13.5)
             .foregroundStyle(Astra.Color.ink.opacity(0.62))
             .lineLimit(1)
@@ -847,19 +1056,23 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
           }
           .padding(.top, 14)
         }
-        if let summary = shown.summary, !summary.isEmpty {
+        if focus?.type == .episode {
+          episodeHeading
+            .padding(.top, 18)
+        }
+        if let summary = headerSummary, !summary.isEmpty {
           Text(summary)
             .astraFont(size: 15)
             .lineSpacing(3)
             .foregroundStyle(Astra.Color.ink.opacity(0.86))
             .lineLimit(summaryExpanded ? nil : 4)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 16)
+            .padding(.top, focus?.type == .episode ? 8 : 16)
         }
-        if !shown.directors.isEmpty {
+        if !playTarget.directors.isEmpty {
           HStack(spacing: 5) {
             Text("Directed by").foregroundStyle(Astra.Color.muted)
-            Text(shown.directors.prefix(2).map(\.tag).joined(separator: ", "))
+            Text(playTarget.directors.prefix(2).map(\.tag).joined(separator: ", "))
               .fontWeight(.semibold)
               .foregroundStyle(Astra.Color.ink)
           }
@@ -867,7 +1080,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
           .lineLimit(1)
           .padding(.top, 10)
         }
-        if (shown.summary?.count ?? 0) > 150 {
+        if (headerSummary?.count ?? 0) > 150 {
           Button {
             astraWithAnimation(Astra.Motion.base) { summaryExpanded.toggle() }
           } label: {
@@ -900,7 +1113,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         ZStack {
           // KP (2026-11-09): framed so the faces end above the logo, for any title.
           FramedArtwork(
-            library: library, item: shown, kind: .scenery, zoneHeight: logoTop + 90, limitY: logoTop - 4,
+            library: library, item: titleItem, kind: .scenery, zoneHeight: logoTop + 90, limitY: logoTop - 4,
             topOffset: PhoneDetail.backdropTop, minTop: PhoneDetail.backdropTop + 40)
           PhoneDetail.backdropShade
         }
@@ -918,14 +1131,15 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     private var phoneActions: some View {
       HStack(alignment: .center, spacing: 14) {
         Button {
-          playItem(shown)
+          playItem(playTarget)
         } label: {
           Label(playLabel, systemImage: "play.fill")
             .frame(maxWidth: .infinity)
+            .contentTransition(.opacity)
         }
         // KP's mockup (2026-11-09): a white Play, like the hero's.
         .buttonStyle(SolidCapsuleButtonStyle())
-        .disabled(shown.isCatalogOnly || !app.canPlay(shown))
+        .disabled(shown.isCatalogOnly || !app.canPlay(playTarget))
 
         if shown.type != .collection, !shown.isCatalogOnly {
           DownloadButton(item: shown, labeled: true)
@@ -941,7 +1155,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         PhoneRowHeader(title: "Cast") { showAllCast = true }
         ScrollView(.horizontal) {
           LazyHStack(alignment: .top, spacing: PhoneDetail.rowSpacing) {
-            ForEach(Array(shown.roles.prefix(20).enumerated()), id: \.offset) { _, role in
+            ForEach(Array(titleItem.roles.prefix(20).enumerated()), id: \.offset) { _, role in
               PhoneCastCard(role: role)
             }
           }
@@ -962,6 +1176,73 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         }
         .scrollIndicators(.never)
         .scrollClipDisabled()
+      }
+    }
+  }
+
+  /// One line of a season on iPhone: the still, "3. Title", its length and
+  /// synopsis. The picked episode sits on a soft highlight (KP, 2026-11-14).
+  struct PhoneEpisodeRow: View {
+    var library: LibraryStore
+    var item: PlexMetadata
+    var selected: Bool
+    var onSelect: () -> Void
+
+    /// The highlight's padding around the row's content.
+    static let inset: CGFloat = 10
+    private static let still = CGSize(width: 136, height: 77)
+
+    @Environment(\.playItem) private var playItem
+
+    var body: some View {
+      HStack(alignment: .top, spacing: 14) {
+        RemoteImage(url: library.imageURL(item.thumb, width: Self.still.width * 2, height: Self.still.height * 2))
+          .frame(width: Self.still.width, height: Self.still.height)
+          .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+          .overlay(alignment: .bottom) {
+            if let progress = item.progress { ProgressBar(value: progress).padding(.horizontal, 8).padding(.bottom, 7) }
+          }
+          .overlay(alignment: .topTrailing) {
+            if library.isWatched(item) { EpisodeWatchedMark().padding(6) }
+          }
+          .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Astra.Color.hairline)
+          }
+        VStack(alignment: .leading, spacing: 4) {
+          Text(item.index.map { "\($0). \(item.title)" } ?? item.title)
+            .astraFont(size: 15, weight: .semibold)
+            .foregroundStyle(Astra.Color.ink)
+            .lineLimit(2)
+          if let duration = item.durationLabel {
+            Text(duration).astraFont(size: 12.5, weight: .medium).foregroundStyle(Astra.Color.muted)
+          }
+          if let summary = item.summary, !summary.isEmpty {
+            Text(summary).astraFont(size: 12.5).foregroundStyle(Astra.Color.muted).lineLimit(2)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Room for the download button drawn over this corner.
+        Color.clear.frame(width: 26, height: 1)
+      }
+      .padding(Self.inset)
+      .background {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+          .fill(Astra.Color.ink.opacity(selected ? 0.1 : 0))
+          .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+              .strokeBorder(Astra.Color.ink.opacity(selected ? 0.16 : 0))
+          }
+      }
+      .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .episodeTaps(item: item, selected: selected, onSelect: onSelect, play: playItem)
+      .astraAnimation(Astra.Motion.fast, value: selected)
+      .itemMenu(library: library, item: item)
+      .sensoryFeedback(.selection, trigger: selected) { _, now in now }
+      // Outside the row's taps, so it gets its own.
+      .overlay(alignment: .topTrailing) {
+        DownloadButton(item: item, compact: true)
+          .padding(.top, Self.inset - 2)
+          .padding(.trailing, Self.inset - 4)
       }
     }
   }

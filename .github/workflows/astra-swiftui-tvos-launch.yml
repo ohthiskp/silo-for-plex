@@ -106,6 +106,7 @@ jobs:
           shot details-movie -AstraDemoOpen 101
           shot details-show -AstraDemoOpen 201
           shot details-show-episodes -AstraDemoOpen 205
+          shot details-episode -AstraDemoOpen 303
           shot watchlist -AstraDemoTab watchlist
           shot settings -AstraDemoTab settings
           shot settings-lower -AstraDemoTab settings -AstraDemoScroll 1
