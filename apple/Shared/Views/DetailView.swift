@@ -984,8 +984,8 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static var backdropShade: some View {
       LinearGradient(
         stops: [
-          .init(color: .black.opacity(0), location: 0.35),
-          .init(color: .black.opacity(0.35), location: 1),
+          .init(color: Astra.Color.bg.opacity(0), location: 0.35),
+          .init(color: Astra.Color.bg.opacity(AstraAppearance.shared.palette.isLight ? 0.5 : 0.35), location: 1),
         ], startPoint: .top, endPoint: .bottom
       )
       .allowsHitTesting(false)
