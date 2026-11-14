@@ -81,6 +81,11 @@ struct DetailView: View {
   private static let episodesID = "details.episodes"
 
   var body: some View {
+    // KP (2026-11-14): Details stays Frosted Glass, even on the Light theme.
+    page.astraDetailsTheme()
+  }
+
+  @ViewBuilder private var page: some View {
     ScrollViewReader { scroll in
       ScrollView(.vertical) {
         // A plain VStack: a lazy one guesses row heights and makes the page jump while scrolling.
@@ -956,7 +961,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.system(size: 16 * Astra.Layout.controlScale, weight: .semibold))
-      .foregroundStyle(Color.black)
+      .foregroundStyle(Astra.Color.onSelection)
       .padding(.horizontal, 22 * Astra.Layout.controlScale)
       .frame(height: 50 * Astra.Layout.controlScale)
       .background(Capsule().fill(Astra.Color.ink.opacity(isEnabled ? 1 : 0.35)))
@@ -998,12 +1003,12 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let rowSpacing: CGFloat = 14
 
     /// A dark floor behind the floating tab bar: content fades out above it.
-    static var tabBarFloor: some View {
+    @MainActor static var tabBarFloor: some View {
       LinearGradient(
         stops: [
-          .init(color: .black.opacity(0), location: 0),
-          .init(color: .black.opacity(0.5), location: 0.5),
-          .init(color: .black.opacity(0.72), location: 1),
+          .init(color: Astra.Color.bg.opacity(0), location: 0),
+          .init(color: Astra.Color.bg.opacity(0.5), location: 0.5),
+          .init(color: Astra.Color.bg.opacity(0.72), location: 1),
         ], startPoint: .top, endPoint: .bottom
       )
       .frame(height: 120)
@@ -1266,11 +1271,11 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
 
     /// A light shade on the lower artwork so the logo and meta line stay readable.
-    static var backdropShade: some View {
+    @MainActor static var backdropShade: some View {
       LinearGradient(
         stops: [
-          .init(color: .black.opacity(0), location: 0.35),
-          .init(color: .black.opacity(0.35), location: 1),
+          .init(color: Astra.Color.bg.opacity(0), location: 0.35),
+          .init(color: Astra.Color.bg.opacity(AstraAppearance.shared.palette.isLight ? 0.5 : 0.35), location: 1),
         ], startPoint: .top, endPoint: .bottom
       )
       .allowsHitTesting(false)
@@ -1295,12 +1300,14 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
             .saturation(1.25)
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
-          // Darker toward the bottom so the synopsis and rows read easily.
+          // Darker toward the bottom so the synopsis and rows read easily
+          // (lighter on the Light theme, where the text is dark).
+          let light = AstraAppearance.shared.palette.isLight
           LinearGradient(
             stops: [
-              .init(color: .black.opacity(0.3), location: 0),
-              .init(color: .black.opacity(0.5), location: 0.45),
-              .init(color: .black.opacity(0.62), location: 1),
+              .init(color: Astra.Color.bg.opacity(light ? 0.62 : 0.3), location: 0),
+              .init(color: Astra.Color.bg.opacity(light ? 0.74 : 0.5), location: 0.45),
+              .init(color: Astra.Color.bg.opacity(light ? 0.84 : 0.62), location: 1),
             ], startPoint: .top, endPoint: .bottom)
         }
       }
@@ -1349,7 +1356,11 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         .frame(height: PhoneDetail.resumeHeight)
         .contentShape(Capsule())
         .shadow(color: .black.opacity(0.35), radius: 3)
-        .astraGlass(in: Capsule(), variant: .clear, interactive: true, tint: accent?.opacity(0.6) ?? .white.opacity(0.32))
+        // Light theme: dark glass, so the white label still reads on a pale page.
+        .astraGlass(
+          in: Capsule(), variant: .clear, interactive: true,
+          tint: accent?.opacity(0.6)
+            ?? (AstraAppearance.shared.palette.isLight ? Astra.Color.ink.opacity(0.82) : .white.opacity(0.32)))
         .astraGlassEdge(Capsule(), strength: 1.1)
         .scaleEffect(configuration.isPressed ? 0.97 : 1)
         .opacity(isEnabled ? 1 : 0.45)
@@ -1366,7 +1377,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     var body: some View {
       icon
         .font(.system(size: 19, weight: .semibold))
-        .foregroundStyle(.white)
+        .foregroundStyle(Astra.Color.ink)
         .frame(width: PhoneDetail.actionCircle, height: PhoneDetail.actionCircle)
         .astraGlass(in: Circle(), variant: .regular, interactive: true)
         .astraGlassEdge(Circle(), strength: 0.6)
