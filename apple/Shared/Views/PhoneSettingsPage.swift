@@ -73,11 +73,14 @@ import SwiftUI
       }
     }
 
-    private var downloadsValue: String {
-      let count = app.downloads.index.records.count
-      guard count > 0 else { return "None" }
-      return "\(count) · " + ByteCountFormatter.string(fromByteCount: app.downloads.storageUsed, countStyle: .file)
-    }
+    private var downloadsValue: String { phoneDownloadsSummary(app) }
+  }
+
+  /// "None", or "3 · 4.2 GB": the saved-titles summary on the root and the Downloads page.
+  @MainActor private func phoneDownloadsSummary(_ app: AppModel) -> String {
+    let count = app.downloads.index.records.count
+    guard count > 0 else { return "None" }
+    return "\(count) · " + ByteCountFormatter.string(fromByteCount: app.downloads.storageUsed, countStyle: .file)
   }
 
   /// The pages Settings opens; also the CI screenshot names.
@@ -585,12 +588,19 @@ import SwiftUI
           SubtitleSample(library: library, style: style, scale: 1.1)
         }
         PhoneCard(footer: "Automatic shows what the file marks as forced or default. Always picks your language.") {
-          PhoneRow(title: "When to show") {
+          // Three long choices don't fit beside the label, so the picker sits under it.
+          VStack(alignment: .leading, spacing: 10) {
+            Text("When to show")
+              .astraFont(size: 17, weight: .medium)
+              .foregroundStyle(Astra.Color.ink)
             Picker("When to show", selection: $subtitles) {
               ForEach(SubtitlePreference.allCases) { Text($0.title).tag($0) }
             }
-            .labelsHidden().pickerStyle(.segmented).fixedSize()
+            .labelsHidden().pickerStyle(.segmented)
           }
+          .padding(.horizontal, 16)
+          .padding(.vertical, 12)
+          .frame(maxWidth: .infinity, alignment: .leading)
         }
         PhoneCard(title: "Style") {
           PhoneRow(title: "Font") {
@@ -691,9 +701,7 @@ import SwiftUI
         PhoneCard(footer: "Downloads wait for Wi-Fi instead of using cellular data.") {
           PhoneSwitch(title: "Wi-Fi only", isOn: $wifiOnly)
           PhoneRow(title: "Saved titles") {
-            PhoneValue(
-              text: "\(app.downloads.index.records.count) · "
-                + ByteCountFormatter.string(fromByteCount: app.downloads.storageUsed, countStyle: .file))
+            PhoneValue(text: phoneDownloadsSummary(app))
           }
         }
         // The same list as Library → Downloads, so titles can be managed here too.
