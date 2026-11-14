@@ -28,6 +28,7 @@
     private(set) var pending: String?
 
     private let folder: URL
+    private let session: SessionWatch
     private var report: URL { folder.appendingPathComponent("last-crash.txt") }
     private var signalLog: URL { folder.appendingPathComponent("signal.log") }
     private var exceptionLog: URL { folder.appendingPathComponent("exception.log") }
@@ -40,6 +41,7 @@
       let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         ?? URL(fileURLWithPath: NSTemporaryDirectory())
       folder = base.appendingPathComponent("CrashReports", isDirectory: true)
+      session = SessionWatch(url: folder.appendingPathComponent("session.json"))
     }
 
     /// Call once, first thing at launch.
@@ -48,13 +50,31 @@
       installed = true
       try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
+      // What the last run was doing, from its session record (SessionWatch).
+      let previous = session.loadPrevious()
+
       // Last launch's crash, if there was one.
       if let text = collectRawLogs() {
-        try? text.write(to: report, atomically: true, encoding: .utf8)
+        let withActivity = text + (previous.map(AppSession.activitySection) ?? "")
+        try? withActivity.write(to: report, atomically: true, encoding: .utf8)
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.shownKey)
         UserDefaults.standard.set(Self.signalName(in: text), forKey: Self.shownSignalKey)
+      } else if Self.detectsSystemKills, let previous,
+        AppSession.endedUnexpectedly(
+          previous, version: Self.versionString(), osVersion: Self.osVersion(), bootTime: Self.bootTime())
+      {
+        // KP, 2026-11-14 ("crashed twice and no crash report"): iOS stopped
+        // Astra on screen (memory or a freeze). That is a SIGKILL, which no
+        // handler sees, so the report comes from the session record.
+        try? AppSession.report(for: previous).write(to: report, atomically: true, encoding: .utf8)
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.shownKey)
+        UserDefaults.standard.set("SIGKILL", forKey: Self.shownSignalKey)
       }
       pending = try? String(contentsOf: report, encoding: .utf8)
+
+      session.start(
+        AppSessionRecord(version: Self.versionString(), osVersion: Self.osVersion(), bootTime: Self.bootTime()),
+        watchMainThread: Self.detectsSystemKills)
 
       CrashSignals.install(path: signalLog.path, exceptionPath: exceptionLog.path, header: Self.header())
       // Apple TV has no MetricKit: its report comes from Astra's own handlers only.
@@ -70,6 +90,22 @@
       if Demo.isOn, UserDefaults.standard.bool(forKey: "AstraDemoCrash") {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { Self.demoCrash() }
       }
+    }
+
+    /// Adds a line to "what Astra was doing", shown with the next crash report.
+    func note(_ text: String) {
+      session.note(text)
+    }
+
+    /// iPhone and Apple TV only: there the system stops an app that runs out
+    /// of memory or freezes. On the Mac a force quit would look the same.
+    private static var detectsSystemKills: Bool {
+      #if os(macOS)
+        return false
+      #else
+        // CI's simulator stops the demo app between screenshots; only the kill check opts in.
+        return !Demo.isOn || UserDefaults.standard.bool(forKey: "AstraDemoWatch")
+      #endif
     }
 
     /// The person closed the report: it is gone for good.
@@ -139,14 +175,31 @@
 
     // MARK: - Header (built at launch, written by the signal handler as is)
 
-    private static func header() -> String {
+    /// "3.1.0 (202611141644)"
+    nonisolated static func versionString() -> String {
       let info = Bundle.main.infoDictionary ?? [:]
       let version = info["CFBundleShortVersionString"] as? String ?? "?"
       let build = info["CFBundleVersion"] as? String ?? "?"
+      return "\(version) (\(build))"
+    }
+
+    nonisolated static func osVersion() -> String {
+      ProcessInfo.processInfo.operatingSystemVersionString
+    }
+
+    /// When the device started, in seconds since 1970 (0 if unknown).
+    nonisolated static func bootTime() -> TimeInterval {
+      var boot = timeval()
+      var size = MemoryLayout<timeval>.size
+      guard sysctlbyname("kern.boottime", &boot, &size, nil, 0) == 0 else { return 0 }
+      return TimeInterval(boot.tv_sec)
+    }
+
+    private static func header() -> String {
       let image = CrashSignals.mainImage()
       return """
-        Version: \(version) (\(build))
-        OS: \(ProcessInfo.processInfo.operatingSystemVersionString)
+        Version: \(versionString())
+        OS: \(osVersion())
         Device: \(deviceModel())
         Launched: \(stamp(Date()))
         Binary: Astra \(image.base) UUID \(image.uuid)

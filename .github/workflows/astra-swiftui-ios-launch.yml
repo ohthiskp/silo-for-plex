@@ -5,7 +5,7 @@ run-name: SwiftUI iPhone launch check ${{ github.sha }}
 # prints any crash report, so launch crashes can be seen without a phone.
 on:
   push:
-    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s]
+    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s, claude/project-thread-r9sbp7]
     paths:
       - "apple/**"
       - ".github/workflows/astra-swiftui-ios-launch.yml"
@@ -125,6 +125,21 @@ jobs:
           CRASHES="$(xcrun simctl get_app_container "$UDID" "$BID" data)/Library/Application Support/CrashReports"
           echo "--- crash report"; cat "$CRASHES/last-crash.txt" 2>/dev/null || echo "(none written)"
           rm -rf "$CRASHES"
+          # A kill by iOS (out of memory, or the watchdog after a freeze) is a SIGKILL
+          # that no handler sees (KP, 2026-11-14). Kill the app on screen the same way;
+          # the next launch must show the report from its session record.
+          OUT=$(xcrun simctl launch "$UDID" "$BID" -AstraDemo YES -AstraDemoWatch YES)
+          sleep 15
+          kill -9 "${OUT##*: }" || true
+          sleep 3
+          shot killed-report -AstraDemoWatch YES
+          xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+          echo "--- report after a kill"; cat "$CRASHES/last-crash.txt" 2>/dev/null || echo "(none written)"
+          if ! grep -q "SIGKILL" "$CRASHES/last-crash.txt" 2>/dev/null; then
+            echo "::error::No crash report after the app was killed on screen"
+            KILL_REPORT_MISSING=1
+          fi
+          rm -rf "$CRASHES"
           ls -la "$RUNNER_TEMP/shots"
           # Small JPEGs printed into the log, for reviewers who can read logs but not artifacts.
           for f in "$RUNNER_TEMP"/shots/*.png; do
@@ -133,6 +148,7 @@ jobs:
             base64 -i "${f%.png}.jpg" | fold -w 4000
             echo "ASTRA-SHOT-END"
           done
+          [ -z "${KILL_REPORT_MISSING:-}" ]
 
       - name: Player gesture UI tests
         if: always() && env.APP != ''
