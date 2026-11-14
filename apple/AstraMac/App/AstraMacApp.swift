@@ -17,6 +17,7 @@ struct AstraMacApp: App {
       RootView()
         .environment(app)
         .crashReportSheet()
+        .recordsActivity(app)
         .frame(minWidth: 960, minHeight: 600)
         // Colour scheme and tint follow the app theme (RootView).
         .environment(\.checkForUpdates) { [updater] in updater.checkForUpdates() }

@@ -19,6 +19,7 @@ struct AstraTVApp: App {
       TVRootView()
         .environment(app)
         .crashReportSheet()
+        .recordsActivity(app)
         // Colour scheme and tint follow the app theme (RootView).
         .task { await app.start() }
     }
