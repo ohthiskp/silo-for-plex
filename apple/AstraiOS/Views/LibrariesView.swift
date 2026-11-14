@@ -251,7 +251,7 @@ struct LibraryBrowser: View {
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(grid == isGrid ? Astra.Color.ink : Astra.Color.muted)
             .frame(width: 40, height: 32)
-            .background { if grid == isGrid { Capsule().fill(.white.opacity(0.14)) } }
+            .background { if grid == isGrid { Capsule().fill(Astra.Color.ink.opacity(0.14)) } }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -294,10 +294,10 @@ extension View {
   fileprivate func chip(selected: Bool) -> some View {
     self
       .font(.system(size: 14, weight: .semibold))
-      .foregroundStyle(selected ? Color.black : Astra.Color.ink)
+      .foregroundStyle(selected ? Astra.Color.onSelection : Astra.Color.ink)
       .padding(.horizontal, 16)
       .frame(height: 36)
-      .background { if selected { Capsule().fill(.white) } }
+      .background { if selected { Capsule().fill(Astra.Color.selection) } }
       .astraGlass(in: Capsule(), variant: .clear, interactive: true)
       .contentShape(Capsule())
   }

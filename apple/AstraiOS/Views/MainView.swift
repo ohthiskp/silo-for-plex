@@ -201,18 +201,24 @@ struct WideTabBar: View {
   /// The bar itself: regular Liquid Glass, tinted a little darker (KP, 2026-11-07).
   @ViewBuilder private var barGlass: some View {
     if #available(iOS 26.0, *) {
-      Capsule().fill(.clear).glassEffect(.regular.tint(.black.opacity(0.35)), in: Capsule())
+      Capsule().fill(.clear).glassEffect(.regular.tint(Self.barTint), in: Capsule())
     } else {
-      Capsule().fill(.regularMaterial).overlay(Capsule().fill(.black.opacity(0.3))).overlay(Capsule().stroke(Astra.Color.hairline))
+      Capsule().fill(.regularMaterial).overlay(Capsule().fill(Self.barTint)).overlay(Capsule().stroke(Astra.Color.hairline))
     }
   }
 
   /// The selection lens: interactive clear glass that shimmers as it moves.
   @ViewBuilder private var lens: some View {
     if #available(iOS 26.0, *) {
-      Capsule().fill(.white.opacity(0.08)).glassEffect(.clear.interactive(), in: Capsule())
+      Capsule().fill(Astra.Color.ink.opacity(0.08)).glassEffect(.clear.interactive(), in: Capsule())
     } else {
-      Capsule().fill(.white.opacity(0.16))
+      Capsule().fill(Astra.Color.ink.opacity(0.16))
     }
+  }
+
+  /// Darker glass on the dark themes; on Light a bright frosted bar, so the
+  /// dark icons read (KP, 2026-11-14: "light mode is a disaster").
+  private static var barTint: Color {
+    AstraAppearance.shared.palette.isLight ? .white.opacity(0.45) : .black.opacity(0.35)
   }
 }
