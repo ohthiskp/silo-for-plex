@@ -420,7 +420,8 @@ final class PlayerController {
       let media = PlaybackResolver.preferredMedia(item.media, quality: .current()), media.id != currentMediaID
     else { return }
     item.viewOffset = Int(position * 1000)
-    try? play(item, library: library)
+    // QA P3-1: if the other file can't start, say why instead of closing silently.
+    do { try play(item, library: library) } catch { lastError = error.localizedDescription }
   }
 
   /// The quality the chip shows as chosen.

@@ -446,7 +446,7 @@ import SwiftUI
       HStack(spacing: 6) {
         Text("Astra \(SettingsView.versionText)")
         Text("·")
-        Button("Sign Out") { app.signOut() }.buttonStyle(.plain)
+        SignOutButton().buttonStyle(.plain)
       }
       .astraFont(size: 13.5)
       .foregroundStyle(Astra.Color.ink.opacity(0.42))

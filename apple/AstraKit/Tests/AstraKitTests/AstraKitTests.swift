@@ -1564,6 +1564,20 @@ final class HomeSectionsTests: XCTestCase {
     XCTAssertEqual(shelf.keys.count, 3)
   }
 
+  /// QA P2-4: a title in Continue Watching isn't repeated in a shelf; an episode takes out its show.
+  func testShelfExcludingContinueWatchingTitles() {
+    let movie = PlexMetadata(ratingKey: "1", type: .movie, title: "A")
+    let other = PlexMetadata(ratingKey: "2", type: .movie, title: "B")
+    let show = PlexMetadata(ratingKey: "30", type: .show, title: "Show")
+    var episode = PlexMetadata(ratingKey: "31", type: .episode, title: "Pilot")
+    episode.grandparentRatingKey = "30"
+    let shelf = HomeShelf(movies: [movie, other], shows: [show])
+    let trimmed = shelf.excluding(titlesIn: [movie, episode])
+    XCTAssertEqual(trimmed.movies.map(\.ratingKey), ["2"])
+    XCTAssertTrue(trimmed.shows.isEmpty)
+    XCTAssertEqual(shelf.excluding(titlesIn: []), shelf)
+  }
+
   func testCatalogKeepsEveryTitleInOrder() {
     func tmdb(_ id: Int) -> TMDBItem { TMDBItem(tmdbID: id, kind: .movie, title: "\(id)") }
     let index = ["movie:2": item("two")]

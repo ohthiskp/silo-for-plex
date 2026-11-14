@@ -1,7 +1,7 @@
-#if os(iOS) || os(macOS)
+#if os(iOS) || os(macOS) || os(tvOS)
   import AstraKit
   import SwiftUI
-  #if os(iOS)
+  #if os(iOS) || os(tvOS)
     import UIKit
   #else
     import AppKit
@@ -15,6 +15,53 @@
     }
   }
 
+  extension View {
+    /// Notes what Astra is doing (sign-in, server, player), so a crash report,
+    /// or a kill by iOS that no handler sees, says what was happening (KP, 2026-11-14).
+    func recordsActivity(_ app: AppModel) -> some View {
+      modifier(ActivityRecorder(app: app))
+    }
+  }
+
+  private struct ActivityRecorder: ViewModifier {
+    let app: AppModel
+
+    func body(content: Content) -> some View {
+      content
+        .onChange(of: app.phase, initial: true) { _, phase in
+          CrashReporter.shared.note(Self.describe(phase))
+        }
+        .onChange(of: app.player.isActive) { _, active in
+          CrashReporter.shared.note(active ? "Player opened: \(app.player.title)" : "Player closed")
+        }
+        .onChange(of: app.player.hasFirstFrame) { _, started in
+          guard started else { return }
+          let size = app.player.videoWidth > 0
+            ? " \(Int(app.player.videoWidth))×\(Int(app.player.videoHeight))" : ""
+          let badge = app.player.resolutionBadge.map { " \($0)" } ?? ""
+          CrashReporter.shared.note("Video started:" + size + badge)
+        }
+        .onChange(of: app.player.isPictureInPicture) { _, pip in
+          CrashReporter.shared.note(pip ? "Picture in Picture on" : "Picture in Picture off")
+        }
+        .onChange(of: app.player.lastError) { _, error in
+          if let error { CrashReporter.shared.note("Player error: \(error)") }
+        }
+    }
+
+    private static func describe(_ phase: AppModel.Phase) -> String {
+      switch phase {
+      case .launching: "Starting"
+      case .signedOut: "Signed out"
+      case .waitingForApproval: "Signing in"
+      case .choosingServer(let servers): "Choosing a server (\(servers.count))"
+      case .connecting(let name): "Connecting to \(name)"
+      case .ready: "Connected, browsing"
+      case .failed(let message): "Couldn't connect: \(message)"
+      }
+    }
+  }
+
   private struct CrashReportPresenter: ViewModifier {
     @State private var reporter = CrashReporter.shared
 
@@ -25,7 +72,7 @@
         CrashReportView(report: reporter.pending ?? "") { reporter.dismiss() }
           #if os(macOS)
             .frame(width: 520, height: 640)
-          #else
+          #elseif os(iOS)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
           #endif
@@ -49,7 +96,10 @@
         VStack(spacing: Astra.Spacing.l) {
           header
           summaryCard
-          details
+          // Apple TV (QA P2-3): no clipboard or share sheet there, so no raw report either.
+          #if !os(tvOS)
+            details
+          #endif
         }
         .padding(.horizontal, Astra.Spacing.l)
         .padding(.top, Astra.Spacing.xl)
@@ -74,7 +124,7 @@
           .astraFont(size: 24, weight: .bold)
           .foregroundStyle(Astra.Color.ink)
           .multilineTextAlignment(.center)
-        Text("Sorry about that. Send this report and it can be fixed.")
+        Text(Self.apology)
           .astraFont(size: 15)
           .foregroundStyle(Astra.Color.muted)
           .multilineTextAlignment(.center)
@@ -82,6 +132,12 @@
       }
       .padding(.bottom, Astra.Spacing.xs)
     }
+
+    #if os(tvOS)
+      static let apology = "Sorry about that. If it happens again, note what you were doing and when."
+    #else
+      static let apology = "Sorry about that. Send this report and it can be fixed."
+    #endif
 
     private var summaryCard: some View {
       let s = summary
@@ -137,6 +193,7 @@
       .padding(.vertical, Astra.Spacing.m - 2)
     }
 
+    #if !os(tvOS)
     private var details: some View {
       VStack(alignment: .leading, spacing: Astra.Spacing.s) {
         Button {
@@ -173,9 +230,16 @@
       }
       .padding(.horizontal, Astra.Spacing.xs)
     }
+    #endif
 
     private var actions: some View {
       VStack(spacing: Astra.Spacing.s) {
+        #if os(tvOS)
+          Button(action: close) {
+            Text("Close").frame(maxWidth: .infinity)
+          }
+          .buttonStyle(PlayButtonStyle())
+        #else
         HStack(spacing: Astra.Spacing.s) {
           Button(action: copy) {
             Label(copied ? "Copied" : "Copy Report", systemImage: copied ? "checkmark" : "doc.on.doc")
@@ -190,11 +254,13 @@
           }
           .buttonStyle(FallbackGlassButtonStyle())
         }
-        Button("Not Now", action: close)
+        // QA P2-6: closing deletes the report, so the button says Close, not "Not Now".
+        Button("Close", action: close)
           .buttonStyle(.plain)
           .astraFont(size: 15, weight: .medium)
           .foregroundStyle(Astra.Color.muted)
           .frame(height: 36)
+        #endif
       }
       .padding(.horizontal, Astra.Spacing.l)
       .padding(.top, Astra.Spacing.s)
@@ -213,6 +279,7 @@
       }
     }
 
+    #if !os(tvOS)
     private func copy() {
       #if os(iOS)
         UIPasteboard.general.string = report
@@ -226,6 +293,7 @@
         withAnimation(Astra.Motion.fast) { copied = false }
       }
     }
+    #endif
   }
 
   extension String {

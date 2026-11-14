@@ -43,6 +43,8 @@ struct PlayerOverlay: View {
     @State private var visibleBeforeTap = false
     /// The system volume: what a swipe on the right and the slider set (instant, unlike mpv's).
     @State private var systemVolume = SystemVolume.shared
+    /// QA P3-4: the screen's brightness before the first swipe, put back when the player closes.
+    @State private var brightnessBeforePlayer: CGFloat?
   #endif
 
   private var player: PlayerController { app.player }
@@ -163,7 +165,12 @@ struct PlayerOverlay: View {
     .onChange(of: player.paused) { _, paused in
       if paused { visible = true } else { poke() }
     }
-    .onDisappear { hideTask?.cancel() }
+    .onDisappear {
+      hideTask?.cancel()
+      #if os(iOS)
+        if let brightnessBeforePlayer { UIScreen.main.brightness = brightnessBeforePlayer }
+      #endif
+    }
     .onGeometryChange(for: CGSize.self, of: { $0.size }) { _ in player.layoutChanged() }
     #if os(iOS)
       .statusBarHidden(!visible)
@@ -359,27 +366,25 @@ struct PlayerOverlay: View {
           .allowsHitTesting(scrubbing == nil)
           Spacer()
           HStack(alignment: .bottom, spacing: 16) {
-            Button {
-              player.showDetails()
-            } label: {
-              VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                  Text(player.title).font(.system(size: 22, weight: .bold)).lineLimit(1)
-                  // The real resolution of the frames playing; nothing until it is known.
-                  if let badge = resolutionTag { ResolutionTag(text: badge, size: 9) }
-                }
-                // Episodes only: "S2 · E4 · Episode Title". Movies show nothing here.
-                if let subtitle = player.subtitle, !subtitle.isEmpty {
-                  Text(subtitle).font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.65))
-                    .lineLimit(1)
-                }
+            // QA P2-2 (2026-11-14): the title is a label, not a button. Tapping
+            // it used to stop the film and open Details; it sits where the
+            // brightness swipes and double taps land, so a tap there now just
+            // shows or hides the controls like anywhere else on the picture.
+            VStack(alignment: .leading, spacing: 4) {
+              HStack(spacing: 8) {
+                Text(player.title).font(.system(size: 22, weight: .bold)).lineLimit(1)
+                // The real resolution of the frames playing; nothing until it is known.
+                if let badge = resolutionTag { ResolutionTag(text: badge, size: 9) }
               }
-              .foregroundStyle(.white)
-              .contentShape(Rectangle())
+              // Episodes only: "S2 · E4 · Episode Title". Movies show nothing here.
+              if let subtitle = player.subtitle, !subtitle.isEmpty {
+                Text(subtitle).font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.65))
+                  .lineLimit(1)
+              }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(player.title), Details")
-            .reportFrame("titleButton", into: $controlFrames)
+            .foregroundStyle(.white)
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .combine)
             Spacer(minLength: 16)
             // KP (2026-11-10): a bare subtitle glyph, no box or glass around it; alone bottom right.
             captionsChip
@@ -464,7 +469,10 @@ struct PlayerOverlay: View {
         level.volume = right
         level.start = right ? (player.muted ? 0 : systemVolume.level) : Double(UIScreen.main.brightness)
         level.value = level.start
-        if !right { level.brightness = level.start }
+        if !right {
+          level.brightness = level.start
+          if brightnessBeforePlayer == nil { brightnessBeforePlayer = UIScreen.main.brightness }
+        }
         level.shown = true
         // Volume shows on the slider among the controls; brightness has its own
         // indicator, so a swipe on the left leaves the controls as they are.

@@ -1,9 +1,11 @@
-#if os(iOS) || os(macOS)
+#if os(iOS) || os(macOS) || os(tvOS)
   import AstraKit
   import Darwin
   import Foundation
   import MachO
-  import MetricKit
+  #if !os(tvOS)
+    import MetricKit
+  #endif
   import Observation
 
   /// Astra (KP, 2026-11-12): "this app crashed, copy this report". When Astra
@@ -26,16 +28,20 @@
     private(set) var pending: String?
 
     private let folder: URL
+    private let session: SessionWatch
     private var report: URL { folder.appendingPathComponent("last-crash.txt") }
     private var signalLog: URL { folder.appendingPathComponent("signal.log") }
     private var exceptionLog: URL { folder.appendingPathComponent("exception.log") }
     private var installed = false
-    private let metrics = MetricsSubscriber()
+    #if !os(tvOS)
+      private let metrics = MetricsSubscriber()
+    #endif
 
     private init() {
       let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         ?? URL(fileURLWithPath: NSTemporaryDirectory())
       folder = base.appendingPathComponent("CrashReports", isDirectory: true)
+      session = SessionWatch(url: folder.appendingPathComponent("session.json"))
     }
 
     /// Call once, first thing at launch.
@@ -44,22 +50,62 @@
       installed = true
       try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
+      // What the last run was doing, from its session record (SessionWatch).
+      let previous = session.loadPrevious()
+
       // Last launch's crash, if there was one.
       if let text = collectRawLogs() {
-        try? text.write(to: report, atomically: true, encoding: .utf8)
+        let withActivity = text + (previous.map(AppSession.activitySection) ?? "")
+        try? withActivity.write(to: report, atomically: true, encoding: .utf8)
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.shownKey)
+        UserDefaults.standard.set(Self.signalName(in: text), forKey: Self.shownSignalKey)
+      } else if Self.detectsSystemKills, let previous,
+        AppSession.endedUnexpectedly(
+          previous, version: Self.versionString(), osVersion: Self.osVersion(), bootTime: Self.bootTime())
+      {
+        // KP, 2026-11-14 ("crashed twice and no crash report"): iOS stopped
+        // Astra on screen (memory or a freeze). That is a SIGKILL, which no
+        // handler sees, so the report comes from the session record.
+        try? AppSession.report(for: previous).write(to: report, atomically: true, encoding: .utf8)
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.shownKey)
+        UserDefaults.standard.set("SIGKILL", forKey: Self.shownSignalKey)
       }
       pending = try? String(contentsOf: report, encoding: .utf8)
 
+      session.start(
+        AppSessionRecord(version: Self.versionString(), osVersion: Self.osVersion(), bootTime: Self.bootTime()),
+        watchMainThread: Self.detectsSystemKills)
+
       CrashSignals.install(path: signalLog.path, exceptionPath: exceptionLog.path, header: Self.header())
-      metrics.onCrash = { [weak self] text, range in self?.receive(metricKit: text, range: range) }
-      MXMetricManager.shared.add(metrics)
+      // Apple TV has no MetricKit: its report comes from Astra's own handlers only.
+      #if !os(tvOS)
+        metrics.onCrash = { [weak self] text, range, crashes, signals in
+          self?.receive(metricKit: text, range: range, crashes: crashes, signals: signals)
+        }
+        MXMetricManager.shared.add(metrics)
+      #endif
 
       // CI only: `-AstraDemo YES -AstraDemoCrash YES` crashes a few seconds in,
       // so the next launch's screenshot shows a real report.
       if Demo.isOn, UserDefaults.standard.bool(forKey: "AstraDemoCrash") {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { Self.demoCrash() }
       }
+    }
+
+    /// Adds a line to "what Astra was doing", shown with the next crash report.
+    func note(_ text: String) {
+      session.note(text)
+    }
+
+    /// iPhone and Apple TV only: there the system stops an app that runs out
+    /// of memory or freezes. On the Mac a force quit would look the same.
+    private static var detectsSystemKills: Bool {
+      #if os(macOS)
+        return false
+      #else
+        // CI's simulator stops the demo app between screenshots; only the kill check opts in.
+        return !Demo.isOn || UserDefaults.standard.bool(forKey: "AstraDemoWatch")
+      #endif
     }
 
     /// The person closed the report: it is gone for good.
@@ -95,31 +141,65 @@
     // MARK: - MetricKit
 
     private static let shownKey = "AstraCrashShownAt"
+    /// The signal of the crash Astra's own handler reported (QA P3-3), so
+    /// Apple's copy of that same crash is recognised and other crashes aren't dropped.
+    private static let shownSignalKey = "AstraCrashShownSignal"
 
-    private func receive(metricKit text: String, range: ClosedRange<Date>) {
+    private func receive(metricKit text: String, range: ClosedRange<Date>, crashes: Int, signals: [String]) {
       let section = "\n\n--- Apple's crash report (MetricKit)\n" + text
       if let pending {
         // The report on screen gets Apple's view of the same crash.
         self.pending = String((pending + section).prefix(200_000))
       } else {
-        // Already shown from Astra's own handler: don't bring the same crash back.
-        let shown = UserDefaults.standard.double(forKey: Self.shownKey)
-        if shown > 0, shown >= range.lowerBound.timeIntervalSince1970 { return }
+        // Already shown from Astra's own handler: don't bring the same crash
+        // back. Only when this is that one crash (same signal); a watchdog or
+        // memory kill the handler couldn't see in the same period still shows.
+        let defaults = UserDefaults.standard
+        let shown = defaults.double(forKey: Self.shownKey)
+        let shownSignal = defaults.string(forKey: Self.shownSignalKey)
+        if shown > 0, shown >= range.lowerBound.timeIntervalSince1970, crashes == 1,
+          shownSignal == nil || signals.first == shownSignal
+        {
+          return
+        }
         self.pending = "Astra crashed" + section
       }
       try? self.pending?.write(to: report, atomically: true, encoding: .utf8)
     }
 
+    /// "SIGABRT" from a report's "Signal: SIGABRT (abort)" line.
+    nonisolated static func signalName(in text: String) -> String? {
+      guard let line = text.split(separator: "\n").first(where: { $0.hasPrefix("Signal: ") }) else { return nil }
+      return line.dropFirst(8).split(separator: " ").first.map(String.init)
+    }
+
     // MARK: - Header (built at launch, written by the signal handler as is)
 
-    private static func header() -> String {
+    /// "3.1.0 (202611141644)"
+    nonisolated static func versionString() -> String {
       let info = Bundle.main.infoDictionary ?? [:]
       let version = info["CFBundleShortVersionString"] as? String ?? "?"
       let build = info["CFBundleVersion"] as? String ?? "?"
+      return "\(version) (\(build))"
+    }
+
+    nonisolated static func osVersion() -> String {
+      ProcessInfo.processInfo.operatingSystemVersionString
+    }
+
+    /// When the device started, in seconds since 1970 (0 if unknown).
+    nonisolated static func bootTime() -> TimeInterval {
+      var boot = timeval()
+      var size = MemoryLayout<timeval>.size
+      guard sysctlbyname("kern.boottime", &boot, &size, nil, 0) == 0 else { return 0 }
+      return TimeInterval(boot.tv_sec)
+    }
+
+    private static func header() -> String {
       let image = CrashSignals.mainImage()
       return """
-        Version: \(version) (\(build))
-        OS: \(ProcessInfo.processInfo.operatingSystemVersionString)
+        Version: \(versionString())
+        OS: \(osVersion())
         Device: \(deviceModel())
         Launched: \(stamp(Date()))
         Binary: Astra \(image.base) UUID \(image.uuid)
@@ -128,7 +208,7 @@
     }
 
     private static func deviceModel() -> String {
-      #if os(iOS)
+      #if os(iOS) || os(tvOS)
         let key = "hw.machine"
       #else
         let key = "hw.model"
@@ -156,18 +236,36 @@
 
   // MARK: - MetricKit subscriber
 
+  #if !os(tvOS)
   private final class MetricsSubscriber: NSObject, MXMetricManagerSubscriber {
-    var onCrash: (@MainActor (String, ClosedRange<Date>) -> Void)?
+    /// The report text, the period it covers, how many crashes, and their signal names.
+    var onCrash: (@MainActor (String, ClosedRange<Date>, Int, [String]) -> Void)?
 
     func didReceive(_ payloads: [MXDiagnosticPayload]) {
       for payload in payloads {
         guard let crashes = payload.crashDiagnostics, !crashes.isEmpty else { continue }
         let text = crashes.map(Self.describe).joined(separator: "\n\n")
+        let signals = crashes.compactMap { $0.signal.map { Self.signalName($0.int32Value) } }
+        let count = crashes.count
         let begin = payload.timeStampBegin
         let range = begin...max(begin, payload.timeStampEnd)
         DispatchQueue.main.async { [onCrash] in
-          MainActor.assumeIsolated { onCrash?(text, range) }
+          MainActor.assumeIsolated { onCrash?(text, range, count, signals) }
         }
+      }
+    }
+
+    /// The name Astra's own handler writes for a signal number ("SIGABRT").
+    private static func signalName(_ number: Int32) -> String {
+      switch number {
+      case SIGABRT: "SIGABRT"
+      case SIGSEGV: "SIGSEGV"
+      case SIGBUS: "SIGBUS"
+      case SIGILL: "SIGILL"
+      case SIGTRAP: "SIGTRAP"
+      case SIGFPE: "SIGFPE"
+      case SIGSYS: "SIGSYS"
+      default: String(number)
       }
     }
 
@@ -207,6 +305,8 @@
     }
   }
 
+  #endif
+
   // MARK: - Signal and exception handlers
 
   /// Written for the moment of a crash: no allocation, no locks, only
@@ -234,12 +334,15 @@
       previous = .allocate(capacity: 32)
       previous!.initialize(repeating: sigaction(), count: 32)
 
-      // Room to run even when the crash is a stack overflow.
-      let stackSize = 256 * 1024
-      if let stack = malloc(stackSize) {
-        var alt = stack_t(ss_sp: stack, ss_size: stackSize, ss_flags: 0)
-        sigaltstack(&alt, nil)
-      }
+      // Room to run even when the crash is a stack overflow (not on tvOS,
+      // where sigaltstack is unavailable; a stack overflow there goes unreported).
+      #if !os(tvOS)
+        let stackSize = 256 * 1024
+        if let stack = malloc(stackSize) {
+          var alt = stack_t(ss_sp: stack, ss_size: stackSize, ss_flags: 0)
+          sigaltstack(&alt, nil)
+        }
+      #endif
 
       for sig in watched {
         var action = sigaction()

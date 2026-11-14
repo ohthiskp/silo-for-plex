@@ -68,6 +68,8 @@ private struct TVLibraryBrowser: View {
   @State private var loaded = 0
   @State private var reachedEnd = false
   @State private var loading = false
+  /// QA P1-1: why the last page didn't load, so an outage never reads as "This library is empty".
+  @State private var loadError: String?
 
   private var sections: [PlexLibrarySection] { library.sections.filter { $0.type == kind } }
   private var section: PlexLibrarySection? { sections.first { $0.key == sectionKey } ?? sections.first }
@@ -120,27 +122,40 @@ private struct TVLibraryBrowser: View {
 
       if sections.isEmpty {
         message("This Plex server has no \(noun.lowercased()) library.")
+      } else if let loadError {
+        // Shown under any titles already loaded too, so paging can carry on.
+        VStack(alignment: .leading, spacing: 24) {
+          if !items.isEmpty { grid }
+          message(loadError)
+          Button("Try Again") { Task { await loadMore() } }
+            .buttonStyle(TVGlassButtonStyle(chip: true))
+        }
       } else if items.isEmpty && reachedEnd {
         message(unwatched ? "You've watched everything here." : "This library is empty.")
       } else if items.isEmpty {
         ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
       } else {
-        LazyVGrid(columns: TVGrid.layout, alignment: .leading, spacing: 56) {
-          ForEach(items) { item in
-            TVPosterCard(library: library, item: item, width: TVGrid.posterWidth)
-              .onAppear { if item.id == items.last?.id { Task { await loadMore() } } }
-          }
-        }
+        grid
       }
     }
     .task(id: reloadKey) {
       items = []
       loaded = 0
       reachedEnd = false
+      loadError = nil
       total = nil
       async let count = countItems()
       await loadMore()
       total = await count
+    }
+  }
+
+  private var grid: some View {
+    LazyVGrid(columns: TVGrid.layout, alignment: .leading, spacing: 56) {
+      ForEach(items) { item in
+        TVPosterCard(library: library, item: item, width: TVGrid.posterWidth)
+          .onAppear { if item.id == items.last?.id { Task { await loadMore() } } }
+      }
     }
   }
 
@@ -171,9 +186,15 @@ private struct TVLibraryBrowser: View {
     guard let section, !loading, !reachedEnd else { return }
     loading = true
     defer { loading = false }
-    let raw =
-      (try? await library.client.libraryItems(sectionKey: section.key, sort: sort, start: loaded, filters: filters))
-      ?? []
+    let raw: [PlexMetadata]
+    do {
+      raw = try await library.client.libraryItems(sectionKey: section.key, sort: sort, start: loaded, filters: filters)
+      loadError = nil
+    } catch {
+      // Not the end of the library: keep paging possible and say why.
+      if !Task.isCancelled { loadError = PlexError.describe(error, server: library.client.serverName) }
+      return
+    }
     reachedEnd = raw.isEmpty
     loaded += raw.count
     let page = library.shown(raw)
@@ -189,7 +210,15 @@ private struct TVWatchlistContent: View {
   var body: some View {
     let items = library.matchWatchlist(app.watchlistItems ?? [])
     VStack(alignment: .leading, spacing: 26) {
-      if items.isEmpty {
+      if items.isEmpty, app.watchlistItems == nil, let error = app.watchlistError {
+        // QA P1-2: plex.tv didn't answer and there's no saved copy: say so, never "Loading…" for ever.
+        Text("Your Watchlist didn't load. \(error)")
+          .font(.system(size: 26, weight: .medium))
+          .foregroundStyle(Astra.Color.muted)
+          .padding(.top, 40)
+        Button("Try Again") { Task { await app.refreshWatchlist(force: true) } }
+          .buttonStyle(TVGlassButtonStyle(chip: true))
+      } else if items.isEmpty {
         Text(app.watchlistItems == nil ? "Loading your Watchlist…" : "Your Watchlist is empty. Press + on any title to add it.")
           .font(.system(size: 26, weight: .medium))
           .foregroundStyle(Astra.Color.muted)

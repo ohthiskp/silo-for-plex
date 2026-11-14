@@ -25,6 +25,8 @@ struct PhoneSearchView: View {
   @State private var people: [TMDBPerson] = []
   @State private var searched = false
   @State private var peopleSearched = false
+  /// QA P1-1: TMDB couldn't be reached (offline): the server's own matches stay, and "No results" says why.
+  @State private var searchFailed = false
   @State private var person: TMDBPerson?
   /// KP (2026-11-09): 4K, HD, Dolby Atmos, Dolby Vision and Bollywood chips.
   @State private var filters: Set<SearchFilter> = []
@@ -218,7 +220,9 @@ struct PhoneSearchView: View {
     } else if titles.isEmpty && people.isEmpty {
       EmptyState(
         symbol: "magnifyingglass", title: "No results",
-        message: scope == .people
+        message: searchFailed
+          ? "Search couldn't reach the internet, and nothing on your server matches “\(query)”."
+          : scope == .people
           ? "No one matches “\(query)”."
           : filters.isEmpty
             ? "Nothing matches “\(query)”."
@@ -265,6 +269,7 @@ struct PhoneSearchView: View {
   /// greyed out. A spinner shows until TMDB answers, never "No results".
   private func runSearch() async {
     let text = query.trimmingCharacters(in: .whitespaces)
+    searchFailed = false
     guard text.count >= 2 else {
       results = []
       people = []
@@ -296,12 +301,19 @@ struct PhoneSearchView: View {
     }
     let found = try? await tmdb.searchMulti(text)
     guard !Task.isCancelled else { return }
-    let shownPeople = Array((found?.people ?? []).filter { $0.profilePath != nil }.prefix(12))
-    if let found { SearchCache.shared[text] = (found.items, shownPeople) }
-    remember(languagesOf: found?.items ?? [])
+    searchFailed = found == nil
+    guard let found else {
+      // Offline or TMDB down: keep the titles on the server that already matched.
+      searched = true
+      peopleSearched = true
+      return
+    }
+    let shownPeople = Array(found.people.filter { $0.profilePath != nil }.prefix(12))
+    SearchCache.shared[text] = (found.items, shownPeople)
+    remember(languagesOf: found.items)
     PerfProbe.value("search.tmdb.ms", Date().timeIntervalSince(searchStarted) * 1000)
     astraWithAnimation(Astra.Motion.base) {
-      results = library.searchResults(found?.items ?? [], text: text)
+      results = library.searchResults(found.items, text: text)
       people = shownPeople
       searched = true
       peopleSearched = true

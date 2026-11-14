@@ -200,7 +200,11 @@ final class LibraryStore {
   var homeRecent: HomeShelf {
     let shelf = selectedService.map { serviceContent[$0.id]?.recent ?? .empty } ?? forYouRecent
     let split = homeTopTenSplit
+    // QA P2-4 (2026-11-14): nor titles in Continue Watching (an episode
+    // there counts as its show). Top Trending stays a full ranked chart, so
+    // its numbers never skip.
     return shelf.excluding(Set((split.movies + split.shows).map(HomeSections.key)))
+      .excluding(titlesIn: continueWatching)
   }
 
   /// Astra 4.0: All-Time Greats for the current tab, without titles in Top
@@ -209,6 +213,7 @@ final class LibraryStore {
     let shelf = selectedService.map { serviceContent[$0.id]?.greats ?? .empty } ?? forYouGreats
     let split = homeTopTenSplit
     return shelf.excluding(Set((split.movies + split.shows).map(HomeSections.key)).union(homeRecent.keys))
+      .excluding(titlesIn: continueWatching)
   }
 
   /// Whether the current tab has anything below Continue Watching.
