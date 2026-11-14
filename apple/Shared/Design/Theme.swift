@@ -147,25 +147,30 @@ enum Astra {
     #endif
   }
 
-  /// The docked Mac sidebar's geometry; pages start to the right of it.
+  /// The Mac's navigation (KP, 2026-11-12: "like Apple TV"): the main tabs
+  /// in a glass bar along the top, the streaming services as circles down
+  /// the left of Home. Home's rows start right of the circles; other pages
+  /// use `pageInset`.
   enum Sidebar {
     #if os(tvOS)
-      // Apple TV: the same sidebar, sized for the remote's focus (KP, 2026-11-08).
       static let margin: CGFloat = 20
       static let collapsedWidth: CGFloat = 96
     #else
-      static let margin: CGFloat = 14
-      static let collapsedWidth: CGFloat = 62
+      /// Left edge of the streaming circles.
+      static let margin: CGFloat = 18
+      /// One streaming circle's diameter.
+      static let collapsedWidth: CGFloat = 46
     #endif
-    /// While the pointer is over it (icons plus names, KP 2026-11-08). Pages keep
-    /// `contentInset`: the expanded sidebar floats over them.
-    #if os(tvOS)
-      static let expandedWidth: CGFloat = 300
-    #else
-      static let expandedWidth: CGFloat = 190
-    #endif
-    static let gap: CGFloat = 28
+    static let gap: CGFloat = 30
+    /// Home's left inset, clear of the streaming circles.
     static let contentInset: CGFloat = margin + collapsedWidth + gap
+    /// The left inset of Library, Search and Settings (no circles there).
+    static let pageInset: CGFloat = 48
+    /// The top bar's height and its gap from the window's top edge.
+    static let barHeight: CGFloat = 44
+    static let barTop: CGFloat = 10
+    /// What pages under the bar leave free at the top, below the window's title-bar inset.
+    static let barSpace: CGFloat = 40
   }
 
   enum Radius {
