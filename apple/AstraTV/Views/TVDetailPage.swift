@@ -180,6 +180,7 @@ struct TVDetailPage: View {
             }
             .buttonStyle(TVGlassButtonStyle(round: true))
             .accessibilityLabel(watched ? "Watched. Mark as unwatched" : "Mark as watched")
+            .accessibilityIdentifier("details.watched")
           }
         }
       }

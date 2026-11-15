@@ -37,8 +37,8 @@ final class RemoteNavigationTests: XCTestCase {
 
   /// Home is on screen (its Continue Watching row).
   private var homeHero: XCUIElement { app.staticTexts["Continue Watching"].firstMatch }
-  /// A Details page is open (its More button).
-  private var detailsMore: XCUIElement { app.buttons["More"].firstMatch }
+  /// A Details page is open (its Watched button, which replaced More on 2026-11-14).
+  private var detailsMore: XCUIElement { app.buttons["details.watched"].firstMatch }
 
   private var focusedElement: XCUIElement {
     app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
