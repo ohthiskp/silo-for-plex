@@ -145,6 +145,7 @@ jobs:
         working-directory: apple
         env:
           TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+          ASTRA_CRASH_TOKEN: ${{ secrets.ASTRA_CRASH_TOKEN }}
         run: |
           set -o pipefail
           # UTC timestamp: always above the Flutter app's build numbers (1000 + run).
@@ -158,6 +159,7 @@ jobs:
             -skipPackagePluginValidation \
             CURRENT_PROJECT_VERSION="$BUILD" \
             TMDB_TOKEN="$TMDB_TOKEN" \
+            ASTRA_CRASH_TOKEN="$ASTRA_CRASH_TOKEN" \
             | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)" || true
           test -d "$RUNNER_TEMP/Astra.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
 

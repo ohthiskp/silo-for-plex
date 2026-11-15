@@ -69,6 +69,9 @@ targets:
         # TMDB read token for artwork and the streaming switcher, from the
         # TMDB_TOKEN build setting / environment (GitHub secret in CI). Empty: Plex artwork only.
         AstraTMDBToken: $(TMDB_TOKEN)
+        # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
+        # ASTRA_CRASH_TOKEN build setting (GitHub secret in CI). Empty: nothing is sent.
+        AstraCrashToken: $(ASTRA_CRASH_TOKEN)
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: Astra is licensed under GPL-3.0.
         NSAppTransportSecurity:
@@ -148,6 +151,9 @@ targets:
         NSBonjourServices: [_plexmediasvr._tcp]
         ITSAppUsesNonExemptEncryption: false
         AstraTMDBToken: $(TMDB_TOKEN)
+        # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
+        # ASTRA_CRASH_TOKEN build setting (GitHub secret in CI). Empty: nothing is sent.
+        AstraCrashToken: $(ASTRA_CRASH_TOKEN)
     settings:
       base:
         PRODUCT_NAME: Astra
@@ -204,6 +210,9 @@ targets:
         NSBonjourServices: [_plexmediasvr._tcp]
         ITSAppUsesNonExemptEncryption: false
         AstraTMDBToken: $(TMDB_TOKEN)
+        # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
+        # ASTRA_CRASH_TOKEN build setting (GitHub secret in CI). Empty: nothing is sent.
+        AstraCrashToken: $(ASTRA_CRASH_TOKEN)
     settings:
       base:
         PRODUCT_NAME: Astra
