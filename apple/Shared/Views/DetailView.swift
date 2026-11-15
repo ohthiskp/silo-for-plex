@@ -1171,11 +1171,15 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
 
     /// Resume (the strongest thing on the page), then quieter round Download and My List.
     private var phoneActions: some View {
-      HStack(alignment: .center, spacing: 14) {
+      HStack(alignment: .center, spacing: 12) {
         Button {
           playItem(playTarget)
         } label: {
+          // One line always: "Resume S1 E3" shrinks a little rather than wrap
+          // now that four buttons share the row.
           Label(playLabel, systemImage: "play.fill")
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity)
             .contentTransition(.opacity)
         }
