@@ -17,6 +17,9 @@ struct DetailView: View {
   /// Resume / Play plays it. Tapping an episode picks it; only Play or a
   /// double tap plays.
   @State private var focus: PlexMetadata?
+  /// Once an episode is tapped, the header shows its still instead of the
+  /// show's artwork (KP, 2026-11-14).
+  @State private var episodeArt = false
   @State private var related: [PlexHub] = []
   @State private var error: String?
   /// A TMDB title that isn't on the Plex server: shown, but nothing to play.
@@ -72,9 +75,16 @@ struct DetailView: View {
   private func pick(_ episode: PlexMetadata, scroll: ScrollViewProxy) {
     astraWithAnimation(Astra.Motion.base) {
       focus = episode
+      episodeArt = true
       summaryExpanded = false
     }
     astraWithAnimation(.smooth(duration: 0.45)) { scroll.scrollTo(Self.headerID, anchor: .top) }
+  }
+
+  /// The tapped episode's still, for the header (nil until an episode is tapped).
+  private var episodeStill: URL? {
+    guard episodeArt, let focus, focus.type == .episode, let thumb = focus.thumb else { return nil }
+    return library.imageURL(thumb, width: 1920, height: 1080, scale: 1)
   }
 
   private static let headerID = "details.header"
@@ -365,9 +375,18 @@ struct DetailView: View {
     .frame(maxWidth: .infinity, minHeight: min(Astra.Layout.detailHeaderHeight, viewport * 0.72), alignment: .bottomLeading)
     .background {
       ZStack {
-        ArtworkImage(library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .clipped()
+        Group {
+          if let still = episodeStill {
+            RemoteImage(url: still, placeholder: Color.clear)
+          } else {
+            ArtworkImage(
+              library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
+          }
+        }
+        .id(episodeStill)
+        .transition(.opacity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
           // Darkens a little as the page rises over it.
           .overlay(Astra.Color.bg.opacity(min(0.55, max(0, scrolled) / 700)))
         HeroScrim()
@@ -1132,7 +1151,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
           // KP (2026-11-09): framed so the faces end above the logo, for any title.
           FramedArtwork(
             library: library, item: titleItem, kind: .scenery, zoneHeight: logoTop + 90, limitY: logoTop - 4,
-            topOffset: PhoneDetail.backdropTop, minTop: PhoneDetail.backdropTop + 40)
+            topOffset: PhoneDetail.backdropTop, minTop: PhoneDetail.backdropTop + 40, imageURL: episodeStill)
           PhoneDetail.backdropShade
         }
         .frame(width: width, height: logoTop + 90)

@@ -23,6 +23,8 @@ struct TVDetailPage: View {
   /// Play / Resume plays it. Selecting an episode picks it and moves focus up
   /// to Play, so a second press plays it.
   @State private var focus: PlexMetadata?
+  /// Once an episode is picked, the backdrop shows its still (KP, 2026-11-14).
+  @State private var episodeArt = false
   @State private var related: [PlexHub] = []
   @State private var notOnServer = false
   @State private var error: String?
@@ -38,6 +40,12 @@ struct TVDetailPage: View {
   }
 
   private var playTarget: PlexMetadata { focus ?? shown }
+
+  /// The picked episode's still, for the backdrop (nil until an episode is picked).
+  private var episodeStill: URL? {
+    guard episodeArt, let focus, focus.type == .episode, let thumb = focus.thumb else { return nil }
+    return library.imageURL(thumb, width: 1920, height: 1080, scale: 1)
+  }
 
   private var isSeries: Bool { shown.type == .show || shown.type == .season || shown.type == .episode }
 
@@ -68,9 +76,16 @@ struct TVDetailPage: View {
     .background {
       ZStack(alignment: .top) {
         AmbientBackdrop(library: library, item: titleItem)
-        ArtworkImage(
-          library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear
-        )
+        Group {
+          if let still = episodeStill {
+            RemoteImage(url: still, placeholder: Color.clear)
+          } else {
+            ArtworkImage(
+              library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
+          }
+        }
+        .id(episodeStill)
+        .transition(.opacity)
         .frame(maxWidth: .infinity)
         .frame(height: 1080)
         .clipped()
@@ -300,7 +315,10 @@ struct TVDetailPage: View {
         LazyHStack(alignment: .top, spacing: 36) {
           ForEach(episodes) { episode in
             TVEpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
-              withAnimation(.easeInOut(duration: 0.25)) { focus = episode }
+              withAnimation(.easeInOut(duration: 0.25)) {
+              focus = episode
+              episodeArt = true
+            }
               playFocused = true
             }
           }
