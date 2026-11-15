@@ -278,8 +278,21 @@ struct DetailView: View {
     VStack(alignment: .leading, spacing: 12) {
       HeroTitle(library: library, item: titleItem, maxWidth: narrow ? 250 : 380, maxHeight: narrow ? 92 : 120)
         .padding(.bottom, 4)
-      DetailMetaLine(item: titleItem, library: library)
-      FormatBadges(item: playTarget)
+      // KP (2026-11-13): like the iPhone and Apple TV, one line of
+      // "2024 • 2h 46m • [PG-13] [4K] [Dolby Atmos]" with the rating in a
+      // grey box, and the genres on their own line under it.
+      HStack(spacing: 8) {
+        DetailMetaLine(
+          item: titleItem, library: library, showsGenres: false, separator: "  •  ", ratingAfter: true,
+          greyRating: true)
+        FormatBadges(item: playTarget)
+      }
+      if !titleItem.genres.isEmpty {
+        Text(titleItem.genres.prefix(3).map(\.tag).joined(separator: " · "))
+          .astraFont(size: 14)
+          .foregroundStyle(Astra.Color.ink.opacity(0.62))
+          .lineLimit(1)
+      }
       episodeHeading
       if focus == nil, let tagline = titleItem.tagline, !tagline.isEmpty {
         Text(tagline)
