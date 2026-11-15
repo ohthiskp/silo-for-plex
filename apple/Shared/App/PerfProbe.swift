@@ -81,6 +81,18 @@ enum PerfProbe {
         try? await Task.pause(0.02)
       }
     }
+    // Memory (KP, 2026-11-15: iOS stopped Astra at 2.7 GB nine seconds after
+    // launch, on Home): the footprint every second, and where it peaked.
+    Task { @MainActor in
+      var peak = 0
+      for second in 1...42 {
+        try? await Task.pause(max(0, Double(second) - Date().timeIntervalSince(processStart)))
+        let used = SessionWatch.memoryUsedMB() ?? 0
+        peak = max(peak, used)
+        let images = await ImagePipeline.shared.stats
+        log("mem t=\(second) footprintMB=\(used) peakMB=\(peak) imagesDecoded=\(images.decoded) imageMB=\(images.bytes >> 20)")
+      }
+    }
     // Totals now and then.
     Task { @MainActor in
       for at in [10.0, 20, 30, 40] {
