@@ -43,11 +43,15 @@ struct HomeView: View {
         BottomEdgeBlur()
           .frame(maxHeight: .infinity, alignment: .bottom)
       #endif
-      topBar
-        .opacity(showsTopBar ? 1 : 0)
-        .offset(y: showsTopBar ? 0 : -12)
-        .allowsHitTesting(showsTopBar)
-        .astraAnimation(Astra.Motion.base, value: showsTopBar)
+      #if !os(macOS)
+        topBar
+          .opacity(showsTopBar ? 1 : 0)
+          .offset(y: showsTopBar ? 0 : -12)
+          .allowsHitTesting(showsTopBar)
+          .astraAnimation(Astra.Motion.base, value: showsTopBar)
+      #endif
+      // Mac (KP, 2026-11-12): the streaming services are circles down the
+      // left (MacServiceRail in MainView), as on Apple TV.
     }
     // KP (2026-11-09): frosted Liquid Glass over the hero's artwork, not flat black.
     .background(AmbientBackdrop(library: library, item: heroItem ?? library.homeHero.first))
@@ -355,12 +359,12 @@ struct ServicePill: View {
       library.select(service)
     } label: {
       content()
-        .foregroundStyle(selected ? Color.black : Color.white.opacity(0.9))
+        .foregroundStyle(selected ? Astra.Color.onSelection : Astra.Color.ink.opacity(0.9))
         .padding(.horizontal, 14 * Astra.Layout.controlScale)
         .frame(height: 34 * Astra.Layout.controlScale)
         .background {
           if selected {
-            Capsule().fill(.white).matchedGeometryEffect(id: "chip", in: selection)
+            Capsule().fill(Astra.Color.selection).matchedGeometryEffect(id: "chip", in: selection)
           }
         }
         .contentShape(Capsule())
@@ -435,11 +439,11 @@ struct KindSwitch: View {
         } label: {
           Text(isSeries ? "Series" : "Movies")
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(series == isSeries ? Color.black : Astra.Color.ink)
+            .foregroundStyle(series == isSeries ? Astra.Color.onSelection : Astra.Color.ink)
             .padding(.horizontal, 12)
             .frame(height: 28)
             .background {
-              if series == isSeries { Capsule().fill(.white).matchedGeometryEffect(id: "kind", in: kindPill) }
+              if series == isSeries { Capsule().fill(Astra.Color.selection).matchedGeometryEffect(id: "kind", in: kindPill) }
             }
             .contentShape(Capsule())
         }
@@ -584,11 +588,12 @@ struct HeroInfo: View {
   var item: PlexMetadata
 
   #if os(macOS)
-    static let titleBox: CGFloat = 130
-    static let logoWidth: CGFloat = 400
+    // KP (2026-11-14): the title logo bigger and more prominent.
+    static let titleBox: CGFloat = 170
+    static let logoWidth: CGFloat = 500
   #elseif os(tvOS)
-    static let titleBox: CGFloat = 180
-    static let logoWidth: CGFloat = 680
+    static let titleBox: CGFloat = 230
+    static let logoWidth: CGFloat = 820
   #else
     static let titleBox: CGFloat = 104
     static let logoWidth: CGFloat = 300
@@ -614,9 +619,9 @@ struct HeroInfo: View {
   #if os(iOS)
     static let blockWidth: CGFloat = .infinity
   #elseif os(tvOS)
-    static let blockWidth: CGFloat = 760
+    static let blockWidth: CGFloat = 820
   #else
-    static let blockWidth: CGFloat = 440
+    static let blockWidth: CGFloat = 500
   #endif
 
   var body: some View {
@@ -632,9 +637,12 @@ struct HeroInfo: View {
     /// "2026 • 1h 41m • [PG] [HD]", the genres under it, then a white Play
     /// and the round + / ✓. Every box has a fixed height, so the hero's
     /// faces can be framed above the logo for any title.
-    static let logoBox = CGSize(width: 240, height: 150)
+    /// KP (2026-11-14): the logo big and prominent, nearly edge to edge
+    /// (like Super Mario's), right under the faces. A wide logo fills the
+    /// width; a tall one stops at the box's height.
+    static let logoBox = CGSize(width: 380, height: 180)
     /// From the top of the logo box to the bottom of the buttons.
-    static let blockHeight: CGFloat = 150 + 14 + 24 + 6 + 18 + 18 + 50
+    static let blockHeight: CGFloat = 180 + 14 + 24 + 6 + 18 + 18 + 50
 
     private var phoneBody: some View {
       VStack(spacing: 0) {
@@ -707,12 +715,17 @@ struct HeroInfo: View {
       }
       .buttonStyle(.plain)
       .accessibilityLabel("\(item.displayTitle), Details")
-      // "2025 · 2h 8m · Sci-Fi [PG-13] [4K]" on one line, as in the mockup.
+      // Same as the iPhone hero and Details (KP, 2026-11-14): "2026 • 1h 41m
+      // [PG] [4K]" with the rating in the grey box, the genres on the line below.
       HStack(spacing: 10) {
-        DetailMetaLine(item: shown, library: library, fontSize: 14.5, genreLimit: 1, ratingAfter: true)
-          .layoutPriority(1)
+        DetailMetaLine(
+          item: shown, library: library, showsGenres: false, fontSize: 15, separator: "  •  ",
+          ratingAfter: true, greyRating: true
+        )
+        .layoutPriority(1)
         FormatBadges(item: shown)
       }
+      .frame(maxWidth: .infinity)
       .task(id: item.id) {
         full = nil
         let key = item.isCatalogOnly ? library.indexMatch(item)?.ratingKey : item.ratingKey
@@ -722,7 +735,14 @@ struct HeroInfo: View {
         full = found
       }
       // Same height for every title, so the buttons never move.
-      .frame(height: 26 * Astra.Layout.textScale, alignment: .leading)
+      .frame(height: 26 * Astra.Layout.textScale)
+      Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
+        .astraFont(size: 14)
+        .foregroundStyle(Astra.Color.ink.opacity(0.62))
+        .lineLimit(1)
+        .frame(maxWidth: .infinity)
+        .frame(height: 18 * Astra.Layout.textScale)
+        .padding(.top, -8)
       HStack(spacing: 12) {
         Button {
           playItem(item)
@@ -924,8 +944,6 @@ struct WatchlistButton: View {
     var onCurrent: (PlexMetadata) -> Void = { _ in }
 
     @State private var position: Int?
-    /// How far the page has scrolled the hero up; it blurs and fades by it.
-    @State private var scrolled: CGFloat = 0
     /// Pages scrolled, fractional while dragging (1.5 = halfway to the third).
     @State private var progress: CGFloat = 0
     @Environment(\.contentLeading) private var leading
@@ -950,7 +968,6 @@ struct WatchlistButton: View {
       .scrollPosition(id: $position)
       .scrollIndicators(.never)
       .modifier(PageProgressReader(progress: $progress, position: position))
-      .modifier(ScrolledAway(offset: $scrolled))
       .onAppear { if let first = items.first { onCurrent(first) } }
       .onChange(of: position) { _, now in
         if let now, items.indices.contains(now) { onCurrent(items[now]) }
@@ -981,7 +998,7 @@ struct WatchlistButton: View {
             // KP (2026-11-09): the faces always end above the logo, for any title.
             FramedArtwork(
               library: library, item: item, kind: .heroBackdrop, zoneHeight: height,
-              limitY: height - 30 - HeroInfo.blockHeight - 6, topOffset: 24, minTop: 110
+              limitY: height - 30 - HeroInfo.blockHeight - 16, topOffset: 24, minTop: 110
             )
             .opacity(i == 0 ? 1 : mix)
           #else
@@ -993,9 +1010,9 @@ struct WatchlistButton: View {
             .opacity(i == 0 ? 1 : mix)
           #endif
         }
-        // Mid-swipe the two blur together; scrolling down blurs into the
-        // frosted background below (KP, 2026-11-09).
-        .blur(radius: sin(mix * .pi) * 22 + min(30, scrolled / 12))
+        // Mid-swipe the two blur together (KP, 2026-11-09). Scrolling down
+        // no longer blurs it: the hero stays still and sharp (KP, 2026-11-14).
+        .blur(radius: sin(mix * .pi) * 22)
         HeroBlend()
       }
       // The bottom dissolves into the frosted background (the same

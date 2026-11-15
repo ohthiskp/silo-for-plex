@@ -30,6 +30,16 @@ enum Astra {
     @MainActor static var theme: SwiftUI.Color { AstraAppearance.shared.accent }
     @MainActor static var onTheme: SwiftUI.Color { AstraAppearance.shared.onAccent }
     @MainActor static var hairline: SwiftUI.Color { AstraAppearance.shared.palette.hairline }
+    /// The chosen pill in a switcher (Movies | Series, scopes, segments): white
+    /// with black text on the dark themes, near-black with white text on Light.
+    @MainActor static var selection: SwiftUI.Color {
+      AstraAppearance.shared.palette.isLight ? AstraAppearance.shared.palette.ink : .white
+    }
+    @MainActor static var onSelection: SwiftUI.Color { AstraAppearance.shared.palette.isLight ? .white : .black }
+    /// A soft drop shadow under titles and logos; much lighter on Light.
+    @MainActor static var shadow: SwiftUI.Color {
+      .black.opacity(AstraAppearance.shared.palette.isLight ? 0.14 : 0.45)
+    }
   }
 
   /// Fixed-size fonts. Text in views uses `.astraFont(_:)`, the same sizes
@@ -147,25 +157,30 @@ enum Astra {
     #endif
   }
 
-  /// The docked Mac sidebar's geometry; pages start to the right of it.
+  /// The Mac's navigation (KP, 2026-11-12: "like Apple TV"): the main tabs
+  /// in a glass bar along the top, the streaming services as circles down
+  /// the left of Home. Home's rows start right of the circles; other pages
+  /// use `pageInset`.
   enum Sidebar {
     #if os(tvOS)
-      // Apple TV: the same sidebar, sized for the remote's focus (KP, 2026-11-08).
       static let margin: CGFloat = 20
       static let collapsedWidth: CGFloat = 96
     #else
-      static let margin: CGFloat = 14
-      static let collapsedWidth: CGFloat = 62
+      /// Left edge of the streaming circles.
+      static let margin: CGFloat = 18
+      /// One streaming circle's diameter.
+      static let collapsedWidth: CGFloat = 46
     #endif
-    /// While the pointer is over it (icons plus names, KP 2026-11-08). Pages keep
-    /// `contentInset`: the expanded sidebar floats over them.
-    #if os(tvOS)
-      static let expandedWidth: CGFloat = 300
-    #else
-      static let expandedWidth: CGFloat = 190
-    #endif
-    static let gap: CGFloat = 28
+    static let gap: CGFloat = 30
+    /// Home's left inset, clear of the streaming circles.
     static let contentInset: CGFloat = margin + collapsedWidth + gap
+    /// The left inset of Library, Search and Settings (no circles there).
+    static let pageInset: CGFloat = 48
+    /// The top bar's height and its gap from the window's top edge.
+    static let barHeight: CGFloat = 44
+    static let barTop: CGFloat = 10
+    /// What pages under the bar leave free at the top, below the window's title-bar inset.
+    static let barSpace: CGFloat = 40
   }
 
   enum Radius {
@@ -192,7 +207,7 @@ extension View {
     font(Astra.Font.display(size))
       .tracking(size >= 30 ? -0.4 : 0)
       .foregroundStyle(Astra.Color.ink)
-      .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
+      .shadow(color: Astra.Color.shadow, radius: 12, y: 4)
   }
 }
 
@@ -294,7 +309,18 @@ struct ThemePalette {
     appTheme = defaults.string(forKey: Self.themeKey).flatMap(AppTheme.init(rawValue:)) ?? .frosted
   }
 
-  var palette: ThemePalette { appTheme.palette }
+  /// How many Details pages are on screen. KP (2026-11-14): "Details pages
+  /// will remain as frosted glass as default", so while one shows, the Light
+  /// theme looks like Frosted Glass (the whole screen, so the tab bar and
+  /// system glass match it). The other themes are already dark.
+  private(set) var detailsShowing = 0
+
+  var palette: ThemePalette {
+    appTheme == .light && detailsShowing > 0 ? AppTheme.frosted.palette : appTheme.palette
+  }
+
+  func detailsAppeared() { detailsShowing += 1 }
+  func detailsDisappeared() { detailsShowing = max(0, detailsShowing - 1) }
   var colorScheme: ColorScheme { palette.colorScheme }
   var accentHex: RGBHex { palette.accentHex }
   var accent: SwiftUI.Color { SwiftUI.Color(hex: accentHex.value) }
@@ -311,6 +337,19 @@ struct ThemePalette {
       defaults.set(theme.rawValue, forKey: Self.themeKey)
     }
   }
+}
+
+private struct DetailsTheme: ViewModifier {
+  func body(content: Content) -> some View {
+    content
+      .onAppear { AstraAppearance.shared.detailsAppeared() }
+      .onDisappear { AstraAppearance.shared.detailsDisappeared() }
+  }
+}
+
+extension View {
+  /// Marks a Details page, which keeps the Frosted Glass look on the Light theme.
+  func astraDetailsTheme() -> some View { modifier(DetailsTheme()) }
 }
 
 extension EnvironmentValues {
