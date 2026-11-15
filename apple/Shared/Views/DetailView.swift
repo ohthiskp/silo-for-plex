@@ -1105,17 +1105,11 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
             .lineLimit(summaryExpanded ? nil : 4)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, focus?.type == .episode ? 8 : 16)
-        }
-        if !playTarget.directors.isEmpty {
-          HStack(spacing: 5) {
-            Text("Directed by").foregroundStyle(Astra.Color.muted)
-            Text(playTarget.directors.prefix(2).map(\.tag).joined(separator: ", "))
-              .fontWeight(.semibold)
-              .foregroundStyle(Astra.Color.ink)
-          }
-          .astraFont(size: 15)
-          .lineLimit(1)
-          .padding(.top, 10)
+            .contentShape(Rectangle())
+            .onTapGesture {
+              guard summary.count > 150 else { return }
+              astraWithAnimation(Astra.Motion.base) { summaryExpanded.toggle() }
+            }
         }
         if (headerSummary?.count ?? 0) > 150 {
           Button {
@@ -1134,6 +1128,17 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
           }
           .buttonStyle(.plain)
           .padding(.top, 2)
+        }
+        if !playTarget.directors.isEmpty {
+          HStack(spacing: 5) {
+            Text("Directed by").foregroundStyle(Astra.Color.muted)
+            Text(playTarget.directors.prefix(2).map(\.tag).joined(separator: ", "))
+              .fontWeight(.semibold)
+              .foregroundStyle(Astra.Color.ink)
+          }
+          .astraFont(size: 15)
+          .lineLimit(1)
+          .padding(.top, 10)
         }
         if notOnServer {
           Text("Not on your Plex server.").astraFont(size: 13).foregroundStyle(Astra.Color.muted).padding(.top, 10)
