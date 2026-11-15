@@ -47,6 +47,7 @@ jobs:
         working-directory: apple
         env:
           TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+          ASTRA_CRASH_TOKEN: ${{ secrets.ASTRA_CRASH_TOKEN }}
         run: |
           set -o pipefail
           xcodebuild build \
@@ -60,6 +61,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION=${{ steps.ver.outputs.build }} \
             TMDB_TOKEN="$TMDB_TOKEN" \
+            ASTRA_CRASH_TOKEN="$ASTRA_CRASH_TOKEN" \
             | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build.log
 

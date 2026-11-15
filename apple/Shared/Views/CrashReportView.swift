@@ -41,6 +41,12 @@
           let badge = app.player.resolutionBadge.map { " \($0)" } ?? ""
           CrashReporter.shared.note("Video started:" + size + badge)
         }
+        .onChange(of: app.library?.selectedService?.id) { _, id in
+          CrashReporter.shared.note("Home tab: " + (id ?? "For You"))
+        }
+        .onChange(of: app.library?.indexStatus.phase) { _, phase in
+          if let phase { CrashReporter.shared.note("Library index: \(phase)") }
+        }
         .onChange(of: app.player.isPictureInPicture) { _, pip in
           CrashReporter.shared.note(pip ? "Picture in Picture on" : "Picture in Picture off")
         }

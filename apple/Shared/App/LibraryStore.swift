@@ -124,6 +124,7 @@ final class LibraryStore {
   static let serviceKey = "astra.home.service"
 
   init(session: ServerSession, tmdbToken: String? = LibraryStore.bundledTMDBToken) {
+    MemoryClues.storeOpened()
     client = session.client
     generation = session.generation
     serverID = session.serverID
@@ -135,6 +136,10 @@ final class LibraryStore {
   }
 
   /// Stops everything this store started. Called when another server replaces it.
+  deinit {
+    MemoryClues.storeFreed()
+  }
+
   func close() {
     isClosed = true
     serviceTask?.cancel()
@@ -742,6 +747,7 @@ final class LibraryStore {
     if !indexReady { indexReady = true }
     indexRevision += 1
     indexStatus.itemCount = aliased.keys.filter { !$0.hasPrefix(LibraryMatch.aliasPrefix) }.count
+    MemoryClues.index(titles: indexStatus.itemCount)
     indexVersion += 1
     let waiters = indexWaiters
     indexWaiters = []

@@ -71,6 +71,8 @@
         UserDefaults.standard.set("SIGKILL", forKey: Self.shownSignalKey)
       }
       pending = try? String(contentsOf: report, encoding: .utf8)
+      // KP (2026-11-15): every report is filed automatically (CrashUpload).
+      if let pending { CrashUpload.send(pending) } else { CrashUpload.retryQueued() }
 
       session.start(
         AppSessionRecord(version: Self.versionString(), osVersion: Self.osVersion(), bootTime: Self.bootTime()),
@@ -165,6 +167,7 @@
         self.pending = "Astra crashed" + section
       }
       try? self.pending?.write(to: report, atomically: true, encoding: .utf8)
+      if let pending = self.pending { CrashUpload.send(pending) }
     }
 
     /// "SIGABRT" from a report's "Signal: SIGABRT (abort)" line.
