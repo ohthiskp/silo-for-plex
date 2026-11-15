@@ -160,12 +160,12 @@ private struct TVSettingRowBody: View {
   var body: some View {
     let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
     configuration.label
-      .foregroundStyle(focused ? Color.black : Astra.Color.ink)
+      .foregroundStyle(focused ? Astra.Color.onSelection : Astra.Color.ink)
       .padding(.horizontal, 30)
       .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
       .background {
         if focused {
-          shape.fill(.white).shadow(color: .black.opacity(0.45), radius: 22, y: 12)
+          shape.fill(Astra.Color.selection).shadow(color: .black.opacity(0.45), radius: 22, y: 12)
         }
       }
       .overlay(alignment: .top) {
@@ -194,10 +194,10 @@ private struct TVPillBody: View {
   var body: some View {
     configuration.label
       .font(.system(size: 26, weight: .semibold))
-      .foregroundStyle(focused ? Color.black : Astra.Color.ink)
+      .foregroundStyle(focused ? Astra.Color.onSelection : Astra.Color.ink)
       .padding(.horizontal, 32)
       .frame(height: 64)
-      .background(Capsule().fill(focused ? Color.white : Astra.Color.ink.opacity(0.12)))
+      .background(Capsule().fill(focused ? Astra.Color.selection : Astra.Color.ink.opacity(0.12)))
       .contentShape(Capsule())
       .opacity(isEnabled ? 1 : 0.45)
       .scaleEffect(configuration.isPressed ? 0.96 : (focused ? 1.08 : 1))
@@ -230,11 +230,11 @@ private struct TVOptionBody: View {
       configuration.label
     }
     .font(.system(size: 26, weight: isOn ? .semibold : .medium))
-    .foregroundStyle(focused ? Color.black : (isOn ? Astra.Color.ink : Astra.Color.muted))
+    .foregroundStyle(focused ? Astra.Color.onSelection : (isOn ? Astra.Color.ink : Astra.Color.muted))
     .padding(.horizontal, 24)
     .frame(height: 58)
     .background {
-      Capsule().fill(focused ? Color.white : Color.clear)
+      Capsule().fill(focused ? Astra.Color.selection : Color.clear)
     }
     .overlay {
       Capsule().strokeBorder(isOn && !focused ? Astra.Color.ink : Astra.Color.hairline, lineWidth: isOn && !focused ? 2 : 1)

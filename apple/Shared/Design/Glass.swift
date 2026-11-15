@@ -186,11 +186,14 @@ extension View {
 struct GlassIconButtonStyle: ButtonStyle {
   var size: CGFloat = 44
   var variant: AstraGlassVariant = .regular
+  /// White glyphs on dark glass; dark ones on the Light theme's bright glass.
+  /// The player forces dark, so its controls stay white over video.
+  @Environment(\.colorScheme) private var scheme
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.system(size: size * Astra.Layout.controlScale * 0.42, weight: .semibold))
-      .foregroundStyle(.white)
+      .foregroundStyle(scheme == .light ? Astra.Color.ink : .white)
       .frame(width: size * Astra.Layout.controlScale, height: size * Astra.Layout.controlScale)
       .contentShape(Circle())
       .astraGlass(in: Circle(), variant: variant, interactive: true)
@@ -245,7 +248,7 @@ struct Badge: View {
       .foregroundStyle(Astra.Color.ink)
       .padding(.horizontal, 6)
       .padding(.vertical, 2)
-      .overlay(RoundedRectangle(cornerRadius: Astra.Radius.badge).stroke(.white.opacity(0.25), lineWidth: 1))
+      .overlay(RoundedRectangle(cornerRadius: Astra.Radius.badge).stroke(Astra.Color.ink.opacity(0.25), lineWidth: 1))
   }
 }
 
@@ -256,11 +259,15 @@ struct ClearGlassButtonStyle: ButtonStyle {
   var prominent: Bool
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.astraAccent) private var accent
+  @Environment(\.colorScheme) private var scheme
+
+  /// Light theme: the main action is dark glass with white text, the others dark text.
+  private var light: Bool { scheme == .light }
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.system(size: 15 * Astra.Layout.controlScale, weight: .semibold))
-      .foregroundStyle(.white)
+      .foregroundStyle(light && !prominent ? Astra.Color.ink : .white)
       .labelStyle(.titleAndIcon)
       // A label never wraps onto two lines.
       .lineLimit(1)
@@ -268,9 +275,10 @@ struct ClearGlassButtonStyle: ButtonStyle {
       .padding(.horizontal, 22 * Astra.Layout.controlScale)
       .frame(height: 46 * Astra.Layout.controlScale)
       .contentShape(Capsule())
-      .shadow(color: .black.opacity(0.35), radius: 3)
+      .shadow(color: .black.opacity(light ? 0 : 0.35), radius: 3)
       .astraGlass(
-        in: Capsule(), variant: .clear, interactive: true, tint: prominent ? (accent?.opacity(0.6) ?? .white.opacity(0.22)) : nil)
+        in: Capsule(), variant: .clear, interactive: true,
+        tint: prominent ? (accent?.opacity(0.6) ?? (light ? Astra.Color.ink.opacity(0.82) : .white.opacity(0.22))) : nil)
       .astraGlassEdge(Capsule(), strength: prominent ? 1 : 0.8)
       .tvFocusLift(1.06)
       .scaleEffect(configuration.isPressed ? 0.96 : 1)
@@ -310,16 +318,6 @@ struct AmbientBackdrop: View {
     .ignoresSafeArea()
     .allowsHitTesting(false)
     .accessibilityHidden(true)
-  }
-}
-
-/// Where a view sits in its vertical scroll view: 0 at the top, growing as
-/// it scrolls up out of sight. The hero blurs and fades by it.
-struct ScrolledAway: ViewModifier {
-  @Binding var offset: CGFloat
-
-  func body(content: Content) -> some View {
-    content.onGeometryChange(for: CGFloat.self, of: { max(0, -$0.frame(in: .scrollView).minY) }) { offset = $0 }
   }
 }
 

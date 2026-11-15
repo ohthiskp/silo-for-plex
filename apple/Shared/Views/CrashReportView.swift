@@ -15,6 +15,53 @@
     }
   }
 
+  extension View {
+    /// Notes what Astra is doing (sign-in, server, player), so a crash report,
+    /// or a kill by iOS that no handler sees, says what was happening (KP, 2026-11-14).
+    func recordsActivity(_ app: AppModel) -> some View {
+      modifier(ActivityRecorder(app: app))
+    }
+  }
+
+  private struct ActivityRecorder: ViewModifier {
+    let app: AppModel
+
+    func body(content: Content) -> some View {
+      content
+        .onChange(of: app.phase, initial: true) { _, phase in
+          CrashReporter.shared.note(Self.describe(phase))
+        }
+        .onChange(of: app.player.isActive) { _, active in
+          CrashReporter.shared.note(active ? "Player opened: \(app.player.title)" : "Player closed")
+        }
+        .onChange(of: app.player.hasFirstFrame) { _, started in
+          guard started else { return }
+          let size = app.player.videoWidth > 0
+            ? " \(Int(app.player.videoWidth))×\(Int(app.player.videoHeight))" : ""
+          let badge = app.player.resolutionBadge.map { " \($0)" } ?? ""
+          CrashReporter.shared.note("Video started:" + size + badge)
+        }
+        .onChange(of: app.player.isPictureInPicture) { _, pip in
+          CrashReporter.shared.note(pip ? "Picture in Picture on" : "Picture in Picture off")
+        }
+        .onChange(of: app.player.lastError) { _, error in
+          if let error { CrashReporter.shared.note("Player error: \(error)") }
+        }
+    }
+
+    private static func describe(_ phase: AppModel.Phase) -> String {
+      switch phase {
+      case .launching: "Starting"
+      case .signedOut: "Signed out"
+      case .waitingForApproval: "Signing in"
+      case .choosingServer(let servers): "Choosing a server (\(servers.count))"
+      case .connecting(let name): "Connecting to \(name)"
+      case .ready: "Connected, browsing"
+      case .failed(let message): "Couldn't connect: \(message)"
+      }
+    }
+  }
+
   private struct CrashReportPresenter: ViewModifier {
     @State private var reporter = CrashReporter.shared
 
