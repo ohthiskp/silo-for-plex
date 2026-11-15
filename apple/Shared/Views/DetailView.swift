@@ -142,6 +142,12 @@ struct DetailView: View {
     #if os(macOS)
       .overlay(alignment: .topTrailing) {
         HStack(spacing: 10) {
+          // KP (2026-11-08): ••• beside the X with the title's actions.
+          if !shown.isCatalogOnly {
+            moreMenu
+              .menuStyle(.button)
+              .astraIconButton(size: 36, variant: .clear)
+          }
           // Astra: details are a card on the Mac; X closes it (Esc too).
           Button {
             if let closeCard { closeCard() } else if !path.isEmpty { path.removeLast() }
@@ -162,6 +168,12 @@ struct DetailView: View {
       // iPhone keeps the system back button (Liquid Glass on iOS 26) and swipe-back.
       .toolbarBackground(.hidden, for: .navigationBar)
       .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        // KP (2026-11-08): ••• top right with the title's actions (the bar gives it its glass).
+        if !shown.isCatalogOnly {
+          ToolbarItem(placement: .topBarTrailing) { moreMenu }
+        }
+      }
       // The floating tab bar gets a dark floor, so it never sits on top of the
       // cast or posters (KP's mockup, 2026-11-08).
       .overlay(alignment: .bottom) {
@@ -190,11 +202,17 @@ struct DetailView: View {
     return nil
   }
 
-  /// KP (2026-11-14): the ••• menu "doesn't make sense", so the one thing it was
-  /// for, Mark Watched / Unwatched, is a round tick beside Download and My List.
-  /// It marks the picked episode on a show, else the title itself.
-  private var canMarkWatched: Bool {
-    !shown.isCatalogOnly && !notOnServer && shown.type != .collection
+  /// The ••• menu: Mark Watched / Unwatched, Download, Go to Season / Show,
+  /// the same actions as a long-press on a title.
+  private var moreMenu: some View {
+    Menu {
+      ItemMenuItems(library: library, item: playTarget, onDetails: true)
+    } label: {
+      Image(systemName: "ellipsis")
+    }
+    .menuIndicator(.hidden)
+    .help("More")
+    .accessibilityLabel("More")
   }
 
   // MARK: Per device
@@ -317,13 +335,10 @@ struct DetailView: View {
         }
 
         // KP (2026-11-08): the round + Watchlist button next to Download, as on
-        // the hero. On an episode or season the + adds its show. Then the
-        // Watched tick that replaced the ••• menu (KP, 2026-11-14).
+        // the hero, and no Watched button here (Mark Watched / Unwatched are in
+        // the ••• menu). On an episode or season the + adds its show.
         if let target = watchlistTarget {
           WatchlistButton(item: target, size: 46, variant: .clear)
-        }
-        if canMarkWatched {
-          WatchedButton(library: library, item: playTarget)
         }
       }
       .frame(maxWidth: narrow ? .infinity : 560)
@@ -632,26 +647,6 @@ struct DetailView: View {
     selectedSeason = season
     let list = (try? await library.children(of: season.ratingKey)) ?? []
     astraWithAnimation(Astra.Motion.base) { episodes = list }
-  }
-}
-
-/// The round tick on Details (Mac, iPad): marks the movie or picked episode
-/// watched, or unwatched again (KP, 2026-11-14).
-struct WatchedButton: View {
-  var library: LibraryStore
-  var item: PlexMetadata
-
-  var body: some View {
-    let watched = library.isWatched(item)
-    Button {
-      Task { await library.setWatched(item, watched: !watched) }
-    } label: {
-      Image(systemName: watched ? "checkmark.circle.fill" : "checkmark.circle")
-        .contentTransition(.symbolEffect(.replace))
-    }
-    .astraIconButton(size: 46, variant: .clear)
-    .help(watched ? "Mark as Unwatched" : "Mark as Watched")
-    .accessibilityLabel(watched ? "Watched. Mark as unwatched" : "Mark as watched")
   }
 }
 
@@ -1171,15 +1166,11 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
 
     /// Resume (the strongest thing on the page), then quieter round Download and My List.
     private var phoneActions: some View {
-      HStack(alignment: .center, spacing: 12) {
+      HStack(alignment: .center, spacing: 14) {
         Button {
           playItem(playTarget)
         } label: {
-          // One line always: "Resume S1 E3" shrinks a little rather than wrap
-          // now that four buttons share the row.
           Label(playLabel, systemImage: "play.fill")
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity)
             .contentTransition(.opacity)
         }
@@ -1192,9 +1183,6 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         }
         if let target = watchlistTarget {
           PhoneWatchlistColumn(item: target)
-        }
-        if canMarkWatched {
-          PhoneWatchedColumn(library: library, item: playTarget)
         }
       }
     }
@@ -1453,27 +1441,6 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       .sensoryFeedback(.success, trigger: on)
       .accessibilityLabel(on ? "Remove from My List" : "Add to My List")
       .task { await app.loadWatchlistIfNeeded() }
-    }
-  }
-
-  /// The round tick beside My List: Mark Watched / Unwatched (KP, 2026-11-14).
-  struct PhoneWatchedColumn: View {
-    var library: LibraryStore
-    var item: PlexMetadata
-
-    var body: some View {
-      let watched = library.isWatched(item)
-      Button {
-        Task { await library.setWatched(item, watched: !watched) }
-      } label: {
-        PhoneActionLabel(title: watched ? "Watched" : "Mark as Watched") {
-          Image(systemName: watched ? "checkmark.circle.fill" : "checkmark.circle")
-            .contentTransition(.symbolEffect(.replace))
-        }
-      }
-      .buttonStyle(PhoneActionButtonStyle())
-      .sensoryFeedback(.success, trigger: watched)
-      .accessibilityLabel(watched ? "Watched. Mark as unwatched" : "Mark as watched")
     }
   }
 

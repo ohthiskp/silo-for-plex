@@ -166,21 +166,16 @@ struct TVDetailPage: View {
           }
         }
         if !shown.isCatalogOnly, !notOnServer {
-          // KP (2026-11-14): the More menu "doesn't make sense"; its one real
-          // job, Mark Watched / Unwatched, is this round tick.
-          let watched = library.isWatched(playTarget)
-          TVLabeledRound(label: watched ? "Watched" : "Mark Watched") {
-            Button {
-              Task { await library.setWatched(playTarget, watched: !watched) }
+          TVLabeledRound(label: "More") {
+            Menu {
+              ItemMenuItems(library: library, item: playTarget, onDetails: true)
             } label: {
-              Image(systemName: watched ? "checkmark.circle.fill" : "checkmark.circle")
+              Image(systemName: "ellipsis")
                 .font(.system(size: 30, weight: .semibold))
-                .contentTransition(.symbolEffect(.replace))
                 .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)
             }
             .buttonStyle(TVGlassButtonStyle(round: true))
-            .accessibilityLabel(watched ? "Watched. Mark as unwatched" : "Mark as watched")
-            .accessibilityIdentifier("details.watched")
+            .accessibilityLabel("More")
           }
         }
       }
