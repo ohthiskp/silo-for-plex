@@ -107,6 +107,8 @@ struct FramedArtwork: View {
   var limitY: CGFloat
   var topOffset: CGFloat = 0
   var minTop: CGFloat = 0
+  /// A picture to frame instead of the title's artwork (a picked episode's still).
+  var imageURL: URL? = nil
 
   @State private var url: URL?
   @State private var focus: ArtFocus?
@@ -153,9 +155,10 @@ struct FramedArtwork: View {
     }
     .frame(height: zoneHeight)
     .clipped()
-    .task(id: "\(item.id)|\(kind)") {
+    .task(id: "\(item.id)|\(kind)|\(imageURL?.absoluteString ?? "")") {
       focus = nil
-      let found = await library.artworkURL(for: item, kind, width: 1920, height: 1080)
+      let found: URL?
+      if let imageURL { found = imageURL } else { found = await library.artworkURL(for: item, kind, width: 1920, height: 1080) }
       guard !Task.isCancelled else { return }
       url = found
       guard let found else { return }
