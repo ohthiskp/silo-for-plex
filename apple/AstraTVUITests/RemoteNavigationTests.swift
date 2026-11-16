@@ -297,21 +297,26 @@ final class RemoteNavigationTests: XCTestCase {
     let appearance = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Appearance")).firstMatch
     XCTAssertTrue(appearance.waitForExistence(timeout: 30), "Settings didn't open")
     sleep(4)
-    var labels: [String] = []
-    for _ in 0..<5 {
-      press(.down)
-      labels.append(focusedElement.label)
-    }
-    shot("settings-moved-down")
-    print("ASTRA-SETTINGS", labels)
-    XCTAssertTrue(labels.contains { ["Change Server", "Index Now"].contains($0) }, "Down didn't reach the server band")
-    XCTAssertTrue(labels.contains { ["Frosted Glass", "OLED", "Light", "Violet", "Appearance"].contains($0) },
-      "Down didn't reach the settings themselves")
-    // Category list: down through the list changes the pane.
-    press(.left, times: 2)
+    // Down from the gear lands on the category list.
     press(.down)
-    shot("settings-category")
-    print("ASTRA-SETTINGS category", focusedElement.label)
+    XCTAssertEqual(focusedElement.label, "Appearance", "Down from the top bar didn't reach Settings")
+    // Up reaches the server band, Down comes back.
+    press(.up)
+    let band = focusedElement.label
+    print("ASTRA-SETTINGS up ->", band)
+    XCTAssertTrue(["Change Server", "Index Now"].contains(band), "Up from the list didn't reach the server band")
+    press(.down)
+    // Down the list; Right into the pane's options.
+    press(.down)
+    XCTAssertEqual(focusedElement.label, "Playback", "Down didn't move along the categories")
+    press(.right)
+    let option = focusedElement.label
+    print("ASTRA-SETTINGS right ->", option)
+    XCTAssertFalse(["Appearance", "Playback", "Subtitles", "Library", "About", "Settings", ""].contains(option),
+      "Right from the list didn't reach the settings themselves")
+    press(.down)
+    shot("settings-moved-down")
+    print("ASTRA-SETTINGS down ->", focusedElement.label)
   }
 
   /// Show Details: the seasons are tabs, starting on the season being watched.
