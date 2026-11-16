@@ -159,6 +159,8 @@ struct TVPageBackdrop: View {
 /// format badges (4K, HDR, Dolby Vision, Dolby Atmos) share it.
 struct TVChip<Content: View>: View {
   var fontSize: CGFloat = 18
+  /// A Dolby logo: tighter sides so the logo fills the chip (badge audit, 2026-11-16).
+  var logo = false
   @ViewBuilder var content: Content
 
   var body: some View {
@@ -166,7 +168,7 @@ struct TVChip<Content: View>: View {
       .font(.system(size: fontSize, weight: .bold))
       .tracking(fontSize * 0.04)
       .foregroundStyle(.white)
-      .padding(.horizontal, fontSize * 0.55)
+      .padding(.horizontal, fontSize * (logo ? 0.4 : 0.55))
       .frame(height: fontSize * 1.6)
       .overlay(
         RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -179,6 +181,10 @@ struct TVChip<Content: View>: View {
 /// Astra's own badges, kept on Apple TV (KP, 2026-11-09): content rating
 /// first, then 4K/HD, Dolby Atmos, and Dolby Vision or HDR.
 struct TVFormatChips: View {
+  /// Beside a 27 pt meta line: the chips are as tall as its grey rating box
+  /// (21.6 pt type, 1.75x tall), so every badge in the row lines up (badge audit, 2026-11-16).
+  static let besideMeta: CGFloat = 23.5
+
   var item: PlexMetadata
   var fontSize: CGFloat = 18
   var showsRating = true
@@ -196,15 +202,15 @@ struct TVFormatChips: View {
       if showsRating, showRatings, let rating = item.officialRating ?? fallbackRating {
         RatingBox(text: rating, fontSize: fontSize)
       }
-      if showQuality, let badge = item.resolutionBadge(for: pick) {
-        TVChip(fontSize: fontSize) { Text(badge == "4K UHD" ? "4K" : badge) }
+      if showQuality, let badge = item.qualityLabel(for: pick) {
+        TVChip(fontSize: fontSize) { Text(badge) }
       }
       if item.hasAtmos(for: pick) {
-        TVChip(fontSize: fontSize) { logo("format-dolby-atmos") }.accessibilityLabel("Dolby Atmos")
+        TVChip(fontSize: fontSize, logo: true) { logo("format-dolby-atmos", height: 1.3) }.accessibilityLabel("Dolby Atmos")
       }
       switch item.dynamicRange(for: pick) {
       case .dolbyVision?:
-        TVChip(fontSize: fontSize) { logo("format-dolby-vision") }.accessibilityLabel("Dolby Vision")
+        TVChip(fontSize: fontSize, logo: true) { logo("format-dolby-vision", height: 1.3) }.accessibilityLabel("Dolby Vision")
       case .hdr10Plus?, .hdr10?, .hlg?:
         TVChip(fontSize: fontSize) { Text("HDR") }
       case nil:
@@ -213,12 +219,13 @@ struct TVFormatChips: View {
     }
   }
 
-  private func logo(_ name: String) -> some View {
+  /// `height` is a share of the font size; the chip is 1.6 font sizes tall.
+  private func logo(_ name: String, height: CGFloat) -> some View {
     Image(name)
       .renderingMode(.template)
       .resizable()
       .scaledToFit()
-      .frame(height: fontSize * 1.1)
+      .frame(height: fontSize * height)
   }
 }
 
@@ -328,6 +335,7 @@ private struct TVCardArt<Content: View>: View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
           .strokeBorder(Color.white.opacity(focused ? 0.7 : 0.06), lineWidth: focused ? 4 : 1)
       )
+      .tvShine()
   }
 }
 
@@ -463,6 +471,17 @@ struct TVRowHeader: View {
   }
 }
 
+// MARK: - Shine
+
+extension View {
+  /// Apple's own focused-poster look on tvOS (KP, 2026-11-16: "reflect like
+  /// Apple and Infuse do"): the system highlight tilts the art with the
+  /// finger on the remote's touch surface and runs a light sheen across it.
+  func tvShine() -> some View {
+    hoverEffect(.highlight)
+  }
+}
+
 // MARK: - Focus helper
 
 extension View {
@@ -491,8 +510,15 @@ enum TVLayout {
   static let heroHeight: CGFloat = 900
   /// Home's page edge, clear of the collapsed streaming sidebar on the left.
   static let homeLeading: CGFloat = 150
+  /// The "2024 [PG-13] 2h 46m 4K UHD …" line on the hero and Details (KP's mockup, 2026-11-16).
+  static let metaSize: CGFloat = 24
   /// The streaming sidebar's circles.
   static let sidebarCircle: CGFloat = 76
+  /// The circles' column; Home's page starts right of it.
+  static let sidebarColumn: CGFloat = 110
+  /// Where a page without a hero starts, below the top bar (it sits in the
+  /// 60 pt top safe area, so pages that ignore that area start lower).
+  static let pageTop: CGFloat = 200
   /// The top bar, and the space a page leaves above its content for it.
   static let barHeight: CGFloat = 90
   static let barSpace: CGFloat = 130
@@ -510,4 +536,11 @@ extension EnvironmentValues {
   @Entry var tvLeading: CGFloat = TVLayout.leading
   /// A page tells the top bar it has scrolled down (the bar fades) or back up.
   @Entry var tvScrolledDown: (Bool) -> Void = { _ in }
+  /// Home: focus moved to the first card of a row or the first hero title
+  /// (true), or further along (false); the streaming circles take focus only then.
+  @Entry var tvLeftEdge: (Bool) -> Void = { _ in }
+  /// Goes up by one each time Down is pressed on the top bar, so a page can
+  /// take focus itself when tvOS finds nothing below (the Settings gear sat
+  /// above nothing it could reach: KP, 2026-11-16 "you can't even go down").
+  @Entry var tvFocusPage: Int = 0
 }

@@ -612,7 +612,8 @@ struct HeroInfo: View {
   }
 
   /// Best copy known: the full one, else the index's match, else the title itself.
-  private var shown: PlexMetadata { full ?? library.indexMatch(item) ?? item }
+  /// TMDB fills what Plex doesn't give (genres, length) for titles not on Plex.
+  private var shown: PlexMetadata { library.filled(full ?? library.indexMatch(item) ?? item) }
 
   /// KP's hero mockup (2026-11-09): one block at the left, its logo centred
   /// over the meta line and buttons; full width on iPhone.
@@ -659,13 +660,7 @@ struct HeroInfo: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(item.displayTitle), Details")
-        HStack(spacing: 8) {
-          DetailMetaLine(
-            item: shown, library: library, showsGenres: false, fontSize: 14, separator: "  •  ",
-            ratingAfter: true, greyRating: true)
-          FormatBadges(item: shown)
-        }
-        .frame(height: 24)
+        MetaBadgeRow(item: shown, playTarget: shown, library: library, fontSize: 14, alignment: .center)
         .padding(.top, 14)
         .task(id: item.id) {
           full = nil
@@ -717,14 +712,7 @@ struct HeroInfo: View {
       .accessibilityLabel("\(item.displayTitle), Details")
       // Same as the iPhone hero and Details (KP, 2026-11-14): "2026 • 1h 41m
       // [PG] [4K]" with the rating in the grey box, the genres on the line below.
-      HStack(spacing: 10) {
-        DetailMetaLine(
-          item: shown, library: library, showsGenres: false, fontSize: 15, separator: "  •  ",
-          ratingAfter: true, greyRating: true
-        )
-        .layoutPriority(1)
-        FormatBadges(item: shown)
-      }
+      MetaBadgeRow(item: shown, playTarget: shown, library: library)
       .frame(maxWidth: .infinity)
       .task(id: item.id) {
         full = nil
@@ -843,39 +831,6 @@ struct HeroTitle: View {
   }
 }
 
-struct MetaRow: View {
-  var item: PlexMetadata
-  /// For the official rating of titles Plex has none for (TMDB-only ones).
-  var library: LibraryStore? = nil
-  var fontSize: CGFloat = 15
-  @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
-  @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
-
-  var body: some View {
-    HStack(spacing: 10) {
-      let parts = [
-        item.year.map(String.init),
-        item.type == .show ? item.childCount.map { "\($0) Season\($0 == 1 ? "" : "s")" } : item.durationLabel,
-        item.genres.prefix(2).map(\.tag).joined(separator: ", ").nilIfEmpty,
-      ].compactMap { $0 }
-      // The text truncates first; badges keep their size.
-      Text(parts.joined(separator: "  •  "))
-        .font(.system(size: fontSize, weight: .medium))
-        .foregroundStyle(Astra.Color.ink.opacity(0.9))
-        .lineLimit(1)
-      // Astra (KP, 2026-11-07): the official rating first (PG-13, TV-MA…),
-      // then the version this device would play. Still no star ratings.
-      RatingBadge(item: item, library: library)
-      let pick = quality == .auto ? PlaybackQuality.current() : quality
-      if showQuality, let badge = item.resolutionBadge(for: pick) { Badge(text: badge).fixedSize() }
-      // Astra (KP, 2026-11-07): Dolby Vision / HDR of that file, when Plex says.
-      if let range = item.dynamicRange(for: pick) {
-        Badge(text: range == .dolbyVision ? "Dolby Vision" : "HDR").fixedSize()
-      }
-    }
-  }
-}
-
 extension String {
   var nilIfEmpty: String? { isEmpty ? nil : self }
 }
@@ -919,7 +874,7 @@ struct WatchlistButton: View {
     Button {
       Task { await app.toggleWatchlist(item) }
     } label: {
-      Image(systemName: on ? "checkmark" : "plus")
+      Image(systemName: on ? "bookmark.fill" : "bookmark")
         .font(.system(size: 19, weight: .semibold))
         .contentTransition(.symbolEffect(.replace))
     }

@@ -124,6 +124,7 @@ final class LibraryStore {
   static let serviceKey = "astra.home.service"
 
   init(session: ServerSession, tmdbToken: String? = LibraryStore.bundledTMDBToken) {
+    MemoryClues.storeOpened()
     client = session.client
     generation = session.generation
     serverID = session.serverID
@@ -135,6 +136,10 @@ final class LibraryStore {
   }
 
   /// Stops everything this store started. Called when another server replaces it.
+  deinit {
+    MemoryClues.storeFreed()
+  }
+
   func close() {
     isClosed = true
     serviceTask?.cancel()
@@ -742,6 +747,7 @@ final class LibraryStore {
     if !indexReady { indexReady = true }
     indexRevision += 1
     indexStatus.itemCount = aliased.keys.filter { !$0.hasPrefix(LibraryMatch.aliasPrefix) }.count
+    MemoryClues.index(titles: indexStatus.itemCount)
     indexVersion += 1
     let waiters = indexWaiters
     indexWaiters = []
@@ -1029,6 +1035,18 @@ final class LibraryStore {
   private var artworkTasks: [String: Task<TMDBArtwork?, Never>] = [:]
 
   /// TMDB's artwork for a movie or show, fetched once per title.
+  /// The title with its gaps (rating, genres, length) filled from TMDB
+  /// details already fetched; asks for them once in the background if not.
+  func filled(_ item: PlexMetadata) -> PlexMetadata {
+    guard let key = item.tmdbKey, item.type == .movie || item.type == .show else { return item }
+    if let art = artwork[key] { return item.filling(from: art) }
+    let missing = item.genres.isEmpty || (item.type == .movie ? item.duration == nil : item.childCount == nil)
+    if missing, artworkTasks[key] == nil {
+      Task { _ = await tmdbArtwork(for: item) }
+    }
+    return item
+  }
+
   func tmdbArtwork(for item: PlexMetadata) async -> TMDBArtwork? {
     guard let tmdb, let key = item.tmdbKey else { return nil }
     if let hit = artwork[key] { return hit }

@@ -85,6 +85,7 @@ actor ImagePipeline {
       stats.megapixels += Double(image.pixelArea) / 1_000_000
       let cost = image.pixelArea * 4
       stats.bytes += cost
+      MemoryClues.decodedImage(bytes: cost)
       cache.setObject(image, forKey: url as NSURL, cost: cost)
     }
     return image

@@ -56,7 +56,8 @@ struct DetailView: View {
   /// the show itself on an episode's or season's page.
   private var titleItem: PlexMetadata {
     if shown.type == .episode || shown.type == .season, let parentShow { return parentShow }
-    return shown
+    // Genres and length from TMDB for titles that aren't on Plex.
+    return library.filled(shown)
   }
 
   /// What the header describes and Play / Resume plays.
@@ -291,12 +292,7 @@ struct DetailView: View {
       // KP (2026-11-13): like the iPhone and Apple TV, one line of
       // "2024 • 2h 46m • [PG-13] [4K] [Dolby Atmos]" with the rating in a
       // grey box, and the genres on their own line under it.
-      HStack(spacing: 8) {
-        DetailMetaLine(
-          item: titleItem, library: library, showsGenres: false, separator: "  •  ", ratingAfter: true,
-          greyRating: true)
-        FormatBadges(item: playTarget)
-      }
+      MetaBadgeRow(item: titleItem, playTarget: playTarget, library: library)
       if !titleItem.genres.isEmpty {
         Text(titleItem.genres.prefix(3).map(\.tag).joined(separator: " · "))
           .astraFont(size: 14)
@@ -857,6 +853,102 @@ struct DetailMetaLine: View {
   }
 }
 
+/// KP's mockup (2026-11-16, Dune), on every platform:
+/// "2024  [PG-13]  2h 46m  4K UHD  ◗◖Dolby Vision  ◗◖Dolby Atmos".
+/// Only the rating sits in a thin outlined box; 4K UHD / 4K / HD is bold
+/// text, and Dolby Vision and Dolby Atmos are Dolby's horizontal logos with
+/// no background. HDR10, HDR10+ and HLG show a bold "HDR". It stays on one
+/// line everywhere; on a narrow iPhone the gaps and type tighten slightly.
+struct MetaBadgeRow: View {
+  /// The movie or show: year, rating, length or seasons.
+  var item: PlexMetadata
+  /// The version that plays: resolution, HDR and Atmos.
+  var playTarget: PlexMetadata
+  /// For the official rating of titles Plex has none for (TMDB-only ones).
+  var library: LibraryStore? = nil
+  var fontSize: CGFloat = 15
+  /// Kept for callers; the row is always a single line.
+  var alignment: HorizontalAlignment = .leading
+
+  /// TMDB's rating, genres and length, for what Plex didn't give (titles not on Plex).
+  @State private var fetchedArt: TMDBArtwork?
+  @AppStorage(Preferences.ratingsKey) private var showRatings = true
+  @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
+  @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
+
+  private var pick: PlaybackQuality { quality == .auto ? .current() : quality }
+  private var gap: CGFloat { fontSize * 1.25 }
+
+  var body: some View {
+    // Always one line (KP, 2026-11-16: "it does fit"): the gaps tighten
+    // first, then the type shrinks a little, before anything would clip.
+    ViewThatFits(in: .horizontal) {
+      line(gap: gap, size: fontSize)
+      line(gap: fontSize * 0.8, size: fontSize)
+      line(gap: fontSize * 0.6, size: fontSize * 0.9)
+      line(gap: fontSize * 0.5, size: fontSize * 0.8)
+    }
+    .task(id: item.id) {
+      fetchedArt = nil
+      let missing = item.officialRating == nil || (item.type == .movie ? item.duration == nil : item.childCount == nil)
+      guard missing, item.type == .movie || item.type == .show, let library else { return }
+      fetchedArt = await library.tmdbArtwork(for: item)
+    }
+  }
+
+  private func line(gap: CGFloat, size: CGFloat) -> some View {
+    HStack(spacing: gap) {
+      facts(size)
+      badges(size)
+    }
+    .font(.system(size: size, weight: .regular))
+    .foregroundStyle(Astra.Color.ink.opacity(0.95))
+    .lineLimit(1)
+  }
+
+  @ViewBuilder private func facts(_ fontSize: CGFloat) -> some View {
+    let item = item.filling(from: fetchedArt)
+    if let year = item.year { Text(String(year)).fixedSize() }
+    if showRatings, let rating = item.officialRating {
+      Text(rating.uppercased())
+        .font(.system(size: fontSize * 0.88, weight: .regular))
+        .padding(.horizontal, fontSize * 0.32)
+        .frame(height: fontSize * 1.32)
+        .overlay(
+          RoundedRectangle(cornerRadius: fontSize * 0.2, style: .continuous)
+            .strokeBorder(Astra.Color.ink.opacity(0.85), lineWidth: max(1, fontSize * 0.06))
+        )
+        .fixedSize()
+        .accessibilityLabel("Rated \(rating)")
+    }
+    let length = item.type == .show ? item.childCount.map { "\($0) Season\($0 == 1 ? "" : "s")" } : item.durationLabel
+    if let length { Text(length).fixedSize() }
+  }
+
+  @ViewBuilder private func badges(_ fontSize: CGFloat) -> some View {
+    if showQuality, let label = playTarget.qualityLabel(for: pick) {
+      Text(label).fontWeight(.bold).fixedSize()
+    }
+    switch playTarget.dynamicRange(for: pick) {
+    case .dolbyVision?: logo("format-dolby-vision-wide", fontSize).accessibilityLabel("Dolby Vision")
+    case .hdr10Plus?, .hdr10?, .hlg?: Text("HDR").fontWeight(.bold).fixedSize()
+    case nil: EmptyView()
+    }
+    if playTarget.hasAtmos(for: pick) {
+      logo("format-dolby-atmos-wide", fontSize).accessibilityLabel("Dolby Atmos")
+    }
+  }
+
+  private func logo(_ name: String, _ fontSize: CGFloat) -> some View {
+    Image(name)
+      .renderingMode(.template)
+      .resizable()
+      .scaledToFit()
+      .frame(height: fontSize * 0.92)
+      .fixedSize()
+  }
+}
+
 /// Format badges are read from the sofa on Apple TV, so they grow more there
 /// than other text does (the hub thread, 2026-11-08: they looked tiny at 1.6x).
 #if os(tvOS)
@@ -879,14 +971,14 @@ struct FormatBadges: View {
 
   var body: some View {
     HStack(spacing: 10 * formatBadgeScale) {
-      if showQuality, let badge = item.resolutionBadge(for: pick) {
-        FormatPill { Text(badge == "4K UHD" ? "4K" : badge) }
+      if showQuality, let badge = item.qualityLabel(for: pick) {
+        FormatPill { Text(badge) }
       }
       if item.hasAtmos(for: pick) {
-        FormatPill { logo("format-dolby-atmos", height: 11) }.accessibilityLabel("Dolby Atmos")
+        FormatPill(logo: true) { logo("format-dolby-atmos", height: 16) }.accessibilityLabel("Dolby Atmos")
       }
       switch item.dynamicRange(for: pick) {
-      case .dolbyVision?: FormatPill { logo("format-dolby-vision", height: 12) }.accessibilityLabel("Dolby Vision")
+      case .dolbyVision?: FormatPill(logo: true) { logo("format-dolby-vision", height: 16) }.accessibilityLabel("Dolby Vision")
       // KP: one general HDR badge for HDR10, HDR10+ and HLG.
       case .hdr10Plus?, .hdr10?, .hlg?: FormatPill { Text("HDR") }
       case nil: EmptyView()
@@ -906,13 +998,16 @@ struct FormatBadges: View {
 /// One badge in the format row: clear, with a thin grey outline, rounded
 /// corners and bold text (KP's Avatar mockup, 2026-11-08).
 struct FormatPill<Content: View>: View {
+  /// A Dolby logo: tighter sides so the logo fills the pill and stays
+  /// readable (badge audit, 2026-11-16: "VISION" was ~3 pt tall).
+  var logo = false
   @ViewBuilder var content: Content
 
   var body: some View {
     content
       .font(.system(size: 13 * formatBadgeScale, weight: .bold))
       .foregroundStyle(Astra.Color.ink)
-      .padding(.horizontal, 10 * formatBadgeScale)
+      .padding(.horizontal, (logo ? 7 : 10) * formatBadgeScale)
       .frame(height: 22 * formatBadgeScale)
       .overlay(
         RoundedRectangle(cornerRadius: 6 * formatBadgeScale, style: .continuous)
@@ -1019,10 +1114,12 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     /// off by it (KP, 2026-11-09: "the poster should be more down").
     static let backdropShare: CGFloat = 1.08
     static let backdropTop: CGFloat = 56
-    static let logoWidth: CGFloat = 0.5
-    static let logoHeight: CGFloat = 64
-    /// The centred logo's box (KP's mockup, 2026-11-09).
-    static let logoBox = CGSize(width: 210, height: 130)
+    /// The centred logo's box: as wide as the text column and 120 pt tall, so
+    /// every logo grows until it meets one edge. Thin wide wordmarks (The
+    /// Odyssey) fill the width and tall ones fill the height (KP, 2026-11-10:
+    /// "Why is odyssey logo so small bro… make those logos way bigger").
+    static let logoMaxWidth: CGFloat = 360
+    static let logoHeight: CGFloat = 120
     static let sectionGap: CGFloat = 26
     static let actionColumn: CGFloat = 50
     static let actionCircle: CGFloat = 50
@@ -1057,19 +1154,15 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       let logoTop = min(360, max(280, viewport * 0.377))
       return VStack(alignment: .leading, spacing: 0) {
         HeroTitle(
-          library: library, item: titleItem, maxWidth: PhoneDetail.logoBox.width, maxHeight: PhoneDetail.logoBox.height,
+          library: library, item: titleItem,
+          maxWidth: min(PhoneDetail.logoMaxWidth, width - PhoneDetail.margin - PhoneDetail.trailing),
+          maxHeight: PhoneDetail.logoHeight,
           alignment: .bottom
         )
         .frame(maxWidth: .infinity)
-        .frame(height: PhoneDetail.logoBox.height, alignment: .bottom)
+        .frame(height: PhoneDetail.logoHeight, alignment: .bottom)
         // "2024 • 2h 46m • [PG-13] [HD] [Dolby Atmos]", the genres under it.
-        HStack(spacing: 8) {
-          DetailMetaLine(
-            item: titleItem, library: library, showsGenres: false, fontSize: 14, separator: "  •  ", ratingAfter: true,
-            greyRating: true)
-          FormatBadges(item: playTarget)
-        }
-        .minimumScaleFactor(0.85)
+        MetaBadgeRow(item: titleItem, playTarget: playTarget, library: library, fontSize: 14, alignment: .center)
         .frame(maxWidth: .infinity)
         .padding(.top, 12)
         if !titleItem.genres.isEmpty {
@@ -1428,7 +1521,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
   }
 
-  /// "+ My List": the Plex Watchlist.
+  /// My List: the Plex Watchlist, a bookmark (filled once added).
   struct PhoneWatchlistColumn: View {
     var item: PlexMetadata
     @Environment(AppModel.self) private var app
@@ -1439,7 +1532,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         Task { await app.toggleWatchlist(item) }
       } label: {
         PhoneActionLabel(title: "My List") {
-          Image(systemName: on ? "checkmark" : "plus").contentTransition(.symbolEffect(.replace))
+          Image(systemName: on ? "bookmark.fill" : "bookmark").contentTransition(.symbolEffect(.replace))
         }
       }
       .buttonStyle(PhoneActionButtonStyle())

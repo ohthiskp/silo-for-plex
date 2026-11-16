@@ -4,7 +4,7 @@ import SwiftUI
 /// Details on Apple TV: the iPhone's Details (KP's Avatar mockup) made wide
 /// (KP, 2026-11-09: "go based off how iOS is"). The scenic backdrop fills the
 /// top and fades into the frosted page; on the left the logo, rating box and
-/// facts, the format badges, Resume with round My List and More beside it,
+/// facts, the format badges, Resume with the round Watchlist bookmark and eye beside it,
 /// the progress line, the synopsis and director. Below: the season's
 /// episodes, Cast, More Like This.
 struct TVDetailPage: View {
@@ -28,15 +28,21 @@ struct TVDetailPage: View {
   @State private var related: [PlexHub] = []
   @State private var notOnServer = false
   @State private var error: String?
-  @State private var certification: String?
   @FocusState private var playFocused: Bool
+  /// 0 at the top, 1 once the page has scrolled down to Cast and beyond: the
+  /// backdrop blurs a little, then the page is all frosted glass (KP, 2026-11-16).
+  @State private var frost: CGFloat = 0
+  /// The season tab that has focus (KP, 2026-11-16: tabs, not a dropdown).
+  @FocusState private var seasonFocus: String?
+  @State private var seasonLoad: Task<Void, Never>?
 
   private var shown: PlexMetadata { item ?? seed }
 
   /// The show on an episode's or season's page: its logo, backdrop, facts and cast.
   private var titleItem: PlexMetadata {
     if shown.type == .episode || shown.type == .season, let parentShow { return parentShow }
-    return shown
+    // Genres and length from TMDB for titles that aren't on Plex.
+    return library.filled(shown)
   }
 
   private var playTarget: PlexMetadata { focus ?? shown }
@@ -73,6 +79,10 @@ struct TVDetailPage: View {
       .padding(.bottom, 100)
     }
     .scrollClipDisabled()
+    .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { _, y in
+      let value = min(1, max(0, (y - 120) / 520))
+      if abs(value - frost) > 0.02 || value == 0 || value == 1 { frost = value }
+    }
     .background {
       ZStack(alignment: .top) {
         AmbientBackdrop(library: library, item: titleItem)
@@ -80,15 +90,18 @@ struct TVDetailPage: View {
           if let still = episodeStill {
             RemoteImage(url: still, placeholder: Color.clear)
           } else {
-            ArtworkImage(
-              library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
+            // The art sits right with faces clear of the logo and buttons, the
+            // rest softly blurred, like the hero (KP, 2026-11-16, Dune).
+            TVHeroArt(library: library, item: titleItem, kind: .scenery, clearX: TVLayout.leading + 760 + 50, push: 0, maxX: 760)
           }
         }
         .id(episodeStill)
         .transition(.opacity)
-        .frame(maxWidth: .infinity)
+        // Edge to edge: inside the safe area it left a dark strip down the left.
+        .frame(width: 1920)
         .frame(height: 1080)
         .clipped()
+        .blur(radius: frost * 28, opaque: true)
         .overlay { HeroBlend() }
         .mask {
           LinearGradient(
@@ -96,7 +109,14 @@ struct TVDetailPage: View {
             startPoint: .top, endPoint: .bottom)
         }
         .ignoresSafeArea()
+        // Frosted glass over everything once you're down in Cast, a touch lighter.
+        Rectangle()
+          .fill(.regularMaterial)
+          .overlay(Color.white.opacity(0.04))
+          .opacity(frost)
+          .ignoresSafeArea()
       }
+      .animation(.easeOut(duration: 0.25), value: frost)
     }
     .ignoresSafeArea(edges: .top)
     .defaultFocus($playFocused, true, priority: .userInitiated)
@@ -105,10 +125,6 @@ struct TVDetailPage: View {
       let key = shown.type == .episode ? shown.grandparentRatingKey : shown.type == .season ? shown.parentRatingKey : nil
       guard let key, parentShow?.ratingKey != key else { return }
       parentShow = try? await library.details(key)
-    }
-    .task(id: titleItem.id) {
-      guard titleItem.officialRating == nil, titleItem.type == .movie || titleItem.type == .show else { return }
-      certification = await library.tmdbArtwork(for: titleItem)?.certification
     }
   }
 
@@ -119,19 +135,19 @@ struct TVDetailPage: View {
       TVLogoTitle(library: library, item: titleItem, maxWidth: 700, maxHeight: 200, textSize: 90)
         .padding(.bottom, 6)
 
-      HStack(spacing: 16) {
-        if let rating = titleItem.officialRating ?? certification {
-          RatingBox(text: rating, fontSize: 20)
-        }
-        let facts = TVFacts.line(titleItem).replacingOccurrences(of: " · ", with: "  •  ")
-        if !facts.isEmpty {
-          Text(facts)
-            .font(.system(size: 26, weight: .medium))
-            .foregroundStyle(Astra.Color.ink.opacity(0.9))
-            .lineLimit(1)
-        }
+      // KP (2026-11-16), the same as the hero, the iPhone and the Mac:
+      // "2008 • 8 Seasons [TV-MA] [HD]" (a movie gives its length), the
+      // genres on their own line under it.
+      // KP's mockup (2026-11-16, Dune): "2024 [PG-13] 2h 46m 4K UHD Dolby Vision Dolby Atmos".
+      MetaBadgeRow(item: titleItem, playTarget: playTarget, library: library, fontSize: TVLayout.metaSize)
+      .frame(height: 42)
+      if !titleItem.genres.isEmpty {
+        Text(titleItem.genres.prefix(3).map(\.tag).joined(separator: " · "))
+          .font(.system(size: 24, weight: .medium))
+          .foregroundStyle(Astra.Color.ink.opacity(0.65))
+          .lineLimit(1)
+          .padding(.top, -8)
       }
-      TVFormatChips(item: playTarget, fontSize: 18, showsRating: false)
 
       if let focus, focus.type == .episode {
         VStack(alignment: .leading, spacing: 6) {
@@ -160,23 +176,26 @@ struct TVDetailPage: View {
         .focused($playFocused)
         .disabled(notOnServer || !app.canPlay(playTarget))
 
+        // KP (2026-11-16): the Watchlist bookmark and the eye stand alone,
+        // with no names under them (as on the iPhone).
         if let target = watchlistTarget {
-          TVLabeledRound(label: app.isOnWatchlist(target) ? "In My List" : "My List") {
-            TVRoundWatchlist(item: target)
-          }
+          TVRoundWatchlist(item: target)
         }
-        if !shown.isCatalogOnly, !notOnServer {
-          TVLabeledRound(label: "More") {
-            Menu {
-              ItemMenuItems(library: library, item: playTarget, onDetails: true)
-            } label: {
-              Image(systemName: "ellipsis")
-                .font(.system(size: 30, weight: .semibold))
-                .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)
-            }
-            .buttonStyle(TVGlassButtonStyle(round: true))
-            .accessibilityLabel("More")
+        // KP (2026-11-16, Apple TV): an eye that marks the movie or the
+        // picked episode watched or unwatched, instead of More.
+        // On a show with no episode picked it marks the whole show.
+        if !shown.isCatalogOnly, !notOnServer, let markTarget = watchedTarget {
+          let watched = library.isWatched(markTarget)
+          Button {
+            Task { await library.setWatched(markTarget, watched: !watched) }
+          } label: {
+            Image(systemName: watched ? "eye.fill" : "eye")
+              .font(.system(size: 30, weight: .semibold))
+              .contentTransition(.symbolEffect(.replace))
+              .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)
           }
+          .buttonStyle(TVGlassButtonStyle(round: true))
+          .accessibilityLabel(watched ? "Mark Unwatched" : "Mark Watched")
         }
       }
       .focusSection()
@@ -217,6 +236,14 @@ struct TVDetailPage: View {
     .padding(.trailing, 600)
     .padding(.top, 330)
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  /// What the eye marks: the picked episode or the movie, else the show.
+  private var watchedTarget: PlexMetadata? {
+    switch playTarget.type {
+    case .movie, .episode, .show, .season: return playTarget
+    default: return titleItem.type == .show ? titleItem : nil
+    }
   }
 
   /// What My List adds: the title itself, or an episode's or season's show.
@@ -269,35 +296,16 @@ struct TVDetailPage: View {
 
   // MARK: Episodes
 
-  /// KP (2026-11-14): a season dropdown, then the whole season.
+  /// KP (2026-11-16, Apple TV): the seasons as a row of tabs at the top,
+  /// starting on the season being watched (Entourage opens on Season 3).
+  /// Moving onto a tab shows that season; the whole season is listed below.
   private var episodesSection: some View {
     VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 24) {
-        if seasons.count > 1 {
-          Menu {
-            ForEach(seasons) { season in
-              Button {
-                Task { await selectSeason(season) }
-              } label: {
-                if season.id == selectedSeason?.id {
-                  Label(season.title, systemImage: "checkmark")
-                } else {
-                  Text(season.title)
-                }
-              }
-            }
-          } label: {
-            HStack(spacing: 12) {
-              Text(selectedSeason?.title ?? "Season")
-              Image(systemName: "chevron.down").font(.system(size: 18, weight: .bold))
-            }
-            .font(.system(size: 26, weight: .semibold))
-            .padding(.horizontal, 28)
-            .frame(height: 60)
-          }
-          .buttonStyle(TVGlassButtonStyle(chip: true))
-          .accessibilityLabel("Season, \(selectedSeason?.title ?? "")")
-        } else {
+      if seasons.count > 1 {
+        seasonTabs
+      }
+      HStack(spacing: 18) {
+        if seasons.count <= 1 {
           Text(selectedSeason?.title ?? "Episodes")
             .font(.system(size: 30, weight: .bold))
             .foregroundStyle(Astra.Color.ink)
@@ -309,8 +317,7 @@ struct TVDetailPage: View {
         }
       }
       .padding(.horizontal, TVLayout.leading)
-      .padding(.vertical, 12)
-      .focusSection()
+      .padding(.top, 4)
       ScrollView(.horizontal, showsIndicators: false) {
         LazyHStack(alignment: .top, spacing: 36) {
           ForEach(episodes) { episode in
@@ -328,6 +335,63 @@ struct TVDetailPage: View {
       }
       .scrollClipDisabled()
       .focusSection()
+    }
+  }
+
+  private var seasonTabs: some View {
+    ScrollViewReader { proxy in
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 16) {
+          ForEach(seasons) { season in
+            Button {
+              chooseSeason(season)
+            } label: {
+              Text(season.title)
+                .font(.system(size: 26, weight: .semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 30)
+                .frame(height: 62)
+            }
+            .buttonStyle(TVGlassButtonStyle(chip: true, selected: season.id == selectedSeason?.id))
+            .focused($seasonFocus, equals: season.ratingKey)
+            .accessibilityAddTraits(season.id == selectedSeason?.id ? .isSelected : [])
+            .id(season.ratingKey)
+          }
+        }
+        .padding(.horizontal, TVLayout.leading)
+        .padding(.vertical, 18)
+      }
+      .scrollClipDisabled()
+      .focusSection()
+      .onAppear { if let key = selectedSeason?.ratingKey { proxy.scrollTo(key, anchor: .center) } }
+      .onChange(of: selectedSeason?.ratingKey) { _, key in
+        if let key { withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(key, anchor: .center) } }
+      }
+    }
+    .onChange(of: seasonFocus) { old, new in
+      guard let new else { return }
+      // Coming into the row lands on the season that's showing.
+      if old == nil, let current = selectedSeason?.ratingKey, new != current {
+        seasonFocus = current
+        return
+      }
+      if let season = seasons.first(where: { $0.ratingKey == new }), season.id != selectedSeason?.id {
+        chooseSeason(season)
+      }
+    }
+  }
+
+  /// Shows a season's episodes. The tab lights up straight away; the list
+  /// follows a moment later, so sweeping across the tabs doesn't load each one.
+  private func chooseSeason(_ season: PlexMetadata) {
+    selectedSeason = season
+    seasonLoad?.cancel()
+    seasonLoad = Task {
+      try? await Task.pause(0.2)
+      guard !Task.isCancelled else { return }
+      let list = (try? await library.children(of: season.ratingKey)) ?? []
+      guard !Task.isCancelled, selectedSeason?.id == season.id else { return }
+      withAnimation(.easeInOut(duration: 0.2)) { episodes = list }
     }
   }
 
@@ -416,23 +480,6 @@ struct TVDetailPage: View {
 
 // MARK: - Pieces
 
-/// A round button with its name under it (My List, More), as on the iPhone.
-private struct TVLabeledRound<Content: View>: View {
-  var label: String
-  @ViewBuilder var content: Content
-
-  var body: some View {
-    VStack(spacing: 12) {
-      content
-      Text(label)
-        .font(.system(size: 20, weight: .medium))
-        .foregroundStyle(Astra.Color.ink.opacity(0.85))
-        .lineLimit(1)
-        .fixedSize()
-    }
-  }
-}
-
 /// An episode: its still with the progress line, "1. Title" and the length,
 /// and two lines of its summary. Selecting picks it (KP, 2026-11-14:
 /// don't play on a click); pressing the picked one again plays it.
@@ -482,6 +529,7 @@ private struct TVEpisodeLabel: View {
           RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)
             .strokeBorder(
               Astra.Color.ink.opacity(focused ? 0.8 : selected ? 0.55 : 0.08), lineWidth: focused || selected ? 4 : 1))
+        .tvShine()
       HStack(spacing: 10) {
         Text([item.index.map { "\($0)." }, item.title].compactMap { $0 }.joined(separator: " "))
           .font(.system(size: 24, weight: .semibold))

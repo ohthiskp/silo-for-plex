@@ -104,6 +104,13 @@ final class PlayerController {
     return VideoTier.badge(for: VideoTier.tier(width: Int(videoWidth), height: Int(videoHeight)))
   }
 
+  /// "4K UHD", "4K" or "HD" for the frames mpv is decoding:
+  /// "4K UHD" when the file playing is 4K with HDR or Dolby Vision (KP, 2026-11-16).
+  var qualityLabel: String? {
+    guard videoWidth > 0 || videoHeight > 0 else { return nil }
+    return VideoTier.label(for: VideoTier.tier(width: Int(videoWidth), height: Int(videoHeight)), dynamicRange: dynamicRange)
+  }
+
   /// Dolby Vision / HDR10 / HLG of the file playing (from Plex's metadata).
   /// On iPhone and Mac mpv shows Dolby Vision as HDR, so this names the file.
   var dynamicRange: DynamicRange? {
@@ -143,10 +150,9 @@ final class PlayerController {
     var media: PlexMedia
     var id: String { "\(item.ratingKey)-\(media.id)" }
 
-    /// "4K", "HD" or "SD".
+    /// "4K UHD", "4K", "HD" or "SD".
     var badge: String {
-      let badge = VideoTier.badge(for: media.tier) ?? "SD"
-      return badge == "4K UHD" ? "4K" : badge
+      VideoTier.label(for: media.tier, dynamicRange: media.dynamicRange) ?? "SD"
     }
 
     /// "HEVC · 58.2 GB".
@@ -189,7 +195,7 @@ final class PlayerController {
   /// Plays `item`: from `local` (a downloaded file) when given, else the
   /// original file on the server.
   func play(_ item: PlexMetadata, library: LibraryStore, local: PlaybackSource? = nil) throws {
-    guard let window else { throw PlexError.invalidResponse }
+    guard let window = window ?? Self.fallbackWindow else { throw PlayerError.noWindow }
     // Always the original file; the preference only picks between versions.
     let source: PlaybackSource
     if let local {
@@ -1104,5 +1110,28 @@ final class MpvDelegateBridge: MpvPlayerDelegate {
 
   func onEvent(name: String, data: [String: Any]?) {
     MainActor.assumeIsolated { owner?.eventReceived(name, data) }
+  }
+}
+
+/// Why playback couldn't start on this device (not a server problem).
+enum PlayerError: LocalizedError {
+  case noWindow
+
+  var errorDescription: String? {
+    switch self {
+    case .noWindow: "Astra couldn't open the player. Try again."
+    }
+  }
+}
+
+extension PlayerController {
+  /// The app's key window, when the one the shell reported is gone.
+  static var fallbackWindow: PlatformWindow? {
+    #if os(macOS)
+      NSApp.keyWindow ?? NSApp.mainWindow
+    #else
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        .flatMap(\.windows).first { $0.isKeyWindow }
+    #endif
   }
 }

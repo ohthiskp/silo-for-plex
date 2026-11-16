@@ -27,6 +27,8 @@ final class SessionWatch: @unchecked Sendable {
   /// The main thread's last heartbeat (seconds, monotonic).
   private var mainBeat = SessionWatch.now()
   private var lastWrite: TimeInterval = 0
+  /// The footprint last written to the activity list.
+  private var notedMB = 0
 
   /// How long the main thread may stay silent before it counts as frozen.
   /// iOS's watchdog allows a little more than this before it stops the app.
@@ -106,7 +108,7 @@ final class SessionWatch: @unchecked Sendable {
         watch.update {
           $0.memoryWarnings += 1
           $0.recordMemory(usedMB: used, leftMB: left)
-          $0.note("Low-memory warning from iOS" + (used.map { " (\($0) MB in use)" } ?? ""))
+          $0.note("Low-memory warning from iOS" + (used.map { " (\($0) MB in use)" } ?? "") + ": " + MemoryClues.summary)
         }
       }
     #elseif os(macOS)
@@ -150,10 +152,21 @@ final class SessionWatch: @unchecked Sendable {
         $0.note("Responding again after \(seconds) s")
       }
     }
-    // Memory and "last seen" every 10 s.
+    // Memory and "last seen" every 10 s, and at once when memory climbs
+    // fast (KP, 2026-11-15: 2.7 GB nine seconds after launch), so the report
+    // shows when it grew and what Astra was doing then.
     let used = Self.memoryUsedMB()
     let left = Self.memoryLeftMB()
-    update(write: Self.now() - lastWrite >= 10) { $0.recordMemory(usedMB: used, leftMB: left) }
+    lock.lock()
+    let jumped = used.map { $0 - notedMB >= 250 } ?? false
+    if jumped, let used { notedMB = used }
+    lock.unlock()
+    update(write: jumped || Self.now() - lastWrite >= 10) {
+      $0.recordMemory(usedMB: used, leftMB: left)
+      if jumped, let used {
+        $0.note("Memory \(used) MB" + (left.map { ", \($0) MB left" } ?? "") + ": " + MemoryClues.summary)
+      }
+    }
   }
 
   // MARK: - Record

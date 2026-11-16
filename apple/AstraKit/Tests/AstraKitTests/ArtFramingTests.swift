@@ -68,4 +68,73 @@ final class ArtFramingTests: XCTestCase {
   func testBadInputGivesZero() {
     XCTAssertEqual(ArtFraming.frame(boxWidth: 0, zoneHeight: 410, aspect: 1.7, limitY: 300), .zero)
   }
+
+  // MARK: Apple TV hero (KP, 2026-11-16): logo left, art right, faces clear of the logo.
+
+  private func side(_ focus: CGRect?) -> CGRect {
+    ArtFraming.side(
+      boxWidth: 1920, boxHeight: 900, aspect: 16.0 / 9.0, clearX: 1080, minX: 240, maxX: 760, defaultX: 420,
+      focus: focus)
+  }
+
+  func testTVHeroPushMovesFacesTowardTheRightEdge() {
+    // Faces at 15%–40% of a 1600-wide picture: just clear of 1080, or pushed right.
+    let faces = CGRect(x: 0.15, y: 0.2, width: 0.25, height: 0.4)
+    func at(_ push: Double) -> CGRect {
+      ArtFraming.side(
+        boxWidth: 1920, boxHeight: 900, aspect: 16.0 / 9.0, clearX: 1080, rightMargin: 60,
+        minX: 240, maxX: 1400, defaultX: 420, focus: faces, push: push)
+    }
+    XCTAssertEqual(at(0).minX, 840, accuracy: 0.5)  // 1080 - 0.15 * 1600
+    let rightmost = 1920 - 60 - 0.40 * 1600.0  // 1220
+    XCTAssertEqual(at(1).minX, rightmost, accuracy: 0.5)
+    XCTAssertEqual(at(0.5).minX, (840 + rightmost) / 2, accuracy: 0.5)
+    // A spread too wide to clear the block keeps every face on screen when pushed.
+    let wide = CGRect(x: 0.05, y: 0.2, width: 0.6, height: 0.4)
+    let r = ArtFraming.side(
+      boxWidth: 1920, boxHeight: 900, aspect: 16.0 / 9.0, clearX: 1080, rightMargin: 60,
+      minX: 240, maxX: 1400, defaultX: 420, focus: wide, push: 1)
+    XCTAssertEqual(r.minX + 0.65 * r.width, 1860, accuracy: 0.5)
+  }
+
+  func testTVHeroWithoutFacesSitsRightOfCentre() {
+    let r = side(nil)
+    XCTAssertEqual(r.minX, 420, accuracy: 0.001)
+    XCTAssertEqual(r.height, 900, accuracy: 0.001)
+    XCTAssertEqual(r.width, 1600, accuracy: 0.001)
+  }
+
+  func testTVHeroFaceInTheMiddleClearsTheLogo() {
+    // One face around the picture's centre.
+    let focus = CGRect(x: 0.42, y: 0.2, width: 0.16, height: 0.3)
+    let r = side(focus)
+    XCTAssertGreaterThanOrEqual(r.minX + focus.minX * r.width, 1080 - 0.5)
+    XCTAssertLessThanOrEqual(r.minX + focus.maxX * r.width, 1880 + 0.5)
+  }
+
+  func testTVHeroFaceAlreadyOnTheRightStaysPut() {
+    // Faces on the right of the art: no reason to push it further right.
+    let focus = CGRect(x: 0.65, y: 0.2, width: 0.15, height: 0.3)
+    XCTAssertEqual(side(focus).minX, 420, accuracy: 0.001)
+  }
+
+  func testTVHeroFaceAtTheRightEdgeStaysOnScreen() {
+    let focus = CGRect(x: 0.85, y: 0.2, width: 0.12, height: 0.3)
+    let r = side(focus)
+    XCTAssertLessThanOrEqual(r.minX + focus.maxX * r.width, 1880 + 0.5)
+    XCTAssertGreaterThanOrEqual(r.minX, 240)
+  }
+
+  func testTVHeroNeverPushedAllTheWayRight() {
+    // A face at the far left of the picture would need a huge shift: capped.
+    let focus = CGRect(x: 0.02, y: 0.2, width: 0.1, height: 0.3)
+    XCTAssertEqual(side(focus).minX, 760, accuracy: 0.001)
+  }
+
+  func testTVHeroWideGroupIsCentredRightOfTheLogo() {
+    let focus = CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.5)
+    let r = side(focus)
+    let mid = r.minX + focus.midX * r.width
+    XCTAssertEqual(mid, 1480, accuracy: 0.5)
+  }
 }

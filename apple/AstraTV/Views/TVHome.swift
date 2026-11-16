@@ -14,6 +14,14 @@ struct TVHome: View {
   @State private var heroFocused = false
   @AppStorage("astra.home.topTenSeries") private var topSeries = false
   @Environment(\.tvScrolledDown) private var scrolledDown
+  /// Left reaches the streaming circles only from the first thing in a row
+  /// or the first hero title (KP, 2026-11-16: "only go to the left if it's
+  /// the first on the list"). Elsewhere Left walks back along the row or the hero.
+  @State private var sidebarReachable = true
+  /// Bumped to put focus on the hero's first button: Right from a circle,
+  /// or Down from the top bar, when tvOS finds nothing that way by itself.
+  @State private var heroFocusRequest = 0
+  @Environment(\.tvFocusPage) private var pageFocus
 
   private var heroItems: [PlexMetadata] { library.homeHero }
   private var current: PlexMetadata? {
@@ -33,12 +41,20 @@ struct TVHome: View {
       .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y + $0.contentInsets.top > 120 }) { _, down in
         scrolledDown(down)
       }
-      .environment(\.tvLeading, TVLayout.homeLeading)
+      .environment(\.tvLeading, TVLayout.homeLeading - TVLayout.sidebarColumn)
+      .environment(\.tvLeftEdge) { sidebarReachable = $0 }
       .ignoresSafeArea(edges: .top)
+      // The page starts right of the circles and is one focus section from
+      // top to bottom, so Right from any circle lands on the page (KP,
+      // 2026-11-16: only HBO Max, level with Play, could get back before).
+      .padding(.leading, TVLayout.sidebarColumn)
+      .focusSection()
 
       // KP (2026-11-09): the streaming services as circles down the left.
-      TVServiceSidebar(library: library)
+      TVServiceSidebar(library: library) { heroFocusRequest += 1 }
+        .disabled(!sidebarReachable)
     }
+    .onChange(of: pageFocus) { heroFocusRequest += 1 }
     .background { AmbientBackdrop(library: library, item: current) }
     .onChange(of: heroItems.map(\.id)) { _, ids in if index >= ids.count { index = 0 } }
     // The hero turns every 9 s while focus is elsewhere.
@@ -58,31 +74,29 @@ struct TVHome: View {
   @ViewBuilder private var hero: some View {
     ZStack(alignment: .bottomLeading) {
       if let current {
-        ArtworkImage(
-          library: library, item: current, kind: .heroBackdrop, width: 1920, height: 1080,
-          placeholder: Color.clear
-        )
-        .frame(maxWidth: .infinity)
-        .frame(height: TVLayout.heroHeight)
-        .clipped()
-        .overlay { HeroBlend() }
-        .mask {
-          LinearGradient(
-            stops: [.init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
-            startPoint: .top, endPoint: .bottom)
-        }
-        // Edge to edge: out past the TV's 80 pt side safe area.
-        .padding(.horizontal, -80)
-        .id(current.id)
-        .transition(.opacity)
+        // KP (2026-11-16): the logo on the left, the art on the right with
+        // the faces clear of the logo, the rest of the picture softly blurred.
+        TVHeroArt(library: library, item: current)
+          .frame(width: 1920, height: TVLayout.heroHeight)
+          .overlay { HeroBlend() }
+          .mask {
+            LinearGradient(
+              stops: [.init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
+              startPoint: .top, endPoint: .bottom)
+          }
+          // Edge to edge: out past the circles and the TV's 80 pt side safe area.
+          .padding(.leading, -(80 + TVLayout.sidebarColumn))
+          .padding(.trailing, -80)
+          .id(current.id)
+          .transition(.opacity)
 
+        // One block for every title, so focus stays on the button it's on
+        // while Left and Right walk through the hero.
         TVHeroInfo(
           library: library, item: current, count: heroItems.count, index: index,
-          focused: $heroFocused, step: step
+          focused: $heroFocused, focusRequest: heroFocusRequest, step: step
         )
-        .id("info-\(current.id)")
-        .transition(.opacity)
-        .padding(.leading, TVLayout.homeLeading)
+        .padding(.leading, TVLayout.homeLeading - TVLayout.sidebarColumn)
         .padding(.bottom, 40)
       } else {
         VStack(spacing: 20) {
@@ -135,83 +149,119 @@ struct TVHome: View {
 
 // MARK: - Hero info
 
-/// The hero's block, bottom left, after KP's hero mockup (2026-11-09) as on
-/// the iPhone and Mac: the title's logo centred over the block, then
-/// "2025 · 2h 8m · Sci-Fi [PG-13] [4K]" on one line, then a wide white Play
-/// beside the round glass + (Watchlist). No Details button: hold Select on
-/// Play for Details and the rest. Right on + turns the hero; the dots show
-/// where you are.
+/// The hero's block, bottom left (KP, 2026-11-16): the title's logo on the
+/// left, then "2025 • 2h 8m [PG-13] [4K] [Atmos]" on one line as on the
+/// iPhone and Mac, the genres under it, then just Play and Details ("keep it
+/// simple"), each with room to grow when focused. Right on Details turns to
+/// the next title; Left on Play goes back a title, and only from the first
+/// title does Left reach the streaming circles.
 private struct TVHeroInfo: View {
   var library: LibraryStore
   var item: PlexMetadata
   var count: Int
   var index: Int
   @Binding var focused: Bool
+  var focusRequest: Int
   var step: (Int) -> Void
 
   @Environment(\.playItem) private var playItem
+  @Environment(\.openItem) private var openItem
+  @Environment(\.tvLeftEdge) private var leftEdge
   @Environment(AppModel.self) private var app
   @FocusState private var focus: Field?
+  /// When focus last moved between the buttons: a Right that moved focus
+  /// onto Details must not also turn the hero (KP: "it automatically moves to the right").
+  @State private var movedAt = Date.distantPast
   /// The server's full copy, for the 4K / Dolby badges and the runtime.
   @State private var full: PlexMetadata?
 
-  private enum Field: Hashable { case play, plus }
+  private enum Field: Hashable { case play, details }
 
-  private static let blockWidth: CGFloat = 820
+  static let blockWidth: CGFloat = 820
 
   private var playable: Bool { library.availability(of: item) != .notOnServer && app.canPlay(item) }
-  private var firstFocus: Field { playable || item.tmdbKey == nil ? .play : .plus }
-  private var shown: PlexMetadata { full ?? library.indexMatch(item) ?? item }
+  private var firstFocus: Field { playable ? .play : .details }
+  /// TMDB fills what Plex doesn't give (genres, length) for titles not on Plex.
+  private var shown: PlexMetadata { library.filled(full ?? library.indexMatch(item) ?? item) }
+  private var settled: Bool { Date().timeIntervalSince(movedAt) > 0.3 }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 24) {
-      VStack(spacing: 22) {
-        // KP (2026-11-14): a bigger, more prominent title logo.
-        TVLogoTitle(library: library, item: item, maxWidth: 820, maxHeight: 240, textSize: 90, centered: true)
-          .frame(maxWidth: .infinity)
-        HStack(spacing: 14) {
-          DetailMetaLine(item: shown, library: library, fontSize: 26, genreLimit: 1, ratingAfter: true)
-            .layoutPriority(1)
-          TVFormatChips(item: shown, fontSize: 18, showsRating: false)
-        }
-        .frame(height: 40)
-        .frame(maxWidth: .infinity)
+    VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 0) {
+        TVLogoTitle(library: library, item: item, maxWidth: 760, maxHeight: 230, textSize: 90)
+          .frame(height: 230, alignment: .bottomLeading)
+        // KP's mockup (2026-11-16): "2024 [PG-13] 2h 46m 4K UHD Dolby Vision Dolby Atmos".
+        MetaBadgeRow(item: shown, playTarget: shown, library: library, fontSize: TVLayout.metaSize)
+        .frame(height: 42)
+        .padding(.top, 26)
+        Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
+          .font(.system(size: 24, weight: .medium))
+          .foregroundStyle(Astra.Color.ink.opacity(0.65))
+          .lineLimit(1)
+          .frame(height: 30)
+          .padding(.top, 6)
       }
+      .id(item.id)
+      .transition(.opacity)
 
-      HStack(spacing: 20) {
+      HStack(spacing: 28) {
         Button {
           playItem(item)
         } label: {
-          Label("Play", systemImage: "play.fill")
+          Label(item.progress != nil ? "Resume" : "Play", systemImage: "play.fill")
             .font(.system(size: 30, weight: .semibold))
-            .frame(maxWidth: .infinity)
+            .lineLimit(1)
+            .frame(width: 250)
         }
         .buttonStyle(TVGlassButtonStyle(prominent: true))
         .focused($focus, equals: .play)
         .disabled(!playable)
-        // Hold Select for Details, Mark Watched and Go to (no downloads on TV).
+        // Hold Select for Mark Watched and Go to (no downloads on TV).
         .itemMenu(library: library, item: item)
 
-        if item.tmdbKey != nil {
-          TVRoundWatchlist(item: item)
-            .focused($focus, equals: .plus)
+        Button {
+          openItem(item)
+        } label: {
+          Label("Details", systemImage: "info.circle")
+            .font(.system(size: 30, weight: .semibold))
+            .lineLimit(1)
+            .frame(width: 200)
         }
+        .buttonStyle(TVGlassButtonStyle())
+        .focused($focus, equals: .details)
       }
+      .padding(.top, 30)
       .focusSection()
       .onMoveCommand { direction in
-        // Only reached when focus can't move further that way.
-        if direction == .right, focus == .plus || (focus == .play && item.tmdbKey == nil) { step(1) }
+        // Reached when focus has nowhere to go that way (the circles are off
+        // while the hero isn't on its first title).
+        guard settled else { return }
+        if direction == .right, focus == .details { step(1) }
+        if direction == .left, focus == firstFocus, index > 0 { step(-1) }
       }
       if count > 1 {
         TVDots(count: count, index: index)
-          .frame(maxWidth: .infinity)
+          .padding(.top, 30)
+          .padding(.leading, 6)
       }
     }
-    .frame(width: Self.blockWidth)
-    // Home opens on Play (or + when the title can't play here), not on the
-    // sidebar or the tab bar.
+    .frame(width: Self.blockWidth, alignment: .leading)
+    // Home opens on Play (or Details when the title can't play here), not on
+    // the sidebar or the tab bar.
     .defaultFocus($focus, firstFocus, priority: .userInitiated)
-    .onChange(of: focus) { _, new in focused = new != nil }
+    .onChange(of: focus) { _, new in
+      focused = new != nil
+      movedAt = Date()
+      if new != nil { leftEdge(index == 0) }
+    }
+    .onChange(of: focusRequest) { if focus == nil { focus = firstFocus } }
+    .onChange(of: index) { _, new in
+      if focus != nil { leftEdge(new == 0) }
+    }
+    .onChange(of: item.id) {
+      // The next title may have nothing to play: keep focus in the block.
+      if focus == .play, !playable { focus = .details }
+    }
     // Closing the player re-enables the page with nothing focused, and tvOS
     // would then pick the leftmost circle; land back on the hero instead.
     .onChange(of: app.player.isActive) { _, active in
@@ -232,6 +282,97 @@ private struct TVHeroInfo: View {
   }
 }
 
+/// The hero's picture (KP, 2026-11-16): the whole picture softly blurred
+/// across the hero, and the sharp picture on the right, fading in from the
+/// left behind the logo. Vision finds the faces once (ArtFocusStore) and the
+/// sharp picture slides right just far enough for them to clear the logo
+/// block, never hard against the right edge.
+/// Face-aware art: the picture sharp on the right with its faces clear of the
+/// text block on the left, the rest the same art softly blurred. The hero
+/// and Details use it (KP, 2026-11-16: "his face should be more on right").
+struct TVHeroArt: View {
+  var library: LibraryStore
+  var item: PlexMetadata
+  var kind: LibraryStore.ArtKind = .heroBackdrop
+  /// Where the text block ends on a 1920 pt screen; faces stay right of it.
+  var clearX: CGFloat = TVHeroArt.heroClearX
+  /// How far right the faces go past `clearX` (0 just clear … 1 at the right edge).
+  var push: Double = 0.6
+  /// The furthest right the art's left edge may sit, on a 1920 pt screen.
+  var maxX: CGFloat = 1300
+
+  @State private var url: URL?
+  @State private var focus: ArtFocus?
+
+  /// The logo block's right edge on a 1920 pt screen, plus clear air: KP
+  /// (2026-11-16) wants faces well to the right, not crowding the logo.
+  static let heroClearX: CGFloat = TVLayout.homeLeading + 80 + TVHeroInfo.blockWidth + 110
+
+  var body: some View {
+    GeometryReader { geo in
+      let scale = geo.size.width / 1920
+      let rect = ArtFraming.side(
+        boxWidth: geo.size.width, boxHeight: geo.size.height, aspect: focus?.aspect ?? 16.0 / 9.0,
+        clearX: clearX * scale, rightMargin: 60 * scale,
+        minX: 240 * scale, maxX: maxX * scale, defaultX: 420 * scale, focus: focus?.focus, push: push)
+      ZStack(alignment: .topLeading) {
+        // A colour wash only: blurred so far that no shape survives, so it
+        // can't show a second, shifted copy of a face (KP, 2026-11-16: the
+        // Breaking Bad art looked cut out with a ghost beside it).
+        RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
+          .frame(width: geo.size.width, height: geo.size.height)
+          .clipped()
+          .blur(radius: 110, opaque: true)
+          .opacity(0.55)
+        // The blurred art sits exactly under the sharp art, so the fade
+        // melts each thing into its own blur instead of into something else.
+        RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
+          .frame(width: rect.width, height: rect.height)
+          .clipped()
+          .blur(radius: 34, opaque: true)
+          .mask {
+            LinearGradient(
+              stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.7), location: 0.3)],
+              startPoint: .leading, endPoint: .trailing)
+          }
+          .offset(x: rect.minX)
+        RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
+          .frame(width: rect.width, height: rect.height)
+          .clipped()
+          .mask {
+            LinearGradient(
+              stops: [
+                // A long, soft fade so the sharp art's left edge melts into
+                // the blur with no visible line (KP, 2026-11-16).
+                .init(color: .clear, location: 0), .init(color: .black.opacity(0.3), location: 0.18),
+                .init(color: .black.opacity(0.75), location: 0.35), .init(color: .black, location: 0.5),
+              ],
+              startPoint: .leading, endPoint: .trailing)
+          }
+          .offset(x: rect.minX)
+      }
+      .animation(.easeInOut(duration: 0.35), value: focus)
+    }
+    .clipped()
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+    .task(id: "\(item.id)|\(kind)") {
+      focus = nil
+      let found = await library.artworkURL(for: item, kind, width: 1920, height: 1080)
+      guard !Task.isCancelled else { return }
+      url = found
+      guard let found else { return }
+      if let hit = await ArtFocusStore.shared.cached(found) {
+        focus = hit
+        return
+      }
+      let result = await ArtFocusStore.shared.focus(for: found)
+      guard !Task.isCancelled else { return }
+      focus = result
+    }
+  }
+}
+
 /// The hero's page dots: the current one a wide white capsule.
 private struct TVDots: View {
   var count: Int
@@ -246,7 +387,9 @@ private struct TVDots: View {
       }
     }
     .animation(.snappy(duration: 0.3), value: index)
-    .accessibilityHidden(true)
+    .accessibilityElement()
+    .accessibilityLabel("Title \(index + 1) of \(count)")
+    .accessibilityIdentifier("astra.hero.page")
   }
 }
 
@@ -257,7 +400,13 @@ private struct TVDots: View {
 /// open or grow. The chosen one is ringed in its brand colour.
 private struct TVServiceSidebar: View {
   var library: LibraryStore
+  /// Right from a circle, when tvOS finds nothing to its right by itself.
+  var right: () -> Void = {}
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
+  @FocusState private var focused: String?
+
+  private static let forYou = "for-you"
+  private var chosen: String { library.selectedService?.id ?? Self.forYou }
 
   var body: some View {
     VStack(spacing: 16) {
@@ -266,6 +415,12 @@ private struct TVServiceSidebar: View {
     }
     .frame(maxHeight: .infinity, alignment: .center)
     .focusSection()
+    .onMoveCommand { if $0 == .right { right() } }
+    .onChange(of: focused) { old, new in
+      // Coming in from the page lands on the service that's showing, not
+      // on whichever circle happens to sit level with the button.
+      if old == nil, let new, new != chosen { focused = chosen }
+    }
   }
 
   private func circle(_ service: StreamingService?) -> some View {
@@ -292,6 +447,7 @@ private struct TVServiceSidebar: View {
       .frame(width: TVLayout.sidebarCircle, height: TVLayout.sidebarCircle)
     }
     .buttonStyle(TVSidebarButtonStyle(selected: selected, brand: brand))
+    .focused($focused, equals: service?.id ?? Self.forYou)
     .accessibilityLabel(service?.label ?? "For You")
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
@@ -338,6 +494,7 @@ struct TVRow<Content: View>: View {
   var spacing: CGFloat = 40
   @ViewBuilder var content: Content
   @Environment(\.tvLeading) private var leading
+  @Environment(\.tvLeftEdge) private var leftEdge
 
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
@@ -352,9 +509,16 @@ struct TVRow<Content: View>: View {
       }
       .padding(.leading, leading)
       .focusSection()
+      .onTVFocus { if $0 { leftEdge(true) } }
       ScrollView(.horizontal, showsIndicators: false) {
         LazyHStack(alignment: .top, spacing: spacing) {
-          content
+          // Each card says whether it's the row's first, so Left only
+          // leaves the row for the streaming circles from there.
+          Group(subviews: content) { cards in
+            ForEach(Array(cards.enumerated()), id: \.element.id) { position, card in
+              card.onTVFocus { if $0 { leftEdge(position == 0) } }
+            }
+          }
         }
         .padding(.horizontal, leading)
         .padding(.vertical, 20)
@@ -479,6 +643,7 @@ private struct TVContinueLabel: View {
     .overlay(
       RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)
         .strokeBorder(.white.opacity(focused ? 0.8 : 0.08), lineWidth: focused ? 4 : 1))
+    .tvShine()
   }
 }
 
@@ -519,6 +684,7 @@ private struct TVRankPoster: View {
         RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)
           .strokeBorder(.white.opacity(focused ? 0.8 : 0.08), lineWidth: focused ? 4 : 1))
       .shadow(color: .black.opacity(0.45), radius: 8, x: -4, y: 0)
+      .tvShine()
   }
 }
 
@@ -575,7 +741,7 @@ private struct TVGlassButtonBody: View {
   }
 }
 
-/// The round + (Plex Watchlist), ✓ once added.
+/// The round Watchlist bookmark, filled once added (KP, 2026-11-16).
 struct TVRoundWatchlist: View {
   var item: PlexMetadata
   @Environment(AppModel.self) private var app
@@ -585,7 +751,7 @@ struct TVRoundWatchlist: View {
     Button {
       Task { await app.toggleWatchlist(item) }
     } label: {
-      Image(systemName: on ? "checkmark" : "plus")
+      Image(systemName: on ? "bookmark.fill" : "bookmark")
         .font(.system(size: 30, weight: .semibold))
         .contentTransition(.symbolEffect(.replace))
         .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)

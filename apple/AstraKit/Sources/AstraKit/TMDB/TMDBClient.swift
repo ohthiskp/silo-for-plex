@@ -100,6 +100,19 @@ public struct TMDBItem: Sendable, Hashable, Identifiable, Codable {
 extension PlexMetadata {
   /// True for a TMDB title shown on Home that hasn't been matched to the server yet.
   public var isCatalogOnly: Bool { ratingKey.hasPrefix("tmdb:") }
+
+  /// The title with what Plex didn't give it filled in from TMDB: the
+  /// rating, genres, a movie's length and a show's seasons (KP, 2026-11-16:
+  /// the hero had no genres or length for titles that aren't on Plex).
+  public func filling(from art: TMDBArtwork?) -> PlexMetadata {
+    guard let art else { return self }
+    var item = self
+    if item.officialRating == nil, let rating = art.certification { item.contentRating = rating }
+    if item.genres.isEmpty { item.genres = art.genres.map { PlexTag(tag: $0) } }
+    if item.duration == nil, type == .movie, let minutes = art.runtimeMinutes { item.duration = minutes * 60_000 }
+    if item.childCount == nil, type == .show, let seasons = art.seasons { item.childCount = seasons }
+    return item
+  }
 }
 
 /// TMDB artwork paths for one title.
@@ -112,16 +125,25 @@ public struct TMDBArtwork: Sendable, Hashable {
   /// The best-voted text-free wide shot, for the Details page (KP,
   /// 2026-11-09: "a more cinematic, scenic shot"). Nil when TMDB has none.
   public var sceneryPath: String?
+  /// Genre names in TMDB's order ("Science Fiction", "Adventure").
+  public var genres: [String] = []
+  /// A movie's length in minutes.
+  public var runtimeMinutes: Int?
+  /// A show's number of seasons.
+  public var seasons: Int?
 
   public init(
     posterPath: String?, backdropPath: String?, logoPath: String?, certification: String? = nil,
-    sceneryPath: String? = nil
+    sceneryPath: String? = nil, genres: [String] = [], runtimeMinutes: Int? = nil, seasons: Int? = nil
   ) {
     self.posterPath = posterPath
     self.backdropPath = backdropPath
     self.logoPath = logoPath
     self.certification = certification
     self.sceneryPath = sceneryPath
+    self.genres = genres
+    self.runtimeMinutes = runtimeMinutes
+    self.seasons = seasons
   }
 
   /// A full image URL. Sizes: poster w342/w500/w780, backdrop w780/w1280/original, logo w300/w500.
@@ -303,7 +325,9 @@ public struct TMDBClient: Sendable {
     return TMDBArtwork(
       posterPath: raw.poster_path, backdropPath: raw.backdrop_path,
       logoPath: Self.bestLogo(raw.images?.logos ?? [], original: raw.original_language),
-      certification: raw.usCertification, sceneryPath: Self.bestScenery(raw.images?.backdrops ?? []))
+      certification: raw.usCertification, sceneryPath: Self.bestScenery(raw.images?.backdrops ?? []),
+      genres: (raw.genres ?? []).compactMap(\.name), runtimeMinutes: raw.runtime.flatMap { $0 > 0 ? $0 : nil },
+      seasons: raw.number_of_seasons.flatMap { $0 > 0 ? $0 : nil })
   }
 
   /// The Details backdrop: a text-free backdrop (no title or tagline on it),
@@ -374,6 +398,10 @@ public struct TMDBClient: Sendable {
     var backdrop_path: String?
     var original_language: String?
     var images: Images?
+    var genres: [Genre]?
+    var runtime: Int?
+    var number_of_seasons: Int?
+    struct Genre: Decodable { var name: String? }
     var release_dates: Results<ReleaseCountry>?
     var content_ratings: Results<ContentRating>?
 

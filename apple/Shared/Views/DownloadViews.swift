@@ -262,7 +262,7 @@ struct DownloadsContent: View {
     } label: {
       DownloadRow(record: record, image: downloads.imageURL(record)) {
         HStack(spacing: Astra.Spacing.m) {
-          if let badge = record.resolutionBadge { Badge(text: badge) }
+          if let badge = record.resolutionBadge { Badge(text: badge == "4K UHD" ? "4K" : badge) }
           if let bytes = record.bytes {
             Text(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
               .astraFont(.meta).foregroundStyle(Astra.Color.muted)

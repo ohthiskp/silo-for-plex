@@ -9,7 +9,7 @@ run-name: SwiftUI performance probe ${{ github.sha }}
 # answers after 150 ms, like a remote Plex server; TMDB and cineby are live.
 on:
   push:
-    branches: [claude/project-thread-0nn44y]
+    branches: [claude/project-thread-0nn44y, claude/project-thread-r9sbp7]
     paths:
       - "apple/**"
       - ".github/workflows/astra-swiftui-perf.yml"

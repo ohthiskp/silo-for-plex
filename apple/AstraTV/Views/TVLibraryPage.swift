@@ -13,7 +13,7 @@ struct TVLibraryGridPage: View {
     ScrollView(.vertical, showsIndicators: false) {
       TVLibraryBrowser(library: library, kind: kind)
         .padding(.horizontal, TVLayout.leading)
-        .padding(.top, TVLayout.barSpace)
+        .padding(.top, TVLayout.pageTop)
         .padding(.bottom, 120)
     }
     .scrollClipDisabled()
@@ -33,7 +33,7 @@ struct TVWatchlistPage: View {
       TVWatchlistContent(library: library)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, TVLayout.leading)
-        .padding(.top, TVLayout.barSpace)
+        .padding(.top, TVLayout.pageTop)
         .padding(.bottom, 120)
     }
     .scrollClipDisabled()

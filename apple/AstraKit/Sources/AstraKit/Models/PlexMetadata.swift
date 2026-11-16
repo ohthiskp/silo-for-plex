@@ -388,6 +388,12 @@ extension PlexMetadata {
     PlaybackResolver.preferredMedia(media, quality: quality).flatMap { VideoTier.badge(for: $0.tier) }
   }
 
+  /// The badge shown for the version this device would play: "4K UHD" (4K with
+  /// HDR or Dolby Vision), "4K" (regular 4K) or "HD".
+  public func qualityLabel(for quality: PlaybackQuality = .auto) -> String? {
+    PlaybackResolver.preferredMedia(media, quality: quality).flatMap { VideoTier.label(for: $0.tier, dynamicRange: $0.dynamicRange) }
+  }
+
   /// Dolby Vision / HDR10 / HLG of the version this device would play, when
   /// Plex sent its streams (full details do; lists don't). Nil for SDR.
   public func dynamicRange(for quality: PlaybackQuality = .auto) -> DynamicRange? {

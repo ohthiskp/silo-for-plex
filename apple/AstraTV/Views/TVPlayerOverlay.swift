@@ -261,8 +261,7 @@ struct PlayerOverlay: View {
   // MARK: Chrome
 
   private var resolutionTag: String? {
-    guard let badge = player.resolutionBadge else { return nil }
-    return badge == "4K UHD" ? "4K" : badge
+    player.qualityLabel
   }
 
   /// The title with its badge and the subtitle button on one row, then the scrubber and times.
@@ -404,7 +403,7 @@ struct PlayerOverlay: View {
         }
         HStack(spacing: 16) {
           if let year = item?.year { Text(String(year)) }
-          if let rating = item?.contentRating, !rating.isEmpty {
+          if let rating = item?.officialRating {
             // A filled grey badge with no outline.
             RatingBox(text: rating, fontSize: 20, grey: true)
           }

@@ -1,80 +1,141 @@
 import AstraKit
 import SwiftUI
 
-/// Apple TV Settings (KP's mockup, 2026-11-14), under the usual top bar:
-/// the server and library index band, Appearance as a live preview of Home
-/// with the themes beside it, then Subtitles next to Playback, Library and
-/// About. Every row is one focusable button: Select turns a switch or steps
-/// to the next choice, like Apple's own TV Settings. No Downloads, gestures
-/// or tab bar here, because the TV app has none.
+/// Apple TV Settings, Direction C (KP picked it 2026-11-14 from
+/// design-audit/05): under the usual top bar, the server and library index
+/// band, then a category list on the left and the chosen category on the
+/// right. Every choice is its own focusable pill, so Left and Right walk the
+/// options and Select saves one (nothing cycles out of sight). Focus is the
+/// only white fill on the page; a saved choice is a tick and an outline.
+/// Changing Library quality asks before it reloads the library.
 struct TVSettingsPage: View {
   @Environment(AppModel.self) private var app
   @Environment(\.tvScrolledDown) private var scrolledDown
+  @State private var category: TVSettingsCategory = .appearance
+  @FocusState private var listFocus: TVSettingsCategory?
+  @Environment(\.tvFocusPage) private var pageFocus
 
   var body: some View {
-    ScrollViewReader { proxy in
-      ScrollView {
-        VStack(alignment: .leading, spacing: 44) {
-          Text("Settings")
-            .font(.system(size: 76, weight: .bold))
-            .foregroundStyle(Astra.Color.ink)
-          TVServerBand()
-          if let library = app.library {
-            TVAppearance(library: library)
-            HStack(alignment: .top, spacing: 48) {
-              TVSubtitles(library: library)
-              VStack(alignment: .leading, spacing: 44) {
-                TVPlaybackCard()
-                TVLibraryCard()
-                TVSettingsCard {
-                  NavigationLink {
-                    SettingsPaneView(pane: .about)
-                  } label: {
-                    TVSettingLine(title: "About and licenses") { TVChevron() }
-                  }
-                  .buttonStyle(TVSettingRowStyle())
-                }
-              }
-            }
-            .id("lower")
-          }
-          TVSettingsFooter()
+    ScrollView {
+      VStack(alignment: .leading, spacing: 40) {
+        Text("Settings")
+          .font(.system(size: 76, weight: .bold))
+          .foregroundStyle(Astra.Color.ink)
+        // Each band is its own focus section, the full width of the page, so
+        // Down from anywhere on the top bar (the gear sits far right, past the
+        // band's buttons) always lands on the next band (KP, 2026-11-16:
+        // "you can't even go down").
+        TVServerBand()
+          .focusSection()
+        HStack(alignment: .top, spacing: 56) {
+          categoryList
+          pane
         }
-        .padding(.horizontal, TVLayout.leading)
-        .padding(.top, 20)
-        .padding(.bottom, 80)
+        .focusSection()
       }
-      .scrollClipDisabled()
-      // The top bar fades away once the page scrolls, as on every other page.
-      .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y > 60 }) { _, down in scrolledDown(down) }
-      .task {
-        // CI screenshots (`-AstraDemoScroll 1`): the lower half.
-        guard Demo.homeScroll != nil, (try? await Task.pause(3)) != nil else { return }
-        proxy.scrollTo("lower", anchor: .top)
+      .padding(.horizontal, TVLayout.leading)
+      .padding(.top, 20)
+      .padding(.bottom, 80)
+    }
+    .scrollClipDisabled()
+    // The top bar fades away once the page scrolls, as on every other page.
+    .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y > 60 }) { _, down in scrolledDown(down) }
+    .onChange(of: listFocus) { if let listFocus { category = listFocus } }
+    // Down from the top bar lands on the category list.
+    .onChange(of: pageFocus) { if listFocus == nil { listFocus = category } }
+    .task {
+      // CI screenshots (`-AstraDemoSettings playback`): show that category.
+      guard Demo.isOn, let name = UserDefaults.standard.string(forKey: "AstraDemoSettings"),
+        let shown = TVSettingsCategory(rawValue: name)
+      else { return }
+      category = shown
+    }
+  }
+
+  /// The categories; moving focus onto one shows it on the right.
+  private var categoryList: some View {
+    VStack(spacing: 0) {
+      ForEach(TVSettingsCategory.allCases) { item in
+        Button {
+          category = item
+        } label: {
+          TVSettingLine(title: item.title) {
+            if item == category { TVChevron() }
+          }
+        }
+        .buttonStyle(TVSettingRowStyle())
+        .focused($listFocus, equals: item)
+        .accessibilityAddTraits(item == category ? .isSelected : [])
       }
+    }
+    .background(TVSettingsCard<EmptyView>.shape.fill(Astra.Color.ink.opacity(0.07)))
+    .overlay(TVSettingsCard<EmptyView>.shape.strokeBorder(Astra.Color.hairline, lineWidth: 1))
+    .frame(width: 400)
+    .focusSection()
+  }
+
+  @ViewBuilder private var pane: some View {
+    Group {
+      switch category {
+      case .appearance: TVAppearancePane()
+      case .playback: TVPlaybackPane()
+      case .subtitles: TVSubtitlesPane()
+      case .library: TVLibraryPane()
+      case .about: TVAboutPane()
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .topLeading)
+    .focusSection()
+    // Menu inside the pane goes back to the category list, not out of Settings.
+    .onExitCommand { listFocus = category }
+    .id(category)
+  }
+}
+
+enum TVSettingsCategory: String, CaseIterable, Identifiable {
+  case appearance, playback, subtitles, library, about
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .appearance: "Appearance"
+    case .playback: "Playback"
+    case .subtitles: "Subtitles"
+    case .library: "Library"
+    case .about: "About"
     }
   }
 }
 
 // MARK: - Building blocks
 
-/// A titled group of rows on quiet glass.
+/// A group of rows on quiet glass, with an optional title and a footer that
+/// explains a consequence.
 private struct TVSettingsCard<Content: View>: View {
   var title: String?
+  var footer: String?
   @ViewBuilder var content: Content
 
   static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 26, style: .continuous) }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 20) {
+    VStack(alignment: .leading, spacing: 16) {
       if let title {
         Text(title)
-          .font(.system(size: 36, weight: .bold))
+          .font(.system(size: 32, weight: .bold))
           .foregroundStyle(Astra.Color.ink)
       }
       VStack(spacing: 0) { content }
         .background(Self.shape.fill(Astra.Color.ink.opacity(0.07)))
         .overlay(Self.shape.strokeBorder(Astra.Color.hairline, lineWidth: 1))
+      if let footer {
+        Text(footer)
+          .font(.system(size: 25))
+          .foregroundStyle(Astra.Color.muted)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.horizontal, 8)
+      }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }
@@ -87,7 +148,7 @@ private struct TVSettingLine<Value: View>: View {
 
   var body: some View {
     HStack(spacing: 20) {
-      Text(title).font(.system(size: 28, weight: .medium)).lineLimit(1)
+      Text(title).font(.system(size: 29, weight: .medium)).lineLimit(1)
       Spacer(minLength: 12)
       value
     }
@@ -108,12 +169,12 @@ private struct TVSettingRowBody: View {
   var body: some View {
     let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
     configuration.label
-      .foregroundStyle(focused ? Color.black : Astra.Color.ink)
+      .foregroundStyle(focused ? Astra.Color.onSelection : Astra.Color.ink)
       .padding(.horizontal, 30)
-      .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+      .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
       .background {
         if focused {
-          shape.fill(.white).shadow(color: .black.opacity(0.45), radius: 22, y: 12)
+          shape.fill(Astra.Color.selection).shadow(color: .black.opacity(0.45), radius: 22, y: 12)
         }
       }
       .overlay(alignment: .top) {
@@ -127,30 +188,25 @@ private struct TVSettingRowBody: View {
   }
 }
 
-/// Capsule buttons for the band: white when focused, glass otherwise; Index
-/// Now is white even at rest, as the band's main action.
+/// Capsule buttons for the band and About: glass at rest, white only while focused.
 private struct TVPillStyle: ButtonStyle {
-  var prominent: Bool
-
   func makeBody(configuration: Configuration) -> some View {
-    TVPillBody(configuration: configuration, prominent: prominent)
+    TVPillBody(configuration: configuration)
   }
 }
 
 private struct TVPillBody: View {
   let configuration: ButtonStyleConfiguration
-  var prominent: Bool
   @Environment(\.isFocused) private var focused
   @Environment(\.isEnabled) private var isEnabled
 
   var body: some View {
-    let white = focused || prominent
     configuration.label
-      .font(.system(size: 25, weight: .semibold))
-      .foregroundStyle(white ? Color.black : Astra.Color.ink)
+      .font(.system(size: 26, weight: .semibold))
+      .foregroundStyle(focused ? Astra.Color.onSelection : Astra.Color.ink)
       .padding(.horizontal, 32)
       .frame(height: 64)
-      .background(Capsule().fill(white ? Color.white : Astra.Color.ink.opacity(0.12)))
+      .background(Capsule().fill(focused ? Astra.Color.selection : Astra.Color.ink.opacity(0.12)))
       .contentShape(Capsule())
       .opacity(isEnabled ? 1 : 0.45)
       .scaleEffect(configuration.isPressed ? 0.96 : (focused ? 1.08 : 1))
@@ -160,109 +216,101 @@ private struct TVPillBody: View {
   }
 }
 
-/// The chosen choice of a few, drawn like a segmented control; Select on the
-/// row steps to the next one.
-private struct TVSegments: View {
-  var options: [String]
-  var selected: Int
-  @Environment(\.isFocused) private var focused
+/// One choice of a setting. Focused: white with black text, lifted. Saved
+/// but not focused: a tick and a 2 pt outline, no fill. Others: plain text.
+private struct TVOptionStyle: ButtonStyle {
+  var isOn: Bool
 
-  var body: some View {
-    HStack(spacing: 0) {
-      ForEach(Array(options.enumerated()), id: \.offset) { i, title in
-        let on = i == selected
-        Text(title)
-          .font(.system(size: 23, weight: .semibold))
-          .foregroundStyle(on ? (focused ? Color.white : Color.black) : (focused ? Color.black.opacity(0.55) : Astra.Color.muted))
-          .padding(.horizontal, 22)
-          .frame(height: 48)
-          .background {
-            if on { RoundedRectangle(cornerRadius: 12, style: .continuous).fill(focused ? Color.black : Color.white) }
-          }
-      }
-    }
-    .padding(4)
-    .background(
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .fill(focused ? Color.black.opacity(0.08) : Astra.Color.ink.opacity(0.1)))
+  func makeBody(configuration: Configuration) -> some View {
+    TVOptionBody(configuration: configuration, isOn: isOn)
   }
 }
 
-private struct TVSwitch: View {
+private struct TVOptionBody: View {
+  let configuration: ButtonStyleConfiguration
   var isOn: Bool
   @Environment(\.isFocused) private var focused
 
   var body: some View {
-    let track: Color = isOn ? (focused ? .black : .white) : (focused ? Color.black.opacity(0.15) : Astra.Color.ink.opacity(0.2))
-    let knob: Color = isOn ? (focused ? .white : .black) : .white
-    Capsule()
-      .fill(track)
-      .frame(width: 66, height: 40)
-      .overlay(alignment: isOn ? .trailing : .leading) {
-        Circle().fill(knob).frame(width: 34, height: 34).padding(3)
+    HStack(spacing: 8) {
+      if isOn {
+        Image(systemName: "checkmark").font(.system(size: 21, weight: .bold)).accessibilityHidden(true)
       }
-      .animation(.snappy(duration: 0.2), value: isOn)
+      configuration.label
+    }
+    .font(.system(size: 26, weight: isOn ? .semibold : .medium))
+    .foregroundStyle(focused ? Astra.Color.onSelection : (isOn ? Astra.Color.ink : Astra.Color.muted))
+    .padding(.horizontal, 24)
+    .frame(height: 58)
+    .background {
+      Capsule().fill(focused ? Astra.Color.selection : Color.clear)
+    }
+    .overlay {
+      Capsule().strokeBorder(isOn && !focused ? Astra.Color.ink : Astra.Color.hairline, lineWidth: isOn && !focused ? 2 : 1)
+    }
+    .contentShape(Capsule())
+    .scaleEffect(configuration.isPressed ? 0.96 : (focused ? 1.08 : 1))
+    .shadow(color: .black.opacity(focused ? 0.4 : 0), radius: 14, y: 7)
+    .zIndex(focused ? 1 : 0)
+    .focusEffectDisabled()
+    .animation(.snappy(duration: 0.2), value: focused)
+  }
+}
+
+/// A setting's name with its choices as pills on the right.
+private struct TVOptionRow<Choice: Hashable, Label: View>: View {
+  var title: String
+  var choices: [Choice]
+  var selection: Choice
+  var choose: (Choice) -> Void
+  @ViewBuilder var label: (Choice) -> Label
+
+  var body: some View {
+    HStack(spacing: 20) {
+      Text(title)
+        .font(.system(size: 29, weight: .medium))
+        .foregroundStyle(Astra.Color.ink)
+        .lineLimit(1)
+      Spacer(minLength: 12)
+      HStack(spacing: 12) {
+        ForEach(choices, id: \.self) { choice in
+          Button {
+            choose(choice)
+          } label: {
+            label(choice)
+          }
+          .buttonStyle(TVOptionStyle(isOn: choice == selection))
+          .accessibilityHint(title)
+          .accessibilityAddTraits(choice == selection ? .isSelected : [])
+        }
+      }
+      .focusSection()
+    }
+    .padding(.horizontal, 30)
+    .frame(minHeight: 96)
+    .overlay(alignment: .top) { Rectangle().fill(Astra.Color.hairline).frame(height: 1).padding(.horizontal, 8) }
+  }
+}
+
+extension TVOptionRow where Label == Text {
+  init(title: String, choices: [Choice], selection: Choice, name: @escaping (Choice) -> String, choose: @escaping (Choice) -> Void) {
+    self.init(title: title, choices: choices, selection: selection, choose: choose) { Text(name($0)) }
+  }
+}
+
+/// On / Off as two pills.
+private struct TVSwitchRow: View {
+  var title: String
+  @Binding var isOn: Bool
+
+  var body: some View {
+    TVOptionRow(title: title, choices: [true, false], selection: isOn, name: { $0 ? "On" : "Off" }) { isOn = $0 }
   }
 }
 
 private struct TVChevron: View {
   var body: some View {
     Image(systemName: "chevron.right").font(.system(size: 22, weight: .semibold)).opacity(0.6)
-  }
-}
-
-private struct TVValueText: View {
-  var text: String
-
-  var body: some View {
-    HStack(spacing: 10) {
-      Text(text).font(.system(size: 26))
-      Image(systemName: "chevron.up.chevron.down").font(.system(size: 18, weight: .semibold))
-    }
-    .opacity(0.6)
-  }
-}
-
-/// A switch row: Select turns it on or off.
-private struct TVSwitchRow: View {
-  var title: String
-  @Binding var isOn: Bool
-
-  var body: some View {
-    Button {
-      isOn.toggle()
-    } label: {
-      TVSettingLine(title: title) { TVSwitch(isOn: isOn) }
-    }
-    .buttonStyle(TVSettingRowStyle())
-    .accessibilityValue(isOn ? "On" : "Off")
-  }
-}
-
-/// A row of a few choices: Select steps to the next.
-private struct TVChoiceRow<Choice: Hashable>: View {
-  var title: String
-  var choices: [Choice]
-  var label: (Choice) -> String
-  @Binding var selection: Choice
-  /// Segments for a few short choices, else the name with an up-down mark.
-  var segmented = true
-
-  var body: some View {
-    let index = choices.firstIndex(of: selection) ?? 0
-    Button {
-      selection = choices[(index + 1) % choices.count]
-    } label: {
-      TVSettingLine(title: title) {
-        if segmented {
-          TVSegments(options: choices.map(label), selected: index)
-        } else {
-          TVValueText(text: label(selection))
-        }
-      }
-    }
-    .buttonStyle(TVSettingRowStyle())
-    .accessibilityValue(label(selection))
   }
 }
 
@@ -283,22 +331,22 @@ private struct TVServerBand: View {
             .fill(app.health?.state == .connected ? Astra.Color.ink : Astra.Color.muted)
             .frame(width: 11, height: 11)
           Text(connectionLine)
-            .font(.system(size: 24))
+            .font(.system(size: 25))
             .foregroundStyle(Astra.Color.muted)
             .lineLimit(1)
         }
       }
       if let library = app.library {
-        IndexProgress(library: library, scale: 1.9)
+        IndexProgress(library: library, scale: 1.95)
       } else {
         Spacer()
       }
       HStack(spacing: 16) {
         Button("Change Server") { Task { await app.chooseServer() } }
-          .buttonStyle(TVPillStyle(prominent: false))
+          .buttonStyle(TVPillStyle())
         if let library = app.library {
           Button("Index Now") { library.reindexNow() }
-            .buttonStyle(TVPillStyle(prominent: true))
+            .buttonStyle(TVPillStyle())
             .disabled(library.indexStatus.phase == .indexing)
         }
       }
@@ -319,49 +367,27 @@ private struct TVServerBand: View {
 
 // MARK: - Appearance
 
-private struct TVAppearance: View {
-  var library: LibraryStore
+private struct TVAppearancePane: View {
+  @Environment(AppModel.self) private var app
   @AppStorage(Preferences.serviceAccentsKey) private var serviceAccents = true
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
   private var appearance: AstraAppearance { .shared }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 20) {
-      Text("Appearance")
-        .font(.system(size: 36, weight: .bold))
-        .foregroundStyle(Astra.Color.ink)
-      HStack(alignment: .top, spacing: 40) {
+    VStack(alignment: .leading, spacing: 28) {
+      if let library = app.library {
         TVHomePreview(library: library)
-        VStack(spacing: 24) {
-          TVSettingsCard {
-            ForEach(AppTheme.allCases) { theme in themeRow(theme) }
-          }
-          TVSettingsCard {
-            TVSwitchRow(title: "Service colours", isOn: $serviceAccents)
-            TVSwitchRow(title: "Coloured logos", isOn: $logoColors)
-          }
+      }
+      TVSettingsCard(
+        footer: "Service colours tint each service's Home page. Turn logo colours off for plain white logos on glass."
+      ) {
+        TVOptionRow(title: "Theme", choices: AppTheme.allCases, selection: appearance.appTheme, name: \.title) { theme in
+          astraWithAnimation(Astra.Motion.page) { appearance.setTheme(theme) }
         }
-        .frame(width: 520)
-        .focusSection()
+        TVSwitchRow(title: "Service colours", isOn: $serviceAccents)
+        TVSwitchRow(title: "Coloured logos", isOn: $logoColors)
       }
     }
-  }
-
-  private func themeRow(_ theme: AppTheme) -> some View {
-    let isOn = theme == appearance.appTheme
-    return Button {
-      astraWithAnimation(Astra.Motion.page) { appearance.setTheme(theme) }
-    } label: {
-      HStack(spacing: 22) {
-        ThemeSwatch(library: library, palette: theme.palette, width: 96, height: 56, radius: 10)
-        Text(theme.title).font(.system(size: 28, weight: .medium))
-        Spacer()
-        if isOn { Image(systemName: "checkmark").font(.system(size: 24, weight: .bold)) }
-      }
-    }
-    .buttonStyle(TVSettingRowStyle())
-    .accessibilityLabel(theme.title)
-    .accessibilityAddTraits(isOn ? .isSelected : [])
   }
 }
 
@@ -383,29 +409,26 @@ private struct TVHomePreview: View {
         }
         .clipped()
         HeroScrim()
-        VStack(spacing: 18) {
-          TVLogoTitle(library: library, item: item, maxWidth: 420, maxHeight: 120, textSize: 56, centered: true)
+        VStack(spacing: 16) {
+          TVLogoTitle(library: library, item: item, maxWidth: 380, maxHeight: 110, textSize: 52, centered: true)
             .frame(maxWidth: .infinity)
-          HStack(spacing: 12) {
-            DetailMetaLine(item: shown, library: library, fontSize: 22, genreLimit: 1, ratingAfter: true)
-            TVFormatChips(item: shown, fontSize: 16, showsRating: false)
-          }
+          MetaBadgeRow(item: shown, playTarget: shown, library: library, fontSize: 18, alignment: .center)
           HStack(spacing: 16) {
             Label("Play", systemImage: "play.fill")
               .font(.system(size: 24, weight: .semibold))
               .foregroundStyle(Color.black)
               .frame(maxWidth: .infinity)
-              .frame(height: 64)
+              .frame(height: 60)
               .background(Capsule().fill(Color.white))
-            Image(systemName: "plus")
-              .font(.system(size: 26, weight: .semibold))
+            Label("Details", systemImage: "info.circle")
+              .font(.system(size: 24, weight: .semibold))
               .foregroundStyle(Color.white)
-              .frame(width: 64, height: 64)
-              .background(Circle().fill(Color.white.opacity(0.18)))
+              .frame(width: 170, height: 60)
+              .background(Capsule().fill(Color.white.opacity(0.18)))
           }
         }
-        .frame(width: 500)
-        .padding(44)
+        .frame(width: 460)
+        .padding(40)
         .task(id: item.id) {
           full = nil
           let key = item.isCatalogOnly ? library.indexMatch(item)?.ratingKey : item.ratingKey
@@ -416,128 +439,160 @@ private struct TVHomePreview: View {
         }
       } else {
         Text("Your Home appears here once it loads.")
-          .font(.system(size: 24))
+          .font(.system(size: 25))
           .foregroundStyle(Astra.Color.muted)
           .padding(44)
       }
     }
     .frame(maxWidth: .infinity)
-    .frame(height: 520)
+    .frame(height: 420)
     .clipShape(Self.shape)
     .overlay(Self.shape.strokeBorder(Astra.Color.hairline, lineWidth: 1))
     .shadow(color: .black.opacity(0.35), radius: 30, y: 16)
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel("Preview of Home")
+    .accessibilityLabel("Preview of Home in this theme")
   }
 }
 
-// MARK: - Subtitles, Playback, Library
+// MARK: - Playback
 
-/// KP (2026-11-13): the subtitle editor with a live sample.
-private struct TVSubtitles: View {
-  var library: LibraryStore
+private struct TVPlaybackPane: View {
+  @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
+  @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 28) {
+      TVSettingsCard(
+        footer: "Astra always plays the original file. When a title has an HD and a 4K file on the server, this picks which one. Auto follows Library quality."
+      ) {
+        TVOptionRow(title: "Preferred version", choices: PlaybackQuality.allCases, selection: quality, name: \.title) {
+          quality = $0
+        }
+      }
+      TVSettingsCard(footer: "Shows in the last 15 seconds of an episode. It never plays on its own.") {
+        TVSwitchRow(title: "Next Episode button", isOn: $nextEpisode)
+      }
+    }
+  }
+}
+
+// MARK: - Subtitles
+
+/// When subtitles show, and how they look (KP, 2026-11-13), with a live sample.
+private struct TVSubtitlesPane: View {
   @Environment(AppModel.self) private var app
+  @AppStorage(SubtitlePreference.storageKey) private var subtitles: SubtitlePreference = .automatic
   @State private var style = SubtitleStyle.current()
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 20) {
-      Text("Subtitles")
-        .font(.system(size: 36, weight: .bold))
-        .foregroundStyle(Astra.Color.ink)
-      SubtitleSample(library: library, style: style, scale: 1.9)
-      TVSettingsCard {
-        TVChoiceRow(
-          title: "Font", choices: SubtitleFont.allCases, label: \.title, selection: $style.font, segmented: false)
-        TVChoiceRow(title: "Size", choices: SubtitleSize.allCases, label: \.shortTitle, selection: $style.size)
-        colourRow
-        TVChoiceRow(
-          title: "Background", choices: SubtitleBackground.allCases, label: \.title, selection: $style.background)
+    VStack(alignment: .leading, spacing: 28) {
+      if let library = app.library {
+        SubtitleSample(library: library, style: style, scale: 1.7)
+      }
+      TVSettingsCard(footer: "Automatic shows what the file marks as forced or default. Always picks your language.") {
+        TVOptionRow(title: "When to show", choices: SubtitlePreference.allCases, selection: subtitles, name: \.title) {
+          subtitles = $0
+        }
+      }
+      TVSettingsCard(title: "Style") {
+        TVOptionRow(title: "Font", choices: SubtitleFont.allCases, selection: style.font, name: \.title) { style.font = $0 }
+        TVOptionRow(title: "Size", choices: SubtitleSize.allCases, selection: style.size, name: \.shortTitle) {
+          style.size = $0
+        }
+        TVOptionRow(title: "Colour", choices: SubtitleColor.allCases, selection: style.color, choose: { style.color = $0 }) {
+          color in
+          HStack(spacing: 10) {
+            Circle().fill(Color(hex: color.rgb)).frame(width: 24, height: 24)
+              .overlay(Circle().strokeBorder(Color.black.opacity(0.25), lineWidth: 1))
+            Text(color.title)
+          }
+        }
+        TVOptionRow(title: "Background", choices: SubtitleBackground.allCases, selection: style.background, name: \.title) {
+          style.background = $0
+        }
       }
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .focusSection()
     .onChange(of: style) {
       style.save()
       app.player.applySubtitleStyle()
     }
   }
-
-  private var colourRow: some View {
-    let all = SubtitleColor.allCases
-    let index = all.firstIndex(of: style.color) ?? all.startIndex
-    return Button {
-      let next = all.index(after: index)
-      style.color = next == all.endIndex ? all[all.startIndex] : all[next]
-    } label: {
-      TVSettingLine(title: "Colour") { TVColourDots(selected: style.color) }
-    }
-    .buttonStyle(TVSettingRowStyle())
-    .accessibilityValue(style.color.title)
-  }
 }
 
-private struct TVColourDots: View {
-  var selected: SubtitleColor
-  @Environment(\.isFocused) private var focused
+// MARK: - Library
 
-  var body: some View {
-    HStack(spacing: 14) {
-      ForEach(SubtitleColor.allCases) { color in
-        Circle()
-          .fill(Color(hex: color.rgb))
-          .frame(width: 38, height: 38)
-          .overlay(Circle().strokeBorder(focused ? Color.black.opacity(0.2) : .clear, lineWidth: 1))
-          .padding(5)
-          .overlay(Circle().strokeBorder(color == selected ? (focused ? Color.black : Color.white) : .clear, lineWidth: 3))
-      }
-    }
-  }
-}
-
-private struct TVPlaybackCard: View {
-  @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
-  @AppStorage(SubtitlePreference.storageKey) private var subtitles: SubtitlePreference = .automatic
-  @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
-
-  var body: some View {
-    TVSettingsCard(title: "Playback") {
-      TVChoiceRow(title: "Quality", choices: PlaybackQuality.allCases, label: \.title, selection: $quality)
-      TVChoiceRow(
-        title: "Subtitles", choices: SubtitlePreference.allCases, label: \.title, selection: $subtitles,
-        segmented: false)
-      TVSwitchRow(title: "Next Episode button", isOn: $nextEpisode)
-    }
-  }
-}
-
-private struct TVLibraryCard: View {
+private struct TVLibraryPane: View {
   @Environment(AppModel.self) private var app
   @AppStorage(LibraryQuality.storageKey) private var libraryQuality: LibraryQuality = .deviceDefault
   @AppStorage(Preferences.qualityBadgesKey) private var qualityBadges = true
   @AppStorage(Preferences.ratingsKey) private var ratings = true
+  /// A change waiting for the reload to be confirmed (design-audit B-02).
+  @State private var pending: LibraryQuality?
 
   var body: some View {
-    TVSettingsCard(title: "Library") {
-      TVChoiceRow(title: "Library quality", choices: LibraryQuality.allCases, label: \.title, selection: $libraryQuality)
-      TVSwitchRow(title: "HD and 4K badges", isOn: $qualityBadges)
-      TVSwitchRow(title: "Age ratings", isOn: $ratings)
+    VStack(alignment: .leading, spacing: 28) {
+      TVSettingsCard(footer: footer) {
+        TVOptionRow(title: "Library quality", choices: LibraryQuality.allCases, selection: libraryQuality, name: \.title) {
+          if $0 != libraryQuality { pending = $0 }
+        }
+      }
+      TVSettingsCard(
+        footer: "Quality badges (HD, 4K, HDR, Dolby Vision, Dolby Atmos) come from the file on your server. The boxed rating (PG-13, TV-MA) is the age rating."
+      ) {
+        TVSwitchRow(title: "HD and 4K badges", isOn: $qualityBadges)
+        TVSwitchRow(title: "Age ratings", isOn: $ratings)
+      }
     }
-    .onChange(of: libraryQuality) { app.libraryQualityChanged() }
+    .confirmationDialog(
+      pending.map { "Switch to \($0.title)?" } ?? "", isPresented: isConfirming, titleVisibility: .visible
+    ) {
+      Button("Switch and Reload") {
+        if let pending { libraryQuality = pending }
+        pending = nil
+        app.libraryQualityChanged()
+      }
+      Button("Cancel", role: .cancel) { pending = nil }
+    } message: {
+      Text("Astra reloads your library with the new choice. Home and your libraries refresh in a moment.")
+    }
+  }
+
+  private var isConfirming: Binding<Bool> {
+    Binding(get: { pending != nil }, set: { if !$0 { pending = nil } })
+  }
+
+  private var footer: String {
+    libraryQuality == .hd
+      ? "One copy of each title, in HD. 4K libraries are hidden on this Apple TV."
+      : "One copy of each title: the 4K one when there is one, otherwise HD."
   }
 }
 
-/// "Astra 3.1.0 (202611131822)" and Sign Out, quiet, at the bottom.
-private struct TVSettingsFooter: View {
+// MARK: - About
+
+private struct TVAboutPane: View {
   @Environment(AppModel.self) private var app
 
   var body: some View {
-    HStack(spacing: 24) {
-      Text("Astra \(SettingsView.versionText)")
-        .font(.system(size: 23))
-        .foregroundStyle(Astra.Color.ink.opacity(0.42))
-      SignOutButton()
-        .buttonStyle(TVPillStyle(prominent: false))
+    VStack(alignment: .leading, spacing: 28) {
+      TVSettingsCard {
+        NavigationLink {
+          SettingsPaneView(pane: .about)
+        } label: {
+          TVSettingLine(title: "Version, licenses and diagnostics") { TVChevron() }
+        }
+        .buttonStyle(TVSettingRowStyle())
+      }
+      HStack(spacing: 24) {
+        Text("Astra \(SettingsView.versionText)")
+          .font(.system(size: 25))
+          .foregroundStyle(Astra.Color.ink.opacity(0.5))
+        Spacer()
+        SignOutButton()
+          .buttonStyle(TVPillStyle())
+      }
+      .padding(.horizontal, 8)
+      .focusSection()
     }
-    .frame(maxWidth: .infinity)
   }
 }
