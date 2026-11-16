@@ -327,8 +327,10 @@ struct TVHeroArt: View {
           .mask {
             LinearGradient(
               stops: [
-                .init(color: .clear, location: 0), .init(color: .black.opacity(0.55), location: 0.2),
-                .init(color: .black, location: 0.4),
+                // A long, soft fade so the sharp art's left edge melts into
+                // the blur with no visible line (KP, 2026-11-16).
+                .init(color: .clear, location: 0), .init(color: .black.opacity(0.3), location: 0.18),
+                .init(color: .black.opacity(0.75), location: 0.35), .init(color: .black, location: 0.5),
               ],
               startPoint: .leading, endPoint: .trailing)
           }
