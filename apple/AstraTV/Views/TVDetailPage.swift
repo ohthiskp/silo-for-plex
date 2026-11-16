@@ -77,9 +77,9 @@ struct TVDetailPage: View {
     .background {
       ZStack(alignment: .top) {
         AmbientBackdrop(library: library, item: titleItem)
-        ArtworkImage(
-          library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear
-        )
+        // The art sits right with faces clear of the logo and buttons, the
+        // rest softly blurred, like the hero (KP, 2026-11-16, Dune).
+        TVHeroArt(library: library, item: titleItem, kind: .scenery, clearX: TVLayout.leading + 760 + 50)
         .frame(maxWidth: .infinity)
         .frame(height: 1080)
         .clipped()

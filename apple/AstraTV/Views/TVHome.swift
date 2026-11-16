@@ -292,22 +292,28 @@ private struct TVHeroInfo: View {
 /// left behind the logo. Vision finds the faces once (ArtFocusStore) and the
 /// sharp picture slides right just far enough for them to clear the logo
 /// block, never hard against the right edge.
-private struct TVHeroArt: View {
+/// Face-aware art: the picture sharp on the right with its faces clear of the
+/// text block on the left, the rest the same art softly blurred. The hero
+/// and Details use it (KP, 2026-11-16: "his face should be more on right").
+struct TVHeroArt: View {
   var library: LibraryStore
   var item: PlexMetadata
+  var kind: LibraryStore.ArtKind = .heroBackdrop
+  /// Where the text block ends on a 1920 pt screen; faces stay right of it.
+  var clearX: CGFloat = TVHeroArt.heroClearX
 
   @State private var url: URL?
   @State private var focus: ArtFocus?
 
   /// The logo block's right edge on a 1920 pt screen, plus a little air.
-  static let clearX: CGFloat = TVLayout.homeLeading + 80 + TVHeroInfo.blockWidth + 40
+  static let heroClearX: CGFloat = TVLayout.homeLeading + 80 + TVHeroInfo.blockWidth + 40
 
   var body: some View {
     GeometryReader { geo in
       let scale = geo.size.width / 1920
       let rect = ArtFraming.side(
         boxWidth: geo.size.width, boxHeight: geo.size.height, aspect: focus?.aspect ?? 16.0 / 9.0,
-        clearX: Self.clearX * scale, rightMargin: 60 * scale,
+        clearX: clearX * scale, rightMargin: 60 * scale,
         minX: 240 * scale, maxX: 760 * scale, defaultX: 420 * scale, focus: focus?.focus)
       ZStack(alignment: .topLeading) {
         RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
@@ -333,9 +339,9 @@ private struct TVHeroArt: View {
     .clipped()
     .allowsHitTesting(false)
     .accessibilityHidden(true)
-    .task(id: item.id) {
+    .task(id: "\(item.id)|\(kind)") {
       focus = nil
-      let found = await library.artworkURL(for: item, .heroBackdrop, width: 1920, height: 1080)
+      let found = await library.artworkURL(for: item, kind, width: 1920, height: 1080)
       guard !Task.isCancelled else { return }
       url = found
       guard let found else { return }
