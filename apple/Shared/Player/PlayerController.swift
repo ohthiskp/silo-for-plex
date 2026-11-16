@@ -104,8 +104,8 @@ final class PlayerController {
     return VideoTier.badge(for: VideoTier.tier(width: Int(videoWidth), height: Int(videoHeight)))
   }
 
-  /// "UHD", "4K" or "HD" for the frames mpv is decoding: UHD when the
-  /// file playing is 4K with HDR or Dolby Vision (KP, 2026-11-16).
+  /// "4K UHD", "4K" or "HD" for the frames mpv is decoding:
+  /// "4K UHD" when the file playing is 4K with HDR or Dolby Vision (KP, 2026-11-16).
   var qualityLabel: String? {
     guard videoWidth > 0 || videoHeight > 0 else { return nil }
     return VideoTier.label(for: VideoTier.tier(width: Int(videoWidth), height: Int(videoHeight)), dynamicRange: dynamicRange)
@@ -150,7 +150,7 @@ final class PlayerController {
     var media: PlexMedia
     var id: String { "\(item.ratingKey)-\(media.id)" }
 
-    /// "UHD", "4K", "HD" or "SD".
+    /// "4K UHD", "4K", "HD" or "SD".
     var badge: String {
       VideoTier.label(for: media.tier, dynamicRange: media.dynamicRange) ?? "SD"
     }

@@ -454,12 +454,12 @@ final class PreferredQualityTests: XCTestCase {
     XCTAssertNil(VideoTier.badge(for: 576))
   }
 
-  /// KP (2026-11-16): UHD for 4K with HDR or Dolby Vision, plain 4K for SDR 4K.
+  /// KP (2026-11-16): 4K UHD for 4K with HDR or Dolby Vision, plain 4K for SDR 4K.
   func testQualityLabelSaysUHDOnlyForHDR4K() {
     XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: nil), "4K")
-    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: .hdr10), "UHD")
-    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: .dolbyVision), "UHD")
-    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: .hlg), "UHD")
+    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: .hdr10), "4K UHD")
+    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: .dolbyVision), "4K UHD")
+    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: .hlg), "4K UHD")
     XCTAssertEqual(VideoTier.label(for: 1080, dynamicRange: .hdr10), "HD")
     XCTAssertNil(VideoTier.label(for: 576, dynamicRange: nil))
   }
