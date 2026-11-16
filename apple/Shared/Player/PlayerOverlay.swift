@@ -1491,7 +1491,7 @@ private struct PlayerFormatTag: View {
 private struct PlayerAtmosTag: View {
   var body: some View {
     Image("format-dolby-atmos").renderingMode(.template).resizable().scaledToFit()
-      .frame(height: 13).foregroundStyle(.white).accessibilityLabel("Dolby Atmos")
+      .frame(height: 16).foregroundStyle(.white).accessibilityLabel("Dolby Atmos")
   }
 }
 

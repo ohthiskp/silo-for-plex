@@ -864,7 +864,7 @@ struct FormatBadges: View {
         FormatPill { Text(badge) }
       }
       if item.hasAtmos(for: pick) {
-        FormatPill(logo: true) { logo("format-dolby-atmos", height: 14) }.accessibilityLabel("Dolby Atmos")
+        FormatPill(logo: true) { logo("format-dolby-atmos", height: 16) }.accessibilityLabel("Dolby Atmos")
       }
       switch item.dynamicRange(for: pick) {
       case .dolbyVision?: FormatPill(logo: true) { logo("format-dolby-vision", height: 16) }.accessibilityLabel("Dolby Vision")

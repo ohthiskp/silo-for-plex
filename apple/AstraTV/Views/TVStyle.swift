@@ -206,7 +206,7 @@ struct TVFormatChips: View {
         TVChip(fontSize: fontSize) { Text(badge) }
       }
       if item.hasAtmos(for: pick) {
-        TVChip(fontSize: fontSize, logo: true) { logo("format-dolby-atmos", height: 1.05) }.accessibilityLabel("Dolby Atmos")
+        TVChip(fontSize: fontSize, logo: true) { logo("format-dolby-atmos", height: 1.3) }.accessibilityLabel("Dolby Atmos")
       }
       switch item.dynamicRange(for: pick) {
       case .dolbyVision?:
