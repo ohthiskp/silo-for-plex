@@ -404,7 +404,7 @@ struct PlayerOverlay: View {
         }
         HStack(spacing: 16) {
           if let year = item?.year { Text(String(year)) }
-          if let rating = item?.contentRating, !rating.isEmpty {
+          if let rating = item?.officialRating {
             // A filled grey badge with no outline.
             RatingBox(text: rating, fontSize: 20, grey: true)
           }

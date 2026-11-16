@@ -843,39 +843,6 @@ struct HeroTitle: View {
   }
 }
 
-struct MetaRow: View {
-  var item: PlexMetadata
-  /// For the official rating of titles Plex has none for (TMDB-only ones).
-  var library: LibraryStore? = nil
-  var fontSize: CGFloat = 15
-  @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
-  @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
-
-  var body: some View {
-    HStack(spacing: 10) {
-      let parts = [
-        item.year.map(String.init),
-        item.type == .show ? item.childCount.map { "\($0) Season\($0 == 1 ? "" : "s")" } : item.durationLabel,
-        item.genres.prefix(2).map(\.tag).joined(separator: ", ").nilIfEmpty,
-      ].compactMap { $0 }
-      // The text truncates first; badges keep their size.
-      Text(parts.joined(separator: "  •  "))
-        .font(.system(size: fontSize, weight: .medium))
-        .foregroundStyle(Astra.Color.ink.opacity(0.9))
-        .lineLimit(1)
-      // Astra (KP, 2026-11-07): the official rating first (PG-13, TV-MA…),
-      // then the version this device would play. Still no star ratings.
-      RatingBadge(item: item, library: library)
-      let pick = quality == .auto ? PlaybackQuality.current() : quality
-      if showQuality, let badge = item.resolutionBadge(for: pick) { Badge(text: badge).fixedSize() }
-      // Astra (KP, 2026-11-07): Dolby Vision / HDR of that file, when Plex says.
-      if let range = item.dynamicRange(for: pick) {
-        Badge(text: range == .dolbyVision ? "Dolby Vision" : "HDR").fixedSize()
-      }
-    }
-  }
-}
-
 extension String {
   var nilIfEmpty: String? { isEmpty ? nil : self }
 }

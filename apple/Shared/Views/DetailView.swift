@@ -864,10 +864,10 @@ struct FormatBadges: View {
         FormatPill { Text(badge == "4K UHD" ? "4K" : badge) }
       }
       if item.hasAtmos(for: pick) {
-        FormatPill { logo("format-dolby-atmos", height: 11) }.accessibilityLabel("Dolby Atmos")
+        FormatPill(logo: true) { logo("format-dolby-atmos", height: 14) }.accessibilityLabel("Dolby Atmos")
       }
       switch item.dynamicRange(for: pick) {
-      case .dolbyVision?: FormatPill { logo("format-dolby-vision", height: 12) }.accessibilityLabel("Dolby Vision")
+      case .dolbyVision?: FormatPill(logo: true) { logo("format-dolby-vision", height: 16) }.accessibilityLabel("Dolby Vision")
       // KP: one general HDR badge for HDR10, HDR10+ and HLG.
       case .hdr10Plus?, .hdr10?, .hlg?: FormatPill { Text("HDR") }
       case nil: EmptyView()
@@ -887,13 +887,16 @@ struct FormatBadges: View {
 /// One badge in the format row: clear, with a thin grey outline, rounded
 /// corners and bold text (KP's Avatar mockup, 2026-11-08).
 struct FormatPill<Content: View>: View {
+  /// A Dolby logo: tighter sides so the logo fills the pill and stays
+  /// readable (badge audit, 2026-11-16: "VISION" was ~3 pt tall).
+  var logo = false
   @ViewBuilder var content: Content
 
   var body: some View {
     content
       .font(.system(size: 13 * formatBadgeScale, weight: .bold))
       .foregroundStyle(Astra.Color.ink)
-      .padding(.horizontal, 10 * formatBadgeScale)
+      .padding(.horizontal, (logo ? 7 : 10) * formatBadgeScale)
       .frame(height: 22 * formatBadgeScale)
       .overlay(
         RoundedRectangle(cornerRadius: 6 * formatBadgeScale, style: .continuous)

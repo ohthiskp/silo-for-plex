@@ -159,6 +159,8 @@ struct TVPageBackdrop: View {
 /// format badges (4K, HDR, Dolby Vision, Dolby Atmos) share it.
 struct TVChip<Content: View>: View {
   var fontSize: CGFloat = 18
+  /// A Dolby logo: tighter sides so the logo fills the chip (badge audit, 2026-11-16).
+  var logo = false
   @ViewBuilder var content: Content
 
   var body: some View {
@@ -166,7 +168,7 @@ struct TVChip<Content: View>: View {
       .font(.system(size: fontSize, weight: .bold))
       .tracking(fontSize * 0.04)
       .foregroundStyle(.white)
-      .padding(.horizontal, fontSize * 0.55)
+      .padding(.horizontal, fontSize * (logo ? 0.4 : 0.55))
       .frame(height: fontSize * 1.6)
       .overlay(
         RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -200,11 +202,11 @@ struct TVFormatChips: View {
         TVChip(fontSize: fontSize) { Text(badge == "4K UHD" ? "4K" : badge) }
       }
       if item.hasAtmos(for: pick) {
-        TVChip(fontSize: fontSize) { logo("format-dolby-atmos") }.accessibilityLabel("Dolby Atmos")
+        TVChip(fontSize: fontSize, logo: true) { logo("format-dolby-atmos", height: 1.05) }.accessibilityLabel("Dolby Atmos")
       }
       switch item.dynamicRange(for: pick) {
       case .dolbyVision?:
-        TVChip(fontSize: fontSize) { logo("format-dolby-vision") }.accessibilityLabel("Dolby Vision")
+        TVChip(fontSize: fontSize, logo: true) { logo("format-dolby-vision", height: 1.25) }.accessibilityLabel("Dolby Vision")
       case .hdr10Plus?, .hdr10?, .hlg?:
         TVChip(fontSize: fontSize) { Text("HDR") }
       case nil:
@@ -213,12 +215,13 @@ struct TVFormatChips: View {
     }
   }
 
-  private func logo(_ name: String) -> some View {
+  /// `height` is a share of the font size; the chip is 1.6 font sizes tall.
+  private func logo(_ name: String, height: CGFloat) -> some View {
     Image(name)
       .renderingMode(.template)
       .resizable()
       .scaledToFit()
-      .frame(height: fontSize * 1.1)
+      .frame(height: fontSize * height)
   }
 }
 
