@@ -2,9 +2,10 @@ import AstraKit
 import SwiftUI
 
 /// What the player shows from pressing Play until the first frame (KP,
-/// 2026-11-16, mockup A "title card"): the title's artwork dimmed and
-/// frosted, its logo in the middle and the small orange Astra arrow moving
-/// underneath. It fades into the video. An episode shows its show's logo.
+/// 2026-11-16: "just the show or movie logo by itself"): the title's
+/// artwork dimmed and frosted, and its logo in the middle, breathing softly
+/// so it reads as loading. No spinner and no Astra mark. It fades into the
+/// video. An episode shows its show's logo.
 struct PlayLoadingCard: View {
   let player: PlayerController
   var library: LibraryStore?
@@ -14,16 +15,13 @@ struct PlayLoadingCard: View {
   @State private var titleItem: PlexMetadata?
   @State private var logo: URL?
   @State private var resolved = false
-  @State private var start = Date()
+  /// The logo's slow pulse while the title loads.
+  @State private var breathing = false
 
   #if os(tvOS)
-    private static let markSize: CGFloat = 110
-    private static let logoSize = CGSize(width: 640, height: 220)
-    private static let gap: CGFloat = 34
+    private static let logoSize = CGSize(width: 800, height: 280)
   #else
-    private static let markSize: CGFloat = 64
-    private static let logoSize = CGSize(width: 320, height: 110)
-    private static let gap: CGFloat = 18
+    private static let logoSize = CGSize(width: 400, height: 140)
   #endif
 
   var body: some View {
@@ -36,19 +34,18 @@ struct PlayLoadingCard: View {
           .blur(radius: 50, opaque: true)
           .opacity(0.45)
       }
-      VStack(spacing: Self.gap) {
-        title
-        TimelineView(.animation(minimumInterval: 1 / 60, paused: reduceMotion)) { context in
-          AstraLoadingMark(time: context.date.timeIntervalSince(start), settled: reduceMotion)
-        }
-        .frame(width: Self.markSize, height: Self.markSize)
-      }
-      .padding(.horizontal, 40)
+      title
+        .opacity(breathing ? 0.78 : 1)
+        .padding(.horizontal, 40)
     }
     .ignoresSafeArea()
     .allowsHitTesting(false)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Starting \(player.title)")
+    .onAppear {
+      guard !reduceMotion else { return }
+      withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { breathing = true }
+    }
     .task(id: player.nowPlayingItem?.ratingKey) {
       guard let library, let item = player.nowPlayingItem else { return }
       var shown = item
@@ -75,8 +72,7 @@ struct PlayLoadingCard: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: Self.logoSize.width * 1.4)
     } else {
-      // Keeps the arrow in place while the logo is looked up.
-      Color.clear.frame(width: Self.logoSize.width, height: Self.logoSize.height * 0.5)
+      Color.clear.frame(width: 1, height: 1)
     }
   }
 }
