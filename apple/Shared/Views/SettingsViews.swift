@@ -505,6 +505,7 @@ struct LibrarySettings: View {
   @AppStorage(LibraryQuality.storageKey) private var libraryQuality: LibraryQuality = .deviceDefault
   @AppStorage(Preferences.qualityBadgesKey) private var qualityBadges = true
   @AppStorage(Preferences.ratingsKey) private var ratings = true
+  @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
 
   var body: some View {
     SettingsForm {
@@ -525,6 +526,13 @@ struct LibrarySettings: View {
       Section("Badges") {
         Toggle("HD and 4K Badges", isOn: $qualityBadges).tint(Astra.Color.switchOn)
         Toggle("Age Ratings", isOn: $ratings).tint(Astra.Color.switchOn)
+      }
+      Section {
+        Toggle("Show Specials", isOn: $showSpecials).tint(Astra.Color.switchOn)
+      } header: {
+        Text("Shows")
+      } footer: {
+        Text("Specials are a show's extra episodes (season 0). Off keeps them out of the season list.")
       }
     }
   }

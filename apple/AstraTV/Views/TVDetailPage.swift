@@ -17,6 +17,8 @@ struct TVDetailPage: View {
   @State private var item: PlexMetadata?
   @State private var parentShow: PlexMetadata?
   @State private var seasons: [PlexMetadata] = []
+  /// Settings → Library → Show Specials (off by default, KP 2026-11-16).
+  @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
   @State private var selectedSeason: PlexMetadata?
   @State private var episodes: [PlexMetadata] = []
   /// A show's picked episode (KP, 2026-11-14): the header shows its details and
@@ -457,7 +459,8 @@ struct TVDetailPage: View {
   /// The show's seasons, opened on `season` (else the first one not watched
   /// yet) with `episode` picked (else the one to watch next).
   private func loadSeasons(show: String, season: String?, episode: String?) async throws {
-    seasons = try await library.children(of: show).filter { $0.type == .season }
+    let all = try await library.children(of: show).filter { $0.type == .season }
+    seasons = SeasonList.visible(all, showSpecials: showSpecials, keeping: season)
     let start =
       season.flatMap { key in seasons.first { $0.ratingKey == key } }
       ?? seasons.first { !$0.isWatched && ($0.index ?? 0) > 0 } ?? seasons.first
