@@ -17,9 +17,6 @@ struct DetailView: View {
   /// Resume / Play plays it. Tapping an episode picks it; only Play or a
   /// double tap plays.
   @State private var focus: PlexMetadata?
-  /// Once an episode is tapped, the header shows its still instead of the
-  /// show's artwork (KP, 2026-11-14).
-  @State private var episodeArt = false
   @State private var related: [PlexHub] = []
   @State private var error: String?
   /// A TMDB title that isn't on the Plex server: shown, but nothing to play.
@@ -72,19 +69,19 @@ struct DetailView: View {
     return titleItem.summary
   }
 
-  /// Picks an episode without playing it, and brings the header with its details into view.
-  private func pick(_ episode: PlexMetadata, scroll: ScrollViewProxy) {
+  /// Picks an episode without playing it. The page stays where it is
+  /// (KP, 2026-11-16: "dont make it automatically go to top").
+  private func pick(_ episode: PlexMetadata) {
     astraWithAnimation(Astra.Motion.base) {
       focus = episode
-      episodeArt = true
       summaryExpanded = false
     }
-    astraWithAnimation(.smooth(duration: 0.45)) { scroll.scrollTo(Self.headerID, anchor: .top) }
   }
 
-  /// The tapped episode's still, for the header (nil until an episode is tapped).
+  /// The picked episode's own still for the header, from the moment the page
+  /// opens (KP, 2026-11-16: "each episode should have its own backdrop").
   private var episodeStill: URL? {
-    guard episodeArt, let focus, focus.type == .episode, let thumb = focus.thumb else { return nil }
+    guard let focus, focus.type == .episode, let thumb = focus.thumb else { return nil }
     return library.imageURL(thumb, width: 1920, height: 1080, scale: 1)
   }
 
@@ -107,7 +104,7 @@ struct DetailView: View {
           // scrolls, so everything below the header covers it as it rises.
           VStack(alignment: .leading, spacing: sectionSpacing) {
             if isSeries, !seasons.isEmpty || !episodes.isEmpty {
-              episodesSection(scroll: scroll)
+              episodesSection
                 .id(Self.episodesID)
             }
             if !titleItem.roles.isEmpty {
@@ -470,63 +467,37 @@ struct DetailView: View {
     #endif
   }
 
-  /// KP (2026-11-14): a season dropdown, then the whole season. Tapping an
-  /// episode shows its details up top; Play / Resume or a double tap plays it.
-  private func episodesSection(scroll: ScrollViewProxy) -> some View {
+  /// KP (2026-11-16, like Infuse): the seasons left to right with no dropdown,
+  /// then the season's episodes left to right. Tapping an episode shows its
+  /// details up top; Play / Resume or a double tap plays it.
+  private var episodesSection: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack(spacing: 12) {
-        SeasonPicker(seasons: seasons, selected: selectedSeason) { season in
+        SeasonTabs(seasons: seasons, selected: selectedSeason, leading: rowLeading) { season in
           Task { await selectSeason(season) }
         }
-        if !episodes.isEmpty {
-          Text("\(episodes.count) Episode\(episodes.count == 1 ? "" : "s")")
-            .astraFont(size: 13, weight: .medium)
-            .foregroundStyle(Astra.Color.muted)
-            .lineLimit(1)
-        }
-        Spacer(minLength: 0)
         if let selectedSeason, seasons.count > 1 {
           DownloadButton(item: selectedSeason, compact: true)
         }
       }
-      .padding(.leading, rowLeading)
       .padding(.trailing, rowTrailing)
-      episodeList(scroll: scroll)
+      episodeCardRow
     }
   }
 
-  @ViewBuilder private func episodeList(scroll: ScrollViewProxy) -> some View {
-    #if os(iOS)
-      if narrow {
-        // iPhone: the season as a list, one episode per line.
-        VStack(spacing: 6) {
-          ForEach(episodes) { episode in
-            PhoneEpisodeRow(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
-              pick(episode, scroll: scroll)
-            }
-          }
-        }
-        .padding(.horizontal, PhoneDetail.margin - PhoneEpisodeRow.inset)
-      } else {
-        episodeCardRow(scroll: scroll)
-      }
-    #else
-      episodeCardRow(scroll: scroll)
-    #endif
-  }
-
-  /// Mac and iPad: the season as a row of stills. The row stays in place when
-  /// the season changes; only its cards are replaced.
-  private func episodeCardRow(scroll: ScrollViewProxy) -> some View {
+  /// The season as a row of stills on every device. The row stays in place
+  /// when the season changes; only its cards are replaced.
+  private var episodeCardRow: some View {
     ScrollView(.horizontal) {
-      LazyHStack(alignment: .top, spacing: 14) {
+      LazyHStack(alignment: .top, spacing: narrow ? 12 : 14) {
         ForEach(episodes) { episode in
           EpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
-            pick(episode, scroll: scroll)
+            pick(episode)
           }
         }
       }
-      .padding(.horizontal, leading)
+      .padding(.leading, rowLeading)
+      .padding(.trailing, rowTrailing)
     }
     .scrollIndicators(.never)
     .scrollClipDisabled()
@@ -646,51 +617,57 @@ struct DetailView: View {
   }
 }
 
-/// "Season 1 ⌄": a glass capsule that opens the list of seasons (KP, 2026-11-14).
-/// A show with one season shows its name without the dropdown.
-struct SeasonPicker: View {
+/// The seasons left to right, like Infuse (KP, 2026-11-16: "no drop down").
+/// The picked season is a glass capsule; the others are quiet text.
+struct SeasonTabs: View {
   var seasons: [PlexMetadata]
   var selected: PlexMetadata?
+  var leading: CGFloat
   var onPick: (PlexMetadata) -> Void
-
-  private var title: String { selected?.title ?? seasons.first?.title ?? "Episodes" }
 
   var body: some View {
     if seasons.count > 1 {
-      Menu {
-        ForEach(seasons) { season in
-          Button {
-            onPick(season)
-          } label: {
-            if season.id == selected?.id {
-              Label(season.title, systemImage: "checkmark")
-            } else {
-              Text(season.title)
+      ScrollViewReader { proxy in
+        ScrollView(.horizontal) {
+          HStack(spacing: 6) {
+            ForEach(seasons) { season in
+              let isOn = season.id == (selected ?? seasons.first)?.id
+              Button {
+                onPick(season)
+              } label: {
+                Text(season.title)
+                  .astraFont(size: 15, weight: isOn ? .semibold : .medium)
+                  .foregroundStyle(isOn ? Astra.Color.ink : Astra.Color.muted)
+                  .lineLimit(1)
+                  .padding(.horizontal, 14)
+                  .frame(height: 36)
+                  .contentShape(Capsule())
+                  .background {
+                    if isOn { Color.clear.astraGlass(in: Capsule(), variant: .regular, interactive: true) }
+                  }
+              }
+              .buttonStyle(.plain)
+              .id(season.id)
+              .accessibilityAddTraits(isOn ? [.isSelected] : [])
             }
           }
+          .padding(.leading, leading - 14)
+          .padding(.trailing, 8)
         }
-      } label: {
-        HStack(spacing: 8) {
-          Text(title).astraFont(size: 16, weight: .semibold).lineLimit(1)
-          Image(systemName: "chevron.down").font(.system(size: 12, weight: .bold))
+        .scrollIndicators(.never)
+        .scrollClipDisabled()
+        .onAppear { if let selected { proxy.scrollTo(selected.id, anchor: .center) } }
+        .onChange(of: selected?.id) { _, id in
+          if let id { astraWithAnimation(Astra.Motion.base) { proxy.scrollTo(id, anchor: .center) } }
         }
-        .foregroundStyle(Astra.Color.ink)
-        .padding(.horizontal, 16)
-        .frame(height: 38)
-        .contentShape(Capsule())
-        .astraGlass(in: Capsule(), variant: .regular, interactive: true)
       }
-      .menuStyle(.button)
-      .buttonStyle(.plain)
-      .menuIndicator(.hidden)
-      .fixedSize()
-      .accessibilityLabel("Season, \(title)")
-      .accessibilityHint("Choose a season")
     } else {
-      Text(title)
+      Text(selected?.title ?? seasons.first?.title ?? "Episodes")
         .astraFont(.rowTitle)
         .foregroundStyle(Astra.Color.ink)
         .lineLimit(1)
+        .padding(.leading, leading)
+      Spacer(minLength: 0)
     }
   }
 }
@@ -1311,73 +1288,6 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         }
         .scrollIndicators(.never)
         .scrollClipDisabled()
-      }
-    }
-  }
-
-  /// One line of a season on iPhone: the still, "3. Title", its length and
-  /// synopsis. The picked episode sits on a soft highlight (KP, 2026-11-14).
-  struct PhoneEpisodeRow: View {
-    var library: LibraryStore
-    var item: PlexMetadata
-    var selected: Bool
-    var onSelect: () -> Void
-
-    /// The highlight's padding around the row's content.
-    static let inset: CGFloat = 10
-    private static let still = CGSize(width: 136, height: 77)
-
-    @Environment(\.playItem) private var playItem
-
-    var body: some View {
-      HStack(alignment: .top, spacing: 14) {
-        RemoteImage(url: library.imageURL(item.thumb, width: Self.still.width * 2, height: Self.still.height * 2))
-          .frame(width: Self.still.width, height: Self.still.height)
-          .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-          .overlay(alignment: .bottom) {
-            if let progress = item.progress { ProgressBar(value: progress).padding(.horizontal, 8).padding(.bottom, 7) }
-          }
-          .overlay(alignment: .topTrailing) {
-            if library.isWatched(item) { EpisodeWatchedMark().padding(6) }
-          }
-          .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Astra.Color.hairline)
-          }
-        VStack(alignment: .leading, spacing: 4) {
-          Text(item.index.map { "\($0). \(item.title)" } ?? item.title)
-            .astraFont(size: 15, weight: .semibold)
-            .foregroundStyle(Astra.Color.ink)
-            .lineLimit(2)
-          if let duration = item.durationLabel {
-            Text(duration).astraFont(size: 12.5, weight: .medium).foregroundStyle(Astra.Color.muted)
-          }
-          if let summary = item.summary, !summary.isEmpty {
-            Text(summary).astraFont(size: 12.5).foregroundStyle(Astra.Color.muted).lineLimit(2)
-          }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Room for the download button drawn over this corner.
-        Color.clear.frame(width: 26, height: 1)
-      }
-      .padding(Self.inset)
-      .background {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-          .fill(Astra.Color.ink.opacity(selected ? 0.1 : 0))
-          .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-              .strokeBorder(Astra.Color.ink.opacity(selected ? 0.16 : 0))
-          }
-      }
-      .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-      .episodeTaps(item: item, selected: selected, onSelect: onSelect, play: playItem)
-      .astraAnimation(Astra.Motion.fast, value: selected)
-      .itemMenu(library: library, item: item)
-      .sensoryFeedback(.selection, trigger: selected) { _, now in now }
-      // Outside the row's taps, so it gets its own.
-      .overlay(alignment: .topTrailing) {
-        DownloadButton(item: item, compact: true)
-          .padding(.top, Self.inset - 2)
-          .padding(.trailing, Self.inset - 4)
       }
     }
   }
