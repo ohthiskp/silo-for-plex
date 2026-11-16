@@ -65,6 +65,8 @@ struct MainView: View {
   /// The page has scrolled down: the bar fades out of the way.
   @State private var scrolledDown = false
   @FocusState private var barFocus: TVTab?
+  /// Down on the bar: the open page takes focus (see `tvFocusPage`).
+  @State private var pageFocus = 0
 
   private var atRoot: Bool { (paths[tab] ?? []).isEmpty }
   private var barShown: Bool { atRoot && (!scrolledDown || barFocus != nil) }
@@ -91,7 +93,7 @@ struct MainView: View {
           .ignoresSafeArea()
           .allowsHitTesting(false)
           .opacity(barShown ? 1 : 0)
-        TVTopBar(tab: $tab, focus: $barFocus)
+        TVTopBar(tab: $tab, focus: $barFocus) { pageFocus += 1 }
           .opacity(barShown ? 1 : 0)
       }
     }
@@ -103,6 +105,7 @@ struct MainView: View {
     .environment(\.playItem) { app.play($0) }
     .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     .environment(\.tvScrolledDown) { scrolledDown = $0 }
+    .environment(\.tvFocusPage, pageFocus)
     .task {
       // tvOS puts first focus on the leftmost item (the search icon); start
       // on the open page instead, unless a title was opened at launch.
@@ -167,6 +170,8 @@ struct MainView: View {
 private struct TVTopBar: View {
   @Binding var tab: TVTab
   var focus: FocusState<TVTab?>.Binding
+  /// Down was pressed on the bar.
+  var down: () -> Void = {}
   /// One white focus pill and one glass pill for the open page, each
   /// sliding from item to item (KP: "make the navigation from button to
   /// button seamless").
@@ -197,6 +202,7 @@ private struct TVTopBar: View {
     .padding(.top, 10)
     .frame(height: TVLayout.barHeight)
     .focusSection()
+    .onMoveCommand { if $0 == .down { down() } }
     // Launch lands on the open page's item (Home), not the search icon.
     .defaultFocus(focus, tab)
   }

@@ -13,6 +13,7 @@ struct TVSettingsPage: View {
   @Environment(\.tvScrolledDown) private var scrolledDown
   @State private var category: TVSettingsCategory = .appearance
   @FocusState private var listFocus: TVSettingsCategory?
+  @Environment(\.tvFocusPage) private var pageFocus
 
   var body: some View {
     ScrollView {
@@ -20,11 +21,17 @@ struct TVSettingsPage: View {
         Text("Settings")
           .font(.system(size: 76, weight: .bold))
           .foregroundStyle(Astra.Color.ink)
+        // Each band is its own focus section, the full width of the page, so
+        // Down from anywhere on the top bar (the gear sits far right, past the
+        // band's buttons) always lands on the next band (KP, 2026-11-16:
+        // "you can't even go down").
         TVServerBand()
+          .focusSection()
         HStack(alignment: .top, spacing: 56) {
           categoryList
           pane
         }
+        .focusSection()
       }
       .padding(.horizontal, TVLayout.leading)
       .padding(.top, 20)
@@ -34,6 +41,8 @@ struct TVSettingsPage: View {
     // The top bar fades away once the page scrolls, as on every other page.
     .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y > 60 }) { _, down in scrolledDown(down) }
     .onChange(of: listFocus) { if let listFocus { category = listFocus } }
+    // Down from the top bar lands on the category list.
+    .onChange(of: pageFocus) { if listFocus == nil { listFocus = category } }
     .task {
       // CI screenshots (`-AstraDemoSettings playback`): show that category.
       guard Demo.isOn, let name = UserDefaults.standard.string(forKey: "AstraDemoSettings"),
@@ -403,10 +412,7 @@ private struct TVHomePreview: View {
         VStack(spacing: 16) {
           TVLogoTitle(library: library, item: item, maxWidth: 380, maxHeight: 110, textSize: 52, centered: true)
             .frame(maxWidth: .infinity)
-          HStack(spacing: 12) {
-            DetailMetaLine(item: shown, library: library, fontSize: 22, genreLimit: 1, ratingAfter: true)
-            TVFormatChips(item: shown, fontSize: 16, showsRating: false)
-          }
+          MetaBadgeRow(item: shown, playTarget: shown, library: library, fontSize: 18, alignment: .center)
           HStack(spacing: 16) {
             Label("Play", systemImage: "play.fill")
               .font(.system(size: 24, weight: .semibold))
@@ -414,11 +420,11 @@ private struct TVHomePreview: View {
               .frame(maxWidth: .infinity)
               .frame(height: 60)
               .background(Capsule().fill(Color.white))
-            Image(systemName: "plus")
-              .font(.system(size: 26, weight: .semibold))
+            Label("Details", systemImage: "info.circle")
+              .font(.system(size: 24, weight: .semibold))
               .foregroundStyle(Color.white)
-              .frame(width: 60, height: 60)
-              .background(Circle().fill(Color.white.opacity(0.18)))
+              .frame(width: 170, height: 60)
+              .background(Capsule().fill(Color.white.opacity(0.18)))
           }
         }
         .frame(width: 460)

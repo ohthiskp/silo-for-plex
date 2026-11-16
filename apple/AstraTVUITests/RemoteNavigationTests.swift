@@ -37,8 +37,10 @@ final class RemoteNavigationTests: XCTestCase {
 
   /// Home is on screen (its Continue Watching row).
   private var homeHero: XCUIElement { app.staticTexts["Continue Watching"].firstMatch }
-  /// A Details page is open (its More button).
-  private var detailsMore: XCUIElement { app.buttons["More"].firstMatch }
+  /// A Details page is open (its watched eye).
+  private var detailsMore: XCUIElement {
+    app.buttons.matching(NSPredicate(format: "label IN %@", ["Mark Watched", "Mark Unwatched"])).firstMatch
+  }
 
   private var focusedElement: XCUIElement {
     app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
@@ -187,6 +189,190 @@ final class RemoteNavigationTests: XCTestCase {
     sleep(4)
     shot("movies")
     XCTAssertTrue(app.buttons["Unwatched"].firstMatch.waitForExistence(timeout: 10), "Movies didn't open")
+  }
+
+  // MARK: Focus (KP, 2026-11-16)
+
+  private static let services = ["For You", "Netflix", "Apple TV+", "Prime Video", "Disney+", "HBO Max", "Hulu"]
+  private var onCircle: Bool { Self.services.contains(focusedElement.label) }
+  private var heroPage: String { app.descendants(matching: .any)["astra.hero.page"].firstMatch.label }
+
+  /// Right from every streaming circle gets back onto the page (KP: only HBO
+  /// Max, level with Play, could before).
+  func testRightFromEveryCircleReachesThePage() {
+    launch()
+    XCTAssertTrue(homeHero.waitForExistence(timeout: 30), "Home didn't load")
+    sleep(4)
+    leaveTabBar()
+    for n in 0..<Self.services.count {
+      for _ in 0..<3 where !onCircle { press(.left) }
+      XCTAssertTrue(onCircle, "Left didn't reach the circles (round \(n))")
+      press(.down, times: n)
+      let circle = focusedElement.label
+      if n == 4 { shot("circle-\(circle)") }
+      press(.right)
+      XCTAssertFalse(onCircle, "Right from \(circle) stayed in the circles")
+    }
+  }
+
+  /// The hero has just Play and Details (KP, 2026-11-16); Right on Details
+  /// turns to the next title and keeps focus there; moving onto Details
+  /// doesn't turn it; Left on Play goes back a title, and only from the first
+  /// title does Left reach the circles.
+  func testHeroButtonsAndLeftRight() {
+    launch()
+    XCTAssertTrue(homeHero.waitForExistence(timeout: 30), "Home didn't load")
+    sleep(4)
+    leaveTabBar()
+    shot("hero-play-focused")
+    let first = heroPage
+    print("ASTRA-HERO start", first)
+    XCTAssertTrue(["Play", "Resume", "Details"].contains(focusedElement.label), "Home didn't open on the hero's buttons")
+    XCTAssertFalse(app.buttons["Add to Watchlist"].exists, "The hero still has a + button")
+    if focusedElement.label != "Details" {
+      press(.right)
+      XCTAssertEqual(focusedElement.label, "Details", "Right from Play didn't go to Details")
+    }
+    XCTAssertEqual(heroPage, first, "Moving onto Details turned the hero")
+    shot("hero-details-focused")
+    press(.right)
+    XCTAssertNotEqual(heroPage, first, "Right on Details didn't turn the hero")
+    XCTAssertEqual(focusedElement.label, "Details", "Focus left Details when the hero turned")
+    shot("hero-second-title")
+    press(.right)
+    print("ASTRA-HERO after two", heroPage)
+    press(.left)
+    var presses = 0
+    while heroPage != first, presses < 6 {
+      press(.left)
+      XCTAssertFalse(onCircle, "Left reached the circles before the first title")
+      presses += 1
+    }
+    XCTAssertEqual(heroPage, first, "Left didn't walk back to the first title")
+    if focusedElement.label == "Details" { press(.left) }
+    press(.left)
+    XCTAssertTrue(onCircle, "Left on the first title didn't reach the circles")
+  }
+
+  /// Details: the eye marks the movie watched, and back.
+  func testDetailsEyeMarksWatched() {
+    launch(["-AstraDemoOpen", "101"])
+    XCTAssertTrue(app.buttons["Mark Watched"].firstMatch.waitForExistence(timeout: 30)
+      || app.buttons["Mark Unwatched"].firstMatch.exists, "No eye button on Details")
+    XCTAssertFalse(app.buttons["More"].exists, "Details still has More")
+    sleep(3)
+    shot("details-eye")
+  }
+
+  /// Details frosts as it scrolls down to Cast.
+  func testDetailsFrostsWhenScrolled() {
+    launch(["-AstraDemoOpen", "101"])
+    sleep(8)
+    if !focusedElement.exists { press(.down) }
+    press(.down, times: 3)
+    shot("details-scrolled-cast")
+    press(.down, times: 2)
+    shot("details-scrolled-more")
+  }
+
+  /// In a row, Left walks back to the first card and only then reaches the circles.
+  func testRowLeftGoesToTheFirstCardFirst() {
+    launch()
+    XCTAssertTrue(homeHero.waitForExistence(timeout: 30), "Home didn't load")
+    sleep(4)
+    leaveTabBar()
+    press(.down)
+    let firstCard = focusedElement.label
+    press(.right)
+    XCTAssertNotEqual(focusedElement.label, firstCard, "Right didn't move along Continue Watching")
+    press(.left)
+    XCTAssertEqual(focusedElement.label, firstCard, "Left didn't go back to the first card")
+    press(.left)
+    XCTAssertTrue(onCircle, "Left on the first card didn't reach the circles")
+  }
+
+  /// Settings: Down from the gear reaches the page, then the options.
+  func testSettingsMovesDown() {
+    launch(["-AstraDemoTab", "settings"])
+    let appearance = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Appearance")).firstMatch
+    XCTAssertTrue(appearance.waitForExistence(timeout: 30), "Settings didn't open")
+    sleep(4)
+    // Down from the gear lands on the category list.
+    press(.down)
+    XCTAssertEqual(focusedElement.label, "Appearance", "Down from the top bar didn't reach Settings")
+    // Down the list; Right into the pane's options.
+    press(.down)
+    XCTAssertEqual(focusedElement.label, "Playback", "Down didn't move along the categories")
+    press(.right)
+    let option = focusedElement.label
+    print("ASTRA-SETTINGS right ->", option)
+    XCTAssertFalse(["Appearance", "Playback", "Subtitles", "Library", "About", "Settings", ""].contains(option),
+      "Right from the list didn't reach the settings themselves")
+    press(.down)
+    shot("settings-moved-down")
+    print("ASTRA-SETTINGS down ->", focusedElement.label)
+    // Left goes back to the list, and Up from its top reaches the server band.
+    press(.left)
+    let categories = ["Appearance", "Playback", "Subtitles", "Library", "About"]
+    XCTAssertTrue(categories.contains(focusedElement.label), "Left from the options didn't go back to the list")
+    for _ in 0..<5 where categories.contains(focusedElement.label) { press(.up) }
+    let band = focusedElement.label
+    print("ASTRA-SETTINGS up ->", band)
+    XCTAssertTrue(["Change Server", "Index Now"].contains(band), "Up from the list didn't reach the server band")
+  }
+
+  /// Show Details: the seasons are tabs, starting on the season being watched.
+  func testSeasonTabs() {
+    // Severance with a Season 2 episode open: starts on Season 2.
+    launch(["-AstraDemoOpen", "205"])
+    XCTAssertTrue(detailsMore.waitForExistence(timeout: 30), "Details didn't open")
+    sleep(4)
+    if !focusedElement.exists { press(.down) }
+    var reached = false
+    for _ in 0..<4 where !reached {
+      press(.down)
+      reached = focusedElement.label.hasPrefix("Season")
+    }
+    XCTAssertTrue(reached, "Down didn't reach the season tabs")
+    shot("season-tabs")
+    let start = focusedElement.label
+    press(focusedElement.label == "Season 1" ? .right : .left)
+    XCTAssertNotEqual(focusedElement.label, start, "Couldn't move along the season tabs")
+    XCTAssertTrue(focusedElement.isSelected, "Moving onto a season tab didn't show it")
+    sleep(2)
+    shot("season-tabs-moved")
+  }
+
+  /// Every page: Down from the bar reaches the page, and Down / Right keep moving.
+  func testEveryPageTakesFocusFromTheBar() {
+    // (Watchlist is empty in the demo: nothing there to focus.)
+    for tab in ["search", "movies", "shows"] {
+      launch(["-AstraDemoTab", tab])
+      sleep(10)
+      var seen: [String] = []
+      for direction in [XCUIRemote.Button.down, .down, .right, .down, .right] {
+        press(direction)
+        seen.append(focusedElement.exists ? focusedElement.label : "none")
+      }
+      shot("page-\(tab)")
+      print("ASTRA-PAGE", tab, seen)
+      XCTAssertTrue(seen.contains { !$0.isEmpty && $0 != "none" && !Self.barItems.contains($0) },
+        "Focus never left the top bar on \(tab)")
+      app.terminate()
+    }
+  }
+
+  /// Movies: the chips sit below the top bar, not under it.
+  func testMoviesChipsClearTheTopBar() {
+    launch(["-AstraDemoTab", "movies"])
+    let chip = app.buttons["Unwatched"].firstMatch
+    XCTAssertTrue(chip.waitForExistence(timeout: 30), "Movies didn't load")
+    sleep(3)
+    let bar = app.buttons["Movies"].firstMatch
+    shot("movies-top")
+    if bar.exists {
+      XCTAssertGreaterThan(chip.frame.minY, bar.frame.maxY + 10, "The chips overlap the top bar")
+    }
   }
 
   // MARK: Player

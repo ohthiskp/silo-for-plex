@@ -80,7 +80,12 @@ struct WindowAccessor: View {
         var onWindow: ((UIWindow?) -> Void)?
         override func didMoveToWindow() {
           super.didMoveToWindow()
-          window?.backgroundColor = .black
+          // Only a real window is reported. When a view that reported the
+          // window goes away (the Apple TV player host when the player closes)
+          // it must not clear it: the next Play would find no window and fail
+          // with "The server sent a response Astra couldn't read" (KP, 2026-11-16).
+          guard let window else { return }
+          window.backgroundColor = .black
           onWindow?(window)
         }
       }

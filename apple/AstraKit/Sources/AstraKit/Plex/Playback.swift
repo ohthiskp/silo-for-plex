@@ -74,6 +74,16 @@ public enum VideoTier {
     if tier >= 720 { return "HD" }
     return nil
   }
+
+  /// The resolution badge on screen (KP, 2026-11-16): "4K UHD" for a 4K file
+  /// with HDR or Dolby Vision, plain "4K" for a regular (SDR) 4K file such
+  /// as Breaking Bad, "HD" for 720 to 1440, nothing below.
+  public static func label(for tier: Int?, dynamicRange: DynamicRange?) -> String? {
+    guard let tier else { return nil }
+    if tier >= 2160 { return dynamicRange == nil ? "4K" : "4K UHD" }
+    if tier >= 720 { return "HD" }
+    return nil
+  }
 }
 
 extension PlexMedia {

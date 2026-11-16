@@ -454,6 +454,16 @@ final class PreferredQualityTests: XCTestCase {
     XCTAssertNil(VideoTier.badge(for: 576))
   }
 
+  /// KP (2026-11-16): 4K UHD for 4K with HDR or Dolby Vision, plain 4K for SDR 4K.
+  func testQualityLabelSaysUHDOnlyForHDR4K() {
+    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: nil), "4K")
+    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: .hdr10), "4K UHD")
+    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: .dolbyVision), "4K UHD")
+    XCTAssertEqual(VideoTier.label(for: 2160, dynamicRange: .hlg), "4K UHD")
+    XCTAssertEqual(VideoTier.label(for: 1080, dynamicRange: .hdr10), "HD")
+    XCTAssertNil(VideoTier.label(for: 576, dynamicRange: nil))
+  }
+
   func testPreferenceDefaultsToAutoAndPersists() throws {
     let suite = "astra.tests.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -761,6 +771,34 @@ final class TMDBTests: XCTestCase {
     XCTAssertFalse(try movie(#"{"id":1,"streamType":1,"codec":"hevc"}"#).hasAtmos())
     let atmos = try movie(#"{"id":3,"streamType":2,"codec":"truehd","extendedDisplayTitle":"English (TrueHD 7.1 Atmos)"}"#)
     XCTAssertTrue(atmos.hasAtmos())
+  }
+
+  func testCatalogTitleFillsGenresLengthAndRatingFromTMDB() async throws {
+    let movieJSON = #"{"genres":[{"id":878,"name":"Science Fiction"},{"id":12,"name":"Adventure"}],"runtime":197,"release_dates":{"results":[{"iso_3166_1":"US","release_dates":[{"certification":"PG-13","type":3}]}]}}"#
+    let art = try await TMDBClient(token: "t", transport: FakeTransport { _ in (200, Data(movieJSON.utf8)) })
+      .artwork(id: 1, kind: .movie)
+    XCTAssertEqual(art.genres, ["Science Fiction", "Adventure"])
+    XCTAssertEqual(art.runtimeMinutes, 197)
+    let catalog = TMDBItem(tmdbID: 1, kind: .movie, title: "Avatar", year: 2025).asMetadata
+    let filled = catalog.filling(from: art)
+    XCTAssertEqual(filled.genres.map(\.tag), ["Science Fiction", "Adventure"])
+    XCTAssertEqual(filled.duration, 197 * 60_000)
+    XCTAssertEqual(filled.officialRating, "PG-13")
+
+    let showJSON = #"{"genres":[{"id":18,"name":"Drama"}],"number_of_seasons":5}"#
+    let showArt = try await TMDBClient(token: "t", transport: FakeTransport { _ in (200, Data(showJSON.utf8)) })
+      .artwork(id: 2, kind: .tv)
+    let show = TMDBItem(tmdbID: 2, kind: .tv, title: "Breaking Bad", year: 2008).asMetadata.filling(from: showArt)
+    XCTAssertEqual(show.childCount, 5)
+    XCTAssertNil(show.duration)
+
+    // Plex's own values win.
+    var plex = catalog
+    plex.genres = [PlexTag(tag: "Action")]
+    plex.duration = 1000
+    XCTAssertEqual(plex.filling(from: art).genres.map(\.tag), ["Action"])
+    XCTAssertEqual(plex.filling(from: art).duration, 1000)
+    XCTAssertEqual(catalog.filling(from: nil), catalog)
   }
 
   func testOfficialRatingFromTMDBAndPlex() async throws {

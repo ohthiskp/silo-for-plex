@@ -1035,6 +1035,18 @@ final class LibraryStore {
   private var artworkTasks: [String: Task<TMDBArtwork?, Never>] = [:]
 
   /// TMDB's artwork for a movie or show, fetched once per title.
+  /// The title with its gaps (rating, genres, length) filled from TMDB
+  /// details already fetched; asks for them once in the background if not.
+  func filled(_ item: PlexMetadata) -> PlexMetadata {
+    guard let key = item.tmdbKey, item.type == .movie || item.type == .show else { return item }
+    if let art = artwork[key] { return item.filling(from: art) }
+    let missing = item.genres.isEmpty || (item.type == .movie ? item.duration == nil : item.childCount == nil)
+    if missing, artworkTasks[key] == nil {
+      Task { _ = await tmdbArtwork(for: item) }
+    }
+    return item
+  }
+
   func tmdbArtwork(for item: PlexMetadata) async -> TMDBArtwork? {
     guard let tmdb, let key = item.tmdbKey else { return nil }
     if let hit = artwork[key] { return hit }
