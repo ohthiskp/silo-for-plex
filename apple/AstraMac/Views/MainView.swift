@@ -270,9 +270,11 @@ struct MacTopBar: View {
     .transaction(value: selection) { $0.animation = nil }
   }
 
+  /// Downloads and Settings: round glass, as the TV's Settings circle.
   private func round(_ page: SidebarItem, count: Int = 0) -> some View {
     item(page, iconOnly: true, count: count)
       .padding(3)
+      .background { if selection != page { Circle().fill(.white.opacity(0.08)) } }
       .astraGlass(in: Circle(), variant: .clear)
   }
 
@@ -329,13 +331,15 @@ struct MacBarButton: View {
       .overlay(alignment: .topTrailing) {
         if count > 0, iconOnly { badge.offset(x: 4, y: -4) }
       }
-      .foregroundStyle(.white.opacity(selected || hovering ? 1 : 0.72))
-      .shadow(color: .black.opacity(0.35), radius: 6, y: 1)
+      // As on Apple TV (KP, 2026-11-16): the open page is a white pill with
+      // black type; the others plain white text, a soft glass pill under the pointer.
+      .foregroundStyle(selected ? Color.black : .white.opacity(hovering ? 1 : 0.75))
+      .shadow(color: .black.opacity(selected ? 0 : 0.35), radius: 6, y: 1)
       .background {
         if selected {
-          Capsule().fill(.white.opacity(0.14)).astraGlass(in: Capsule(), variant: .clear)
+          Capsule().fill(.white).shadow(color: .black.opacity(0.3), radius: 10, y: 4)
         } else if hovering {
-          Capsule().fill(.white.opacity(0.08))
+          Capsule().fill(.white.opacity(0.1)).astraGlass(in: Capsule(), variant: .clear)
         }
       }
       .contentShape(Capsule())
