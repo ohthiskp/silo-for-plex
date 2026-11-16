@@ -77,6 +77,26 @@ final class ArtFramingTests: XCTestCase {
       focus: focus)
   }
 
+  func testTVHeroPushMovesFacesTowardTheRightEdge() {
+    // Faces at 15%–40% of a 1600-wide picture: just clear of 1080, or pushed right.
+    let faces = CGRect(x: 0.15, y: 0.2, width: 0.25, height: 0.4)
+    func at(_ push: Double) -> CGRect {
+      ArtFraming.side(
+        boxWidth: 1920, boxHeight: 900, aspect: 16.0 / 9.0, clearX: 1080, rightMargin: 60,
+        minX: 240, maxX: 1400, defaultX: 420, focus: faces, push: push)
+    }
+    XCTAssertEqual(at(0).minX, 840, accuracy: 0.5)  // 1080 - 0.15 * 1600
+    let rightmost = 1920 - 60 - 0.40 * 1600.0  // 1220
+    XCTAssertEqual(at(1).minX, rightmost, accuracy: 0.5)
+    XCTAssertEqual(at(0.5).minX, (840 + rightmost) / 2, accuracy: 0.5)
+    // A spread too wide to clear the block keeps every face on screen when pushed.
+    let wide = CGRect(x: 0.05, y: 0.2, width: 0.6, height: 0.4)
+    let r = ArtFraming.side(
+      boxWidth: 1920, boxHeight: 900, aspect: 16.0 / 9.0, clearX: 1080, rightMargin: 60,
+      minX: 240, maxX: 1400, defaultX: 420, focus: wide, push: 1)
+    XCTAssertEqual(r.minX + 0.65 * r.width, 1860, accuracy: 0.5)
+  }
+
   func testTVHeroWithoutFacesSitsRightOfCentre() {
     let r = side(nil)
     XCTAssertEqual(r.minX, 420, accuracy: 0.001)

@@ -80,7 +80,7 @@ struct TVDetailPage: View {
         AmbientBackdrop(library: library, item: titleItem)
         // The art sits right with faces clear of the logo and buttons, the
         // rest softly blurred, like the hero (KP, 2026-11-16, Dune).
-        TVHeroArt(library: library, item: titleItem, kind: .scenery, clearX: TVLayout.leading + 760 + 50)
+        TVHeroArt(library: library, item: titleItem, kind: .scenery, clearX: TVLayout.leading + 760 + 50, push: 0, maxX: 760)
         // Edge to edge: inside the safe area it left a dark strip down the left.
         .frame(width: 1920)
         .frame(height: 1080)

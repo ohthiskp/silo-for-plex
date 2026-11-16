@@ -67,9 +67,12 @@ public enum ArtFraming {
   ///   - minX, maxX: how far right the picture's left edge may sit.
   ///   - defaultX: where it sits when nothing was found in the picture.
   ///   - focus: the faces (or main subject), normalized, top-left origin.
+  ///   - push: 0 moves the faces just past `clearX`; 1 moves them as far right
+  ///     as they fit (KP, 2026-11-16, Avatar: "the faces are too close… it
+  ///     should be on the right side").
   public static func side(
     boxWidth: Double, boxHeight: Double, aspect: Double, clearX: Double, rightMargin: Double = 40,
-    minX: Double, maxX: Double, defaultX: Double, focus: CGRect? = nil
+    minX: Double, maxX: Double, defaultX: Double, focus: CGRect? = nil, push: Double = 0
   ) -> CGRect {
     guard boxWidth > 0, boxHeight > 0, aspect > 0, maxX >= minX else { return .zero }
     let width = boxHeight * aspect
@@ -84,9 +87,13 @@ public enum ArtFraming {
         let onScreen = boxWidth - rightMargin - Double(focus.maxX) * width
         x = max(minX, min(clear, onScreen))
         x = max(x, min(defaultX, onScreen))
+        if onScreen > x { x += (onScreen - x) * min(max(push, 0), 1) }
       } else {
-        // Too many faces to clear the block: centre them in the space right of it.
-        x = clearX + region / 2 - Double(focus.midX) * width
+        // Too many faces to clear the block: centre them in the space right
+        // of it, or with `push`, move them toward the right edge.
+        let centred = clearX + region / 2 - Double(focus.midX) * width
+        let rightmost = boxWidth - rightMargin - Double(focus.maxX) * width
+        x = centred + (rightmost - centred) * min(max(push, 0), 1)
       }
     }
     x = min(maxX, max(minX, x))

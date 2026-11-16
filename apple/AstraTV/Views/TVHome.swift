@@ -296,6 +296,10 @@ struct TVHeroArt: View {
   var kind: LibraryStore.ArtKind = .heroBackdrop
   /// Where the text block ends on a 1920 pt screen; faces stay right of it.
   var clearX: CGFloat = TVHeroArt.heroClearX
+  /// How far right the faces go past `clearX` (0 just clear … 1 at the right edge).
+  var push: Double = 0.6
+  /// The furthest right the art's left edge may sit, on a 1920 pt screen.
+  var maxX: CGFloat = 1300
 
   @State private var url: URL?
   @State private var focus: ArtFocus?
@@ -310,7 +314,7 @@ struct TVHeroArt: View {
       let rect = ArtFraming.side(
         boxWidth: geo.size.width, boxHeight: geo.size.height, aspect: focus?.aspect ?? 16.0 / 9.0,
         clearX: clearX * scale, rightMargin: 60 * scale,
-        minX: 240 * scale, maxX: 1040 * scale, defaultX: 420 * scale, focus: focus?.focus)
+        minX: 240 * scale, maxX: maxX * scale, defaultX: 420 * scale, focus: focus?.focus, push: push)
       ZStack(alignment: .topLeading) {
         // A colour wash only: blurred so far that no shape survives, so it
         // can't show a second, shifted copy of a face (KP, 2026-11-16: the
