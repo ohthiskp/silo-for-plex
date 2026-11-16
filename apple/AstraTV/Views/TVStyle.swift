@@ -328,6 +328,7 @@ private struct TVCardArt<Content: View>: View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
           .strokeBorder(Color.white.opacity(focused ? 0.7 : 0.06), lineWidth: focused ? 4 : 1)
       )
+      .tvShine()
   }
 }
 
@@ -460,6 +461,17 @@ struct TVRowHeader: View {
       .font(.system(size: size, weight: .semibold))
       .foregroundStyle(TVColor.onSurface)
       .lineLimit(1)
+  }
+}
+
+// MARK: - Shine
+
+extension View {
+  /// Apple's own focused-poster look on tvOS (KP, 2026-11-16: "reflect like
+  /// Apple and Infuse do"): the system highlight tilts the art with the
+  /// finger on the remote's touch surface and runs a light sheen across it.
+  func tvShine() -> some View {
+    hoverEffect(.highlight)
   }
 }
 

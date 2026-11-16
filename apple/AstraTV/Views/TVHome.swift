@@ -146,10 +146,10 @@ struct TVHome: View {
 
 /// The hero's block, bottom left (KP, 2026-11-16): the title's logo on the
 /// left, then "2025 • 2h 8m [PG-13] [4K] [Atmos]" on one line as on the
-/// iPhone and Mac, the genres under it, then Play, Details and the round +
-/// (Watchlist), each with room to grow when focused. Right on + turns to the
-/// next title; Left on Play goes back a title, and only from the first title
-/// does Left reach the streaming circles.
+/// iPhone and Mac, the genres under it, then just Play and Details ("keep it
+/// simple"), each with room to grow when focused. Right on Details turns to
+/// the next title; Left on Play goes back a title, and only from the first
+/// title does Left reach the streaming circles.
 private struct TVHeroInfo: View {
   var library: LibraryStore
   var item: PlexMetadata
@@ -164,19 +164,17 @@ private struct TVHeroInfo: View {
   @Environment(AppModel.self) private var app
   @FocusState private var focus: Field?
   /// When focus last moved between the buttons: a Right that moved focus
-  /// onto + must not also turn the hero (KP: "it automatically moves to the right").
+  /// onto Details must not also turn the hero (KP: "it automatically moves to the right").
   @State private var movedAt = Date.distantPast
   /// The server's full copy, for the 4K / Dolby badges and the runtime.
   @State private var full: PlexMetadata?
 
-  private enum Field: Hashable { case play, details, plus }
+  private enum Field: Hashable { case play, details }
 
   static let blockWidth: CGFloat = 820
 
   private var playable: Bool { library.availability(of: item) != .notOnServer && app.canPlay(item) }
-  private var hasPlus: Bool { item.tmdbKey != nil }
   private var firstFocus: Field { playable ? .play : .details }
-  private var lastField: Field { hasPlus ? .plus : .details }
   private var shown: PlexMetadata { full ?? library.indexMatch(item) ?? item }
   private var settled: Bool { Date().timeIntervalSince(movedAt) > 0.3 }
 
@@ -230,11 +228,6 @@ private struct TVHeroInfo: View {
         }
         .buttonStyle(TVGlassButtonStyle())
         .focused($focus, equals: .details)
-
-        if hasPlus {
-          TVRoundWatchlist(item: item)
-            .focused($focus, equals: .plus)
-        }
       }
       .padding(.top, 30)
       .focusSection()
@@ -242,7 +235,7 @@ private struct TVHeroInfo: View {
         // Reached when focus has nowhere to go that way (the circles are off
         // while the hero isn't on its first title).
         guard settled else { return }
-        if direction == .right, focus == lastField { step(1) }
+        if direction == .right, focus == .details { step(1) }
         if direction == .left, focus == firstFocus, index > 0 { step(-1) }
       }
       if count > 1 {
@@ -264,8 +257,7 @@ private struct TVHeroInfo: View {
       if focus != nil { leftEdge(new == 0) }
     }
     .onChange(of: item.id) {
-      // The next title may have no + or nothing to play: keep focus in the block.
-      if focus == .plus, !hasPlus { focus = .details }
+      // The next title may have nothing to play: keep focus in the block.
       if focus == .play, !playable { focus = .details }
     }
     // Closing the player re-enables the page with nothing focused, and tvOS
@@ -618,6 +610,7 @@ private struct TVContinueLabel: View {
     .overlay(
       RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)
         .strokeBorder(.white.opacity(focused ? 0.8 : 0.08), lineWidth: focused ? 4 : 1))
+    .tvShine()
   }
 }
 
@@ -658,6 +651,7 @@ private struct TVRankPoster: View {
         RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)
           .strokeBorder(.white.opacity(focused ? 0.8 : 0.08), lineWidth: focused ? 4 : 1))
       .shadow(color: .black.opacity(0.45), radius: 8, x: -4, y: 0)
+      .tvShine()
   }
 }
 

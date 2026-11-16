@@ -27,6 +27,9 @@ struct TVDetailPage: View {
   @State private var notOnServer = false
   @State private var error: String?
   @FocusState private var playFocused: Bool
+  /// 0 at the top, 1 once the page has scrolled down to Cast and beyond: the
+  /// backdrop blurs a little, then the page is all frosted glass (KP, 2026-11-16).
+  @State private var frost: CGFloat = 0
   /// The season tab that has focus (KP, 2026-11-16: tabs, not a dropdown).
   @FocusState private var seasonFocus: String?
   @State private var seasonLoad: Task<Void, Never>?
@@ -67,6 +70,10 @@ struct TVDetailPage: View {
       .padding(.bottom, 100)
     }
     .scrollClipDisabled()
+    .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { _, y in
+      let value = min(1, max(0, (y - 120) / 520))
+      if abs(value - frost) > 0.02 || value == 0 || value == 1 { frost = value }
+    }
     .background {
       ZStack(alignment: .top) {
         AmbientBackdrop(library: library, item: titleItem)
@@ -76,6 +83,7 @@ struct TVDetailPage: View {
         .frame(maxWidth: .infinity)
         .frame(height: 1080)
         .clipped()
+        .blur(radius: frost * 28, opaque: true)
         .overlay { HeroBlend() }
         .mask {
           LinearGradient(
@@ -83,7 +91,14 @@ struct TVDetailPage: View {
             startPoint: .top, endPoint: .bottom)
         }
         .ignoresSafeArea()
+        // Frosted glass over everything once you're down in Cast, a touch lighter.
+        Rectangle()
+          .fill(.regularMaterial)
+          .overlay(Color.white.opacity(0.04))
+          .opacity(frost)
+          .ignoresSafeArea()
       }
+      .animation(.easeOut(duration: 0.25), value: frost)
     }
     .ignoresSafeArea(edges: .top)
     .defaultFocus($playFocused, true, priority: .userInitiated)
@@ -154,17 +169,21 @@ struct TVDetailPage: View {
             TVRoundWatchlist(item: target)
           }
         }
-        if !shown.isCatalogOnly, !notOnServer {
-          TVLabeledRound(label: "More") {
-            Menu {
-              ItemMenuItems(library: library, item: playTarget, onDetails: true)
+        // KP (2026-11-16, Apple TV): an eye that marks the movie or the
+        // picked episode watched or unwatched, instead of More.
+        if !shown.isCatalogOnly, !notOnServer, playTarget.type == .movie || playTarget.type == .episode {
+          let watched = library.isWatched(playTarget)
+          TVLabeledRound(label: watched ? "Watched" : "Mark Watched") {
+            Button {
+              Task { await library.setWatched(playTarget, watched: !watched) }
             } label: {
-              Image(systemName: "ellipsis")
+              Image(systemName: watched ? "eye.fill" : "eye")
                 .font(.system(size: 30, weight: .semibold))
+                .contentTransition(.symbolEffect(.replace))
                 .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)
             }
             .buttonStyle(TVGlassButtonStyle(round: true))
-            .accessibilityLabel("More")
+            .accessibilityLabel(watched ? "Mark Unwatched" : "Mark Watched")
           }
         }
       }
@@ -505,6 +524,7 @@ private struct TVEpisodeLabel: View {
           RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)
             .strokeBorder(
               Astra.Color.ink.opacity(focused ? 0.8 : selected ? 0.55 : 0.08), lineWidth: focused || selected ? 4 : 1))
+        .tvShine()
       HStack(spacing: 10) {
         Text([item.index.map { "\($0)." }, item.title].compactMap { $0 }.joined(separator: " "))
           .font(.system(size: 24, weight: .semibold))
