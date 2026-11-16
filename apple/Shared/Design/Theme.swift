@@ -221,7 +221,9 @@ private struct ContentLeadingKey: EnvironmentKey {
 /// views redraw when it changes because it is observed.
 /// Settings → Appearance → Theme: how the whole app looks (KP, 2026-11-09).
 enum AppTheme: String, CaseIterable, Identifiable, Sendable {
-  case frosted, oled, light, violet
+  // KP (2026-11-16): Light removed on every platform ("it looks terrible").
+  // A saved "light" no longer matches a case, so it opens as Frosted Glass.
+  case frosted, oled, violet
 
   var id: String { rawValue }
 
@@ -229,7 +231,6 @@ enum AppTheme: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .frosted: "Frosted Glass"
     case .oled: "OLED"
-    case .light: "Light"
     case .violet: "Violet"
     }
   }
@@ -238,7 +239,6 @@ enum AppTheme: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .frosted: "Liquid Glass over the artwork"
     case .oled: "Pure black, no blur"
-    case .light: "Bright glass and dark text"
     case .violet: "Deep purple glass"
     }
   }
@@ -253,10 +253,6 @@ enum AppTheme: String, CaseIterable, Identifiable, Sendable {
       ThemePalette(
         bg: 0x000000, surface: 0x0E0E0F, surface2: 0x161617, ink: 0xF5F5F7, accent: 0xFFFFFF,
         isLight: false, ambient: 0, wash: 0, glassTint: nil)
-    case .light:
-      ThemePalette(
-        bg: 0xF2F2F7, surface: 0xFFFFFF, surface2: 0xE5E5EA, ink: 0x1C1C1E, accent: 0x1C1C1E,
-        isLight: true, ambient: 0.55, wash: 0.55, glassTint: nil)
     case .violet:
       ThemePalette(
         bg: 0x110A1F, surface: 0x1C1230, surface2: 0x261A40, ink: 0xF4F0FF, accent: 0xB69CFF,
@@ -316,7 +312,7 @@ struct ThemePalette {
   private(set) var detailsShowing = 0
 
   var palette: ThemePalette {
-    appTheme == .light && detailsShowing > 0 ? AppTheme.frosted.palette : appTheme.palette
+    appTheme.palette
   }
 
   func detailsAppeared() { detailsShowing += 1 }
@@ -364,6 +360,33 @@ extension View {
   /// A header height that fits the window: `share` of the visible height, capped at `cap`.
   func astraHeaderHeight(cap: CGFloat) -> some View {
     containerRelativeFrame(.vertical) { length, _ in min(cap, max(360, length * Astra.Layout.heroShare)) }
+  }
+}
+
+extension EnvironmentValues {
+  /// Text and buttons drawn straight on artwork (the Home hero). They keep
+  /// the dark themes' white type on every theme, so the Light theme never
+  /// has to wash the artwork pale to make them read (KP, 2026-11-16).
+  @Entry var astraOnArt: Bool = false
+}
+
+extension Astra.Color {
+  /// `ink`, or the dark themes' white when drawn on artwork.
+  @MainActor static func ink(onArt: Bool) -> SwiftUI.Color { onArt ? AppTheme.frosted.palette.ink : ink }
+  /// The main button's fill and label on artwork: white with black text.
+  @MainActor static func selection(onArt: Bool) -> SwiftUI.Color { onArt ? .white : selection }
+  @MainActor static func onSelection(onArt: Bool) -> SwiftUI.Color { onArt ? .black : onSelection }
+  /// The shade laid over hero artwork so its text reads: the page colour on
+  /// the dark themes, a soft black on Light (never a white wash).
+  @MainActor static var heroShade: SwiftUI.Color { AstraAppearance.shared.palette.isLight ? .black : bg }
+  /// How strong the hero shade is: lighter on Light, where it's only for the text.
+  @MainActor static var heroShadeStrength: Double { AstraAppearance.shared.palette.isLight ? 0.55 : 1 }
+}
+
+extension View {
+  /// Marks content drawn on artwork: white type and dark glass on every theme.
+  func astraOnArt() -> some View {
+    environment(\.astraOnArt, true).environment(\.colorScheme, .dark)
   }
 }
 

@@ -10,33 +10,25 @@ import SwiftUI
   struct MacSettingsPage: View {
     @Environment(AppModel.self) private var app
     @Environment(\.contentLeading) private var leading
+    @State private var category: MacSettingsCategory = .demo
 
     var body: some View {
       NavigationStack {
-        ScrollViewReader { proxy in
         ScrollView {
+          // KP (2026-11-16): laid out like Apple TV's Settings: the server
+          // and library band on top, the categories in a list on the left,
+          // the chosen one on the right.
           VStack(alignment: .leading, spacing: 28) {
             Text("Settings")
               .astraFont(.display(Astra.Layout.pageTitleSize))
               .foregroundStyle(Astra.Color.ink)
             ServerStatusBand()
-            if let library = app.library {
-              AppearanceBlock(library: library)
-              // Three columns in a wide window, fewer as it narrows.
-              LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 330), spacing: 24, alignment: .top)],
-                alignment: .leading, spacing: 24
-              ) {
-                VStack(alignment: .leading, spacing: 24) {
-                  PlaybackBlock()
-                  DownloadsBlock()
-                }
-                SubtitleBlock(library: library)
-                LibraryBlock()
-              }
-              .id("lower")
+            HStack(alignment: .top, spacing: 32) {
+              categoryList
+              pane
+                .frame(maxWidth: 760, alignment: .topLeading)
+                .id(category)
             }
-            SettingsFooter()
           }
           .frame(maxWidth: 1240, alignment: .leading)
           .padding(.leading, leading)
@@ -46,13 +38,6 @@ import SwiftUI
           .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(.hidden)
-        .task {
-          // CI screenshots (`-AstraDemoScroll`): show the lower half.
-          guard Demo.homeScroll != nil else { return }
-          try? await Task.pause(2)
-          proxy.scrollTo("lower", anchor: .top)
-        }
-        }
         .astraPageBackground()
         .navigationDestination(for: SettingsPane.self) { pane in
           Group {
@@ -64,6 +49,93 @@ import SwiftUI
           .navigationTitle(pane.title)
         }
       }
+    }
+
+    /// The categories, as on Apple TV: the chosen one lit, a chevron beside it.
+    private var categoryList: some View {
+      VStack(spacing: 0) {
+        ForEach(MacSettingsCategory.allCases) { item in
+          MacCategoryRow(title: item.title, selected: item == category) { category = item }
+        }
+      }
+      .background(SettingsCard<EmptyView>.shape.fill(Astra.Color.ink.opacity(0.06)))
+      .overlay(SettingsCard<EmptyView>.shape.strokeBorder(Astra.Color.hairline, lineWidth: 1))
+      .clipShape(SettingsCard<EmptyView>.shape)
+      .frame(width: 230)
+    }
+
+    @ViewBuilder private var pane: some View {
+      VStack(alignment: .leading, spacing: 24) {
+        switch category {
+        case .appearance:
+          if let library = app.library { AppearanceBlock(library: library) }
+        case .playback:
+          PlaybackBlock()
+        case .subtitles:
+          if let library = app.library { SubtitleBlock(library: library) }
+        case .library:
+          LibraryBlock()
+          DownloadsBlock()
+        case .updates:
+          UpdatesBlock()
+          SettingsFooter()
+        }
+      }
+    }
+  }
+
+  enum MacSettingsCategory: String, CaseIterable, Identifiable {
+    case appearance, playback, subtitles, library, updates
+
+    var id: String { rawValue }
+
+    var title: String {
+      switch self {
+      case .appearance: "Appearance"
+      case .playback: "Playback"
+      case .subtitles: "Subtitles"
+      case .library: "Library"
+      case .updates: "Updates and About"
+      }
+    }
+
+    /// CI screenshots: `-AstraDemoSettings playback` opens that category.
+    static var demo: MacSettingsCategory {
+      guard Demo.isOn, let name = UserDefaults.standard.string(forKey: "AstraDemoSettings") else { return .appearance }
+      return MacSettingsCategory(rawValue: name) ?? .appearance
+    }
+  }
+
+  /// One category in the list: plain text, the chosen one on a light fill
+  /// with a chevron, a soft fill under the pointer.
+  private struct MacCategoryRow: View {
+    var title: String
+    var selected: Bool
+    var action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+      Button(action: action) {
+        HStack {
+          Text(title)
+            .astraFont(size: 14.5, weight: selected ? .semibold : .medium)
+            .foregroundStyle(Astra.Color.ink.opacity(selected ? 1 : 0.8))
+          Spacer(minLength: 8)
+          if selected {
+            Image(systemName: "chevron.right")
+              .font(.system(size: 12, weight: .semibold))
+              .foregroundStyle(Astra.Color.muted)
+          }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 46)
+        .background(Astra.Color.ink.opacity(selected ? 0.12 : (hovering ? 0.06 : 0)))
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .onHover { hovering = $0 }
+      .settingsRowSeparator()
+      .accessibilityAddTraits(selected ? .isSelected : [])
     }
   }
 
@@ -304,6 +376,8 @@ import SwiftUI
     @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
     @AppStorage(SubtitlePreference.storageKey) private var subtitles: SubtitlePreference = .automatic
     @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
+    @AppStorage(PlaybackLanguage.audioKey) private var audioLanguage = ""
+    @AppStorage(PlaybackLanguage.subtitleKey) private var subtitleLanguage = ""
 
     var body: some View {
       SettingsCard(title: "Playback") {
@@ -313,15 +387,28 @@ import SwiftUI
           }
           .labelsHidden().pickerStyle(.segmented).fixedSize()
         }
+        // KP (2026-11-16): default the audio and subtitles to a language.
+        SettingRow(title: "Audio language") {
+          Picker("Audio language", selection: $audioLanguage) {
+            ForEach(PlaybackLanguage.choices) { Text($0.title).tag($0.code) }
+          }
+          .labelsHidden().fixedSize()
+        }
         SettingRow(title: "Subtitles") {
           Picker("Subtitles", selection: $subtitles) {
             ForEach(SubtitlePreference.allCases) { Text($0.title).tag($0) }
           }
           .labelsHidden().fixedSize()
         }
+        SettingRow(title: "Subtitle language") {
+          Picker("Subtitle language", selection: $subtitleLanguage) {
+            ForEach(PlaybackLanguage.choices) { Text($0.title).tag($0.code) }
+          }
+          .labelsHidden().fixedSize()
+        }
         SettingSwitch(title: "Next Episode button", isOn: $nextEpisode)
       }
-      .help("Astra always plays the original file. Quality picks between the versions on your server.")
+      .help("Astra always plays the original file. Quality picks between the versions on your server. Audio and subtitles start in these languages whenever the file has them. Automatic leaves it to the file and your Plex server.")
     }
   }
 
@@ -359,6 +446,32 @@ import SwiftUI
           .astraFont(size: 14.5)
           .monospacedDigit()
           .foregroundStyle(Astra.Color.muted)
+        }
+      }
+    }
+  }
+
+  /// KP (2026-11-16): "there's no in-app updater in Mac settings". The
+  /// version, and a button that checks now (Sparkle also checks every hour).
+  private struct UpdatesBlock: View {
+    @Environment(\.checkForUpdates) private var checkForUpdates
+
+    var body: some View {
+      if let checkForUpdates {
+        SettingsCard(title: "Updates") {
+          SettingRow(title: "Astra \(SettingsView.versionText)") {
+            Button("Check for Updates", action: checkForUpdates)
+              .buttonStyle(SettingsPillStyle(prominent: true))
+          }
+          HStack {
+            Text("Astra looks for a new version every hour and asks before installing it.")
+              .astraFont(size: 12.5)
+              .foregroundStyle(Astra.Color.muted)
+            Spacer(minLength: 0)
+          }
+          .padding(.horizontal, 16)
+          .padding(.vertical, 12)
+          .settingsRowSeparator()
         }
       }
     }
