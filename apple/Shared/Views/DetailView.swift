@@ -837,8 +837,8 @@ struct DetailMetaLine: View {
 /// "2024  [PG-13]  2h 46m  4K UHD  ◗◖Dolby Vision  ◗◖Dolby Atmos".
 /// Only the rating sits in a thin outlined box; 4K UHD / 4K / HD is bold
 /// text, and Dolby Vision and Dolby Atmos are Dolby's horizontal logos with
-/// no background. HDR10, HDR10+ and HLG show a bold "HDR". When the line is
-/// too wide (iPhone), the badges drop to a second line.
+/// no background. HDR10, HDR10+ and HLG show a bold "HDR". It stays on one
+/// line everywhere; on a narrow iPhone the gaps and type tighten slightly.
 struct MetaBadgeRow: View {
   /// The movie or show: year, rating, length or seasons.
   var item: PlexMetadata
@@ -847,7 +847,7 @@ struct MetaBadgeRow: View {
   /// For the official rating of titles Plex has none for (TMDB-only ones).
   var library: LibraryStore? = nil
   var fontSize: CGFloat = 15
-  /// Where the two lines line up when the badges wrap.
+  /// Kept for callers; the row is always a single line.
   var alignment: HorizontalAlignment = .leading
 
   @State private var fetchedRating: String?
@@ -859,19 +859,14 @@ struct MetaBadgeRow: View {
   private var gap: CGFloat { fontSize * 1.25 }
 
   var body: some View {
+    // Always one line (KP, 2026-11-16: "it does fit"): the gaps tighten
+    // first, then the type shrinks a little, before anything would clip.
     ViewThatFits(in: .horizontal) {
-      HStack(spacing: gap) {
-        facts
-        badges
-      }
-      VStack(alignment: alignment, spacing: fontSize * 0.6) {
-        HStack(spacing: gap) { facts }
-        HStack(spacing: gap) { badges }
-      }
+      line(gap: gap, size: fontSize)
+      line(gap: fontSize * 0.8, size: fontSize)
+      line(gap: fontSize * 0.6, size: fontSize * 0.9)
+      line(gap: fontSize * 0.5, size: fontSize * 0.8)
     }
-    .font(.system(size: fontSize, weight: .regular))
-    .foregroundStyle(Astra.Color.ink.opacity(0.95))
-    .lineLimit(1)
     .task(id: item.id) {
       fetchedRating = nil
       guard item.officialRating == nil, item.type == .movie || item.type == .show, let library else { return }
@@ -879,7 +874,17 @@ struct MetaBadgeRow: View {
     }
   }
 
-  @ViewBuilder private var facts: some View {
+  private func line(gap: CGFloat, size: CGFloat) -> some View {
+    HStack(spacing: gap) {
+      facts(size)
+      badges(size)
+    }
+    .font(.system(size: size, weight: .regular))
+    .foregroundStyle(Astra.Color.ink.opacity(0.95))
+    .lineLimit(1)
+  }
+
+  @ViewBuilder private func facts(_ fontSize: CGFloat) -> some View {
     if let year = item.year { Text(String(year)).fixedSize() }
     if showRatings, let rating = item.officialRating ?? fetchedRating {
       Text(rating.uppercased())
@@ -897,21 +902,21 @@ struct MetaBadgeRow: View {
     if let length { Text(length).fixedSize() }
   }
 
-  @ViewBuilder private var badges: some View {
+  @ViewBuilder private func badges(_ fontSize: CGFloat) -> some View {
     if showQuality, let label = playTarget.qualityLabel(for: pick) {
       Text(label).fontWeight(.bold).fixedSize()
     }
     switch playTarget.dynamicRange(for: pick) {
-    case .dolbyVision?: logo("format-dolby-vision-wide").accessibilityLabel("Dolby Vision")
+    case .dolbyVision?: logo("format-dolby-vision-wide", fontSize).accessibilityLabel("Dolby Vision")
     case .hdr10Plus?, .hdr10?, .hlg?: Text("HDR").fontWeight(.bold).fixedSize()
     case nil: EmptyView()
     }
     if playTarget.hasAtmos(for: pick) {
-      logo("format-dolby-atmos-wide").accessibilityLabel("Dolby Atmos")
+      logo("format-dolby-atmos-wide", fontSize).accessibilityLabel("Dolby Atmos")
     }
   }
 
-  private func logo(_ name: String) -> some View {
+  private func logo(_ name: String, _ fontSize: CGFloat) -> some View {
     Image(name)
       .renderingMode(.template)
       .resizable()
