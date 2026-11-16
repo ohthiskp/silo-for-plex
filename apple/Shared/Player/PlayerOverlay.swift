@@ -1563,22 +1563,3 @@ struct NextEpisodeButton: View {
 
 #endif
 
-/// In place of the timeline while a Live TV channel plays: a full white
-/// line with a red LIVE tag, like a TV app's live edge.
-struct LivePlayerStrip: View {
-  var size: CGFloat
-
-  var body: some View {
-    HStack(spacing: size * 0.8) {
-      Text("LIVE")
-        .font(.system(size: size, weight: .heavy))
-        .foregroundStyle(.white)
-        .padding(.horizontal, size * 0.55)
-        .padding(.vertical, size * 0.2)
-        .background(RoundedRectangle(cornerRadius: size * 0.35, style: .continuous).fill(Astra.Color.live))
-      Capsule().fill(.white).frame(height: max(3, size * 0.3))
-    }
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel("Live")
-  }
-}
