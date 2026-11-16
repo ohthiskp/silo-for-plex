@@ -181,6 +181,10 @@ struct TVChip<Content: View>: View {
 /// Astra's own badges, kept on Apple TV (KP, 2026-11-09): content rating
 /// first, then 4K/HD, Dolby Atmos, and Dolby Vision or HDR.
 struct TVFormatChips: View {
+  /// Beside a 27 pt meta line: the chips are as tall as its grey rating box
+  /// (21.6 pt type, 1.75x tall), so every badge in the row lines up (badge audit, 2026-11-16).
+  static let besideMeta: CGFloat = 23.5
+
   var item: PlexMetadata
   var fontSize: CGFloat = 18
   var showsRating = true
@@ -206,7 +210,7 @@ struct TVFormatChips: View {
       }
       switch item.dynamicRange(for: pick) {
       case .dolbyVision?:
-        TVChip(fontSize: fontSize, logo: true) { logo("format-dolby-vision", height: 1.25) }.accessibilityLabel("Dolby Vision")
+        TVChip(fontSize: fontSize, logo: true) { logo("format-dolby-vision", height: 1.3) }.accessibilityLabel("Dolby Vision")
       case .hdr10Plus?, .hdr10?, .hlg?:
         TVChip(fontSize: fontSize) { Text("HDR") }
       case nil:

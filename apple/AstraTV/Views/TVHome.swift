@@ -195,7 +195,7 @@ private struct TVHeroInfo: View {
             ratingAfter: true, greyRating: true
           )
           .layoutPriority(1)
-          TVFormatChips(item: shown, fontSize: 18, showsRating: false)
+          TVFormatChips(item: shown, fontSize: TVFormatChips.besideMeta, showsRating: false)
         }
         .frame(height: 42)
         .padding(.top, 26)

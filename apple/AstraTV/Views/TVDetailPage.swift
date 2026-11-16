@@ -126,7 +126,7 @@ struct TVDetailPage: View {
           ratingAfter: true, greyRating: true
         )
         .layoutPriority(1)
-        TVFormatChips(item: playTarget, fontSize: 18, showsRating: false)
+        TVFormatChips(item: playTarget, fontSize: TVFormatChips.besideMeta, showsRating: false)
       }
       .frame(height: 42)
       if !titleItem.genres.isEmpty {
