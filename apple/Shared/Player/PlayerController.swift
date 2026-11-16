@@ -189,7 +189,7 @@ final class PlayerController {
   /// Plays `item`: from `local` (a downloaded file) when given, else the
   /// original file on the server.
   func play(_ item: PlexMetadata, library: LibraryStore, local: PlaybackSource? = nil) throws {
-    guard let window else { throw PlexError.invalidResponse }
+    guard let window = window ?? Self.fallbackWindow else { throw PlayerError.noWindow }
     // Always the original file; the preference only picks between versions.
     let source: PlaybackSource
     if let local {
@@ -1104,5 +1104,28 @@ final class MpvDelegateBridge: MpvPlayerDelegate {
 
   func onEvent(name: String, data: [String: Any]?) {
     MainActor.assumeIsolated { owner?.eventReceived(name, data) }
+  }
+}
+
+/// Why playback couldn't start on this device (not a server problem).
+enum PlayerError: LocalizedError {
+  case noWindow
+
+  var errorDescription: String? {
+    switch self {
+    case .noWindow: "Astra couldn't open the player. Try again."
+    }
+  }
+}
+
+extension PlayerController {
+  /// The app's key window, when the one the shell reported is gone.
+  static var fallbackWindow: PlatformWindow? {
+    #if os(macOS)
+      NSApp.keyWindow ?? NSApp.mainWindow
+    #else
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        .flatMap(\.windows).first { $0.isKeyWindow }
+    #endif
   }
 }
