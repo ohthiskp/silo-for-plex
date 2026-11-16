@@ -5,8 +5,8 @@ import SwiftUI
 struct RootView: View {
   @Environment(AppModel.self) private var app
 
-  private enum Loader { case hidden, loading, connected }
-  /// The launch screen stays up briefly after connecting to say "Connected".
+  private enum Loader { case hidden, loading }
+  /// The launch screen (the animated logo) shows only while Astra is loading.
   @State private var loader: Loader = .loading
   /// The last server's name ("Omega"), read once for the launch screen.
   @State private var savedServerName = SavedConnection.load()?.serverName
@@ -84,14 +84,6 @@ struct RootView: View {
     .preferredColorScheme(AstraAppearance.shared.colorScheme)
     .tint(AstraAppearance.shared.accent)
     .onChange(of: app.phase, initial: true) { _, phase in updateLoader(for: phase) }
-    .task(id: loader) {
-      // "Connected" shows for a moment, then the app fades in. It was 1.1 s,
-      // added to every launch (KP, 2026-11-09: "a huge delay every time I open it").
-      guard loader == .connected else { return }
-      try? await Task.pause(0.35)
-      guard !Task.isCancelled, loader == .connected else { return }
-      astraWithAnimation(Astra.Motion.hero) { loader = .hidden }
-    }
     // Controls stay inside the safe area (clear of the Mac title bar and the
     // iPhone status bar); only artwork and backgrounds extend under it.
   }
@@ -110,9 +102,9 @@ struct RootView: View {
     case .launching, .connecting:
       loader = .loading
     case .ready where loader == .loading:
-      // Astra: hidden by the `.task(id: loader)` below. An unstructured
-      // Task here aborted the iPhone app in swift_task_dealloc (iOS 27).
-      loader = .connected
+      // The logo keeps moving while it fades into the app (KP, 2026-11-16:
+      // no "Connected" still frame, and no wait added to the launch).
+      astraWithAnimation(Astra.Motion.hero) { loader = .hidden }
     case .ready:
       break
     default:
@@ -123,8 +115,9 @@ struct RootView: View {
   @ViewBuilder private var content: some View {
     if loader != .hidden {
       // The saved server's name shows at once, before it answers.
-      LoadingView(connected: loader == .connected, serverName: app.server?.serverName ?? savedServerName)
-        .transition(.opacity)
+      LoadingView(serverName: app.server?.serverName ?? savedServerName)
+        // Fades out while drifting slightly forward, into the app.
+        .transition(.opacity.combined(with: .scale(scale: 1.08)))
     } else {
       phaseContent
     }
@@ -133,7 +126,7 @@ struct RootView: View {
   @ViewBuilder private var phaseContent: some View {
     switch app.phase {
     case .launching, .connecting:
-      LoadingView(connected: false)
+      LoadingView()
     case .signedOut, .waitingForApproval:
       SignInView()
     case .choosingServer(let servers):
