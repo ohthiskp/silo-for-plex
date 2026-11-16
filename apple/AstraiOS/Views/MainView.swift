@@ -13,13 +13,15 @@ struct MainView: View {
 
   /// Settings → Navigation (Astra 4.0): which tabs the bar shows.
   @AppStorage(TabLayout.storageKey) private var storedTabs = ""
+  /// Settings → Live TV → Show Live tab (only once an IPTV source is set up).
+  @AppStorage(LiveTVStore.shownKey) private var liveShown = true
   @State private var tab: TabID = Demo.tab.flatMap(PhoneTab.init(rawValue:)) ?? .home
   @State private var paths: [TabID: [Route]] = [
     .home: Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
   ]
 
   private var tabs: [TabID] {
-    let stored = TabLayout.tabs(from: storedTabs)
+    let stored = TabLayout.withLive(TabLayout.tabs(from: storedTabs), liveShown && app.liveTV.source != nil)
     // CI screenshots (`-AstraDemoTab settings`): Settings as a tab of its own.
     if Demo.tab == TabID.settings.rawValue, !stored.contains(.settings) { return stored + [.settings] }
     return stored
@@ -58,6 +60,7 @@ struct MainView: View {
     }
     // A tab turned off in Settings while open: back to Home.
     .onChange(of: storedTabs) { if !tabs.contains(tab) { tab = .home } }
+    .onChange(of: liveShown) { if !tabs.contains(tab) { tab = .home } }
     .environment(\.playItem) { app.play($0) }
     .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     .onAppear {
@@ -76,6 +79,7 @@ struct MainView: View {
     case .libraries: LibrariesView(library: library)
     case .downloads: DownloadsView()
     case .settings: SettingsView(showsTitle: true)
+    case .live: LiveTVPage()
     case .watchlist:
       AstraPage {
         AstraSectionHeader(title: "Watchlist")

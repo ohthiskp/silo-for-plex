@@ -30,6 +30,8 @@ enum Astra {
     @MainActor static var theme: SwiftUI.Color { AstraAppearance.shared.accent }
     @MainActor static var onTheme: SwiftUI.Color { AstraAppearance.shared.onAccent }
     @MainActor static var hairline: SwiftUI.Color { AstraAppearance.shared.palette.hairline }
+    /// Live TV's LIVE tag and dot (KP, 2026-11-16): broadcast red on every theme.
+    static let live = SwiftUI.Color(red: 1, green: 0.23, blue: 0.19)
     /// The chosen pill in a switcher (Movies | Series, scopes, segments): white
     /// with black text on the dark themes, near-black with white text on Light.
     @MainActor static var selection: SwiftUI.Color {

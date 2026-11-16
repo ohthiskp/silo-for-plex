@@ -723,6 +723,14 @@ struct TVScrubBarLabel: View {
   }
 
   var body: some View {
+    if player.isLive {
+      LivePlayerStrip(size: 26).padding(.bottom, 50)
+    } else {
+      standard
+    }
+  }
+
+  @ViewBuilder private var standard: some View {
     VStack(spacing: 14) {
       GeometryReader { geo in
         let width = geo.size.width

@@ -33,6 +33,8 @@ import SwiftUI
                 }
                 SubtitleBlock(library: library)
                 LibraryBlock()
+                // Live TV (KP, 2026-11-16).
+                LiveTVSettingsContent()
               }
               .id("lower")
             }

@@ -81,6 +81,7 @@ struct TVSettingsPage: View {
       case .playback: TVPlaybackPane()
       case .subtitles: TVSubtitlesPane()
       case .library: TVLibraryPane()
+      case .live: LiveTVSettingsContent()
       case .about: TVAboutPane()
       }
     }
@@ -93,7 +94,7 @@ struct TVSettingsPage: View {
 }
 
 enum TVSettingsCategory: String, CaseIterable, Identifiable {
-  case appearance, playback, subtitles, library, about
+  case appearance, playback, subtitles, library, live, about
 
   var id: String { rawValue }
 
@@ -103,6 +104,7 @@ enum TVSettingsCategory: String, CaseIterable, Identifiable {
     case .playback: "Playback"
     case .subtitles: "Subtitles"
     case .library: "Library"
+    case .live: "Live TV"
     case .about: "About"
     }
   }

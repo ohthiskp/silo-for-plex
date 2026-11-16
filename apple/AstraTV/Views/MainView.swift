@@ -20,7 +20,7 @@ struct TVRootView: View {
 /// Settings as a round button at the far right where a profile icon sits.
 /// No logo at the top left.
 enum TVTab: String, CaseIterable, Identifiable {
-  case search, home, movies, shows, watchlist, settings
+  case search, home, movies, shows, live, watchlist, settings
 
   var id: String { rawValue }
 
@@ -30,6 +30,7 @@ enum TVTab: String, CaseIterable, Identifiable {
     case .home: "Home"
     case .movies: "Movies"
     case .shows: "Shows"
+    case .live: "Live"
     case .watchlist: "Watchlist"
     case .settings: "Settings"
     }
@@ -42,13 +43,14 @@ enum TVTab: String, CaseIterable, Identifiable {
     case .home: "house.fill"
     case .movies: "film.fill"
     case .shows: "tv.fill"
+    case .live: "dot.radiowaves.left.and.right"
     case .watchlist: "bookmark.fill"
     case .settings: "gearshape.fill"
     }
   }
 
   /// The centred items (icon and name); Search and Settings are icons only.
-  static let centre: [TVTab] = [.home, .movies, .shows, .watchlist]
+  static let centre: [TVTab] = [.home, .movies, .shows, .live, .watchlist]
 }
 
 /// Signed in on Apple TV: the top bar over the page, each page its own
@@ -67,6 +69,8 @@ struct MainView: View {
   @FocusState private var barFocus: TVTab?
   /// Down on the bar: the open page takes focus (see `tvFocusPage`).
   @State private var pageFocus = 0
+  @AppStorage(LiveTVStore.shownKey) private var liveShown = true
+  private var liveVisible: Bool { liveShown && app.liveTV.source != nil }
 
   private var atRoot: Bool { (paths[tab] ?? []).isEmpty }
   private var barShown: Bool { atRoot && (!scrolledDown || barFocus != nil) }
@@ -99,6 +103,8 @@ struct MainView: View {
     }
     .animation(.easeInOut(duration: 0.25), value: barShown)
     .onChange(of: tab) { scrolledDown = false }
+    // Live hidden in Settings (or its source removed) while open: back to Home.
+    .onChange(of: liveVisible) { if !liveVisible, tab == .live { tab = .home } }
     // While the player is up, nothing under it can take focus, so the remote
     // (Menu above all) stays with the player.
     .disabled(app.player.isActive)
@@ -155,6 +161,7 @@ struct MainView: View {
     case .movies: TVLibraryGridPage(library: library, kind: "movie")
     case .shows: TVLibraryGridPage(library: library, kind: "show")
     case .watchlist: TVWatchlistPage(library: library)
+    case .live: LiveTVPage(focusTrigger: pageFocus)
     case .settings:
       // KP's mockup (2026-11-14): one page under the top bar, no category list.
       TVSettingsPage()
@@ -176,6 +183,10 @@ private struct TVTopBar: View {
   /// sliding from item to item (KP: "make the navigation from button to
   /// button seamless").
   @Namespace private var pills
+  @Environment(AppModel.self) private var app
+  @AppStorage(LiveTVStore.shownKey) private var liveShown = true
+  /// Live TV (KP, 2026-11-16): only once an IPTV source is set up, and it can be hidden.
+  private var liveVisible: Bool { liveShown && app.liveTV.source != nil }
 
   var body: some View {
     ZStack {
@@ -183,7 +194,7 @@ private struct TVTopBar: View {
         item(.search) {
           Image(systemName: "magnifyingglass").font(.system(size: 28, weight: .semibold))
         }
-        ForEach(TVTab.centre) { page in
+        ForEach(TVTab.centre.filter { $0 != .live || liveVisible }) { page in
           item(page) {
             Label(page.title, systemImage: page.icon)
               .labelStyle(TVBarLabelStyle())
@@ -287,6 +298,7 @@ extension Demo {
     case "libraries", "library", "movies": .movies
     case "shows": .shows
     case "watchlist": .watchlist
+    case "live": .live
     case "settings": .settings
     default: .home
     }

@@ -100,6 +100,8 @@ jobs:
           shot search -AstraDemoTab search
           shot search-dune -AstraDemoTab search -AstraDemoQuery dune
           shot libraries -AstraDemoTab libraries
+          # Live TV (KP, 2026-11-16): demo channels and guide.
+          shot live -AstraDemoTab live
           shot details-movie -AstraDemoOpen 101
           shot details-show -AstraDemoOpen 205
           shot details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
@@ -116,7 +118,7 @@ jobs:
           shot light-settings -AstraDemoTab settings $LIGHT
           # Settings, Direction C (KP, 2026-11-14): the root, then each page it opens.
           shot settings -AstraDemoTab settings
-          for page in appearance playback subtitles library downloads server; do
+          for page in appearance playback subtitles library downloads server live; do
             shot "settings-$page" -AstraDemoTab settings -AstraDemoSettings "$page"
           done
           # The player (KP's 2026-11-10 redesign) over a 1 h 56 m test video, paused in each state.

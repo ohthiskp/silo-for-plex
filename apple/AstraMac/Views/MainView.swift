@@ -5,7 +5,7 @@ import SwiftUI
 /// icon, then Home, Movies, Shows and Watchlist centred; Downloads and
 /// Settings as round buttons at the far right.
 enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
-  case home, movies, shows, watchlist, search, downloads, settings
+  case home, movies, shows, live, watchlist, search, downloads, settings
 
   var id: String { rawValue }
 
@@ -14,6 +14,7 @@ enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
     case .home: "Home"
     case .movies: "Movies"
     case .shows: "Shows"
+    case .live: "Live"
     case .watchlist: "Watchlist"
     case .search: "Search"
     case .downloads: "Downloads"
@@ -26,6 +27,7 @@ enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
     case .home: "house.fill"
     case .movies: "film.fill"
     case .shows: "tv.fill"
+    case .live: "dot.radiowaves.left.and.right"
     case .watchlist: "bookmark.fill"
     case .search: "magnifyingglass"
     case .downloads: "arrow.down.circle.fill"
@@ -33,7 +35,7 @@ enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
     }
   }
 
-  /// ⌘1 to ⌘7, in the order above.
+  /// ⌘1 to ⌘8, in the order above.
   var shortcut: KeyEquivalent { KeyEquivalent(Character(String((Self.allCases.firstIndex(of: self) ?? 0) + 1))) }
 
   /// `-AstraDemoTab` for the CI screenshots.
@@ -81,7 +83,12 @@ struct MainView: View {
       astraWithAnimation(Self.cardMotion) { path.append(.details(item)) }
     }
     .environment(\.playItem) { app.play($0) }
+    // Live hidden in Settings (or its source removed) while open: back to Home.
+    .onChange(of: liveVisible) { if !liveVisible, selection == .live { selection = .home } }
   }
+
+  @AppStorage(LiveTVStore.shownKey) private var liveShown = true
+  private var liveVisible: Bool { liveShown && app.liveTV.source != nil }
 
   private var layers: some View {
     ZStack(alignment: .top) {
@@ -206,6 +213,9 @@ struct MainView: View {
       .safeAreaPadding(.top, barClearance)
     case .search:
       SearchView(library: library).safeAreaPadding(.top, barClearance)
+    case .live:
+      // The header runs under the bar, like Home's hero.
+      LiveTVPage()
     case .settings:
       SettingsPage().safeAreaPadding(.top, barClearance)
     }
@@ -223,6 +233,9 @@ struct MacTopBar: View {
   var selection: SidebarItem
   var choose: (SidebarItem) -> Void
   @Environment(AppModel.self) private var app
+  @AppStorage(LiveTVStore.shownKey) private var liveShown = true
+  /// Live TV (KP, 2026-11-16): only once an IPTV source is set up, and it can be hidden.
+  private var liveVisible: Bool { liveShown && app.liveTV.source != nil }
 
   var body: some View {
     ZStack {
@@ -235,6 +248,7 @@ struct MacTopBar: View {
           item(.home)
           item(.movies)
           item(.shows)
+          if liveVisible { item(.live) }
         }
         .padding(4)
         .astraGlass(in: Capsule(), variant: .clear)

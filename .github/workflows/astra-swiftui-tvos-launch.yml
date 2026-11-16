@@ -108,9 +108,11 @@ jobs:
           shot details-show-episodes -AstraDemoOpen 205
           shot details-episode -AstraDemoOpen 303
           shot watchlist -AstraDemoTab watchlist
+          # Live TV (KP, 2026-11-16): demo channels and guide.
+          shot live -AstraDemoTab live
           shot settings -AstraDemoTab settings
           # Settings, Direction C (KP, 2026-11-14): each category in the right pane.
-          for page in playback subtitles library about; do
+          for page in playback subtitles library live about; do
             shot "settings-$page" -AstraDemoTab settings -AstraDemoSettings "$page"
           done
           # The player (KP's 2026-11-10 redesign) over a 1 h 56 m test video, paused in each state.

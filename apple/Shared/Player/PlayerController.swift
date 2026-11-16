@@ -59,6 +59,9 @@ final class PlayerController {
   /// iPhone Picture in Picture, or the Mac's small floating window.
   private(set) var isPictureInPicture = false
   var lastError: String?
+  /// A Live TV channel is playing (KP, 2026-11-16): no timeline, no Plex
+  /// progress, a LIVE badge instead.
+  private(set) var isLive = false
   /// Opens the details page of what is playing (the title's chevron on iPhone).
   @ObservationIgnored var openDetails: ((PlexMetadata) -> Void)?
   #if os(iOS) || os(tvOS)
@@ -321,6 +324,109 @@ final class PlayerController {
     findUpNext(after: item, library: library, source: source)
   }
 
+  /// Plays a Live TV channel (KP, 2026-11-16): the provider's stream as it
+  /// is, through mpv, with no transcoding and nothing reported to Plex.
+  func playLive(url: URL, title: String, subtitle: String?, artwork: URL?) throws {
+    guard let window = window ?? Self.fallbackWindow else { throw PlayerError.noWindow }
+    if isActive { close() }
+    item = nil
+    currentMediaID = nil
+    versions = []
+    versionsGUID = nil
+    upNext = nil
+
+    let core = MpvPlayerCore()
+    core.delegate = bridge
+    #if os(macOS)
+      let host = PlayerWindowHost(over: window, content: makeOverlay?() ?? AnyView(EmptyView()))
+      host.onUserClose = { [weak self] in self?.close() }
+      host.onMiniChange = { [weak self] mini in self?.isPictureInPicture = mini }
+      guard core.initialize(in: host.window) else {
+        host.dismiss()
+        throw PlaybackFailure("mpv could not start.")
+      }
+      self.host = host
+    #else
+      guard core.initialize(in: window) else {
+        throw PlaybackFailure("mpv could not start.")
+      }
+    #endif
+    self.core = core
+    source = nil
+    playbackServer = nil
+    isLive = true
+
+    self.title = title
+    self.subtitle = subtitle
+    position = 0
+    duration = 0
+    paused = false
+    buffering = true
+    hasFirstFrame = false
+    videoWidth = 0
+    videoHeight = 0
+    audioTracks = []
+    subtitleTracks = []
+    chapters = []
+    lastError = nil
+
+    for (name, format) in [
+      ("time-pos", "double"), ("pause", "flag"), ("paused-for-cache", "flag"), ("eof-reached", "flag"),
+      ("volume", "double"), ("mute", "flag"), ("width", "double"), ("height", "double"), ("track-list", "node"),
+      ("aid", "string"), ("sid", "string"),
+    ] {
+      core.observeProperty(name, format: format)
+    }
+    core.setProperty("force-media-title", value: title)
+    core.setProperty("start", value: "none")
+    core.setProperty("pause", value: "no")
+    // Live streams: a few seconds of cache, and reconnect when the provider drops.
+    core.setProperty("cache", value: "yes")
+    core.setProperty("demuxer-max-bytes", value: "64MiB")
+    core.setProperty("demuxer-readahead-secs", value: "10")
+    core.setProperty("stream-lavf-o", value: "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5")
+    for (name, value) in SubtitlePreference.current().mpvOptions(languages: Locale.preferredLanguages) {
+      core.setProperty(name, value: value)
+    }
+    subtitleSize = .current()
+    subtitleLook = .current()
+    subtitleDelay = 0
+    for (name, value) in SubtitleStyle.current().mpvOptions { core.setProperty(name, value: value) }
+    core.command(["loadfile", url.absoluteString, "replace"])
+    core.setVisible(true)
+    #if os(macOS)
+      core.setPaused(false)
+      self.host?.show()
+    #else
+      try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+      try? AVAudioSession.sharedInstance().setActive(true)
+      window.rootViewController?.view.backgroundColor = .clear
+      core.updateFrame()
+      let pip = PipCoordinator(core: core)
+      pip.onChange = { [weak self] active in self?.isPictureInPicture = active }
+      pip.enableAutoStart()
+      self.pip = pip
+    #endif
+
+    isActive = true
+    nowPlaying.begin(
+      title: title, subtitle: subtitle, duration: 0, artwork: artwork,
+      handlers: .init(
+        play: { [weak self] in self?.setPaused(false) },
+        pause: { [weak self] in self?.setPaused(true) },
+        toggle: { [weak self] in self?.togglePause() },
+        skip: { [weak self] in self?.seek(by: $0) },
+        seek: { [weak self] in self?.seek(to: $0) }
+      ))
+    // No first frame in 30 s: say so instead of spinning for ever.
+    Task { [weak self] in
+      try? await Task.pause(30)
+      guard let self, self.isActive, self.isLive, !self.hasFirstFrame, self.title == title else { return }
+      self.close()
+      self.lastError = "This channel isn't sending anything right now. Try another channel, or check your IPTV provider."
+    }
+  }
+
   /// Looks up the next episode once, at the start, for the Next Episode button.
   private func findUpNext(after item: PlexMetadata, library: LibraryStore, source started: PlaybackSource) {
     upNext = nil
@@ -398,6 +504,7 @@ final class PlayerController {
     core?.dispose()
     core = nil
     isActive = false
+    isLive = false
     isPictureInPicture = false
     previews?.close()
     previews = nil
