@@ -108,13 +108,21 @@ public enum SubtitlePreference: String, CaseIterable, Sendable, Identifiable {
 
   /// mpv options to set before `loadfile`. `languages` are the device's
   /// preferred languages ("en-US", "fr"); only their language codes are used.
-  public func mpvOptions(languages: [String]) -> [(String, String)] {
+  ///
+  /// `preferred` (Settings → Playback → Subtitle Language) replaces the
+  /// device's languages when it isn't Automatic.
+  public func mpvOptions(languages: [String], preferred: PlaybackLanguage = .automatic) -> [(String, String)] {
     switch self {
     case .off:
       return [("sid", "no")]
     case .automatic:
-      return [("sid", "auto"), ("subs-with-matching-audio", "no")]
+      var options: [(String, String)] = [("sid", "auto"), ("subs-with-matching-audio", "no")]
+      if !preferred.isAutomatic { options.append(("slang", preferred.mpvValue)) }
+      return options
     case .always:
+      if !preferred.isAutomatic {
+        return [("sid", "auto"), ("subs-with-matching-audio", "yes"), ("slang", preferred.mpvValue)]
+      }
       var codes: [String] = []
       for language in languages {
         let code = String(language.prefix { $0 != "-" && $0 != "_" }).lowercased()

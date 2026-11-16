@@ -29,14 +29,12 @@ struct HomeView: View {
     ZStack(alignment: .top) {
       page
       #if os(iOS)
-        // KP (2026-11-09): the tabs vanished on bright artwork. A blur runs
-        // down from the Dynamic Island, behind the bar while it shows and
-        // under the status bar once the page scrolls, fading out softly.
+        // KP (2026-11-16): no bar-shaped blur that redraws as things load,
+        // just a little soft blur along the top of the screen, always the same.
         TopEdgeBlur()
-          .frame(height: showsTopBar ? 112 : 34)
+          .frame(height: 30)
           .ignoresSafeArea(edges: .top)
           .allowsHitTesting(false)
-          .astraAnimation(Astra.Motion.base, value: showsTopBar)
       #endif
       #if os(iOS)
         // KP (2026-11-09): rows soften under the tab bar instead of meeting it.
@@ -87,7 +85,14 @@ struct HomeView: View {
           // Astra (KP, 2026-11-07): the hero follows the finger (or the
           // trackpad) and snaps to the next title; a stretching dot shows
           // where you are. No arrows, on iPhone and Mac.
-          SwipeHero(library: library, items: library.homeHero, height: heroHeight) { heroItem = $0 }
+          Group {
+            #if os(macOS)
+              // KP (2026-11-16): laid out like Apple TV's hero, one title at a time.
+              MacHero(library: library, items: library.homeHero, height: heroHeight) { heroItem = $0 }
+            #else
+              SwipeHero(library: library, items: library.homeHero, height: heroHeight) { heroItem = $0 }
+            #endif
+          }
           // A new set of titles (another service) starts a fresh carousel.
           .id(library.selectedService?.id ?? "for-you")
           .tvFullBleed()
@@ -224,20 +229,20 @@ struct HomeView: View {
 }
 
 #if os(iOS)
-  /// A blur at the top of the screen that fades out downwards, with the
-  /// page colour laid over it so white tabs and the clock always read.
+  /// A light blur along the top of the screen (behind the clock), fading
+  /// out downwards, with only a hint of the page colour so the clock reads.
   struct TopEdgeBlur: View {
     var body: some View {
       ZStack {
-        Rectangle().fill(.regularMaterial)
+        Rectangle().fill(.ultraThinMaterial)
         LinearGradient(
-          colors: [Astra.Color.bg.opacity(0.7), Astra.Color.bg.opacity(0.35)],
+          colors: [Astra.Color.heroShade.opacity(AstraAppearance.shared.palette.isLight ? 0 : 0.3), .clear],
           startPoint: .top, endPoint: .bottom)
       }
       .mask {
         LinearGradient(
           stops: [
-            .init(color: .black, location: 0), .init(color: .black, location: 0.6),
+            .init(color: .black, location: 0), .init(color: .black, location: 0.45),
             .init(color: .clear, location: 1),
           ],
           startPoint: .top, endPoint: .bottom)
@@ -626,11 +631,15 @@ struct HeroInfo: View {
   #endif
 
   var body: some View {
-    #if os(iOS)
-      phoneBody
-    #else
-      wideBody
-    #endif
+    Group {
+      #if os(iOS)
+        phoneBody
+      #else
+        wideBody
+      #endif
+    }
+    // White type and dark glass on the artwork, on every theme (KP, 2026-11-16).
+    .astraOnArt()
   }
 
   #if os(iOS)
@@ -672,7 +681,7 @@ struct HeroInfo: View {
         }
         Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
           .astraFont(size: 13.5)
-          .foregroundStyle(Astra.Color.ink.opacity(0.62))
+          .foregroundStyle(Astra.Color.ink(onArt: true).opacity(0.62))
           .lineLimit(1)
           .frame(height: 18)
           .padding(.top, 6)
@@ -694,6 +703,13 @@ struct HeroInfo: View {
     }
   #endif
 
+  #if os(macOS)
+    /// Logo and text block alignment: the left, as on Apple TV (KP, 2026-11-16).
+    private static let wideAlignment: Alignment = .bottomLeading
+  #else
+    private static let wideAlignment: Alignment = .bottom
+  #endif
+
   private var wideBody: some View {
     VStack(alignment: .leading, spacing: 14) {
       // Fixed boxes for the title and the meta: every title takes the same
@@ -702,18 +718,20 @@ struct HeroInfo: View {
       Button {
         openItem(item)
       } label: {
-        // A wide logo across most of the block, centred over it (KP's mockup).
-        HeroTitle(library: library, item: item, maxWidth: Self.logoWidth, maxHeight: Self.titleBox, alignment: .bottom)
-          .frame(maxWidth: .infinity)
-          .frame(height: Self.titleBox, alignment: .bottom)
-          .contentShape(Rectangle())
+        HeroTitle(
+          library: library, item: item, maxWidth: Self.logoWidth, maxHeight: Self.titleBox,
+          alignment: Self.wideAlignment
+        )
+        .frame(maxWidth: .infinity, alignment: Self.wideAlignment)
+        .frame(height: Self.titleBox, alignment: Self.wideAlignment)
+        .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .accessibilityLabel("\(item.displayTitle), Details")
-      // Same as the iPhone hero and Details (KP, 2026-11-14): "2026 • 1h 41m
-      // [PG] [4K]" with the rating in the grey box, the genres on the line below.
+      // KP's mockup (2026-11-16), as on Apple TV: "2024 [PG-13] 2h 46m 4K
+      // UHD Dolby Vision Dolby Atmos" on one line, the genres below.
       MetaBadgeRow(item: shown, playTarget: shown, library: library)
-      .frame(maxWidth: .infinity)
+      .frame(maxWidth: .infinity, alignment: Self.wideAlignment)
       .task(id: item.id) {
         full = nil
         let key = item.isCatalogOnly ? library.indexMatch(item)?.ratingKey : item.ratingKey
@@ -726,9 +744,9 @@ struct HeroInfo: View {
       .frame(height: 26 * Astra.Layout.textScale)
       Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
         .astraFont(size: 14)
-        .foregroundStyle(Astra.Color.ink.opacity(0.62))
+        .foregroundStyle(Astra.Color.ink(onArt: true).opacity(0.62))
         .lineLimit(1)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: Self.wideAlignment)
         .frame(height: 18 * Astra.Layout.textScale)
         .padding(.top, -8)
       HStack(spacing: 12) {
@@ -736,7 +754,11 @@ struct HeroInfo: View {
           playItem(item)
         } label: {
           Label(item.progress != nil ? "Resume" : "Play", systemImage: "play.fill")
-            .frame(maxWidth: .infinity)
+            #if os(macOS)
+              .frame(width: 150)
+            #else
+              .frame(maxWidth: .infinity)
+            #endif
         }
         .buttonStyle(SolidCapsuleButtonStyle())
         // On the service but not on the Plex server: nothing to play.
@@ -746,10 +768,26 @@ struct HeroInfo: View {
         // Apple TV: focus starts on Play, not on the sidebar.
         .tvLaunchFocus(item.id, when: playable)
         .help(library.availability(of: item) == .notOnServer ? "Not on your Plex server" : "")
-        // KP (2026-11-09): the mockup's Details button is the round glass +
-        // (Plex Watchlist). Tapping the logo opens Details.
-        WatchlistButton(item: item)
-          .tvLaunchFocus(item.id, when: !playable)
+        #if os(macOS)
+          // As on Apple TV (KP, 2026-11-16): Play and Details, nothing else.
+          Button {
+            openItem(item)
+          } label: {
+            Label("Details", systemImage: "info.circle")
+              .font(.system(size: 16, weight: .semibold))
+              .foregroundStyle(.white)
+              .padding(.horizontal, 22)
+              .frame(height: 50)
+              .contentShape(Capsule())
+          }
+          .buttonStyle(.plain)
+          .astraGlass(in: Capsule(), variant: .regular)
+        #else
+          // KP (2026-11-09): the mockup's Details button is the round glass +
+          // (Plex Watchlist). Tapping the logo opens Details.
+          WatchlistButton(item: item)
+            .tvLaunchFocus(item.id, when: !playable)
+        #endif
       }
       .astraGlassGroup(spacing: 12)
       .padding(.top, 4)
@@ -779,15 +817,19 @@ struct HeroScrim: View {
 /// bottom; the bottom edge itself is a fade (mask), not a band of black.
 struct HeroBlend: View {
   var body: some View {
+    // KP (2026-11-16): never a light wash over hero artwork, so on the Light
+    // theme this is a soft dark shade (the hero's text stays white there).
+    let shade = Astra.Color.heroShade
+    let k = Astra.Color.heroShadeStrength
     ZStack {
       LinearGradient(
         stops: [
-          .init(color: Astra.Color.bg.opacity(0), location: 0.4),
-          .init(color: Astra.Color.bg.opacity(0.5), location: 1),
+          .init(color: shade.opacity(0), location: 0.4),
+          .init(color: shade.opacity(0.5 * k), location: 1),
         ], startPoint: .top, endPoint: .bottom)
       #if !os(iOS)
         LinearGradient(
-          colors: [Astra.Color.bg.opacity(0.8), Astra.Color.bg.opacity(0)], startPoint: .leading,
+          colors: [shade.opacity(0.8 * k), shade.opacity(0)], startPoint: .leading,
           endPoint: .init(x: 0.6, y: 0.5))
       #endif
     }
@@ -807,6 +849,7 @@ struct HeroTitle: View {
 
   @State private var logo: URL?
   @State private var resolved = false
+  @Environment(\.astraOnArt) private var onArt
 
   var body: some View {
     ZStack(alignment: alignment) {
@@ -816,7 +859,10 @@ struct HeroTitle: View {
           .shadow(color: .black.opacity(0.5), radius: 14, y: 4)
       } else if resolved {
         Text(item.displayTitle)
-          .astraDisplay(Astra.Layout.titleSize, tracking: 10)
+          .font(Astra.Font.display(Astra.Layout.titleSize))
+          .tracking(-0.4)
+          .foregroundStyle(Astra.Color.ink(onArt: onArt))
+          .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
           .lineLimit(2)
           .minimumScaleFactor(0.5)
           .multilineTextAlignment(alignment == .bottom ? .center : .leading)
@@ -1012,7 +1058,7 @@ struct WatchlistButton: View {
         ForEach(0..<count, id: \.self) { i in
           let near = max(0, 1 - abs(progress - CGFloat(i)))
           Capsule()
-            .fill(Astra.Color.ink.opacity(0.35 + 0.65 * near))
+            .fill(Astra.Color.ink(onArt: true).opacity(0.35 + 0.65 * near))
             .frame(width: 7 + 17 * near, height: 7)
             #if os(macOS)
               .padding(.vertical, 6)

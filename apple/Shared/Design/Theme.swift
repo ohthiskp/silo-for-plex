@@ -368,6 +368,33 @@ extension View {
 }
 
 extension EnvironmentValues {
+  /// Text and buttons drawn straight on artwork (the Home hero). They keep
+  /// the dark themes' white type on every theme, so the Light theme never
+  /// has to wash the artwork pale to make them read (KP, 2026-11-16).
+  @Entry var astraOnArt: Bool = false
+}
+
+extension Astra.Color {
+  /// `ink`, or the dark themes' white when drawn on artwork.
+  @MainActor static func ink(onArt: Bool) -> SwiftUI.Color { onArt ? AppTheme.frosted.palette.ink : ink }
+  /// The main button's fill and label on artwork: white with black text.
+  @MainActor static func selection(onArt: Bool) -> SwiftUI.Color { onArt ? .white : selection }
+  @MainActor static func onSelection(onArt: Bool) -> SwiftUI.Color { onArt ? .black : onSelection }
+  /// The shade laid over hero artwork so its text reads: the page colour on
+  /// the dark themes, a soft black on Light (never a white wash).
+  @MainActor static var heroShade: SwiftUI.Color { AstraAppearance.shared.palette.isLight ? .black : bg }
+  /// How strong the hero shade is: lighter on Light, where it's only for the text.
+  @MainActor static var heroShadeStrength: Double { AstraAppearance.shared.palette.isLight ? 0.55 : 1 }
+}
+
+extension View {
+  /// Marks content drawn on artwork: white type and dark glass on every theme.
+  func astraOnArt() -> some View {
+    environment(\.astraOnArt, true).environment(\.colorScheme, .dark)
+  }
+}
+
+extension EnvironmentValues {
   /// Astra: Home's accent, the chosen streaming service's brand colour (nil is
   /// the usual white). Tints the main button and progress bars on that page.
   @Entry var astraAccent: Color? = nil

@@ -30,6 +30,7 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 24) {
                   PlaybackBlock()
                   DownloadsBlock()
+                  UpdatesBlock()
                 }
                 SubtitleBlock(library: library)
                 LibraryBlock()
@@ -304,6 +305,8 @@ import SwiftUI
     @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
     @AppStorage(SubtitlePreference.storageKey) private var subtitles: SubtitlePreference = .automatic
     @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
+    @AppStorage(PlaybackLanguage.audioKey) private var audioLanguage = ""
+    @AppStorage(PlaybackLanguage.subtitleKey) private var subtitleLanguage = ""
 
     var body: some View {
       SettingsCard(title: "Playback") {
@@ -313,15 +316,28 @@ import SwiftUI
           }
           .labelsHidden().pickerStyle(.segmented).fixedSize()
         }
+        // KP (2026-11-16): default the audio and subtitles to a language.
+        SettingRow(title: "Audio language") {
+          Picker("Audio language", selection: $audioLanguage) {
+            ForEach(PlaybackLanguage.choices) { Text($0.title).tag($0.code) }
+          }
+          .labelsHidden().fixedSize()
+        }
         SettingRow(title: "Subtitles") {
           Picker("Subtitles", selection: $subtitles) {
             ForEach(SubtitlePreference.allCases) { Text($0.title).tag($0) }
           }
           .labelsHidden().fixedSize()
         }
+        SettingRow(title: "Subtitle language") {
+          Picker("Subtitle language", selection: $subtitleLanguage) {
+            ForEach(PlaybackLanguage.choices) { Text($0.title).tag($0.code) }
+          }
+          .labelsHidden().fixedSize()
+        }
         SettingSwitch(title: "Next Episode button", isOn: $nextEpisode)
       }
-      .help("Astra always plays the original file. Quality picks between the versions on your server.")
+      .help("Astra always plays the original file. Quality picks between the versions on your server. Audio and subtitles start in these languages whenever the file has them. Automatic leaves it to the file and your Plex server.")
     }
   }
 
@@ -359,6 +375,32 @@ import SwiftUI
           .astraFont(size: 14.5)
           .monospacedDigit()
           .foregroundStyle(Astra.Color.muted)
+        }
+      }
+    }
+  }
+
+  /// KP (2026-11-16): "there's no in-app updater in Mac settings". The
+  /// version, and a button that checks now (Sparkle also checks every hour).
+  private struct UpdatesBlock: View {
+    @Environment(\.checkForUpdates) private var checkForUpdates
+
+    var body: some View {
+      if let checkForUpdates {
+        SettingsCard(title: "Updates") {
+          SettingRow(title: "Astra \(SettingsView.versionText)") {
+            Button("Check for Updates", action: checkForUpdates)
+              .buttonStyle(SettingsPillStyle(prominent: true))
+          }
+          HStack {
+            Text("Astra looks for a new version every hour and asks before installing it.")
+              .astraFont(size: 12.5)
+              .foregroundStyle(Astra.Color.muted)
+            Spacer(minLength: 0)
+          }
+          .padding(.horizontal, 16)
+          .padding(.vertical, 12)
+          .settingsRowSeparator()
         }
       }
     }

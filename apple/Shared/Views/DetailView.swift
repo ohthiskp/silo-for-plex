@@ -131,14 +131,9 @@ struct DetailView: View {
     .ignoresSafeArea(edges: .top)
     .background { pageBackground }
     #if os(macOS)
-      .overlay(alignment: .topTrailing) {
+      .overlay(alignment: .topLeading) {
+        // KP (2026-11-16): X and ••• at the top left of the card.
         HStack(spacing: 10) {
-          // KP (2026-11-08): ••• beside the X with the title's actions.
-          if !shown.isCatalogOnly {
-            moreMenu
-              .menuStyle(.button)
-              .astraIconButton(size: 36, variant: .clear)
-          }
           // Astra: details are a card on the Mac; X closes it (Esc too).
           Button {
             if let closeCard { closeCard() } else if !path.isEmpty { path.removeLast() }
@@ -151,8 +146,14 @@ struct DetailView: View {
           #endif
           .help("Close (Esc)")
           .accessibilityLabel("Close")
+          // KP (2026-11-08): ••• beside the X with the title's actions.
+          if !shown.isCatalogOnly {
+            moreMenu
+              .menuStyle(.button)
+              .astraIconButton(size: 36, variant: .clear)
+          }
         }
-        .padding(.trailing, 18)
+        .padding(.leading, 18)
         .padding(.top, 18)
       }
     #elseif os(iOS)
@@ -856,6 +857,7 @@ struct MetaBadgeRow: View {
   @AppStorage(Preferences.ratingsKey) private var showRatings = true
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
   @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
+  @Environment(\.astraOnArt) private var onArt
 
   private var pick: PlaybackQuality { quality == .auto ? .current() : quality }
   private var gap: CGFloat { fontSize * 1.25 }
@@ -883,7 +885,7 @@ struct MetaBadgeRow: View {
       badges(size)
     }
     .font(.system(size: size, weight: .regular))
-    .foregroundStyle(Astra.Color.ink.opacity(0.95))
+    .foregroundStyle(Astra.Color.ink(onArt: onArt).opacity(0.95))
     .lineLimit(1)
   }
 
@@ -897,7 +899,7 @@ struct MetaBadgeRow: View {
         .frame(height: fontSize * 1.32)
         .overlay(
           RoundedRectangle(cornerRadius: fontSize * 0.2, style: .continuous)
-            .strokeBorder(Astra.Color.ink.opacity(0.85), lineWidth: max(1, fontSize * 0.06))
+            .strokeBorder(Astra.Color.ink(onArt: onArt).opacity(0.85), lineWidth: max(1, fontSize * 0.06))
         )
         .fixedSize()
         .accessibilityLabel("Rated \(rating)")
@@ -979,6 +981,7 @@ struct FormatBadges: View {
 /// One badge in the format row: clear, with a thin grey outline, rounded
 /// corners and bold text (KP's Avatar mockup, 2026-11-08).
 struct FormatPill<Content: View>: View {
+  @Environment(\.astraOnArt) private var onArt
   /// A Dolby logo: tighter sides so the logo fills the pill and stays
   /// readable (badge audit, 2026-11-16: "VISION" was ~3 pt tall).
   var logo = false
@@ -987,12 +990,12 @@ struct FormatPill<Content: View>: View {
   var body: some View {
     content
       .font(.system(size: 13 * formatBadgeScale, weight: .bold))
-      .foregroundStyle(Astra.Color.ink)
+      .foregroundStyle(Astra.Color.ink(onArt: onArt))
       .padding(.horizontal, (logo ? 7 : 10) * formatBadgeScale)
       .frame(height: 22 * formatBadgeScale)
       .overlay(
         RoundedRectangle(cornerRadius: 6 * formatBadgeScale, style: .continuous)
-          .strokeBorder(Astra.Color.ink.opacity(0.5), lineWidth: 1)
+          .strokeBorder(Astra.Color.ink(onArt: onArt).opacity(0.5), lineWidth: 1)
       )
       .fixedSize()
   }
@@ -1003,6 +1006,7 @@ struct FormatPill<Content: View>: View {
 /// poster or trailer (KP, 2026-11-09: "in a box… look very official"). The
 /// same box on the hero, Details and Apple TV.
 struct RatingBox: View {
+  @Environment(\.astraOnArt) private var onArt
   var text: String
   var fontSize: CGFloat = 12
   /// A soft grey filled box instead of the outlined one (KP's iPhone mockup, 2026-11-09).
@@ -1013,15 +1017,15 @@ struct RatingBox: View {
       .font(.system(size: fontSize, weight: .heavy).width(.condensed))
       .tracking(fontSize * 0.05)
       .monospacedDigit()
-      .foregroundStyle(Astra.Color.ink.opacity(grey ? 0.9 : 1))
+      .foregroundStyle(Astra.Color.ink(onArt: onArt).opacity(grey ? 0.9 : 1))
       .padding(.horizontal, fontSize * 0.5)
       .frame(height: fontSize * 1.75)
       .background {
-        if grey { RoundedRectangle(cornerRadius: fontSize * 0.3, style: .continuous).fill(Astra.Color.ink.opacity(0.22)) }
+        if grey { RoundedRectangle(cornerRadius: fontSize * 0.3, style: .continuous).fill(Astra.Color.ink(onArt: onArt).opacity(0.22)) }
       }
       .overlay(
         RoundedRectangle(cornerRadius: fontSize * 0.16, style: .continuous)
-          .strokeBorder(Astra.Color.ink, lineWidth: grey ? 0 : max(1.25, fontSize * 0.12))
+          .strokeBorder(Astra.Color.ink(onArt: onArt), lineWidth: grey ? 0 : max(1.25, fontSize * 0.12))
       )
       .fixedSize()
       .accessibilityLabel("Rated \(text)")
@@ -1065,14 +1069,15 @@ struct ExpandableSummary: View {
 /// Resume / Play on Details: a solid white capsule with black text (KP's mockup).
 struct SolidCapsuleButtonStyle: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.astraOnArt) private var onArt
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.system(size: 16 * Astra.Layout.controlScale, weight: .semibold))
-      .foregroundStyle(Astra.Color.onSelection)
+      .foregroundStyle(Astra.Color.onSelection(onArt: onArt))
       .padding(.horizontal, 22 * Astra.Layout.controlScale)
       .frame(height: 50 * Astra.Layout.controlScale)
-      .background(Capsule().fill(Astra.Color.ink.opacity(isEnabled ? 1 : 0.35)))
+      .background(Capsule().fill(Astra.Color.ink(onArt: onArt).opacity(isEnabled ? 1 : 0.35)))
       .tvFocusLift(1.06)
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
       .astraAnimation(.snappy(duration: 0.15), value: configuration.isPressed)

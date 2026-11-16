@@ -5,7 +5,7 @@ run-name: SwiftUI iPhone launch check ${{ github.sha }}
 # prints any crash report, so launch crashes can be seen without a phone.
 on:
   push:
-    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s, claude/project-thread-r9sbp7, claude/project-thread-7lc0du]
+    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s, claude/project-thread-r9sbp7, claude/project-thread-7lc0du, claude/project-thread-98g8ho]
     paths:
       - "apple/**"
       - ".github/workflows/astra-swiftui-ios-launch.yml"

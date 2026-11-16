@@ -61,6 +61,12 @@ struct MainView: View {
   @State private var path: [Route] = Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
   /// The window's own top inset (the hidden title bar); pages leave room for the bar below it.
   @State private var safeTop: CGFloat = 28
+  /// The window's size, and the size hidden pages keep: a page that isn't
+  /// showing doesn't lay itself out again on every frame of a window resize
+  /// (the main cause of the Mac's glitchy resizing, KP 2026-11-16). It takes
+  /// the window's size again when it's opened.
+  @State private var windowSize: CGSize = .zero
+  @State private var hiddenSize: CGSize = .zero
 
   /// How far below the safe area pages and cards start, so they clear the bar.
   private var barClearance: CGFloat {
@@ -74,6 +80,11 @@ struct MainView: View {
       layers.frame(width: window.size.width, height: window.size.height)
     }
     .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { safeTop = $0 }
+    .onGeometryChange(for: CGSize.self, of: { $0.size }) { size in
+      windowSize = size
+      if hiddenSize == .zero { hiddenSize = size }
+    }
+    .onChange(of: selection) { hiddenSize = windowSize }
     .background(Astra.Color.bg.ignoresSafeArea())
     .environment(\.ambient, AmbientSource(library: library, item: library.homeHero.first))
     .environment(\.openItem) { item in
@@ -88,7 +99,13 @@ struct MainView: View {
       ZStack(alignment: .leading) {
         ForEach(opened) { item in
           let current = item == selection
-          page(for: item)
+          let frozen = current || hiddenSize == .zero ? nil : hiddenSize
+          // The clear box takes the window's size; a hidden page inside it
+          // keeps its own, without pushing anything else around.
+          Color.clear.overlay(alignment: .topLeading) {
+            page(for: item)
+              .frame(width: frozen?.width, height: frozen?.height, alignment: .topLeading)
+          }
             // Behind cards or another page: timers and the hero pause.
             .environment(\.isPageActive, current && path.isEmpty)
             .environment(\.contentLeading, item == .home ? Astra.Sidebar.contentInset : Astra.Sidebar.pageInset)
@@ -105,6 +122,11 @@ struct MainView: View {
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+      // Apple TV's soft shade behind the bar, so the art never reads as part of it.
+      MacTopShade()
+        .frame(height: Astra.Sidebar.barTop + Astra.Sidebar.barHeight + 46)
+        .ignoresSafeArea(edges: .top)
 
       cards
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -214,10 +236,10 @@ struct MainView: View {
 
 // MARK: - Top bar
 
-/// The top bar from Apple TV, made for the pointer: the search icon, Home,
-/// Movies, Shows and Watchlist centred on one glass capsule; Downloads and
-/// Settings as round glass buttons at the far right. The open page is a
-/// white pill. Astra (KP, 2026-11-07): no sliding pill; a click lights the
+/// The top bar as on Apple TV (KP, 2026-11-16): no glass capsule around the
+/// tabs, just the search icon, then Home, Movies, Shows and Watchlist as
+/// plain items centred, the open one on a quiet glass pill. Downloads and
+/// Settings stay round at the far right. No sliding pill: a click lights the
 /// item at once.
 struct MacTopBar: View {
   var selection: SidebarItem
@@ -226,22 +248,13 @@ struct MacTopBar: View {
 
   var body: some View {
     ZStack {
-      // KP (2026-11-14): Search and Watchlist are their own glass droplets
-      // just off the ends of the bar, close enough that Liquid Glass draws
-      // them pulling towards it, so they read as apart yet together.
-      HStack(spacing: 6) {
-        round(.search)
-        HStack(spacing: 2) {
-          item(.home)
-          item(.movies)
-          item(.shows)
-        }
-        .padding(4)
-        .astraGlass(in: Capsule(), variant: .clear)
-        .astraGlassEdge(Capsule(), strength: 0.6)
-        round(.watchlist)
+      HStack(spacing: 4) {
+        item(.search, iconOnly: true)
+        item(.home)
+        item(.movies)
+        item(.shows)
+        item(.watchlist)
       }
-      .astraGlassGroup(spacing: 14)
 
       HStack(spacing: 10) {
         Spacer()
@@ -251,15 +264,16 @@ struct MacTopBar: View {
       .padding(.trailing, Astra.Spacing.pageTrailing)
     }
     .frame(height: Astra.Sidebar.barHeight)
+    // White type and dark glass over the artwork, on every theme.
+    .astraOnArt()
     // Selection changes light at once.
     .transaction(value: selection) { $0.animation = nil }
   }
 
   private func round(_ page: SidebarItem, count: Int = 0) -> some View {
     item(page, iconOnly: true, count: count)
-      .padding(4)
+      .padding(3)
       .astraGlass(in: Circle(), variant: .clear)
-      .astraGlassEdge(Circle(), strength: 0.6)
   }
 
   private func item(_ page: SidebarItem, iconOnly: Bool = false, count: Int = 0) -> some View {
@@ -270,28 +284,29 @@ struct MacTopBar: View {
   }
 }
 
-/// One top-bar item: an icon and its name (or the icon alone for Search and
-/// Settings). Its colour comes only from `selected`.
+/// One top-bar item: an icon and its name (or the icon alone for Search,
+/// Downloads and Settings). The open page sits on a quiet glass pill, as on
+/// Apple TV; the pointer brightens the others.
 struct MacBarButton: View {
   var symbol: String
   var title: String
   var iconOnly = false
   var selected: Bool
-  /// Astra (KP, 2026-11-07): Library shows how many downloads are running.
+  /// Astra (KP, 2026-11-07): Downloads shows how many are running.
   var count = 0
   var action: () -> Void
   @State private var hovering = false
 
-  private var height: CGFloat { Astra.Sidebar.barHeight - 8 }
+  private var height: CGFloat { Astra.Sidebar.barHeight - 6 }
 
   private var badge: some View {
     Text("\(count)")
       .font(.system(size: 10, weight: .bold))
       .monospacedDigit()
-      .foregroundStyle(selected && !iconOnly ? Astra.Color.theme : Astra.Color.onAccent)
+      .foregroundStyle(Astra.Color.onAccent)
       .padding(.horizontal, 5)
       .frame(minWidth: 16, minHeight: 16)
-      .background(Capsule().fill(selected && !iconOnly ? Astra.Color.onTheme : Astra.Color.accent))
+      .background(Capsule().fill(Astra.Color.accent))
       .astraTransition(.scale.combined(with: .opacity))
   }
 
@@ -302,7 +317,7 @@ struct MacBarButton: View {
           .font(.system(size: 14, weight: .semibold))
         if !iconOnly {
           Text(title)
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: 15, weight: .semibold))
             .lineLimit(1)
             .fixedSize()
         }
@@ -314,12 +329,13 @@ struct MacBarButton: View {
       .overlay(alignment: .topTrailing) {
         if count > 0, iconOnly { badge.offset(x: 4, y: -4) }
       }
-      .foregroundStyle(selected ? Astra.Color.onTheme : (hovering ? Astra.Color.ink : Astra.Color.muted))
+      .foregroundStyle(.white.opacity(selected || hovering ? 1 : 0.72))
+      .shadow(color: .black.opacity(0.35), radius: 6, y: 1)
       .background {
         if selected {
-          Capsule().fill(Astra.Color.theme)
+          Capsule().fill(.white.opacity(0.14)).astraGlass(in: Capsule(), variant: .clear)
         } else if hovering {
-          Capsule().fill(.white.opacity(0.1))
+          Capsule().fill(.white.opacity(0.08))
         }
       }
       .contentShape(Capsule())
@@ -329,6 +345,26 @@ struct MacBarButton: View {
     .help(title)
     .accessibilityLabel(count > 0 ? "\(title), \(count)" : title)
     .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+}
+
+/// The soft shade along the top of the window, under the bar, so its plain
+/// items read over bright artwork (Apple TV's top shade), with a light blur
+/// for rows that scroll under it. Fixed: it never redraws with the page.
+struct MacTopShade: View {
+  var body: some View {
+    ZStack {
+      Rectangle().fill(.ultraThinMaterial)
+      LinearGradient(colors: [.black.opacity(0.5), .black.opacity(0)], startPoint: .top, endPoint: .bottom)
+    }
+    .mask {
+      LinearGradient(
+        stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.35), .init(color: .clear, location: 1)],
+        startPoint: .top, endPoint: .bottom)
+    }
+    .environment(\.colorScheme, .dark)
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
   }
 }
 
