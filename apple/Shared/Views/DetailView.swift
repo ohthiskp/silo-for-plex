@@ -79,6 +79,8 @@ struct DetailView: View {
   }
 
   private static let headerID = "details.header"
+  /// The header's text column on Mac and iPad.
+  private static let textColumn: CGFloat = 580
   private static let episodesID = "details.episodes"
 
   var body: some View {
@@ -354,6 +356,9 @@ struct DetailView: View {
         Text(error).astraFont(size: 13).foregroundStyle(Astra.Color.muted)
       }
     }
+    // KP (2026-11-16, Dune): the text keeps to a column at the left, so
+    // the faces in the art (framed to its right on the Mac) stay clear.
+    .frame(maxWidth: narrow ? .infinity : Self.textColumn, alignment: .leading)
     .padding(.leading, leading)
     .padding(.trailing, Astra.Spacing.pageTrailing)
     // Room for the backdrop above the text, and for the back button.
@@ -362,11 +367,20 @@ struct DetailView: View {
     .frame(maxWidth: .infinity, minHeight: min(Astra.Layout.detailHeaderHeight, viewport * 0.72), alignment: .bottomLeading)
     .background {
       ZStack {
-        ArtworkImage(library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .clipped()
-          // Darkens a little as the page rises over it.
-          .overlay(Astra.Color.bg.opacity(min(0.55, max(0, scrolled) / 700)))
+        Group {
+          #if os(macOS)
+            // Faces found by Vision sit right of the text column (KP,
+            // 2026-11-16: "the text is covering his face"), as on Apple TV.
+            MacHeroArt(
+              library: library, item: titleItem, clearX: leading + Self.textColumn + 40, kind: .scenery, push: 0.3)
+          #else
+            ArtworkImage(library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .clipped()
+          #endif
+        }
+        // Darkens a little as the page rises over it.
+        .overlay(Astra.Color.bg.opacity(min(0.55, max(0, scrolled) / 700)))
         HeroScrim()
       }
       .tvFullBleed()

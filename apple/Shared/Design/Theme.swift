@@ -221,7 +221,9 @@ private struct ContentLeadingKey: EnvironmentKey {
 /// views redraw when it changes because it is observed.
 /// Settings → Appearance → Theme: how the whole app looks (KP, 2026-11-09).
 enum AppTheme: String, CaseIterable, Identifiable, Sendable {
-  case frosted, oled, light, violet
+  // KP (2026-11-16): Light removed on every platform ("it looks terrible").
+  // A saved "light" no longer matches a case, so it opens as Frosted Glass.
+  case frosted, oled, violet
 
   var id: String { rawValue }
 
@@ -229,7 +231,6 @@ enum AppTheme: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .frosted: "Frosted Glass"
     case .oled: "OLED"
-    case .light: "Light"
     case .violet: "Violet"
     }
   }
@@ -238,7 +239,6 @@ enum AppTheme: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .frosted: "Liquid Glass over the artwork"
     case .oled: "Pure black, no blur"
-    case .light: "Bright glass and dark text"
     case .violet: "Deep purple glass"
     }
   }
@@ -253,10 +253,6 @@ enum AppTheme: String, CaseIterable, Identifiable, Sendable {
       ThemePalette(
         bg: 0x000000, surface: 0x0E0E0F, surface2: 0x161617, ink: 0xF5F5F7, accent: 0xFFFFFF,
         isLight: false, ambient: 0, wash: 0, glassTint: nil)
-    case .light:
-      ThemePalette(
-        bg: 0xF2F2F7, surface: 0xFFFFFF, surface2: 0xE5E5EA, ink: 0x1C1C1E, accent: 0x1C1C1E,
-        isLight: true, ambient: 0.55, wash: 0.55, glassTint: nil)
     case .violet:
       ThemePalette(
         bg: 0x110A1F, surface: 0x1C1230, surface2: 0x261A40, ink: 0xF4F0FF, accent: 0xB69CFF,
@@ -316,7 +312,7 @@ struct ThemePalette {
   private(set) var detailsShowing = 0
 
   var palette: ThemePalette {
-    appTheme == .light && detailsShowing > 0 ? AppTheme.frosted.palette : appTheme.palette
+    appTheme.palette
   }
 
   func detailsAppeared() { detailsShowing += 1 }

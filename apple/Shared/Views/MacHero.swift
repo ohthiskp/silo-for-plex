@@ -137,6 +137,9 @@
     var item: PlexMetadata
     /// Where the text block ends; faces stay right of this line.
     var clearX: CGFloat
+    var kind: LibraryStore.ArtKind = .heroBackdrop
+    /// 0 puts the faces just past `clearX`; 1 as far right as they fit.
+    var push: Double = 0.6
 
     @State private var url: URL?
     @State private var focus: ArtFocus?
@@ -147,7 +150,7 @@
         let rect = ArtFraming.side(
           boxWidth: size.width, boxHeight: size.height, aspect: focus?.aspect ?? 16.0 / 9.0,
           clearX: clearX, rightMargin: 40, minX: size.width * 0.12, maxX: size.width * 0.62,
-          defaultX: size.width * 0.24, focus: focus?.focus, push: 0.6)
+          defaultX: size.width * 0.24, focus: focus?.focus, push: push)
         ZStack(alignment: .topLeading) {
           // A colour wash only: blurred so far that no shape survives.
           let small = CGSize(width: 192, height: 108)
@@ -179,9 +182,9 @@
       .clipped()
       .allowsHitTesting(false)
       .accessibilityHidden(true)
-      .task(id: item.id) {
+      .task(id: "\(item.id)|\(kind)") {
         focus = nil
-        let found = await library.artworkURL(for: item, .heroBackdrop, width: 1920, height: 1080)
+        let found = await library.artworkURL(for: item, kind, width: 1920, height: 1080)
         guard !Task.isCancelled else { return }
         url = found
         guard let found else { return }
