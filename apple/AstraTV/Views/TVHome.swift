@@ -310,11 +310,26 @@ struct TVHeroArt: View {
         clearX: clearX * scale, rightMargin: 60 * scale,
         minX: 240 * scale, maxX: 760 * scale, defaultX: 420 * scale, focus: focus?.focus)
       ZStack(alignment: .topLeading) {
+        // A colour wash only: blurred so far that no shape survives, so it
+        // can't show a second, shifted copy of a face (KP, 2026-11-16: the
+        // Breaking Bad art looked cut out with a ghost beside it).
         RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
           .frame(width: geo.size.width, height: geo.size.height)
           .clipped()
+          .blur(radius: 110, opaque: true)
+          .opacity(0.55)
+        // The blurred art sits exactly under the sharp art, so the fade
+        // melts each thing into its own blur instead of into something else.
+        RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
+          .frame(width: rect.width, height: rect.height)
+          .clipped()
           .blur(radius: 34, opaque: true)
-          .opacity(0.7)
+          .mask {
+            LinearGradient(
+              stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.7), location: 0.3)],
+              startPoint: .leading, endPoint: .trailing)
+          }
+          .offset(x: rect.minX)
         RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
           .frame(width: rect.width, height: rect.height)
           .clipped()
