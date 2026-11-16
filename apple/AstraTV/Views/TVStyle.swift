@@ -510,6 +510,8 @@ enum TVLayout {
   static let heroHeight: CGFloat = 900
   /// Home's page edge, clear of the collapsed streaming sidebar on the left.
   static let homeLeading: CGFloat = 150
+  /// The "2024 [PG-13] 2h 46m 4K UHD …" line on the hero and Details (KP's mockup, 2026-11-16).
+  static let metaSize: CGFloat = 24
   /// The streaming sidebar's circles.
   static let sidebarCircle: CGFloat = 76
   /// The circles' column; Home's page starts right of it.

@@ -121,14 +121,8 @@ struct TVDetailPage: View {
       // KP (2026-11-16), the same as the hero, the iPhone and the Mac:
       // "2008 • 8 Seasons [TV-MA] [HD]" (a movie gives its length), the
       // genres on their own line under it.
-      HStack(spacing: 16) {
-        DetailMetaLine(
-          item: titleItem, library: library, showsGenres: false, fontSize: 27, separator: "  •  ",
-          ratingAfter: true, greyRating: true
-        )
-        .layoutPriority(1)
-        TVFormatChips(item: playTarget, fontSize: TVFormatChips.besideMeta, showsRating: false)
-      }
+      // KP's mockup (2026-11-16, Dune): "2024 [PG-13] 2h 46m 4K UHD Dolby Vision Dolby Atmos".
+      MetaBadgeRow(item: titleItem, playTarget: playTarget, library: library, fontSize: TVLayout.metaSize)
       .frame(height: 42)
       if !titleItem.genres.isEmpty {
         Text(titleItem.genres.prefix(3).map(\.tag).joined(separator: " · "))

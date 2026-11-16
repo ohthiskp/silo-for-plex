@@ -412,10 +412,7 @@ private struct TVHomePreview: View {
         VStack(spacing: 16) {
           TVLogoTitle(library: library, item: item, maxWidth: 380, maxHeight: 110, textSize: 52, centered: true)
             .frame(maxWidth: .infinity)
-          HStack(spacing: 12) {
-            DetailMetaLine(item: shown, library: library, fontSize: 22, genreLimit: 1, ratingAfter: true)
-            TVFormatChips(item: shown, fontSize: 16, showsRating: false)
-          }
+          MetaBadgeRow(item: shown, playTarget: shown, library: library, fontSize: 18, alignment: .center)
           HStack(spacing: 16) {
             Label("Play", systemImage: "play.fill")
               .font(.system(size: 24, weight: .semibold))

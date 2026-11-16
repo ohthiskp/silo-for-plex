@@ -659,13 +659,7 @@ struct HeroInfo: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(item.displayTitle), Details")
-        HStack(spacing: 8) {
-          DetailMetaLine(
-            item: shown, library: library, showsGenres: false, fontSize: 14, separator: "  •  ",
-            ratingAfter: true, greyRating: true)
-          FormatBadges(item: shown)
-        }
-        .frame(height: 24)
+        MetaBadgeRow(item: shown, playTarget: shown, library: library, fontSize: 14, alignment: .center)
         .padding(.top, 14)
         .task(id: item.id) {
           full = nil
@@ -717,14 +711,7 @@ struct HeroInfo: View {
       .accessibilityLabel("\(item.displayTitle), Details")
       // Same as the iPhone hero and Details (KP, 2026-11-14): "2026 • 1h 41m
       // [PG] [4K]" with the rating in the grey box, the genres on the line below.
-      HStack(spacing: 10) {
-        DetailMetaLine(
-          item: shown, library: library, showsGenres: false, fontSize: 15, separator: "  •  ",
-          ratingAfter: true, greyRating: true
-        )
-        .layoutPriority(1)
-        FormatBadges(item: shown)
-      }
+      MetaBadgeRow(item: shown, playTarget: shown, library: library)
       .frame(maxWidth: .infinity)
       .task(id: item.id) {
         full = nil

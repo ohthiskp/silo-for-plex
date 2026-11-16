@@ -281,12 +281,7 @@ struct DetailView: View {
       // KP (2026-11-13): like the iPhone and Apple TV, one line of
       // "2024 • 2h 46m • [PG-13] [4K] [Dolby Atmos]" with the rating in a
       // grey box, and the genres on their own line under it.
-      HStack(spacing: 8) {
-        DetailMetaLine(
-          item: titleItem, library: library, showsGenres: false, separator: "  •  ", ratingAfter: true,
-          greyRating: true)
-        FormatBadges(item: playTarget)
-      }
+      MetaBadgeRow(item: titleItem, playTarget: playTarget, library: library)
       if !titleItem.genres.isEmpty {
         Text(titleItem.genres.prefix(3).map(\.tag).joined(separator: " · "))
           .astraFont(size: 14)
@@ -838,6 +833,94 @@ struct DetailMetaLine: View {
   }
 }
 
+/// KP's mockup (2026-11-16, Dune), on every platform:
+/// "2024  [PG-13]  2h 46m  4K UHD  ◗◖Dolby Vision  ◗◖Dolby Atmos".
+/// Only the rating sits in a thin outlined box; 4K UHD / 4K / HD is bold
+/// text, and Dolby Vision and Dolby Atmos are Dolby's horizontal logos with
+/// no background. HDR10, HDR10+ and HLG show a bold "HDR". When the line is
+/// too wide (iPhone), the badges drop to a second line.
+struct MetaBadgeRow: View {
+  /// The movie or show: year, rating, length or seasons.
+  var item: PlexMetadata
+  /// The version that plays: resolution, HDR and Atmos.
+  var playTarget: PlexMetadata
+  /// For the official rating of titles Plex has none for (TMDB-only ones).
+  var library: LibraryStore? = nil
+  var fontSize: CGFloat = 15
+  /// Where the two lines line up when the badges wrap.
+  var alignment: HorizontalAlignment = .leading
+
+  @State private var fetchedRating: String?
+  @AppStorage(Preferences.ratingsKey) private var showRatings = true
+  @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
+  @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
+
+  private var pick: PlaybackQuality { quality == .auto ? .current() : quality }
+  private var gap: CGFloat { fontSize * 1.25 }
+
+  var body: some View {
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: gap) {
+        facts
+        badges
+      }
+      VStack(alignment: alignment, spacing: fontSize * 0.6) {
+        HStack(spacing: gap) { facts }
+        HStack(spacing: gap) { badges }
+      }
+    }
+    .font(.system(size: fontSize, weight: .regular))
+    .foregroundStyle(Astra.Color.ink.opacity(0.95))
+    .lineLimit(1)
+    .task(id: item.id) {
+      fetchedRating = nil
+      guard item.officialRating == nil, item.type == .movie || item.type == .show, let library else { return }
+      fetchedRating = await library.tmdbArtwork(for: item)?.certification
+    }
+  }
+
+  @ViewBuilder private var facts: some View {
+    if let year = item.year { Text(String(year)).fixedSize() }
+    if showRatings, let rating = item.officialRating ?? fetchedRating {
+      Text(rating.uppercased())
+        .font(.system(size: fontSize * 0.88, weight: .regular))
+        .padding(.horizontal, fontSize * 0.32)
+        .frame(height: fontSize * 1.32)
+        .overlay(
+          RoundedRectangle(cornerRadius: fontSize * 0.2, style: .continuous)
+            .strokeBorder(Astra.Color.ink.opacity(0.85), lineWidth: max(1, fontSize * 0.06))
+        )
+        .fixedSize()
+        .accessibilityLabel("Rated \(rating)")
+    }
+    let length = item.type == .show ? item.childCount.map { "\($0) Season\($0 == 1 ? "" : "s")" } : item.durationLabel
+    if let length { Text(length).fixedSize() }
+  }
+
+  @ViewBuilder private var badges: some View {
+    if showQuality, let label = playTarget.qualityLabel(for: pick) {
+      Text(label).fontWeight(.bold).fixedSize()
+    }
+    switch playTarget.dynamicRange(for: pick) {
+    case .dolbyVision?: logo("format-dolby-vision-wide").accessibilityLabel("Dolby Vision")
+    case .hdr10Plus?, .hdr10?, .hlg?: Text("HDR").fontWeight(.bold).fixedSize()
+    case nil: EmptyView()
+    }
+    if playTarget.hasAtmos(for: pick) {
+      logo("format-dolby-atmos-wide").accessibilityLabel("Dolby Atmos")
+    }
+  }
+
+  private func logo(_ name: String) -> some View {
+    Image(name)
+      .renderingMode(.template)
+      .resizable()
+      .scaledToFit()
+      .frame(height: fontSize * 0.92)
+      .fixedSize()
+  }
+}
+
 /// Format badges are read from the sofa on Apple TV, so they grow more there
 /// than other text does (the hub thread, 2026-11-08: they looked tiny at 1.6x).
 #if os(tvOS)
@@ -1051,13 +1134,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         .frame(maxWidth: .infinity)
         .frame(height: PhoneDetail.logoHeight, alignment: .bottom)
         // "2024 • 2h 46m • [PG-13] [HD] [Dolby Atmos]", the genres under it.
-        HStack(spacing: 8) {
-          DetailMetaLine(
-            item: titleItem, library: library, showsGenres: false, fontSize: 14, separator: "  •  ", ratingAfter: true,
-            greyRating: true)
-          FormatBadges(item: playTarget)
-        }
-        .minimumScaleFactor(0.85)
+        MetaBadgeRow(item: titleItem, playTarget: playTarget, library: library, fontSize: 14, alignment: .center)
         .frame(maxWidth: .infinity)
         .padding(.top, 12)
         if !titleItem.genres.isEmpty {

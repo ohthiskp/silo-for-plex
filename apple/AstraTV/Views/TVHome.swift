@@ -189,14 +189,8 @@ private struct TVHeroInfo: View {
       VStack(alignment: .leading, spacing: 0) {
         TVLogoTitle(library: library, item: item, maxWidth: 760, maxHeight: 230, textSize: 90)
           .frame(height: 230, alignment: .bottomLeading)
-        HStack(spacing: 16) {
-          DetailMetaLine(
-            item: shown, library: library, showsGenres: false, fontSize: 27, separator: "  •  ",
-            ratingAfter: true, greyRating: true
-          )
-          .layoutPriority(1)
-          TVFormatChips(item: shown, fontSize: TVFormatChips.besideMeta, showsRating: false)
-        }
+        // KP's mockup (2026-11-16): "2024 [PG-13] 2h 46m 4K UHD Dolby Vision Dolby Atmos".
+        MetaBadgeRow(item: shown, playTarget: shown, library: library, fontSize: TVLayout.metaSize)
         .frame(height: 42)
         .padding(.top, 26)
         Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
