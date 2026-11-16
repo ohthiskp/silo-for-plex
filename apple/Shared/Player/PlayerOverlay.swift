@@ -653,14 +653,12 @@ struct PlayerOverlay: View {
 
   /// iPhone: "4K" or "HD" from the frames mpv is decoding; nil (no badge) until known or below HD.
   private var resolutionTag: String? {
-    guard let badge = player.resolutionBadge else { return nil }
-    return badge == "4K UHD" ? "4K" : badge
+    player.qualityLabel
   }
 
   /// "4K" or "HD" from what mpv is decoding; "SD" below 720.
   private var shortBadge: String {
-    guard let badge = player.resolutionBadge else { return player.videoHeight > 0 ? "SD" : "—" }
-    return badge == "4K UHD" ? "4K" : badge
+    player.qualityLabel ?? (player.videoHeight > 0 ? "SD" : "—")
   }
 
   @ViewBuilder private var audioButtons: some View {

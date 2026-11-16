@@ -860,8 +860,8 @@ struct FormatBadges: View {
 
   var body: some View {
     HStack(spacing: 10 * formatBadgeScale) {
-      if showQuality, let badge = item.resolutionBadge(for: pick) {
-        FormatPill { Text(badge == "4K UHD" ? "4K" : badge) }
+      if showQuality, let badge = item.qualityLabel(for: pick) {
+        FormatPill { Text(badge) }
       }
       if item.hasAtmos(for: pick) {
         FormatPill(logo: true) { logo("format-dolby-atmos", height: 14) }.accessibilityLabel("Dolby Atmos")

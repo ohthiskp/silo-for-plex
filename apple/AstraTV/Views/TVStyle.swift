@@ -202,8 +202,8 @@ struct TVFormatChips: View {
       if showsRating, showRatings, let rating = item.officialRating ?? fallbackRating {
         RatingBox(text: rating, fontSize: fontSize)
       }
-      if showQuality, let badge = item.resolutionBadge(for: pick) {
-        TVChip(fontSize: fontSize) { Text(badge == "4K UHD" ? "4K" : badge) }
+      if showQuality, let badge = item.qualityLabel(for: pick) {
+        TVChip(fontSize: fontSize) { Text(badge) }
       }
       if item.hasAtmos(for: pick) {
         TVChip(fontSize: fontSize, logo: true) { logo("format-dolby-atmos", height: 1.05) }.accessibilityLabel("Dolby Atmos")

@@ -261,8 +261,7 @@ struct PlayerOverlay: View {
   // MARK: Chrome
 
   private var resolutionTag: String? {
-    guard let badge = player.resolutionBadge else { return nil }
-    return badge == "4K UHD" ? "4K" : badge
+    player.qualityLabel
   }
 
   /// The title with its badge and the subtitle button on one row, then the scrubber and times.

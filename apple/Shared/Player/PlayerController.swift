@@ -104,6 +104,13 @@ final class PlayerController {
     return VideoTier.badge(for: VideoTier.tier(width: Int(videoWidth), height: Int(videoHeight)))
   }
 
+  /// "UHD", "4K" or "HD" for the frames mpv is decoding: UHD when the
+  /// file playing is 4K with HDR or Dolby Vision (KP, 2026-11-16).
+  var qualityLabel: String? {
+    guard videoWidth > 0 || videoHeight > 0 else { return nil }
+    return VideoTier.label(for: VideoTier.tier(width: Int(videoWidth), height: Int(videoHeight)), dynamicRange: dynamicRange)
+  }
+
   /// Dolby Vision / HDR10 / HLG of the file playing (from Plex's metadata).
   /// On iPhone and Mac mpv shows Dolby Vision as HDR, so this names the file.
   var dynamicRange: DynamicRange? {
@@ -143,10 +150,9 @@ final class PlayerController {
     var media: PlexMedia
     var id: String { "\(item.ratingKey)-\(media.id)" }
 
-    /// "4K", "HD" or "SD".
+    /// "UHD", "4K", "HD" or "SD".
     var badge: String {
-      let badge = VideoTier.badge(for: media.tier) ?? "SD"
-      return badge == "4K UHD" ? "4K" : badge
+      VideoTier.label(for: media.tier, dynamicRange: media.dynamicRange) ?? "SD"
     }
 
     /// "HEVC · 58.2 GB".
