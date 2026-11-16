@@ -109,6 +109,13 @@ struct PlayerOverlay: View {
         }
       #endif
 
+      // From pressing Play until the first frame: the title card (KP,
+      // 2026-11-16), under the controls, fading into the video.
+      if !player.hasFirstFrame {
+        PlayLoadingCard(player: player, library: app.library)
+          .transition(.opacity)
+      }
+
       chrome
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible)
@@ -131,16 +138,7 @@ struct PlayerOverlay: View {
       if loaderInRing {
         // iPhone with controls showing: the play button's ring shows loading.
       } else if !player.hasFirstFrame {
-        // Until the first frame: the title and a spinner, never a blank black window.
-        VStack(spacing: 14) {
-          ProgressView().controlSize(.large).tint(.white)
-          Text(player.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
-            .lineLimit(1)
-          Text("Starting…").font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
-        }
-        .padding(.horizontal, 24)
-        .allowsHitTesting(false)
-        .transition(.opacity)
+        // Until the first frame the title card (above) is the loading state.
       } else if player.buffering {
         ProgressView().controlSize(.large).tint(.white)
           .allowsHitTesting(false)
@@ -150,7 +148,7 @@ struct PlayerOverlay: View {
     // iPhone: the controls come and go in 0.15 s (KP, 2026-11-10: "very very responsive").
     .astraAnimation(Self.showHide, value: visible)
     .astraAnimation(Astra.Motion.fast, value: player.buffering)
-    .astraAnimation(Astra.Motion.base, value: player.hasFirstFrame)
+    .astraAnimation(Astra.Motion.hero, value: player.hasFirstFrame)
     #if os(macOS)
       .onContinuousHover { phase in
         // Every mouse move reaches here; restart the hide timer at most a few times a second.
@@ -159,8 +157,13 @@ struct PlayerOverlay: View {
     #endif
     .coordinateSpace(.named(Self.space))
     .onAppear {
-      poke()
+      // The title card shows by itself while the title starts; the controls
+      // come in with the first frame (a tap still brings them up before it).
+      if player.hasFirstFrame { poke() } else { visible = false }
       applyDemo()
+    }
+    .onChange(of: player.hasFirstFrame) { _, started in
+      if started { poke() }
     }
     .onChange(of: player.paused) { _, paused in
       if paused { visible = true } else { poke() }
