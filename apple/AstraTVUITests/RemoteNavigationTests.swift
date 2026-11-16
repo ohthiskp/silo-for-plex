@@ -300,12 +300,6 @@ final class RemoteNavigationTests: XCTestCase {
     // Down from the gear lands on the category list.
     press(.down)
     XCTAssertEqual(focusedElement.label, "Appearance", "Down from the top bar didn't reach Settings")
-    // Up reaches the server band, Down comes back.
-    press(.up)
-    let band = focusedElement.label
-    print("ASTRA-SETTINGS up ->", band)
-    XCTAssertTrue(["Change Server", "Index Now"].contains(band), "Up from the list didn't reach the server band")
-    press(.down)
     // Down the list; Right into the pane's options.
     press(.down)
     XCTAssertEqual(focusedElement.label, "Playback", "Down didn't move along the categories")
@@ -317,6 +311,14 @@ final class RemoteNavigationTests: XCTestCase {
     press(.down)
     shot("settings-moved-down")
     print("ASTRA-SETTINGS down ->", focusedElement.label)
+    // Left goes back to the list, and Up from its top reaches the server band.
+    press(.left)
+    let categories = ["Appearance", "Playback", "Subtitles", "Library", "About"]
+    XCTAssertTrue(categories.contains(focusedElement.label), "Left from the options didn't go back to the list")
+    for _ in 0..<5 where categories.contains(focusedElement.label) { press(.up) }
+    let band = focusedElement.label
+    print("ASTRA-SETTINGS up ->", band)
+    XCTAssertTrue(["Change Server", "Index Now"].contains(band), "Up from the list didn't reach the server band")
   }
 
   /// Show Details: the seasons are tabs, starting on the season being watched.
