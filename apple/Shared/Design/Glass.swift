@@ -189,6 +189,7 @@ struct GlassIconButtonStyle: ButtonStyle {
   /// White glyphs on dark glass; dark ones on the Light theme's bright glass.
   /// The player forces dark, so its controls stay white over video.
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.astraOnArt) private var onArt
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
@@ -196,7 +197,11 @@ struct GlassIconButtonStyle: ButtonStyle {
       .foregroundStyle(scheme == .light ? Astra.Color.ink : .white)
       .frame(width: size * Astra.Layout.controlScale, height: size * Astra.Layout.controlScale)
       .contentShape(Circle())
-      .astraGlass(in: Circle(), variant: variant, interactive: true)
+      // On artwork in the Light theme the glass picks up the bright page
+      // below and the white glyph vanished; a dark tint keeps it dark glass.
+      .astraGlass(
+        in: Circle(), variant: variant, interactive: true,
+        tint: onArt && AstraAppearance.shared.palette.isLight ? .black.opacity(0.35) : nil)
       .tvFocusLift(1.12)
       .scaleEffect(configuration.isPressed ? 0.94 : 1)
       .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)

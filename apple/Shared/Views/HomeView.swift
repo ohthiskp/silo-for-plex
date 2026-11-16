@@ -816,6 +816,11 @@ struct HeroScrim: View {
 /// The Home hero's shade: dark behind the title at the left, a little at the
 /// bottom; the bottom edge itself is a fade (mask), not a band of black.
 struct HeroBlend: View {
+  #if os(iOS)
+    private static let phone = true
+  #else
+    private static let phone = false
+  #endif
   var body: some View {
     // KP (2026-11-16): never a light wash over hero artwork, so on the Light
     // theme this is a soft dark shade (the hero's text stays white there).
@@ -825,7 +830,8 @@ struct HeroBlend: View {
       LinearGradient(
         stops: [
           .init(color: shade.opacity(0), location: 0.4),
-          .init(color: shade.opacity(0.5 * k), location: 1),
+          // iPhone's white meta line sits low on the art: a firmer shade there.
+          .init(color: shade.opacity(0.5 * (Self.phone ? max(k, 0.9) : k)), location: 1),
         ], startPoint: .top, endPoint: .bottom)
       #if !os(iOS)
         LinearGradient(
@@ -854,7 +860,8 @@ struct HeroTitle: View {
   var body: some View {
     ZStack(alignment: alignment) {
       if let logo {
-        RemoteImage(url: logo, contentMode: .fit, placeholder: Color.clear)
+        // Logos sit where the title block does (the left on Mac), not centred in their box.
+        RemoteImage(url: logo, contentMode: .fit, placeholder: Color.clear, alignment: alignment)
           .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
           .shadow(color: .black.opacity(0.5), radius: 14, y: 4)
       } else if resolved {
@@ -1022,7 +1029,12 @@ struct WatchlistButton: View {
         LinearGradient(
           // KP's mockup (2026-11-09): the artwork stays bright behind the
           // logo and buttons and only fades at the very bottom.
-          stops: [.init(color: .black, location: 0.8), .init(color: .clear, location: 1)],
+          // On Light the art (and its shade) reach further down, so the
+          // white meta line and buttons sit on art, not on the pale page.
+          stops: [
+            .init(color: .black, location: AstraAppearance.shared.palette.isLight ? 0.9 : 0.8),
+            .init(color: .clear, location: 1),
+          ],
           startPoint: .top, endPoint: .bottom)
       }
       .clipped()
@@ -1058,7 +1070,12 @@ struct WatchlistButton: View {
         ForEach(0..<count, id: \.self) { i in
           let near = max(0, 1 - abs(progress - CGFloat(i)))
           Capsule()
-            .fill(Astra.Color.ink(onArt: true).opacity(0.35 + 0.65 * near))
+            // iPhone: the dots sit where the art has faded into the page.
+            #if os(iOS)
+              .fill(Astra.Color.ink.opacity(0.35 + 0.65 * near))
+            #else
+              .fill(Astra.Color.ink(onArt: true).opacity(0.35 + 0.65 * near))
+            #endif
             .frame(width: 7 + 17 * near, height: 7)
             #if os(macOS)
               .padding(.vertical, 6)
