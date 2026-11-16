@@ -530,4 +530,8 @@ extension EnvironmentValues {
   /// Home: focus moved to the first card of a row or the first hero title
   /// (true), or further along (false); the streaming circles take focus only then.
   @Entry var tvLeftEdge: (Bool) -> Void = { _ in }
+  /// Goes up by one each time Down is pressed on the top bar, so a page can
+  /// take focus itself when tvOS finds nothing below (the Settings gear sat
+  /// above nothing it could reach: KP, 2026-11-16 "you can't even go down").
+  @Entry var tvFocusPage: Int = 0
 }

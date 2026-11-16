@@ -18,6 +18,10 @@ struct TVHome: View {
   /// or the first hero title (KP, 2026-11-16: "only go to the left if it's
   /// the first on the list"). Elsewhere Left walks back along the row or the hero.
   @State private var sidebarReachable = true
+  /// Bumped to put focus on the hero's first button: Right from a circle,
+  /// or Down from the top bar, when tvOS finds nothing that way by itself.
+  @State private var heroFocusRequest = 0
+  @Environment(\.tvFocusPage) private var pageFocus
 
   private var heroItems: [PlexMetadata] { library.homeHero }
   private var current: PlexMetadata? {
@@ -47,9 +51,10 @@ struct TVHome: View {
       .focusSection()
 
       // KP (2026-11-09): the streaming services as circles down the left.
-      TVServiceSidebar(library: library)
+      TVServiceSidebar(library: library) { heroFocusRequest += 1 }
         .disabled(!sidebarReachable)
     }
+    .onChange(of: pageFocus) { heroFocusRequest += 1 }
     .background { AmbientBackdrop(library: library, item: current) }
     .onChange(of: heroItems.map(\.id)) { _, ids in if index >= ids.count { index = 0 } }
     // The hero turns every 9 s while focus is elsewhere.
@@ -89,7 +94,7 @@ struct TVHome: View {
         // while Left and Right walk through the hero.
         TVHeroInfo(
           library: library, item: current, count: heroItems.count, index: index,
-          focused: $heroFocused, step: step
+          focused: $heroFocused, focusRequest: heroFocusRequest, step: step
         )
         .padding(.leading, TVLayout.homeLeading - TVLayout.sidebarColumn)
         .padding(.bottom, 40)
@@ -156,6 +161,7 @@ private struct TVHeroInfo: View {
   var count: Int
   var index: Int
   @Binding var focused: Bool
+  var focusRequest: Int
   var step: (Int) -> Void
 
   @Environment(\.playItem) private var playItem
@@ -253,6 +259,7 @@ private struct TVHeroInfo: View {
       movedAt = Date()
       if new != nil { leftEdge(index == 0) }
     }
+    .onChange(of: focusRequest) { if focus == nil { focus = firstFocus } }
     .onChange(of: index) { _, new in
       if focus != nil { leftEdge(new == 0) }
     }
@@ -370,6 +377,8 @@ private struct TVDots: View {
 /// open or grow. The chosen one is ringed in its brand colour.
 private struct TVServiceSidebar: View {
   var library: LibraryStore
+  /// Right from a circle, when tvOS finds nothing to its right by itself.
+  var right: () -> Void = {}
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
   @FocusState private var focused: String?
 
@@ -383,6 +392,7 @@ private struct TVServiceSidebar: View {
     }
     .frame(maxHeight: .infinity, alignment: .center)
     .focusSection()
+    .onMoveCommand { if $0 == .right { right() } }
     .onChange(of: focused) { old, new in
       // Coming in from the page lands on the service that's showing, not
       // on whichever circle happens to sit level with the button.

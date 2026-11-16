@@ -13,6 +13,7 @@ struct TVSettingsPage: View {
   @Environment(\.tvScrolledDown) private var scrolledDown
   @State private var category: TVSettingsCategory = .appearance
   @FocusState private var listFocus: TVSettingsCategory?
+  @Environment(\.tvFocusPage) private var pageFocus
 
   var body: some View {
     ScrollView {
@@ -40,6 +41,8 @@ struct TVSettingsPage: View {
     // The top bar fades away once the page scrolls, as on every other page.
     .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y > 60 }) { _, down in scrolledDown(down) }
     .onChange(of: listFocus) { if let listFocus { category = listFocus } }
+    // Down from the top bar lands on the category list.
+    .onChange(of: pageFocus) { if listFocus == nil { listFocus = category } }
     .task {
       // CI screenshots (`-AstraDemoSettings playback`): show that category.
       guard Demo.isOn, let name = UserDefaults.standard.string(forKey: "AstraDemoSettings"),
@@ -420,11 +423,11 @@ private struct TVHomePreview: View {
               .frame(maxWidth: .infinity)
               .frame(height: 60)
               .background(Capsule().fill(Color.white))
-            Image(systemName: "plus")
-              .font(.system(size: 26, weight: .semibold))
+            Label("Details", systemImage: "info.circle")
+              .font(.system(size: 24, weight: .semibold))
               .foregroundStyle(Color.white)
-              .frame(width: 60, height: 60)
-              .background(Circle().fill(Color.white.opacity(0.18)))
+              .frame(width: 170, height: 60)
+              .background(Capsule().fill(Color.white.opacity(0.18)))
           }
         }
         .frame(width: 460)
