@@ -53,7 +53,8 @@ struct DetailView: View {
   /// the show itself on an episode's or season's page.
   private var titleItem: PlexMetadata {
     if shown.type == .episode || shown.type == .season, let parentShow { return parentShow }
-    return shown
+    // Genres and length from TMDB for titles that aren't on Plex.
+    return library.filled(shown)
   }
 
   /// What the header describes and Play / Resume plays.
@@ -850,7 +851,8 @@ struct MetaBadgeRow: View {
   /// Kept for callers; the row is always a single line.
   var alignment: HorizontalAlignment = .leading
 
-  @State private var fetchedRating: String?
+  /// TMDB's rating, genres and length, for what Plex didn't give (titles not on Plex).
+  @State private var fetchedArt: TMDBArtwork?
   @AppStorage(Preferences.ratingsKey) private var showRatings = true
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
   @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
@@ -868,9 +870,10 @@ struct MetaBadgeRow: View {
       line(gap: fontSize * 0.5, size: fontSize * 0.8)
     }
     .task(id: item.id) {
-      fetchedRating = nil
-      guard item.officialRating == nil, item.type == .movie || item.type == .show, let library else { return }
-      fetchedRating = await library.tmdbArtwork(for: item)?.certification
+      fetchedArt = nil
+      let missing = item.officialRating == nil || (item.type == .movie ? item.duration == nil : item.childCount == nil)
+      guard missing, item.type == .movie || item.type == .show, let library else { return }
+      fetchedArt = await library.tmdbArtwork(for: item)
     }
   }
 
@@ -885,8 +888,9 @@ struct MetaBadgeRow: View {
   }
 
   @ViewBuilder private func facts(_ fontSize: CGFloat) -> some View {
+    let item = item.filling(from: fetchedArt)
     if let year = item.year { Text(String(year)).fixedSize() }
-    if showRatings, let rating = item.officialRating ?? fetchedRating {
+    if showRatings, let rating = item.officialRating {
       Text(rating.uppercased())
         .font(.system(size: fontSize * 0.88, weight: .regular))
         .padding(.horizontal, fontSize * 0.32)
@@ -1493,7 +1497,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
   }
 
-  /// "+ My List": the Plex Watchlist.
+  /// My List: the Plex Watchlist, a bookmark (filled once added).
   struct PhoneWatchlistColumn: View {
     var item: PlexMetadata
     @Environment(AppModel.self) private var app
@@ -1504,7 +1508,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         Task { await app.toggleWatchlist(item) }
       } label: {
         PhoneActionLabel(title: "My List") {
-          Image(systemName: on ? "checkmark" : "plus").contentTransition(.symbolEffect(.replace))
+          Image(systemName: on ? "bookmark.fill" : "bookmark").contentTransition(.symbolEffect(.replace))
         }
       }
       .buttonStyle(PhoneActionButtonStyle())

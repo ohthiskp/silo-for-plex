@@ -181,7 +181,8 @@ private struct TVHeroInfo: View {
 
   private var playable: Bool { library.availability(of: item) != .notOnServer && app.canPlay(item) }
   private var firstFocus: Field { playable ? .play : .details }
-  private var shown: PlexMetadata { full ?? library.indexMatch(item) ?? item }
+  /// TMDB fills what Plex doesn't give (genres, length) for titles not on Plex.
+  private var shown: PlexMetadata { library.filled(full ?? library.indexMatch(item) ?? item) }
   private var settled: Bool { Date().timeIntervalSince(movedAt) > 0.3 }
 
   var body: some View {
@@ -299,8 +300,9 @@ struct TVHeroArt: View {
   @State private var url: URL?
   @State private var focus: ArtFocus?
 
-  /// The logo block's right edge on a 1920 pt screen, plus a little air.
-  static let heroClearX: CGFloat = TVLayout.homeLeading + 80 + TVHeroInfo.blockWidth + 40
+  /// The logo block's right edge on a 1920 pt screen, plus clear air: KP
+  /// (2026-11-16) wants faces well to the right, not crowding the logo.
+  static let heroClearX: CGFloat = TVLayout.homeLeading + 80 + TVHeroInfo.blockWidth + 110
 
   var body: some View {
     GeometryReader { geo in
@@ -308,7 +310,7 @@ struct TVHeroArt: View {
       let rect = ArtFraming.side(
         boxWidth: geo.size.width, boxHeight: geo.size.height, aspect: focus?.aspect ?? 16.0 / 9.0,
         clearX: clearX * scale, rightMargin: 60 * scale,
-        minX: 240 * scale, maxX: 760 * scale, defaultX: 420 * scale, focus: focus?.focus)
+        minX: 240 * scale, maxX: 1040 * scale, defaultX: 420 * scale, focus: focus?.focus)
       ZStack(alignment: .topLeading) {
         // A colour wash only: blurred so far that no shape survives, so it
         // can't show a second, shifted copy of a face (KP, 2026-11-16: the
@@ -735,7 +737,7 @@ private struct TVGlassButtonBody: View {
   }
 }
 
-/// The round + (Plex Watchlist), ✓ once added.
+/// The round Watchlist bookmark, filled once added (KP, 2026-11-16).
 struct TVRoundWatchlist: View {
   var item: PlexMetadata
   @Environment(AppModel.self) private var app
@@ -745,7 +747,7 @@ struct TVRoundWatchlist: View {
     Button {
       Task { await app.toggleWatchlist(item) }
     } label: {
-      Image(systemName: on ? "checkmark" : "plus")
+      Image(systemName: on ? "bookmark.fill" : "bookmark")
         .font(.system(size: 30, weight: .semibold))
         .contentTransition(.symbolEffect(.replace))
         .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)

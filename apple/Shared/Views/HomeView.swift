@@ -612,7 +612,8 @@ struct HeroInfo: View {
   }
 
   /// Best copy known: the full one, else the index's match, else the title itself.
-  private var shown: PlexMetadata { full ?? library.indexMatch(item) ?? item }
+  /// TMDB fills what Plex doesn't give (genres, length) for titles not on Plex.
+  private var shown: PlexMetadata { library.filled(full ?? library.indexMatch(item) ?? item) }
 
   /// KP's hero mockup (2026-11-09): one block at the left, its logo centred
   /// over the meta line and buttons; full width on iPhone.
@@ -873,7 +874,7 @@ struct WatchlistButton: View {
     Button {
       Task { await app.toggleWatchlist(item) }
     } label: {
-      Image(systemName: on ? "checkmark" : "plus")
+      Image(systemName: on ? "bookmark.fill" : "bookmark")
         .font(.system(size: 19, weight: .semibold))
         .contentTransition(.symbolEffect(.replace))
     }

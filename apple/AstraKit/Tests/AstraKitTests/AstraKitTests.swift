@@ -773,6 +773,34 @@ final class TMDBTests: XCTestCase {
     XCTAssertTrue(atmos.hasAtmos())
   }
 
+  func testCatalogTitleFillsGenresLengthAndRatingFromTMDB() async throws {
+    let movieJSON = #"{"genres":[{"id":878,"name":"Science Fiction"},{"id":12,"name":"Adventure"}],"runtime":197,"release_dates":{"results":[{"iso_3166_1":"US","release_dates":[{"certification":"PG-13","type":3}]}]}}"#
+    let art = try await TMDBClient(token: "t", transport: FakeTransport { _ in (200, Data(movieJSON.utf8)) })
+      .artwork(id: 1, kind: .movie)
+    XCTAssertEqual(art.genres, ["Science Fiction", "Adventure"])
+    XCTAssertEqual(art.runtimeMinutes, 197)
+    let catalog = TMDBItem(tmdbID: 1, kind: .movie, title: "Avatar", year: 2025).asMetadata
+    let filled = catalog.filling(from: art)
+    XCTAssertEqual(filled.genres.map(\.tag), ["Science Fiction", "Adventure"])
+    XCTAssertEqual(filled.duration, 197 * 60_000)
+    XCTAssertEqual(filled.officialRating, "PG-13")
+
+    let showJSON = #"{"genres":[{"id":18,"name":"Drama"}],"number_of_seasons":5}"#
+    let showArt = try await TMDBClient(token: "t", transport: FakeTransport { _ in (200, Data(showJSON.utf8)) })
+      .artwork(id: 2, kind: .tv)
+    let show = TMDBItem(tmdbID: 2, kind: .tv, title: "Breaking Bad", year: 2008).asMetadata.filling(from: showArt)
+    XCTAssertEqual(show.childCount, 5)
+    XCTAssertNil(show.duration)
+
+    // Plex's own values win.
+    var plex = catalog
+    plex.genres = [PlexTag(tag: "Action")]
+    plex.duration = 1000
+    XCTAssertEqual(plex.filling(from: art).genres.map(\.tag), ["Action"])
+    XCTAssertEqual(plex.filling(from: art).duration, 1000)
+    XCTAssertEqual(catalog.filling(from: nil), catalog)
+  }
+
   func testOfficialRatingFromTMDBAndPlex() async throws {
     let movieJSON = #"{"release_dates":{"results":[{"iso_3166_1":"GB","release_dates":[{"certification":"12A","type":3}]},{"iso_3166_1":"US","release_dates":[{"certification":"","type":1},{"certification":"PG-13","type":3},{"certification":"R","type":4}]}]}}"#
     let movie = try await TMDBClient(token: "t", transport: FakeTransport { _ in (200, Data(movieJSON.utf8)) })

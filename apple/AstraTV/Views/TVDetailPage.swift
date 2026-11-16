@@ -4,7 +4,7 @@ import SwiftUI
 /// Details on Apple TV: the iPhone's Details (KP's Avatar mockup) made wide
 /// (KP, 2026-11-09: "go based off how iOS is"). The scenic backdrop fills the
 /// top and fades into the frosted page; on the left the logo, rating box and
-/// facts, the format badges, Resume with round My List and More beside it,
+/// facts, the format badges, Resume with the round Watchlist bookmark and eye beside it,
 /// the progress line, the synopsis and director. Below: the season's
 /// episodes, Cast, More Like This.
 struct TVDetailPage: View {
@@ -39,7 +39,8 @@ struct TVDetailPage: View {
   /// The show on an episode's or season's page: its logo, backdrop, facts and cast.
   private var titleItem: PlexMetadata {
     if shown.type == .episode || shown.type == .season, let parentShow { return parentShow }
-    return shown
+    // Genres and length from TMDB for titles that aren't on Plex.
+    return library.filled(shown)
   }
 
   private var playTarget: PlexMetadata { focus ?? shown }
@@ -159,27 +160,26 @@ struct TVDetailPage: View {
         .focused($playFocused)
         .disabled(notOnServer || !app.canPlay(playTarget))
 
+        // KP (2026-11-16): the Watchlist bookmark and the eye stand alone,
+        // with no names under them (as on the iPhone).
         if let target = watchlistTarget {
-          TVLabeledRound(label: app.isOnWatchlist(target) ? "In My List" : "My List") {
-            TVRoundWatchlist(item: target)
-          }
+          TVRoundWatchlist(item: target)
         }
         // KP (2026-11-16, Apple TV): an eye that marks the movie or the
         // picked episode watched or unwatched, instead of More.
-        if !shown.isCatalogOnly, !notOnServer, playTarget.type == .movie || playTarget.type == .episode {
-          let watched = library.isWatched(playTarget)
-          TVLabeledRound(label: watched ? "Watched" : "Mark Watched") {
-            Button {
-              Task { await library.setWatched(playTarget, watched: !watched) }
-            } label: {
-              Image(systemName: watched ? "eye.fill" : "eye")
-                .font(.system(size: 30, weight: .semibold))
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)
-            }
-            .buttonStyle(TVGlassButtonStyle(round: true))
-            .accessibilityLabel(watched ? "Mark Unwatched" : "Mark Watched")
+        // On a show with no episode picked it marks the whole show.
+        if !shown.isCatalogOnly, !notOnServer, let markTarget = watchedTarget {
+          let watched = library.isWatched(markTarget)
+          Button {
+            Task { await library.setWatched(markTarget, watched: !watched) }
+          } label: {
+            Image(systemName: watched ? "eye.fill" : "eye")
+              .font(.system(size: 30, weight: .semibold))
+              .contentTransition(.symbolEffect(.replace))
+              .frame(width: TVLayout.roundButton, height: TVLayout.roundButton)
           }
+          .buttonStyle(TVGlassButtonStyle(round: true))
+          .accessibilityLabel(watched ? "Mark Unwatched" : "Mark Watched")
         }
       }
       .focusSection()
@@ -220,6 +220,14 @@ struct TVDetailPage: View {
     .padding(.trailing, 600)
     .padding(.top, 330)
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  /// What the eye marks: the picked episode or the movie, else the show.
+  private var watchedTarget: PlexMetadata? {
+    switch playTarget.type {
+    case .movie, .episode, .show, .season: return playTarget
+    default: return titleItem.type == .show ? titleItem : nil
+    }
   }
 
   /// What My List adds: the title itself, or an episode's or season's show.
@@ -452,23 +460,6 @@ struct TVDetailPage: View {
 }
 
 // MARK: - Pieces
-
-/// A round button with its name under it (My List, More), as on the iPhone.
-private struct TVLabeledRound<Content: View>: View {
-  var label: String
-  @ViewBuilder var content: Content
-
-  var body: some View {
-    VStack(spacing: 12) {
-      content
-      Text(label)
-        .font(.system(size: 20, weight: .medium))
-        .foregroundStyle(Astra.Color.ink.opacity(0.85))
-        .lineLimit(1)
-        .fixedSize()
-    }
-  }
-}
 
 /// An episode: its still with the progress line, "1. Title" and the length,
 /// and two lines of its summary. Selecting picks it (KP, 2026-11-14:
