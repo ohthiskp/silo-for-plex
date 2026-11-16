@@ -493,6 +493,11 @@ enum TVLayout {
   static let homeLeading: CGFloat = 150
   /// The streaming sidebar's circles.
   static let sidebarCircle: CGFloat = 76
+  /// The circles' column; Home's page starts right of it.
+  static let sidebarColumn: CGFloat = 110
+  /// Where a page without a hero starts, below the top bar (it sits in the
+  /// 60 pt top safe area, so pages that ignore that area start lower).
+  static let pageTop: CGFloat = 200
   /// The top bar, and the space a page leaves above its content for it.
   static let barHeight: CGFloat = 90
   static let barSpace: CGFloat = 130
@@ -510,4 +515,7 @@ extension EnvironmentValues {
   @Entry var tvLeading: CGFloat = TVLayout.leading
   /// A page tells the top bar it has scrolled down (the bar fades) or back up.
   @Entry var tvScrolledDown: (Bool) -> Void = { _ in }
+  /// Home: focus moved to the first card of a row or the first hero title
+  /// (true), or further along (false); the streaming circles take focus only then.
+  @Entry var tvLeftEdge: (Bool) -> Void = { _ in }
 }

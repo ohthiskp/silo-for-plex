@@ -14,6 +14,10 @@ struct TVHome: View {
   @State private var heroFocused = false
   @AppStorage("astra.home.topTenSeries") private var topSeries = false
   @Environment(\.tvScrolledDown) private var scrolledDown
+  /// Left reaches the streaming circles only from the first thing in a row
+  /// or the first hero title (KP, 2026-11-16: "only go to the left if it's
+  /// the first on the list"). Elsewhere Left walks back along the row or the hero.
+  @State private var sidebarReachable = true
 
   private var heroItems: [PlexMetadata] { library.homeHero }
   private var current: PlexMetadata? {
@@ -33,11 +37,18 @@ struct TVHome: View {
       .onScrollGeometryChange(for: Bool.self, of: { $0.contentOffset.y + $0.contentInsets.top > 120 }) { _, down in
         scrolledDown(down)
       }
-      .environment(\.tvLeading, TVLayout.homeLeading)
+      .environment(\.tvLeading, TVLayout.homeLeading - TVLayout.sidebarColumn)
+      .environment(\.tvLeftEdge) { sidebarReachable = $0 }
       .ignoresSafeArea(edges: .top)
+      // The page starts right of the circles and is one focus section from
+      // top to bottom, so Right from any circle lands on the page (KP,
+      // 2026-11-16: only HBO Max, level with Play, could get back before).
+      .padding(.leading, TVLayout.sidebarColumn)
+      .focusSection()
 
       // KP (2026-11-09): the streaming services as circles down the left.
       TVServiceSidebar(library: library)
+        .disabled(!sidebarReachable)
     }
     .background { AmbientBackdrop(library: library, item: current) }
     .onChange(of: heroItems.map(\.id)) { _, ids in if index >= ids.count { index = 0 } }
@@ -58,31 +69,29 @@ struct TVHome: View {
   @ViewBuilder private var hero: some View {
     ZStack(alignment: .bottomLeading) {
       if let current {
-        ArtworkImage(
-          library: library, item: current, kind: .heroBackdrop, width: 1920, height: 1080,
-          placeholder: Color.clear
-        )
-        .frame(maxWidth: .infinity)
-        .frame(height: TVLayout.heroHeight)
-        .clipped()
-        .overlay { HeroBlend() }
-        .mask {
-          LinearGradient(
-            stops: [.init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
-            startPoint: .top, endPoint: .bottom)
-        }
-        // Edge to edge: out past the TV's 80 pt side safe area.
-        .padding(.horizontal, -80)
-        .id(current.id)
-        .transition(.opacity)
+        // KP (2026-11-16): the logo on the left, the art on the right with
+        // the faces clear of the logo, the rest of the picture softly blurred.
+        TVHeroArt(library: library, item: current)
+          .frame(width: 1920, height: TVLayout.heroHeight)
+          .overlay { HeroBlend() }
+          .mask {
+            LinearGradient(
+              stops: [.init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
+              startPoint: .top, endPoint: .bottom)
+          }
+          // Edge to edge: out past the circles and the TV's 80 pt side safe area.
+          .padding(.leading, -(80 + TVLayout.sidebarColumn))
+          .padding(.trailing, -80)
+          .id(current.id)
+          .transition(.opacity)
 
+        // One block for every title, so focus stays on the button it's on
+        // while Left and Right walk through the hero.
         TVHeroInfo(
           library: library, item: current, count: heroItems.count, index: index,
           focused: $heroFocused, step: step
         )
-        .id("info-\(current.id)")
-        .transition(.opacity)
-        .padding(.leading, TVLayout.homeLeading)
+        .padding(.leading, TVLayout.homeLeading - TVLayout.sidebarColumn)
         .padding(.bottom, 40)
       } else {
         VStack(spacing: 20) {
@@ -135,12 +144,12 @@ struct TVHome: View {
 
 // MARK: - Hero info
 
-/// The hero's block, bottom left, after KP's hero mockup (2026-11-09) as on
-/// the iPhone and Mac: the title's logo centred over the block, then
-/// "2025 · 2h 8m · Sci-Fi [PG-13] [4K]" on one line, then a wide white Play
-/// beside the round glass + (Watchlist). No Details button: hold Select on
-/// Play for Details and the rest. Right on + turns the hero; the dots show
-/// where you are.
+/// The hero's block, bottom left (KP, 2026-11-16): the title's logo on the
+/// left, then "2025 • 2h 8m [PG-13] [4K] [Atmos]" on one line as on the
+/// iPhone and Mac, the genres under it, then Play, Details and the round +
+/// (Watchlist), each with room to grow when focused. Right on + turns to the
+/// next title; Left on Play goes back a title, and only from the first title
+/// does Left reach the streaming circles.
 private struct TVHeroInfo: View {
   var library: LibraryStore
   var item: PlexMetadata
@@ -150,68 +159,115 @@ private struct TVHeroInfo: View {
   var step: (Int) -> Void
 
   @Environment(\.playItem) private var playItem
+  @Environment(\.openItem) private var openItem
+  @Environment(\.tvLeftEdge) private var leftEdge
   @Environment(AppModel.self) private var app
   @FocusState private var focus: Field?
+  /// When focus last moved between the buttons: a Right that moved focus
+  /// onto + must not also turn the hero (KP: "it automatically moves to the right").
+  @State private var movedAt = Date.distantPast
   /// The server's full copy, for the 4K / Dolby badges and the runtime.
   @State private var full: PlexMetadata?
 
-  private enum Field: Hashable { case play, plus }
+  private enum Field: Hashable { case play, details, plus }
 
-  private static let blockWidth: CGFloat = 820
+  static let blockWidth: CGFloat = 820
 
   private var playable: Bool { library.availability(of: item) != .notOnServer && app.canPlay(item) }
-  private var firstFocus: Field { playable || item.tmdbKey == nil ? .play : .plus }
+  private var hasPlus: Bool { item.tmdbKey != nil }
+  private var firstFocus: Field { playable ? .play : .details }
+  private var lastField: Field { hasPlus ? .plus : .details }
   private var shown: PlexMetadata { full ?? library.indexMatch(item) ?? item }
+  private var settled: Bool { Date().timeIntervalSince(movedAt) > 0.3 }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 24) {
-      VStack(spacing: 22) {
-        // KP (2026-11-14): a bigger, more prominent title logo.
-        TVLogoTitle(library: library, item: item, maxWidth: 820, maxHeight: 240, textSize: 90, centered: true)
-          .frame(maxWidth: .infinity)
-        HStack(spacing: 14) {
-          DetailMetaLine(item: shown, library: library, fontSize: 26, genreLimit: 1, ratingAfter: true)
-            .layoutPriority(1)
+    VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 0) {
+        TVLogoTitle(library: library, item: item, maxWidth: 760, maxHeight: 230, textSize: 90)
+          .frame(height: 230, alignment: .bottomLeading)
+        HStack(spacing: 16) {
+          DetailMetaLine(
+            item: shown, library: library, showsGenres: false, fontSize: 27, separator: "  •  ",
+            ratingAfter: true, greyRating: true
+          )
+          .layoutPriority(1)
           TVFormatChips(item: shown, fontSize: 18, showsRating: false)
         }
-        .frame(height: 40)
-        .frame(maxWidth: .infinity)
+        .frame(height: 42)
+        .padding(.top, 26)
+        Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
+          .font(.system(size: 24, weight: .medium))
+          .foregroundStyle(Astra.Color.ink.opacity(0.65))
+          .lineLimit(1)
+          .frame(height: 30)
+          .padding(.top, 6)
       }
+      .id(item.id)
+      .transition(.opacity)
 
-      HStack(spacing: 20) {
+      HStack(spacing: 28) {
         Button {
           playItem(item)
         } label: {
-          Label("Play", systemImage: "play.fill")
+          Label(item.progress != nil ? "Resume" : "Play", systemImage: "play.fill")
             .font(.system(size: 30, weight: .semibold))
-            .frame(maxWidth: .infinity)
+            .lineLimit(1)
+            .frame(width: 250)
         }
         .buttonStyle(TVGlassButtonStyle(prominent: true))
         .focused($focus, equals: .play)
         .disabled(!playable)
-        // Hold Select for Details, Mark Watched and Go to (no downloads on TV).
+        // Hold Select for Mark Watched and Go to (no downloads on TV).
         .itemMenu(library: library, item: item)
 
-        if item.tmdbKey != nil {
+        Button {
+          openItem(item)
+        } label: {
+          Label("Details", systemImage: "info.circle")
+            .font(.system(size: 30, weight: .semibold))
+            .lineLimit(1)
+            .frame(width: 200)
+        }
+        .buttonStyle(TVGlassButtonStyle())
+        .focused($focus, equals: .details)
+
+        if hasPlus {
           TVRoundWatchlist(item: item)
             .focused($focus, equals: .plus)
         }
       }
+      .padding(.top, 30)
       .focusSection()
       .onMoveCommand { direction in
-        // Only reached when focus can't move further that way.
-        if direction == .right, focus == .plus || (focus == .play && item.tmdbKey == nil) { step(1) }
+        // Reached when focus has nowhere to go that way (the circles are off
+        // while the hero isn't on its first title).
+        guard settled else { return }
+        if direction == .right, focus == lastField { step(1) }
+        if direction == .left, focus == firstFocus, index > 0 { step(-1) }
       }
       if count > 1 {
         TVDots(count: count, index: index)
-          .frame(maxWidth: .infinity)
+          .padding(.top, 30)
+          .padding(.leading, 6)
       }
     }
-    .frame(width: Self.blockWidth)
-    // Home opens on Play (or + when the title can't play here), not on the
-    // sidebar or the tab bar.
+    .frame(width: Self.blockWidth, alignment: .leading)
+    // Home opens on Play (or Details when the title can't play here), not on
+    // the sidebar or the tab bar.
     .defaultFocus($focus, firstFocus, priority: .userInitiated)
-    .onChange(of: focus) { _, new in focused = new != nil }
+    .onChange(of: focus) { _, new in
+      focused = new != nil
+      movedAt = Date()
+      if new != nil { leftEdge(index == 0) }
+    }
+    .onChange(of: index) { _, new in
+      if focus != nil { leftEdge(new == 0) }
+    }
+    .onChange(of: item.id) {
+      // The next title may have no + or nothing to play: keep focus in the block.
+      if focus == .plus, !hasPlus { focus = .details }
+      if focus == .play, !playable { focus = .details }
+    }
     // Closing the player re-enables the page with nothing focused, and tvOS
     // would then pick the leftmost circle; land back on the hero instead.
     .onChange(of: app.player.isActive) { _, active in
@@ -232,6 +288,69 @@ private struct TVHeroInfo: View {
   }
 }
 
+/// The hero's picture (KP, 2026-11-16): the whole picture softly blurred
+/// across the hero, and the sharp picture on the right, fading in from the
+/// left behind the logo. Vision finds the faces once (ArtFocusStore) and the
+/// sharp picture slides right just far enough for them to clear the logo
+/// block, never hard against the right edge.
+private struct TVHeroArt: View {
+  var library: LibraryStore
+  var item: PlexMetadata
+
+  @State private var url: URL?
+  @State private var focus: ArtFocus?
+
+  /// The logo block's right edge on a 1920 pt screen, plus a little air.
+  static let clearX: CGFloat = TVLayout.homeLeading + 80 + TVHeroInfo.blockWidth + 40
+
+  var body: some View {
+    GeometryReader { geo in
+      let scale = geo.size.width / 1920
+      let rect = ArtFraming.side(
+        boxWidth: geo.size.width, boxHeight: geo.size.height, aspect: focus?.aspect ?? 16.0 / 9.0,
+        clearX: Self.clearX * scale, rightMargin: 60 * scale,
+        minX: 240 * scale, maxX: 760 * scale, defaultX: 420 * scale, focus: focus?.focus)
+      ZStack(alignment: .topLeading) {
+        RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
+          .frame(width: geo.size.width, height: geo.size.height)
+          .clipped()
+          .blur(radius: 34, opaque: true)
+          .opacity(0.7)
+        RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
+          .frame(width: rect.width, height: rect.height)
+          .clipped()
+          .mask {
+            LinearGradient(
+              stops: [
+                .init(color: .clear, location: 0), .init(color: .black.opacity(0.55), location: 0.2),
+                .init(color: .black, location: 0.4),
+              ],
+              startPoint: .leading, endPoint: .trailing)
+          }
+          .offset(x: rect.minX)
+      }
+      .animation(.easeInOut(duration: 0.35), value: focus)
+    }
+    .clipped()
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+    .task(id: item.id) {
+      focus = nil
+      let found = await library.artworkURL(for: item, .heroBackdrop, width: 1920, height: 1080)
+      guard !Task.isCancelled else { return }
+      url = found
+      guard let found else { return }
+      if let hit = await ArtFocusStore.shared.cached(found) {
+        focus = hit
+        return
+      }
+      let result = await ArtFocusStore.shared.focus(for: found)
+      guard !Task.isCancelled else { return }
+      focus = result
+    }
+  }
+}
+
 /// The hero's page dots: the current one a wide white capsule.
 private struct TVDots: View {
   var count: Int
@@ -246,7 +365,9 @@ private struct TVDots: View {
       }
     }
     .animation(.snappy(duration: 0.3), value: index)
-    .accessibilityHidden(true)
+    .accessibilityElement()
+    .accessibilityLabel("Title \(index + 1) of \(count)")
+    .accessibilityIdentifier("astra.hero.page")
   }
 }
 
@@ -258,6 +379,10 @@ private struct TVDots: View {
 private struct TVServiceSidebar: View {
   var library: LibraryStore
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
+  @FocusState private var focused: String?
+
+  private static let forYou = "for-you"
+  private var chosen: String { library.selectedService?.id ?? Self.forYou }
 
   var body: some View {
     VStack(spacing: 16) {
@@ -266,6 +391,11 @@ private struct TVServiceSidebar: View {
     }
     .frame(maxHeight: .infinity, alignment: .center)
     .focusSection()
+    .onChange(of: focused) { old, new in
+      // Coming in from the page lands on the service that's showing, not
+      // on whichever circle happens to sit level with the button.
+      if old == nil, let new, new != chosen { focused = chosen }
+    }
   }
 
   private func circle(_ service: StreamingService?) -> some View {
@@ -292,6 +422,7 @@ private struct TVServiceSidebar: View {
       .frame(width: TVLayout.sidebarCircle, height: TVLayout.sidebarCircle)
     }
     .buttonStyle(TVSidebarButtonStyle(selected: selected, brand: brand))
+    .focused($focused, equals: service?.id ?? Self.forYou)
     .accessibilityLabel(service?.label ?? "For You")
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
@@ -338,6 +469,7 @@ struct TVRow<Content: View>: View {
   var spacing: CGFloat = 40
   @ViewBuilder var content: Content
   @Environment(\.tvLeading) private var leading
+  @Environment(\.tvLeftEdge) private var leftEdge
 
   var body: some View {
     VStack(alignment: .leading, spacing: 18) {
@@ -352,9 +484,16 @@ struct TVRow<Content: View>: View {
       }
       .padding(.leading, leading)
       .focusSection()
+      .onTVFocus { if $0 { leftEdge(true) } }
       ScrollView(.horizontal, showsIndicators: false) {
         LazyHStack(alignment: .top, spacing: spacing) {
-          content
+          // Each card says whether it's the row's first, so Left only
+          // leaves the row for the streaming circles from there.
+          Group(subviews: content) { cards in
+            ForEach(Array(cards.enumerated()), id: \.element.id) { position, card in
+              card.onTVFocus { if $0 { leftEdge(position == 0) } }
+            }
+          }
         }
         .padding(.horizontal, leading)
         .padding(.vertical, 20)

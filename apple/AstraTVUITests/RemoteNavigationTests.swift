@@ -189,6 +189,144 @@ final class RemoteNavigationTests: XCTestCase {
     XCTAssertTrue(app.buttons["Unwatched"].firstMatch.waitForExistence(timeout: 10), "Movies didn't open")
   }
 
+  // MARK: Focus (KP, 2026-11-16)
+
+  private static let services = ["For You", "Netflix", "Apple TV+", "Prime Video", "Disney+", "HBO Max", "Hulu"]
+  private var onCircle: Bool { Self.services.contains(focusedElement.label) }
+  private var heroPage: String { app.descendants(matching: .any)["astra.hero.page"].firstMatch.label }
+
+  /// Right from every streaming circle gets back onto the page (KP: only HBO
+  /// Max, level with Play, could before).
+  func testRightFromEveryCircleReachesThePage() {
+    launch()
+    XCTAssertTrue(homeHero.waitForExistence(timeout: 30), "Home didn't load")
+    sleep(4)
+    leaveTabBar()
+    for n in 0..<Self.services.count {
+      for _ in 0..<3 where !onCircle { press(.left) }
+      XCTAssertTrue(onCircle, "Left didn't reach the circles (round \(n))")
+      press(.down, times: n)
+      let circle = focusedElement.label
+      if n == 4 { shot("circle-\(circle)") }
+      press(.right)
+      XCTAssertFalse(onCircle, "Right from \(circle) stayed in the circles")
+    }
+  }
+
+  /// The hero: Play, Details, +; Right on + turns to the next title and keeps
+  /// focus on +; Right onto + doesn't turn it; Left on Play goes back a title,
+  /// and only from the first title does Left reach the circles.
+  func testHeroButtonsAndLeftRight() {
+    launch()
+    XCTAssertTrue(homeHero.waitForExistence(timeout: 30), "Home didn't load")
+    sleep(4)
+    leaveTabBar()
+    shot("hero-play-focused")
+    let first = heroPage
+    print("ASTRA-HERO start", first)
+    XCTAssertTrue(["Play", "Resume", "Details"].contains(focusedElement.label), "Home didn't open on the hero's buttons")
+    if focusedElement.label != "Details" {
+      press(.right)
+      XCTAssertEqual(focusedElement.label, "Details", "Right from Play didn't go to Details")
+    }
+    shot("hero-details-focused")
+    press(.right)
+    XCTAssertTrue(focusedElement.label.contains("Watchlist"), "Right from Details didn't go to +")
+    XCTAssertEqual(heroPage, first, "Moving onto + turned the hero")
+    shot("hero-plus-focused")
+    press(.right)
+    XCTAssertNotEqual(heroPage, first, "Right on + didn't turn the hero")
+    XCTAssertTrue(focusedElement.label.contains("Watchlist"), "Focus left + when the hero turned")
+    shot("hero-second-title")
+    press(.right)
+    print("ASTRA-HERO after two", heroPage)
+    // Back to the first button, then Left walks back to the first title.
+    press(.left, times: 2)
+    var guardPresses = 0
+    while heroPage != first, guardPresses < 6 {
+      press(.left)
+      XCTAssertFalse(onCircle, "Left reached the circles before the first title")
+      guardPresses += 1
+    }
+    XCTAssertEqual(heroPage, first, "Left didn't walk back to the first title")
+    press(.left)
+    XCTAssertTrue(onCircle, "Left on the first title didn't reach the circles")
+  }
+
+  /// In a row, Left walks back to the first card and only then reaches the circles.
+  func testRowLeftGoesToTheFirstCardFirst() {
+    launch()
+    XCTAssertTrue(homeHero.waitForExistence(timeout: 30), "Home didn't load")
+    sleep(4)
+    leaveTabBar()
+    press(.down)
+    let firstCard = focusedElement.label
+    press(.right)
+    XCTAssertNotEqual(focusedElement.label, firstCard, "Right didn't move along Continue Watching")
+    press(.left)
+    XCTAssertEqual(focusedElement.label, firstCard, "Left didn't go back to the first card")
+    press(.left)
+    XCTAssertTrue(onCircle, "Left on the first card didn't reach the circles")
+  }
+
+  /// Settings: Down from the gear reaches the page, then the options.
+  func testSettingsMovesDown() {
+    launch(["-AstraDemoTab", "settings"])
+    let appearance = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Appearance")).firstMatch
+    XCTAssertTrue(appearance.waitForExistence(timeout: 30), "Settings didn't open")
+    sleep(4)
+    var labels: [String] = []
+    for _ in 0..<5 {
+      press(.down)
+      labels.append(focusedElement.label)
+    }
+    shot("settings-moved-down")
+    print("ASTRA-SETTINGS", labels)
+    XCTAssertTrue(labels.contains { ["Change Server", "Index Now"].contains($0) }, "Down didn't reach the server band")
+    XCTAssertTrue(labels.contains { ["Frosted Glass", "OLED", "Light", "Violet", "Appearance"].contains($0) },
+      "Down didn't reach the settings themselves")
+    // Category list: down through the list changes the pane.
+    press(.left, times: 2)
+    press(.down)
+    shot("settings-category")
+    print("ASTRA-SETTINGS category", focusedElement.label)
+  }
+
+  /// Show Details: the seasons are tabs, starting on the season being watched.
+  func testSeasonTabs() {
+    // Severance with a Season 2 episode open: starts on Season 2.
+    launch(["-AstraDemoOpen", "205"])
+    XCTAssertTrue(detailsMore.waitForExistence(timeout: 30), "Details didn't open")
+    sleep(4)
+    if !focusedElement.exists { press(.down) }
+    var reached = false
+    for _ in 0..<4 where !reached {
+      press(.down)
+      reached = focusedElement.label.hasPrefix("Season")
+    }
+    XCTAssertTrue(reached, "Down didn't reach the season tabs")
+    shot("season-tabs")
+    let start = focusedElement.label
+    press(focusedElement.label == "Season 1" ? .right : .left)
+    XCTAssertNotEqual(focusedElement.label, start, "Couldn't move along the season tabs")
+    XCTAssertTrue(focusedElement.isSelected, "Moving onto a season tab didn't show it")
+    sleep(2)
+    shot("season-tabs-moved")
+  }
+
+  /// Movies: the chips sit below the top bar, not under it.
+  func testMoviesChipsClearTheTopBar() {
+    launch(["-AstraDemoTab", "movies"])
+    let chip = app.buttons["Unwatched"].firstMatch
+    XCTAssertTrue(chip.waitForExistence(timeout: 30), "Movies didn't load")
+    sleep(3)
+    let bar = app.buttons["Movies"].firstMatch
+    shot("movies-top")
+    if bar.exists {
+      XCTAssertGreaterThan(chip.frame.minY, bar.frame.maxY + 10, "The chips overlap the top bar")
+    }
+  }
+
   // MARK: Player
 
   func testPlayerControlsAndMenuCloses() throws {

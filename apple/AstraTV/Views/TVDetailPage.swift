@@ -26,8 +26,10 @@ struct TVDetailPage: View {
   @State private var related: [PlexHub] = []
   @State private var notOnServer = false
   @State private var error: String?
-  @State private var certification: String?
   @FocusState private var playFocused: Bool
+  /// The season tab that has focus (KP, 2026-11-16: tabs, not a dropdown).
+  @FocusState private var seasonFocus: String?
+  @State private var seasonLoad: Task<Void, Never>?
 
   private var shown: PlexMetadata { item ?? seed }
 
@@ -91,10 +93,6 @@ struct TVDetailPage: View {
       guard let key, parentShow?.ratingKey != key else { return }
       parentShow = try? await library.details(key)
     }
-    .task(id: titleItem.id) {
-      guard titleItem.officialRating == nil, titleItem.type == .movie || titleItem.type == .show else { return }
-      certification = await library.tmdbArtwork(for: titleItem)?.certification
-    }
   }
 
   // MARK: Header
@@ -104,19 +102,25 @@ struct TVDetailPage: View {
       TVLogoTitle(library: library, item: titleItem, maxWidth: 700, maxHeight: 200, textSize: 90)
         .padding(.bottom, 6)
 
+      // KP (2026-11-16), the same as the hero, the iPhone and the Mac:
+      // "2008 • 8 Seasons [TV-MA] [HD]" (a movie gives its length), the
+      // genres on their own line under it.
       HStack(spacing: 16) {
-        if let rating = titleItem.officialRating ?? certification {
-          RatingBox(text: rating, fontSize: 20)
-        }
-        let facts = TVFacts.line(titleItem).replacingOccurrences(of: " · ", with: "  •  ")
-        if !facts.isEmpty {
-          Text(facts)
-            .font(.system(size: 26, weight: .medium))
-            .foregroundStyle(Astra.Color.ink.opacity(0.9))
-            .lineLimit(1)
-        }
+        DetailMetaLine(
+          item: titleItem, library: library, showsGenres: false, fontSize: 27, separator: "  •  ",
+          ratingAfter: true, greyRating: true
+        )
+        .layoutPriority(1)
+        TVFormatChips(item: playTarget, fontSize: 18, showsRating: false)
       }
-      TVFormatChips(item: playTarget, fontSize: 18, showsRating: false)
+      .frame(height: 42)
+      if !titleItem.genres.isEmpty {
+        Text(titleItem.genres.prefix(3).map(\.tag).joined(separator: " · "))
+          .font(.system(size: 24, weight: .medium))
+          .foregroundStyle(Astra.Color.ink.opacity(0.65))
+          .lineLimit(1)
+          .padding(.top, -8)
+      }
 
       if let focus, focus.type == .episode {
         VStack(alignment: .leading, spacing: 6) {
@@ -254,35 +258,16 @@ struct TVDetailPage: View {
 
   // MARK: Episodes
 
-  /// KP (2026-11-14): a season dropdown, then the whole season.
+  /// KP (2026-11-16, Apple TV): the seasons as a row of tabs at the top,
+  /// starting on the season being watched (Entourage opens on Season 3).
+  /// Moving onto a tab shows that season; the whole season is listed below.
   private var episodesSection: some View {
     VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 24) {
-        if seasons.count > 1 {
-          Menu {
-            ForEach(seasons) { season in
-              Button {
-                Task { await selectSeason(season) }
-              } label: {
-                if season.id == selectedSeason?.id {
-                  Label(season.title, systemImage: "checkmark")
-                } else {
-                  Text(season.title)
-                }
-              }
-            }
-          } label: {
-            HStack(spacing: 12) {
-              Text(selectedSeason?.title ?? "Season")
-              Image(systemName: "chevron.down").font(.system(size: 18, weight: .bold))
-            }
-            .font(.system(size: 26, weight: .semibold))
-            .padding(.horizontal, 28)
-            .frame(height: 60)
-          }
-          .buttonStyle(TVGlassButtonStyle(chip: true))
-          .accessibilityLabel("Season, \(selectedSeason?.title ?? "")")
-        } else {
+      if seasons.count > 1 {
+        seasonTabs
+      }
+      HStack(spacing: 18) {
+        if seasons.count <= 1 {
           Text(selectedSeason?.title ?? "Episodes")
             .font(.system(size: 30, weight: .bold))
             .foregroundStyle(Astra.Color.ink)
@@ -294,8 +279,7 @@ struct TVDetailPage: View {
         }
       }
       .padding(.horizontal, TVLayout.leading)
-      .padding(.vertical, 12)
-      .focusSection()
+      .padding(.top, 4)
       ScrollView(.horizontal, showsIndicators: false) {
         LazyHStack(alignment: .top, spacing: 36) {
           ForEach(episodes) { episode in
@@ -310,6 +294,63 @@ struct TVDetailPage: View {
       }
       .scrollClipDisabled()
       .focusSection()
+    }
+  }
+
+  private var seasonTabs: some View {
+    ScrollViewReader { proxy in
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 16) {
+          ForEach(seasons) { season in
+            Button {
+              chooseSeason(season)
+            } label: {
+              Text(season.title)
+                .font(.system(size: 26, weight: .semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 30)
+                .frame(height: 62)
+            }
+            .buttonStyle(TVGlassButtonStyle(chip: true, selected: season.id == selectedSeason?.id))
+            .focused($seasonFocus, equals: season.ratingKey)
+            .accessibilityAddTraits(season.id == selectedSeason?.id ? .isSelected : [])
+            .id(season.ratingKey)
+          }
+        }
+        .padding(.horizontal, TVLayout.leading)
+        .padding(.vertical, 18)
+      }
+      .scrollClipDisabled()
+      .focusSection()
+      .onAppear { if let key = selectedSeason?.ratingKey { proxy.scrollTo(key, anchor: .center) } }
+      .onChange(of: selectedSeason?.ratingKey) { _, key in
+        if let key { withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(key, anchor: .center) } }
+      }
+    }
+    .onChange(of: seasonFocus) { old, new in
+      guard let new else { return }
+      // Coming into the row lands on the season that's showing.
+      if old == nil, let current = selectedSeason?.ratingKey, new != current {
+        seasonFocus = current
+        return
+      }
+      if let season = seasons.first(where: { $0.ratingKey == new }), season.id != selectedSeason?.id {
+        chooseSeason(season)
+      }
+    }
+  }
+
+  /// Shows a season's episodes. The tab lights up straight away; the list
+  /// follows a moment later, so sweeping across the tabs doesn't load each one.
+  private func chooseSeason(_ season: PlexMetadata) {
+    selectedSeason = season
+    seasonLoad?.cancel()
+    seasonLoad = Task {
+      try? await Task.pause(0.2)
+      guard !Task.isCancelled else { return }
+      let list = (try? await library.children(of: season.ratingKey)) ?? []
+      guard !Task.isCancelled, selectedSeason?.id == season.id else { return }
+      withAnimation(.easeInOut(duration: 0.2)) { episodes = list }
     }
   }
 

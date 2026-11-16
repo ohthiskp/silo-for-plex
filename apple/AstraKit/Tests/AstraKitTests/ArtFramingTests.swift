@@ -68,4 +68,53 @@ final class ArtFramingTests: XCTestCase {
   func testBadInputGivesZero() {
     XCTAssertEqual(ArtFraming.frame(boxWidth: 0, zoneHeight: 410, aspect: 1.7, limitY: 300), .zero)
   }
+
+  // MARK: Apple TV hero (KP, 2026-11-16): logo left, art right, faces clear of the logo.
+
+  private func side(_ focus: CGRect?) -> CGRect {
+    ArtFraming.side(
+      boxWidth: 1920, boxHeight: 900, aspect: 16.0 / 9.0, clearX: 1080, minX: 240, maxX: 760, defaultX: 420,
+      focus: focus)
+  }
+
+  func testTVHeroWithoutFacesSitsRightOfCentre() {
+    let r = side(nil)
+    XCTAssertEqual(r.minX, 420, accuracy: 0.001)
+    XCTAssertEqual(r.height, 900, accuracy: 0.001)
+    XCTAssertEqual(r.width, 1600, accuracy: 0.001)
+  }
+
+  func testTVHeroFaceInTheMiddleClearsTheLogo() {
+    // One face around the picture's centre.
+    let focus = CGRect(x: 0.42, y: 0.2, width: 0.16, height: 0.3)
+    let r = side(focus)
+    XCTAssertGreaterThanOrEqual(r.minX + focus.minX * r.width, 1080 - 0.5)
+    XCTAssertLessThanOrEqual(r.minX + focus.maxX * r.width, 1880 + 0.5)
+  }
+
+  func testTVHeroFaceAlreadyOnTheRightStaysPut() {
+    // Faces on the right of the art: no reason to push it further right.
+    let focus = CGRect(x: 0.65, y: 0.2, width: 0.15, height: 0.3)
+    XCTAssertEqual(side(focus).minX, 420, accuracy: 0.001)
+  }
+
+  func testTVHeroFaceAtTheRightEdgeStaysOnScreen() {
+    let focus = CGRect(x: 0.85, y: 0.2, width: 0.12, height: 0.3)
+    let r = side(focus)
+    XCTAssertLessThanOrEqual(r.minX + focus.maxX * r.width, 1880 + 0.5)
+    XCTAssertGreaterThanOrEqual(r.minX, 240)
+  }
+
+  func testTVHeroNeverPushedAllTheWayRight() {
+    // A face at the far left of the picture would need a huge shift: capped.
+    let focus = CGRect(x: 0.02, y: 0.2, width: 0.1, height: 0.3)
+    XCTAssertEqual(side(focus).minX, 760, accuracy: 0.001)
+  }
+
+  func testTVHeroWideGroupIsCentredRightOfTheLogo() {
+    let focus = CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.5)
+    let r = side(focus)
+    let mid = r.minX + focus.midX * r.width
+    XCTAssertEqual(mid, 1480, accuracy: 0.5)
+  }
 }

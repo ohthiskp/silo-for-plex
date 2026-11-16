@@ -20,11 +20,17 @@ struct TVSettingsPage: View {
         Text("Settings")
           .font(.system(size: 76, weight: .bold))
           .foregroundStyle(Astra.Color.ink)
+        // Each band is its own focus section, the full width of the page, so
+        // Down from anywhere on the top bar (the gear sits far right, past the
+        // band's buttons) always lands on the next band (KP, 2026-11-16:
+        // "you can't even go down").
         TVServerBand()
+          .focusSection()
         HStack(alignment: .top, spacing: 56) {
           categoryList
           pane
         }
+        .focusSection()
       }
       .padding(.horizontal, TVLayout.leading)
       .padding(.top, 20)

@@ -52,4 +52,44 @@ public enum ArtFraming {
     let left = min(0, max(boxWidth - width, boxWidth / 2 - centre * width))
     return CGRect(x: left, y: top, width: width, height: height)
   }
+
+  /// Apple TV's hero (KP, 2026-11-16): the title's logo and buttons sit on the
+  /// left, the sharp art sits to the right and the rest is a soft blur. The
+  /// art slides right only as far as it must for the faces (or main subject)
+  /// to clear the logo block, between `minX` and `maxX`, so it is never pushed
+  /// hard against the right edge.
+  ///
+  /// - Parameters:
+  ///   - boxWidth, boxHeight: the hero; the art is drawn `boxHeight` tall.
+  ///   - aspect: the picture's width / height.
+  ///   - clearX: faces should start right of this line (the logo block's edge).
+  ///   - rightMargin: faces should end this far from the right edge.
+  ///   - minX, maxX: how far right the picture's left edge may sit.
+  ///   - defaultX: where it sits when nothing was found in the picture.
+  ///   - focus: the faces (or main subject), normalized, top-left origin.
+  public static func side(
+    boxWidth: Double, boxHeight: Double, aspect: Double, clearX: Double, rightMargin: Double = 40,
+    minX: Double, maxX: Double, defaultX: Double, focus: CGRect? = nil
+  ) -> CGRect {
+    guard boxWidth > 0, boxHeight > 0, aspect > 0, maxX >= minX else { return .zero }
+    let width = boxHeight * aspect
+    var x = defaultX
+    if let focus, focus.width > 0 {
+      let region = boxWidth - rightMargin - clearX
+      let faceWidth = Double(focus.width) * width
+      if faceWidth <= region {
+        // Just far enough right that the faces start past the logo block,
+        // and never so far that they run off the right edge.
+        let clear = clearX - Double(focus.minX) * width
+        let onScreen = boxWidth - rightMargin - Double(focus.maxX) * width
+        x = max(minX, min(clear, onScreen))
+        x = max(x, min(defaultX, onScreen))
+      } else {
+        // Too many faces to clear the block: centre them in the space right of it.
+        x = clearX + region / 2 - Double(focus.midX) * width
+      }
+    }
+    x = min(maxX, max(minX, x))
+    return CGRect(x: x, y: 0, width: width, height: boxHeight)
+  }
 }
