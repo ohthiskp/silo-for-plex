@@ -196,7 +196,7 @@ private struct TVHeroInfo: View {
         .padding(.top, 26)
         Text(shown.genres.prefix(3).map(\.tag).joined(separator: " · "))
           .font(.system(size: 24, weight: .medium))
-          .foregroundStyle(Astra.Color.ink.opacity(0.65))
+          .foregroundStyle(Astra.Color.ink(onArt: true).opacity(0.65))
           .lineLimit(1)
           .frame(height: 30)
           .padding(.top, 6)
@@ -246,6 +246,8 @@ private struct TVHeroInfo: View {
       }
     }
     .frame(width: Self.blockWidth, alignment: .leading)
+    // White type on the artwork on every theme (KP, 2026-11-16: no light wash on heroes).
+    .astraOnArt()
     // Home opens on Play (or Details when the title can't play here), not on
     // the sidebar or the tab bar.
     .defaultFocus($focus, firstFocus, priority: .userInitiated)

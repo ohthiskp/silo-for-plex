@@ -189,6 +189,7 @@ struct GlassIconButtonStyle: ButtonStyle {
   /// White glyphs on dark glass; dark ones on the Light theme's bright glass.
   /// The player forces dark, so its controls stay white over video.
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.astraOnArt) private var onArt
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
@@ -196,7 +197,11 @@ struct GlassIconButtonStyle: ButtonStyle {
       .foregroundStyle(scheme == .light ? Astra.Color.ink : .white)
       .frame(width: size * Astra.Layout.controlScale, height: size * Astra.Layout.controlScale)
       .contentShape(Circle())
-      .astraGlass(in: Circle(), variant: variant, interactive: true)
+      // On artwork in the Light theme the glass picks up the bright page
+      // below and the white glyph vanished; a dark tint keeps it dark glass.
+      .astraGlass(
+        in: Circle(), variant: variant, interactive: true,
+        tint: onArt && AstraAppearance.shared.palette.isLight ? .black.opacity(0.35) : nil)
       .tvFocusLift(1.12)
       .scaleEffect(configuration.isPressed ? 0.94 : 1)
       .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
@@ -302,15 +307,37 @@ struct AmbientBackdrop: View {
     ZStack {
       Astra.Color.bg
       if let item, palette.ambient > 0 {
-        ArtworkImage(library: library, item: item, kind: .backdrop, width: 640, height: 360, placeholder: Color.clear)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #if os(macOS)
+          // Mac (KP, 2026-11-16: glitchy resizing): the art is blurred at a
+          // small fixed size and only scaled to the window, so a resize just
+          // stretches a finished picture instead of blurring the whole
+          // window again on every frame. No full-window glass layer either.
+          GeometryReader { geo in
+            let small = CGSize(width: 192, height: 108)
+            let scale = max(geo.size.width / small.width, geo.size.height / small.height)
+            ArtworkImage(library: library, item: item, kind: .backdrop, width: 320, height: 180, placeholder: Color.clear)
+              .frame(width: small.width, height: small.height)
+              .clipped()
+              .blur(radius: 7, opaque: true)
+              .drawingGroup()
+              .scaleEffect(scale)
+              .frame(width: geo.size.width, height: geo.size.height)
+          }
           .clipped()
-          .blur(radius: 60, opaque: true)
           .opacity(palette.ambient)
           .id(item.id)
           .astraTransition(.opacity)
-        Rectangle().fill(Color.clear)
-          .astraGlass(in: Rectangle())
+        #else
+          ArtworkImage(library: library, item: item, kind: .backdrop, width: 640, height: 360, placeholder: Color.clear)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .blur(radius: 60, opaque: true)
+            .opacity(palette.ambient)
+            .id(item.id)
+            .astraTransition(.opacity)
+          Rectangle().fill(Color.clear)
+            .astraGlass(in: Rectangle())
+        #endif
         Astra.Color.bg.opacity(palette.wash)
       }
     }

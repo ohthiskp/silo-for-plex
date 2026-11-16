@@ -130,21 +130,24 @@ struct RemoteImage<Placeholder: View>: View {
   var url: URL?
   var contentMode: ContentMode
   var placeholder: Placeholder
+  /// Where a fitted image sits in a larger box (a logo at the left, say).
+  var alignment: Alignment = .center
 
   @State private var image: PlatformImage?
   @State private var loadedURL: URL?
 
-  init(url: URL?, contentMode: ContentMode = .fill, placeholder: Placeholder) {
+  init(url: URL?, contentMode: ContentMode = .fill, placeholder: Placeholder, alignment: Alignment = .center) {
     self.url = url
     self.contentMode = contentMode
     self.placeholder = placeholder
+    self.alignment = alignment
     let hit = url.flatMap { ImagePipeline.shared.cached($0) }
     _image = State(initialValue: hit)
     _loadedURL = State(initialValue: hit == nil ? nil : url)
   }
 
   var body: some View {
-    ZStack {
+    ZStack(alignment: alignment) {
       placeholder
       if let image {
         Image(platformImage: image)
