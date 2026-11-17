@@ -48,8 +48,6 @@ public enum ByteRange {
     private var listener: NWListener?
     private let lock = NSLock()
     private var _port: UInt16?
-    /// Bytes read from the share per request; mpv reads ahead on its own.
-    let chunk = 2 << 20
 
     public init(resolver: @escaping Resolver) {
       self.resolver = resolver
@@ -140,6 +138,7 @@ public enum ByteRange {
       }
       do {
         let share = try await resolver(pieces[1], path)
+        let chunk = share.preferredChunkSize
         let size = try await share.size(of: path)
         let range: ClosedRange<Int64>?
         do {

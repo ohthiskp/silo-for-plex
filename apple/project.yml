@@ -77,6 +77,23 @@ targets:
         # TMDB read token for artwork and the streaming switcher, from the
         # TMDB_TOKEN build setting / environment (GitHub secret in CI). Empty: Plex artwork only.
         AstraTMDBToken: $(TMDB_TOKEN)
+        # Cloud drives (KP, 2026-11-17): Astra's registration with each service, from
+        # GitHub secrets of the same name. Empty: that service isn't offered.
+        # ASTRA_GOOGLE_CLIENT_ID is the part before ".apps.googleusercontent.com".
+        AstraGoogleClientID: $(ASTRA_GOOGLE_CLIENT_ID)
+        AstraDropboxAppKey: $(ASTRA_DROPBOX_APP_KEY)
+        AstraOneDriveClientID: $(ASTRA_ONEDRIVE_CLIENT_ID)
+        AstraBoxClientID: $(ASTRA_BOX_CLIENT_ID)
+        AstraBoxClientSecret: $(ASTRA_BOX_CLIENT_SECRET)
+        AstraPCloudClientID: $(ASTRA_PCLOUD_CLIENT_ID)
+        AstraPCloudClientSecret: $(ASTRA_PCLOUD_CLIENT_SECRET)
+        AstraYandexClientID: $(ASTRA_YANDEX_CLIENT_ID)
+        # Where the cloud sign-in pages send the browser back.
+        CFBundleURLTypes:
+          - CFBundleURLName: app.astra.oauth
+            CFBundleURLSchemes:
+              - astra
+              - com.googleusercontent.apps.$(ASTRA_GOOGLE_CLIENT_ID)
         # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
         # ASTRA_CRASH_TOKEN build setting (GitHub secret in CI). Empty: nothing is sent.
         AstraCrashToken: $(ASTRA_CRASH_TOKEN)
@@ -162,6 +179,23 @@ targets:
         NSBonjourServices: [_plexmediasvr._tcp, _smb._tcp]
         ITSAppUsesNonExemptEncryption: false
         AstraTMDBToken: $(TMDB_TOKEN)
+        # Cloud drives (KP, 2026-11-17): Astra's registration with each service, from
+        # GitHub secrets of the same name. Empty: that service isn't offered.
+        # ASTRA_GOOGLE_CLIENT_ID is the part before ".apps.googleusercontent.com".
+        AstraGoogleClientID: $(ASTRA_GOOGLE_CLIENT_ID)
+        AstraDropboxAppKey: $(ASTRA_DROPBOX_APP_KEY)
+        AstraOneDriveClientID: $(ASTRA_ONEDRIVE_CLIENT_ID)
+        AstraBoxClientID: $(ASTRA_BOX_CLIENT_ID)
+        AstraBoxClientSecret: $(ASTRA_BOX_CLIENT_SECRET)
+        AstraPCloudClientID: $(ASTRA_PCLOUD_CLIENT_ID)
+        AstraPCloudClientSecret: $(ASTRA_PCLOUD_CLIENT_SECRET)
+        AstraYandexClientID: $(ASTRA_YANDEX_CLIENT_ID)
+        # Where the cloud sign-in pages send the browser back.
+        CFBundleURLTypes:
+          - CFBundleURLName: app.astra.oauth
+            CFBundleURLSchemes:
+              - astra
+              - com.googleusercontent.apps.$(ASTRA_GOOGLE_CLIENT_ID)
         # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
         # ASTRA_CRASH_TOKEN build setting (GitHub secret in CI). Empty: nothing is sent.
         AstraCrashToken: $(ASTRA_CRASH_TOKEN)
@@ -224,6 +258,23 @@ targets:
         NSBonjourServices: [_plexmediasvr._tcp, _smb._tcp]
         ITSAppUsesNonExemptEncryption: false
         AstraTMDBToken: $(TMDB_TOKEN)
+        # Cloud drives (KP, 2026-11-17): Astra's registration with each service, from
+        # GitHub secrets of the same name. Empty: that service isn't offered.
+        # ASTRA_GOOGLE_CLIENT_ID is the part before ".apps.googleusercontent.com".
+        AstraGoogleClientID: $(ASTRA_GOOGLE_CLIENT_ID)
+        AstraDropboxAppKey: $(ASTRA_DROPBOX_APP_KEY)
+        AstraOneDriveClientID: $(ASTRA_ONEDRIVE_CLIENT_ID)
+        AstraBoxClientID: $(ASTRA_BOX_CLIENT_ID)
+        AstraBoxClientSecret: $(ASTRA_BOX_CLIENT_SECRET)
+        AstraPCloudClientID: $(ASTRA_PCLOUD_CLIENT_ID)
+        AstraPCloudClientSecret: $(ASTRA_PCLOUD_CLIENT_SECRET)
+        AstraYandexClientID: $(ASTRA_YANDEX_CLIENT_ID)
+        # Where the cloud sign-in pages send the browser back.
+        CFBundleURLTypes:
+          - CFBundleURLName: app.astra.oauth
+            CFBundleURLSchemes:
+              - astra
+              - com.googleusercontent.apps.$(ASTRA_GOOGLE_CLIENT_ID)
         # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
         # ASTRA_CRASH_TOKEN build setting (GitHub secret in CI). Empty: nothing is sent.
         AstraCrashToken: $(ASTRA_CRASH_TOKEN)

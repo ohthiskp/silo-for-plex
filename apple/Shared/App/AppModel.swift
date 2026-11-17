@@ -41,7 +41,7 @@ final class AppModel {
   var serverSwitch: ServerSwitch?
   let player = PlayerController()
   let downloads = DownloadStore()
-  /// Jellyfin, Emby and SMB sources next to Plex (Settings → Sources).
+  /// Jellyfin, Emby, SMB, WebDAV and cloud-drive sources next to Plex (the engine; KP designs its screens).
   let sources: SourcesModel
 
   let info: PlexClientInfo

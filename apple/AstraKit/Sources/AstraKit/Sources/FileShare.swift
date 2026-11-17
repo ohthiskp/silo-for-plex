@@ -18,8 +18,8 @@ public struct ShareEntry: Sendable, Hashable {
   }
 }
 
-/// A network share Astra reads files from (SMB today; NFS, WebDAV and FTP
-/// later). The app supplies the real one; tests use a folder in memory.
+/// A folder tree Astra reads files from: an SMB or WebDAV share, or a cloud
+/// drive. Tests use a folder in memory.
 public protocol FileShare: Sendable {
   /// The entries of a folder inside the share ("" is the top).
   func list(_ path: String) async throws -> [ShareEntry]
@@ -27,13 +27,42 @@ public protocol FileShare: Sendable {
   func size(of path: String) async throws -> Int64
   /// Up to `length` bytes from `offset`; fewer only at the end of the file.
   func read(_ path: String, offset: Int64, length: Int) async throws -> Data
+  /// How much the file server reads at a time: more for cloud drives, where
+  /// every read is a round trip to the internet.
+  var preferredChunkSize: Int { get }
 }
 
-/// Opens shares by name for one source (one server, one sign-in).
+extension FileShare {
+  public var preferredChunkSize: Int { 2 << 20 }
+}
+
+/// A share a provider offers: an SMB share, or a cloud drive (the account's
+/// own, or a Google shared drive). `id` goes in `SourceFolder.share`.
+public struct ShareRoot: Sendable, Hashable, Identifiable {
+  public var id: String
+  public var title: String
+
+  public init(id: String, title: String) {
+    self.id = id
+    self.title = title
+  }
+}
+
+/// Opens shares by name for one source (one server, or one cloud account).
 public protocol FileShareProvider: Sendable {
   /// The shares the server offers, for the Add Folder picker.
   func shareNames() async throws -> [String]
+  /// The same with display names (a cloud's drives have ids).
+  func roots() async throws -> [ShareRoot]
   func share(_ name: String) async throws -> any FileShare
+}
+
+extension FileShareProvider {
+  public func roots() async throws -> [ShareRoot] {
+    try await shareNames().map { ShareRoot(id: $0, title: $0) }
+  }
+
+  public func shareNames() async throws -> [String] { try await roots().map(\.id) }
 }
 
 public enum MediaFiles {

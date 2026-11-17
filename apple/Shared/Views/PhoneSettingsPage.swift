@@ -33,7 +33,6 @@ import SwiftUI
               .foregroundStyle(Astra.Color.ink)
           }
           PhoneServerCard()
-          PhoneSourcesCard()
           PhoneCard {
             PhoneLinkRow(title: "Appearance", value: AstraAppearance.shared.appTheme.title) { PhoneAppearancePage() }
             PhoneLinkRow(title: "Playback", value: "\(quality.title) · Next Episode \(nextEpisode ? "on" : "off")") {
@@ -87,8 +86,6 @@ import SwiftUI
   /// The pages Settings opens; also the CI screenshot names.
   enum PhoneSettingsDestination: String, Identifiable, Hashable {
     case appearance, playback, subtitles, library, downloads, server
-    // Sources (CI screenshots): Add Source, the demo share, Add Jellyfin.
-    case sources, source, addserver
 
     var id: String { rawValue }
 
@@ -100,9 +97,6 @@ import SwiftUI
       case .library: PhoneLibraryPage()
       case .downloads: PhoneDownloadsPage()
       case .server: PhoneServerPage()
-      case .sources: AddSourcePage()
-      case .source: SourceDetailPage(id: "demosmb1")
-      case .addserver: AddMediaServerPage(kind: .jellyfin)
       }
     }
   }
@@ -313,23 +307,6 @@ import SwiftUI
       .background(PhoneCard<EmptyView>.shape.fill(Astra.Color.ink.opacity(0.08)))
       .overlay(PhoneCard<EmptyView>.shape.strokeBorder(Astra.Color.hairline, lineWidth: 1))
       .clipShape(PhoneCard<EmptyView>.shape)
-    }
-  }
-
-  /// Jellyfin, Emby and network shares next to Plex (KP, 2026-11-17).
-  private struct PhoneSourcesCard: View {
-    @Environment(AppModel.self) private var app
-
-    var body: some View {
-      PhoneCard(
-        title: "Sources",
-        footer: app.sources.configs.isEmpty ? "Add Jellyfin, Emby or a network share. Their titles join your Plex library." : nil
-      ) {
-        ForEach(app.sources.configs) { config in
-          PhoneLinkRow(title: config.name, value: app.sources.line(for: config)) { SourceDetailPage(id: config.id) }
-        }
-        PhoneLinkRow(title: "Add Source") { AddSourcePage() }
-      }
     }
   }
 

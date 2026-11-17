@@ -36,19 +36,6 @@ enum Demo {
     return (item, PlaybackResolver.local(record, fileURL: URL(fileURLWithPath: path), resumeMs: nil))
   }
 
-  /// Settings → Sources in screenshots: one of each kind (nothing is contacted).
-  static let sources: [SourceConfig] = [
-    SourceConfig(
-      id: "demojf01", kind: .jellyfin, name: "Living Room Jellyfin", address: "http://192.168.1.20:8096", username: "kp",
-      userID: "demo", libraries: [SourceLibrary(id: "m", title: "Movies", type: "movie"), SourceLibrary(id: "s", title: "Shows", type: "show")]),
-    SourceConfig(
-      id: "demosmb1", kind: .smb, name: "NAS", address: "nas.local", username: "kp",
-      folders: [
-        SourceFolder(id: "f1", share: "Media", path: "Movies", content: .movies, title: "Movies"),
-        SourceFolder(id: "f2", share: "Media", path: "TV", content: .shows, title: "TV"),
-      ]),
-  ]
-
   /// A session on the fake server.
   static func session(info: PlexClientInfo) -> ServerSession {
     let client = PlexServerClient(

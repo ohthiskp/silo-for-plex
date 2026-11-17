@@ -76,8 +76,6 @@ import SwiftUI
         case .library:
           LibraryBlock()
           DownloadsBlock()
-        case .sources:
-          SourcesBlock()
         case .updates:
           UpdatesBlock()
           SettingsFooter()
@@ -87,7 +85,7 @@ import SwiftUI
   }
 
   enum MacSettingsCategory: String, CaseIterable, Identifiable {
-    case appearance, playback, subtitles, library, sources, updates
+    case appearance, playback, subtitles, library, updates
 
     var id: String { rawValue }
 
@@ -97,7 +95,6 @@ import SwiftUI
       case .playback: "Playback"
       case .subtitles: "Subtitles"
       case .library: "Library"
-      case .sources: "Sources"
       case .updates: "Updates and About"
       }
     }
@@ -434,57 +431,6 @@ import SwiftUI
         SettingSwitch(title: "HD and 4K badges", isOn: $qualityBadges)
         SettingSwitch(title: "Age ratings", isOn: $ratings)
         SettingSwitch(title: "Show Specials", isOn: $showSpecials)
-      }
-    }
-  }
-
-  /// Jellyfin, Emby and network shares next to Plex (KP, 2026-11-17).
-  private struct SourcesBlock: View {
-    @Environment(AppModel.self) private var app
-
-    var body: some View {
-      VStack(alignment: .leading, spacing: 10) {
-        SettingsCard(title: "Sources") {
-          ForEach(app.sources.configs) { config in
-            NavigationLink {
-              SourceDetailPage(id: config.id)
-            } label: {
-              SettingRow(title: config.name) { SourceRowValue(text: app.sources.line(for: config)) }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-          }
-          NavigationLink {
-            AddSourcePage()
-          } label: {
-            SettingRow(title: "Add Source…") { SourceRowValue(text: "") }
-              .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-        }
-        Text("Jellyfin, Emby and network shares join your Plex library. Astra always plays the original file.")
-          .astraFont(size: 12.5)
-          .foregroundStyle(Astra.Color.muted)
-          .padding(.leading, 4)
-      }
-    }
-  }
-
-  private struct SourceRowValue: View {
-    var text: String
-
-    var body: some View {
-      HStack(spacing: 6) {
-        if !text.isEmpty {
-          Text(text)
-            .astraFont(size: 14.5)
-            .foregroundStyle(Astra.Color.muted)
-            .lineLimit(1)
-            .truncationMode(.middle)
-        }
-        Image(systemName: "chevron.right")
-          .astraFont(size: 12, weight: .semibold)
-          .foregroundStyle(Astra.Color.muted)
       }
     }
   }
