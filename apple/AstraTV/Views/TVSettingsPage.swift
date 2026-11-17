@@ -81,6 +81,7 @@ struct TVSettingsPage: View {
       case .playback: TVPlaybackPane()
       case .subtitles: TVSubtitlesPane()
       case .library: TVLibraryPane()
+      case .sources: TVSourcesPane()
       case .about: TVAboutPane()
       }
     }
@@ -93,7 +94,7 @@ struct TVSettingsPage: View {
 }
 
 enum TVSettingsCategory: String, CaseIterable, Identifiable {
-  case appearance, playback, subtitles, library, about
+  case appearance, playback, subtitles, library, sources, about
 
   var id: String { rawValue }
 
@@ -103,6 +104,7 @@ enum TVSettingsCategory: String, CaseIterable, Identifiable {
     case .playback: "Playback"
     case .subtitles: "Subtitles"
     case .library: "Library"
+    case .sources: "Sources"
     case .about: "About"
     }
   }
@@ -619,6 +621,35 @@ private struct TVLibraryPane: View {
     libraryQuality == .hd
       ? "One copy of each title, in HD. 4K libraries are hidden on this Apple TV."
       : "One copy of each title: the 4K one when there is one, otherwise HD."
+  }
+}
+
+// MARK: - Sources
+
+/// Jellyfin, Emby and network shares next to Plex (KP, 2026-11-17).
+private struct TVSourcesPane: View {
+  @Environment(AppModel.self) private var app
+
+  var body: some View {
+    TVSettingsCard(footer: "Jellyfin, Emby and network shares join your Plex library. Astra always plays the original file.") {
+      ForEach(app.sources.configs) { config in
+        NavigationLink {
+          SourceDetailPage(id: config.id)
+        } label: {
+          TVSettingLine(title: config.name) {
+            Text(app.sources.line(for: config)).font(.system(size: 25)).opacity(0.6).lineLimit(1)
+            TVChevron()
+          }
+        }
+        .buttonStyle(TVSettingRowStyle())
+      }
+      NavigationLink {
+        AddSourcePage()
+      } label: {
+        TVSettingLine(title: "Add Source") { TVChevron() }
+      }
+      .buttonStyle(TVSettingRowStyle())
+    }
   }
 }
 

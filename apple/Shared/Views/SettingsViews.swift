@@ -180,7 +180,7 @@ struct SettingsRow: View {
 }
 
 /// A Form page with Astra's background.
-private struct SettingsForm<Content: View>: View {
+struct SettingsForm<Content: View>: View {
   @ViewBuilder var content: Content
 
   var body: some View {

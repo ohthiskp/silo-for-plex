@@ -25,6 +25,11 @@ packages:
   MPVKit:
     url: https://github.com/edde746/mpv-build
     revision: 43324582df6c1413c8ea2094563f5e3517317eef
+  # SMB network shares (KP, 2026-11-17: "add support for all that infuse has").
+  # MIT, statically linking libsmb2 (LGPL-2.1, GPL-3.0 compatible). Exact so it only changes on purpose.
+  AMSMB2:
+    url: https://github.com/amosavian/AMSMB2
+    exactVersion: 4.0.3
   # In-app updates on Mac (MIT).
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
@@ -51,6 +56,7 @@ targets:
       - package: AstraKit
       - package: MPVKit
         product: MPVKit
+      - package: AMSMB2
       - package: Sparkle
     info:
       path: AstraMac/Resources/Info.plist
@@ -78,7 +84,7 @@ targets:
           # Plex servers on the LAN are plain http on 32400.
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
-        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
+        NSLocalNetworkUsageDescription: Astra connects to your Plex, Jellyfin and Emby servers and network shares on your local network.
     entitlements:
       path: AstraMac/Resources/Astra.entitlements
       properties:
@@ -122,6 +128,7 @@ targets:
       - package: AstraKit
       - package: MPVKit
         product: MPVKit
+      - package: AMSMB2
     info:
       path: AstraiOS/Resources/Info.plist
       properties:
@@ -147,8 +154,8 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
-        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
-        NSBonjourServices: [_plexmediasvr._tcp]
+        NSLocalNetworkUsageDescription: Astra connects to your Plex, Jellyfin and Emby servers and network shares on your local network.
+        NSBonjourServices: [_plexmediasvr._tcp, _smb._tcp]
         ITSAppUsesNonExemptEncryption: false
         AstraTMDBToken: $(TMDB_TOKEN)
         # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
@@ -192,6 +199,7 @@ targets:
       - package: AstraKit
       - package: MPVKit
         product: MPVKit
+      - package: AMSMB2
     info:
       path: AstraTV/Resources/Info.plist
       properties:
@@ -206,8 +214,8 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
-        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
-        NSBonjourServices: [_plexmediasvr._tcp]
+        NSLocalNetworkUsageDescription: Astra connects to your Plex, Jellyfin and Emby servers and network shares on your local network.
+        NSBonjourServices: [_plexmediasvr._tcp, _smb._tcp]
         ITSAppUsesNonExemptEncryption: false
         AstraTMDBToken: $(TMDB_TOKEN)
         # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
