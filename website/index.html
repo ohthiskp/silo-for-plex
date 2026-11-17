@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Astra</title>
+<meta name="description" content="Astra is a Plex player for iPhone, Mac and Apple TV. It plays the file on your server as it is, never transcoded.">
+<link rel="icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0908; --raised:#14120f; --fg:#f2efea; --muted:#a8a29a; --faint:#8a847b;
+  --rule:rgba(242,239,234,.12); --orange:#f08a45;
+  --display:"Archivo",-apple-system,sans-serif; --text:"Archivo",-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);scrollbar-color:#3a3631 var(--bg)}
+body{background:var(--bg);color:var(--fg);font:400 17px/1.55 var(--text);font-variation-settings:"wdth" 100;-webkit-font-smoothing:antialiased;overflow-x:hidden;font-variant-numeric:tabular-nums}
+::selection{background:var(--orange);color:#140a03}
+a{color:inherit;text-decoration:none}
+a:focus-visible{outline:2px solid var(--orange);outline-offset:3px;border-radius:6px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+.mark{display:flex;align-items:center;gap:10px;font-weight:700;font-size:19px;letter-spacing:-.01em}
+.mark img{width:30px;height:30px;border-radius:8px}
+.top nav{display:flex;gap:28px;align-items:center;font-size:15px;color:var(--muted)}
+.top nav a:hover{color:var(--fg)}
+.top nav .dl{color:var(--fg);font-weight:600}
+
+/* opening */
+.open{padding:72px 0 0}
+h1{font-family:var(--display);font-variation-settings:"wdth" 72;font-weight:800;font-size:clamp(52px,9.5vw,128px);line-height:.92;letter-spacing:-.025em;max-width:11ch;text-wrap:balance}
+.open-row{display:grid;grid-template-columns:1fr 360px;gap:48px;align-items:end}
+.intro{color:var(--muted);font-size:19px;max-width:36ch}
+.intro strong{color:var(--fg);font-weight:600}
+.actions{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:999px;font-weight:600;font-size:16px;transition:background .2s,color .2s}
+.btn.solid{background:var(--fg);color:#0a0908}
+.btn.solid:hover{background:#fff}
+.btn.line{border:1px solid var(--rule);color:var(--fg)}
+.btn.line:hover{border-color:rgba(242,239,234,.35)}
+.btn svg{width:17px;height:17px}
+
+.stage{position:relative;margin-top:64px}
+.mac{border-radius:14px;overflow:hidden;border:1px solid var(--rule);box-shadow:0 30px 60px -20px rgba(0,0,0,.8)}
+.mac img,.phone img,.shot img{display:block;width:100%;height:auto}
+.phone{position:absolute;right:-12px;bottom:-56px;width:23%;max-width:250px;border-radius:40px;overflow:hidden;border:8px solid #1a1816;box-shadow:0 24px 50px -10px rgba(0,0,0,.85)}
+
+/* facts */
+section{padding:140px 0 0}
+h2{font-family:var(--display);font-variation-settings:"wdth" 80;font-weight:750;font-size:clamp(34px,5vw,60px);line-height:1;letter-spacing:-.02em;max-width:16ch;text-wrap:balance}
+.facts{display:grid;grid-template-columns:repeat(2,1fr);column-gap:64px;margin-top:56px;border-top:1px solid var(--rule)}
+.fact{display:grid;grid-template-columns:180px 1fr;gap:24px;padding:26px 0;border-bottom:1px solid var(--rule)}
+.fact h3{font-size:17px;font-weight:650}
+.fact p{color:var(--muted);font-size:16px;max-width:44ch}
+
+/* screens */
+.pair{display:grid;grid-template-columns:5fr 7fr;gap:56px;align-items:center}
+.pair.flip{grid-template-columns:7fr 5fr}
+.pair p{color:var(--muted);font-size:18px;margin-top:18px;max-width:40ch}
+.shot{border-radius:12px;overflow:hidden;border:1px solid var(--rule)}
+.tags{margin-top:22px;font-size:14px;color:var(--faint);letter-spacing:.01em}
+.tags span+span::before{content:"·";margin:0 10px;color:#4a453f}
+
+/* get */
+.get h2{max-width:none}
+.rows{margin-top:44px;border-top:1px solid var(--rule)}
+.row{display:grid;grid-template-columns:200px 1fr auto;gap:24px;align-items:center;padding:24px 0;border-bottom:1px solid var(--rule)}
+.row b{font-size:22px;font-weight:700;font-variation-settings:"wdth" 85}
+.row p{color:var(--muted);font-size:16px}
+.row .btn{padding:10px 18px;font-size:15px}
+
+footer{margin-top:140px;border-top:1px solid var(--rule);padding:28px 0 56px;color:var(--faint);font-size:14px}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+footer a{text-decoration:underline;text-underline-offset:3px;text-decoration-color:#4a453f}
+
+@media (max-width:860px){
+  .top nav a:not(.dl){display:none}
+  .open{padding-top:40px}
+  .open-row,.pair,.pair.flip{grid-template-columns:1fr;gap:28px}
+  .pair.flip .shot{order:2}
+  .phone{width:34%;right:8px;bottom:-40px;border-width:5px;border-radius:24px}
+  .facts{grid-template-columns:1fr}
+  .fact{grid-template-columns:1fr;gap:6px}
+  .row{grid-template-columns:1fr;gap:8px}
+  .row .btn{justify-self:start;margin-top:6px}
+  section{padding-top:96px}
+  footer{margin-top:96px}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <a class="mark" href="#"><img src="img/icon.png" alt="">Astra</a>
+    <nav>
+      <a href="#what">What it does</a>
+      <a href="#screens">Apple TV</a>
+      <a class="dl" href="#get">Download</a>
+    </nav>
+  </header>
+
+  <div class="open">
+    <div class="open-row">
+      <h1>Watch your Plex the way it was shot.</h1>
+      <div>
+        <p class="intro">Astra is a Plex player for iPhone, Mac and Apple TV. <strong>It plays the file on your server as it is.</strong> No transcoding, no quality drop.</p>
+        <div class="actions">
+          <a class="btn solid" href="#get"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9s-1.9-.8-3.2-.8C6.5 7.1 5 8.1 4.1 9.6c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.6-1-2.7-4zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>Download for Mac</a>
+          <a class="btn line" href="#get">iPhone &amp; Apple TV beta</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="mac"><img src="img/mac-home.jpg" alt="Astra Home screen on Mac" width="1392" height="916"></div>
+      <div class="phone"><img src="img/iphone-show.jpg" alt="A show page in Astra on iPhone" width="460" height="1000"></div>
+    </div>
+  </div>
+</div>
+
+<section id="what">
+  <div class="wrap">
+    <h2>A player, not a streaming service.</h2>
+    <div class="facts">
+      <div class="fact"><h3>Direct play</h3><p>Everything goes through mpv. Your 80 GB remux plays as an 80 GB remux.</p></div>
+      <div class="fact"><h3>Dolby and HDR</h3><p>Dolby Vision, HDR10 and Atmos show up on the title page and play as mastered.</p></div>
+      <div class="fact"><h3>Resume anywhere</h3><p>Progress syncs through Plex. Stop on the TV, finish on the train.</p></div>
+      <div class="fact"><h3>What's trending</h3><p>See what's popular on Netflix, Disney+ and the rest, then play the copy on your server.</p></div>
+      <div class="fact"><h3>Downloads</h3><p>Take movies and episodes with you on iPhone and Mac, in the original file.</p></div>
+      <div class="fact"><h3>Live TV</h3><p>A channel guide with favourites and search, kept apart from your library.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap pair">
+    <div>
+      <h2>Every title gets its real logo and clean art.</h2>
+      <p>Year, rating, runtime and formats on one line. Press Play and it starts where you left off.</p>
+      <div class="tags"><span>4K</span><span>Dolby Vision</span><span>Dolby Atmos</span><span>HDR</span></div>
+    </div>
+    <div class="shot"><img src="img/mac-details.jpg" alt="A movie's title page in Astra on Mac" width="1392" height="916" loading="lazy"></div>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="wrap pair flip">
+    <div class="shot"><img src="img/tv-home.jpg" alt="Astra Home screen on Apple TV" width="1280" height="720" loading="lazy"></div>
+    <div>
+      <h2>And on the TV.</h2>
+      <p>Built for the Siri Remote. Same Home, same title pages, same player.</p>
+    </div>
+  </div>
+</section>
+
+<section class="get" id="get">
+  <div class="wrap">
+    <h2>Get Astra. It's free.</h2>
+    <div class="rows">
+      <div class="row"><b>Mac</b><p>Signed app. Updates itself. macOS 26 or later.</p><a class="btn solid" href="#">Download .dmg</a></div>
+      <div class="row"><b>iPhone</b><p>Beta through TestFlight. iOS 26 or later.</p><a class="btn line" href="#">Open TestFlight</a></div>
+      <div class="row"><b>Apple TV</b><p>Same TestFlight link. tvOS 26 or later.</p><a class="btn line" href="#">Open TestFlight</a></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Astra is open source under GPL-3.0. <a href="https://github.com/ohthiskp/silo-for-plex">Source on GitHub</a></span>
+    <span>Not affiliated with Plex Inc.</span>
+  </div>
+</footer>
+
+</body>
+</html>
