@@ -322,7 +322,7 @@ private struct GridPoster: View {
           }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .watchedLook(library.isWatched(item), corner: 12, mark: 24, inset: 6)
+        .watchedLook(library.isWatched(item), corner: 12, mark: 17, inset: 8)
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Astra.Color.hairline))
         .contentShape(Rectangle())
     }
