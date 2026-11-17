@@ -32,11 +32,11 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--fg);outline-offset:
 .top nav .dl{color:var(--fg);font-weight:600}
 
 /* hero */
-.hero{position:relative;overflow-x:clip;padding:56px 0 40px;text-align:center}
-h1{font-family:var(--serif);font-weight:400;font-size:clamp(56px,10vw,132px);line-height:.95;letter-spacing:-.03em;font-optical-sizing:auto;text-wrap:balance}
-
-.intro{position:relative;z-index:2;color:var(--muted);font-size:clamp(18px,2vw,21px);max-width:34em;margin:22px auto 0;text-wrap:balance}
-.actions{position:relative;z-index:2;display:flex;gap:10px;justify-content:center;margin-top:30px;flex-wrap:wrap}
+.hero{position:relative;overflow-x:clip;padding:56px 0 0}
+.hero-copy{display:grid;grid-template-columns:1.8fr 1fr;gap:48px;align-items:end;position:relative;z-index:3}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(52px,7.6vw,108px);line-height:.95;letter-spacing:-.03em;font-optical-sizing:auto;text-wrap:balance}
+.intro{color:var(--muted);font-size:clamp(18px,1.6vw,20px);max-width:30em;text-wrap:pretty}
+.actions{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:999px;font-weight:600;font-size:16px;transition:background .2s,border-color .2s}
 .btn.solid{background:var(--fg);color:#0a0908}
 .btn.solid:hover{background:#fff}
@@ -44,23 +44,26 @@ h1{font-family:var(--serif);font-weight:400;font-size:clamp(56px,10vw,132px);lin
 .btn.line:hover{border-color:rgba(244,241,236,.5)}
 .btn svg{width:17px;height:17px}
 
-/* the TV */
-.screen-area{position:relative;margin:72px auto 0;max-width:1080px}
-.ambient{position:absolute;inset:-18% -22%;z-index:0;pointer-events:none}
-.ambient img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(70px) saturate(1.7) brightness(1.05);opacity:0;transition:opacity 1.6s ease}
-.ambient img.on{opacity:.95}
-.tv{position:relative;z-index:1;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#000;border:10px solid #0d0c0e;box-shadow:0 0 0 1px rgba(255,255,255,.07),0 40px 80px -30px rgba(0,0,0,.9)}
-.tv img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.02);transition:opacity 1.2s ease,transform 6s ease-out}
-.tv img.on{opacity:1;transform:scale(1)}
-.stand{position:relative;z-index:1;width:22%;height:14px;margin:0 auto;background:linear-gradient(#18171a,#0d0c0e);border-radius:0 0 10px 10px}
-
-.picker{position:relative;z-index:2;display:flex;justify-content:center;gap:6px;margin-top:34px;flex-wrap:wrap}
-.picker button{all:unset;cursor:pointer;padding:8px 14px;border-radius:999px;font:500 14px var(--sans);color:var(--faint);position:relative;overflow:hidden}
-.picker button:hover{color:var(--fg)}
-.picker button[aria-current="true"]{color:var(--fg);background:rgba(244,241,236,.08)}
-.picker button .bar{position:absolute;left:14px;right:14px;bottom:3px;height:2px;border-radius:2px;background:rgba(244,241,236,.6);transform:scaleX(0);transform-origin:left}
-.picker button[aria-current="true"] .bar{animation:fill var(--dur,6s) linear forwards}
-@keyframes fill{to{transform:scaleX(1)}}
+/* the room */
+.room{position:relative;max-width:1440px;margin:40px auto 0;aspect-ratio:16/7.6;overflow:hidden}
+.ambient{position:absolute;left:16%;right:16%;top:0;height:82%;z-index:0;pointer-events:none}
+.ambient img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(80px) saturate(2) brightness(1.35);opacity:0;transition:opacity 1.6s ease}
+.ambient img.on{opacity:.9}
+.console{position:absolute;left:6%;right:6%;top:78%;bottom:-4%;z-index:1;background:linear-gradient(#141210,#0a0908 18%,#070606);border-top:1px solid rgba(255,255,255,.07);box-shadow:0 -1px 0 rgba(0,0,0,.6)}
+.spill{position:absolute;left:12%;right:12%;top:0;height:40%;overflow:hidden;mix-blend-mode:screen;-webkit-mask:linear-gradient(#000,transparent);mask:linear-gradient(#000,transparent)}
+.spill img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(30px) saturate(1.6);opacity:0;transition:opacity 1.6s ease}
+.spill img.on{opacity:.25}
+.plant{position:absolute;z-index:2;left:9%;width:11%;bottom:22%}
+.books{position:absolute;z-index:2;right:10%;width:10%;bottom:22%}
+.tv-wrap{position:absolute;z-index:2;left:25%;width:50%;top:16%}
+.tv{position:relative;aspect-ratio:16/9;overflow:hidden;background:#000;border:5px solid #050505;border-radius:4px;box-shadow:0 0 0 1px #23211f}
+.tv img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.2s ease}
+.tv img.on{opacity:1}
+.tv::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.05),transparent 40%);pointer-events:none}
+.foot{position:absolute;top:100%;width:4%;height:0;border-top:3px solid #2a2826}
+.foot.l{left:9%;transform-origin:right;transform:rotate(-28deg) translate(0,8px)}
+.foot.r{right:9%;transform-origin:left;transform:rotate(28deg) translate(0,8px)}
+.vignette{position:absolute;inset:0;z-index:4;pointer-events:none;background:radial-gradient(120% 90% at 50% 40%,transparent 55%,var(--bg) 100%),linear-gradient(var(--bg),transparent 8%,transparent 88%,var(--bg))}
 
 /* sections */
 section{position:relative;overflow-x:clip;padding:150px 0 0}
@@ -98,8 +101,13 @@ footer a{text-decoration:underline;text-underline-offset:3px;text-decoration-col
 @media (max-width:860px){
   .top nav a:not(.dl){display:none}
   .hero{padding-top:32px}
-  .screen-area{margin-top:48px}
-  .tv{border-width:5px;border-radius:9px}
+  .hero-copy{grid-template-columns:1fr;gap:20px}
+  .room{aspect-ratio:4/3;margin-top:24px}
+  .tv-wrap{left:6%;width:88%;top:12%}
+  .ambient{left:-4%;right:-4%;top:2%;height:80%}
+  .console{top:81%;left:-2%;right:-2%}
+  .plant,.books{display:none}
+  .tv{border-width:3px}
   .pair,.pair.flip{grid-template-columns:1fr;gap:32px}
   .pair.flip .shot{order:2}
   .facts{grid-template-columns:1fr}
@@ -110,8 +118,7 @@ footer a{text-decoration:underline;text-underline-offset:3px;text-decoration-col
   footer{margin-top:100px}
 }
 @media (prefers-reduced-motion:reduce){
-  .tv img,.ambient img{transition:none;transform:none}
-  .picker button .bar{display:none}
+  .tv img,.ambient img{transition:none}
 }
 </style>
 </head>
@@ -129,38 +136,65 @@ footer a{text-decoration:underline;text-underline-offset:3px;text-decoration-col
 </div>
 
 <header class="hero">
-  <div class="wrap">
+  <div class="wrap hero-copy">
     <h1>Make yourself at home.</h1>
-    <p class="intro">Astra turns your movie and TV collection into your own streaming service, on iPhone, Mac and Apple TV. Every film in the quality it was made in.</p>
-    <div class="actions">
-      <a class="btn solid mac-dl" href="https://github.com/ohthiskp/silo-for-plex/releases"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9s-1.9-.8-3.2-.8C6.5 7.1 5 8.1 4.1 9.6c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.6-1-2.7-4zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>Download for Mac</a>
-      <a class="btn line" href="#get">iPhone &amp; Apple TV beta</a>
+    <div>
+      <p class="intro">Astra turns your movie and TV collection into your own streaming service, on iPhone, Mac and Apple TV. Every film in the quality it was made in.</p>
+      <div class="actions">
+        <a class="btn solid mac-dl" href="https://github.com/ohthiskp/silo-for-plex/releases"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9s-1.9-.8-3.2-.8C6.5 7.1 5 8.1 4.1 9.6c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.6-1-2.7-4zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>Download for Mac</a>
+        <a class="btn line" href="#get">iPhone &amp; Apple TV beta</a>
+      </div>
     </div>
+  </div>
 
-    <div class="screen-area">
-      <div class="ambient" aria-hidden="true">
+  <div class="room">
+    <div class="ambient" aria-hidden="true">
+      <img class="on" src="img/hero/dune-glow.jpg" alt="">
+      <img src="img/hero/dark-knight-glow.jpg" alt="">
+      <img src="img/hero/infinity-war-glow.jpg" alt="">
+      <img src="img/hero/severance-glow.jpg" alt="">
+      <img src="img/hero/home-glow.jpg" alt="">
+    </div>
+    <div class="console" aria-hidden="true">
+      <div class="spill">
         <img class="on" src="img/hero/dune-glow.jpg" alt="">
-        <img src="img/hero/avatar-glow.jpg" alt="">
+        <img src="img/hero/dark-knight-glow.jpg" alt="">
+        <img src="img/hero/infinity-war-glow.jpg" alt="">
         <img src="img/hero/severance-glow.jpg" alt="">
-        <img src="img/hero/mario-glow.jpg" alt="">
-        <img src="img/hero/heart-glow.jpg" alt="">
-      </div>
-      <div class="tv">
-        <img class="on" src="img/hero/dune.jpg" alt="Dune: Part Two in Astra on Apple TV" width="1280" height="720">
-        <img src="img/hero/avatar.jpg" alt="Avatar: Fire and Ash on the Astra Home screen" width="1280" height="720" loading="lazy">
-        <img src="img/hero/severance.jpg" alt="Severance in Astra with its seasons" width="1280" height="720" loading="lazy">
-        <img src="img/hero/mario.jpg" alt="The Super Mario Galaxy Movie on the Astra Home screen" width="1280" height="720" loading="lazy">
-        <img src="img/hero/heart.jpg" alt="Your Heart Will Be Broken on the Astra Home screen" width="1280" height="720" loading="lazy">
-      </div>
-      <div class="stand"></div>
-      <div class="picker" role="group" aria-label="Choose a title">
-        <button aria-current="true">Dune: Part Two<span class="bar"></span></button>
-        <button>Avatar<span class="bar"></span></button>
-        <button>Severance<span class="bar"></span></button>
-        <button>Mario Galaxy<span class="bar"></span></button>
-        <button>Your Heart Will Be Broken<span class="bar"></span></button>
+        <img src="img/hero/home-glow.jpg" alt="">
       </div>
     </div>
+    <svg class="plant" viewBox="0 0 200 300" aria-hidden="true">
+      <g fill="#0c0c0f">
+        <path d="M70 220 Q60 260 72 300 L128 300 Q140 260 130 220 Z"/>
+        <path d="M100 222 C 96 170 70 120 30 96 C 58 132 80 170 96 222 Z"/>
+        <path d="M100 222 C 104 160 130 108 178 82 C 146 122 120 164 104 222 Z"/>
+        <path d="M98 222 C 90 150 96 80 112 20 C 116 90 110 160 104 222 Z"/>
+        <path d="M96 222 C 70 190 40 180 6 186 C 40 196 70 206 94 224 Z"/>
+        <path d="M104 222 C 130 196 160 186 196 190 C 162 200 132 210 106 224 Z"/>
+        <path d="M99 222 C 80 160 52 120 62 52 C 80 110 96 160 103 222 Z"/>
+        <path d="M101 222 C 120 170 150 140 150 60 C 136 120 118 170 103 222 Z"/>
+      </g>
+    </svg>
+    <svg class="books" viewBox="0 0 220 120" aria-hidden="true">
+      <g fill="#0c0c0f">
+        <rect x="0" y="92" width="150" height="28" rx="2"/>
+        <rect x="10" y="66" width="132" height="26" rx="2" fill="#0f0f12"/>
+        <rect x="4" y="44" width="140" height="22" rx="2"/>
+        <path d="M170 120 Q160 92 172 70 Q178 56 186 56 Q194 56 200 70 Q212 92 202 120 Z" fill="#0f0f12"/>
+      </g>
+    </svg>
+    <div class="tv-wrap">
+      <div class="tv">
+        <img class="on" src="img/hero/dune.jpg" alt="Dune: Part Two in Astra on Apple TV" width="1920" height="1080">
+        <img src="img/hero/dark-knight.jpg" alt="The Dark Knight in Astra on Apple TV" width="1920" height="1080" loading="lazy">
+        <img src="img/hero/infinity-war.jpg" alt="Avengers: Infinity War in Astra on Apple TV" width="1920" height="1080" loading="lazy">
+        <img src="img/hero/severance.jpg" alt="Severance in Astra on Apple TV" width="1920" height="1080" loading="lazy">
+        <img src="img/hero/home.jpg" alt="The Astra Home screen on Apple TV" width="1920" height="1080" loading="lazy">
+      </div>
+      <i class="foot l"></i><i class="foot r"></i>
+    </div>
+    <div class="vignette" aria-hidden="true"></div>
   </div>
 </header>
 
@@ -173,7 +207,7 @@ footer a{text-decoration:underline;text-underline-offset:3px;text-decoration-col
       <div class="fact"><h3>Pick up anywhere</h3><p>Stop on the TV, finish on the train. Your place follows you between devices.</p></div>
       <div class="fact"><h3>What's trending</h3><p>See what's popular on Netflix, Disney+ and the rest, then play your own copy.</p></div>
       <div class="fact"><h3>Downloads</h3><p>Take movies and episodes with you on iPhone and Mac, in the original file.</p></div>
-      <div class="fact"><h3>Live TV</h3><p>A channel guide with favourites and search, kept apart from your library.</p></div>
+      <div class="fact"><h3>Watchlist</h3><p>Save anything you spot, from any screen. It's waiting on every device.</p></div>
     </div>
   </div>
 </section>
@@ -216,19 +250,17 @@ footer a{text-decoration:underline;text-underline-offset:3px;text-decoration-col
   const DUR = 6000;
   const shots = [...document.querySelectorAll('.tv img')];
   const glows = [...document.querySelectorAll('.ambient img')];
-  const btns = [...document.querySelectorAll('.picker button')];
+  const spills = [...document.querySelectorAll('.spill img')];
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let i = 0, timer;
   function show(n){
     i = (n + shots.length) % shots.length;
     shots.forEach((s,k)=>s.classList.toggle('on',k===i));
     glows.forEach((g,k)=>g.classList.toggle('on',k===i));
-    btns.forEach((b,k)=>{ b.setAttribute('aria-current', k===i); const bar=b.querySelector('.bar'); bar.style.animation='none'; bar.offsetWidth; bar.style.animation=''; });
+    spills.forEach((g,k)=>g.classList.toggle('on',k===i));
     clearTimeout(timer);
     if(!reduce) timer = setTimeout(()=>show(i+1), DUR);
   }
-  btns.forEach((b,k)=>b.addEventListener('click',()=>show(k)));
-  document.documentElement.style.setProperty('--dur', DUR+'ms');
   show(0);
   // Point Mac buttons at the newest Mac build's zip.
   fetch('https://api.github.com/repos/ohthiskp/silo-for-plex/releases?per_page=20')
