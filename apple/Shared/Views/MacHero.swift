@@ -143,6 +143,9 @@
 
     @State private var url: URL?
     @State private var focus: ArtFocus?
+    /// The art shows once it's framed, so it never slides to a new place
+    /// after it appears (that jump read as a glitch on every Details open).
+    @State private var ready = false
 
     var body: some View {
       GeometryReader { geo in
@@ -178,11 +181,13 @@
             .offset(x: rect.minX)
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .opacity(ready ? 1 : 0)
       }
       .clipped()
       .allowsHitTesting(false)
       .accessibilityHidden(true)
       .task(id: "\(item.id)|\(kind)") {
+        ready = false
         focus = nil
         let found = await library.artworkURL(for: item, kind, width: 1920, height: 1080)
         guard !Task.isCancelled else { return }
@@ -190,12 +195,27 @@
         guard let found else { return }
         if let hit = await ArtFocusStore.shared.cached(found) {
           focus = hit
+          show()
           return
         }
+        // Faces not looked for yet: wait a moment for Vision, then show the
+        // art where it is. A late answer is remembered for next time but
+        // doesn't move the art on screen.
+        let fallback = Task { @MainActor in
+          try? await Task.pause(0.6)
+          if !Task.isCancelled { show() }
+        }
         let result = await ArtFocusStore.shared.focus(for: found)
-        guard !Task.isCancelled else { return }
-        astraWithAnimation(.easeInOut(duration: 0.35)) { focus = result }
+        fallback.cancel()
+        guard !Task.isCancelled, !ready else { return }
+        focus = result
+        show()
       }
+    }
+
+    private func show() {
+      guard !ready else { return }
+      astraWithAnimation(.easeOut(duration: 0.3)) { ready = true }
     }
   }
 
