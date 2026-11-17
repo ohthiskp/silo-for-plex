@@ -21,8 +21,7 @@ The `astra-design-system` skill holds the rules; `docs/design/` holds the approv
 - `DESIGN_SYSTEM.md`, `docs/design/README.md`; UI tests in `apple/AstraiOSUITests/`
 
 ## Out of scope
-- Redesigning an approved screen, or building a screen KP said to wait on (for example the 3-tab iPhone
-  bar is waiting on KP's mockup). Stop and report; KP decides.
+- Redesigning an approved screen, or building a screen KP said to wait on. Stop and report; KP decides.
 - Data and fetching → `astra-media`. Playback behavior → `astra-playback`. App state/routing → `astra-engineer`.
 
 ## Rules (KP's standing rules — check every time)

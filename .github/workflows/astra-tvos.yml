@@ -165,8 +165,10 @@ jobs:
           RB
 
       - name: Archive
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
         run: |
-          export ASTRA_DART_DEFINES="-DGIT_COMMIT=${{ github.sha }} -DTMDB_TOKEN=${{ secrets.TMDB_TOKEN }}"
+          export ASTRA_DART_DEFINES="-DGIT_COMMIT=${{ github.sha }} -DTMDB_TOKEN=$TMDB_TOKEN"
           xcodebuild -workspace tvos/Runner.xcworkspace -scheme Runner -configuration Release \
             -sdk appletvos -destination 'generic/platform=tvOS' \
             -archivePath "$RUNNER_TEMP/AstraTV.xcarchive" archive \
@@ -203,7 +205,10 @@ jobs:
 
       - name: Remove temporary signing
         if: always()
-        run: python3 tool/astra/asc_tv_signing.py cleanup || true
+        # A failed clean-up shows as a warning (the upload already happened); the next
+        # run's setup removes what's left.
+        continue-on-error: true
+        run: python3 tool/astra/asc_tv_signing.py cleanup
 
       - name: Remove API key
         if: always()
