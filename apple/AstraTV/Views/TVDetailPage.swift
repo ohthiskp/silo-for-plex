@@ -17,6 +17,8 @@ struct TVDetailPage: View {
   @State private var item: PlexMetadata?
   @State private var parentShow: PlexMetadata?
   @State private var seasons: [PlexMetadata] = []
+  /// Settings → Library → Show Specials (off by default, KP 2026-11-16).
+  @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
   @State private var selectedSeason: PlexMetadata?
   @State private var episodes: [PlexMetadata] = []
   /// A show's picked episode (KP, 2026-11-14): the header shows its details and
@@ -457,7 +459,8 @@ struct TVDetailPage: View {
   /// The show's seasons, opened on `season` (else the first one not watched
   /// yet) with `episode` picked (else the one to watch next).
   private func loadSeasons(show: String, season: String?, episode: String?) async throws {
-    seasons = try await library.children(of: show).filter { $0.type == .season }
+    let all = try await library.children(of: show).filter { $0.type == .season }
+    seasons = SeasonList.visible(all, showSpecials: showSpecials, keeping: season)
     let start =
       season.flatMap { key in seasons.first { $0.ratingKey == key } }
       ?? seasons.first { !$0.isWatched && ($0.index ?? 0) > 0 } ?? seasons.first
@@ -513,17 +516,9 @@ private struct TVEpisodeLabel: View {
       RemoteImage(url: library.imageURL(item.thumb, width: size.width, height: size.height), placeholder: Astra.Color.surface)
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous))
+        .watchedLook(library.isWatched(item), corner: TVLayout.radius, mark: 32, inset: 18)
         .overlay(alignment: .bottom) {
           if let progress = item.progress { TVProgressLine(value: progress).padding(14) }
-        }
-        .overlay(alignment: .topTrailing) {
-          if library.isWatched(item) {
-            Image(systemName: "checkmark.circle.fill")
-              .symbolRenderingMode(.palette)
-              .foregroundStyle(.black, .white)
-              .font(.system(size: 30))
-              .padding(12)
-          }
         }
         .overlay(
           RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)

@@ -417,6 +417,7 @@ import SwiftUI
     @AppStorage(LibraryQuality.storageKey) private var libraryQuality: LibraryQuality = .deviceDefault
     @AppStorage(Preferences.qualityBadgesKey) private var qualityBadges = true
     @AppStorage(Preferences.ratingsKey) private var ratings = true
+    @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
 
     var body: some View {
       SettingsCard(title: "Library") {
@@ -429,6 +430,7 @@ import SwiftUI
         }
         SettingSwitch(title: "HD and 4K badges", isOn: $qualityBadges)
         SettingSwitch(title: "Age ratings", isOn: $ratings)
+        SettingSwitch(title: "Show Specials", isOn: $showSpecials)
       }
     }
   }

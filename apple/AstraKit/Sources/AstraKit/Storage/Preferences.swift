@@ -11,6 +11,8 @@ public enum Preferences {
   public static let qualityBadgesKey = "astra.library.qualityBadges"
   /// Library → age ratings (PG-13, TV-MA…).
   public static let ratingsKey = "astra.library.ratings"
+  /// Library → Show Specials: a show's season 0 on Details (off by default, KP 2026-11-16).
+  public static let showSpecialsKey = "astra.library.showSpecials"
   /// Downloads → Wi-Fi Only.
   public static let wifiOnlyKey = "astra.downloads.wifiOnly"
 }

@@ -11,6 +11,8 @@ struct DetailView: View {
   /// The show an episode or season belongs to, for the + Watchlist button.
   @State private var parentShow: PlexMetadata?
   @State private var seasons: [PlexMetadata] = []
+  /// Settings → Library → Show Specials (off by default, KP 2026-11-16).
+  @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
   @State private var selectedSeason: PlexMetadata?
   @State private var episodes: [PlexMetadata] = []
   /// A show's picked episode (KP, 2026-11-14): the header shows its details and
@@ -489,9 +491,6 @@ struct DetailView: View {
         SeasonTabs(seasons: seasons, selected: selectedSeason, leading: rowLeading) { season in
           Task { await selectSeason(season) }
         }
-        if let selectedSeason, seasons.count > 1 {
-          DownloadButton(item: selectedSeason, compact: true)
-        }
       }
       .padding(.trailing, rowTrailing)
       episodeCardRow
@@ -607,7 +606,8 @@ struct DetailView: View {
   /// The show's seasons, opened on `season` (else the first one not watched
   /// yet) with `episode` picked (else the one to watch next).
   private func loadSeasons(show: String, season: String?, episode: String?) async throws {
-    seasons = try await library.children(of: show).filter { $0.type == .season }
+    let all = try await library.children(of: show).filter { $0.type == .season }
+    seasons = SeasonList.visible(all, showSpecials: showSpecials, keeping: season)
     let start =
       season.flatMap { key in seasons.first { $0.ratingKey == key } }
       ?? seasons.first { !$0.isWatched && ($0.index ?? 0) > 0 } ?? seasons.first
@@ -702,11 +702,9 @@ struct EpisodeCard: View {
       RemoteImage(url: library.imageURL(item.thumb, width: width, height: height))
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
+        .watchedLook(library.isWatched(item))
         .overlay(alignment: .bottomLeading) {
           if let progress = item.progress { ProgressBar(value: progress).padding(10) }
-        }
-        .overlay(alignment: .topTrailing) {
-          if library.isWatched(item) { EpisodeWatchedMark().padding(8) }
         }
         .overlay {
           RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous)
@@ -739,17 +737,6 @@ struct EpisodeCard: View {
       DownloadButton(item: item, compact: true)
         .offset(x: 4, y: height + 1)
     }
-  }
-}
-
-/// The white tick on a watched episode's still.
-struct EpisodeWatchedMark: View {
-  var body: some View {
-    Image(systemName: "checkmark.circle.fill")
-      .symbolRenderingMode(.palette)
-      .foregroundStyle(.black, .white)
-      .font(.system(size: 18))
-      .accessibilityHidden(true)
   }
 }
 

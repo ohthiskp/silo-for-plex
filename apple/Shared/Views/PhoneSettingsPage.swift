@@ -656,6 +656,7 @@ import SwiftUI
     @AppStorage(LibraryQuality.storageKey) private var libraryQuality: LibraryQuality = .deviceDefault
     @AppStorage(Preferences.qualityBadgesKey) private var qualityBadges = true
     @AppStorage(Preferences.ratingsKey) private var ratings = true
+    @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
     /// A change waiting for the reload to be confirmed (design-audit B-02).
     @State private var pending: LibraryQuality?
 
@@ -675,6 +676,9 @@ import SwiftUI
         ) {
           PhoneSwitch(title: "HD and 4K badges", isOn: $qualityBadges)
           PhoneSwitch(title: "Age ratings", isOn: $ratings)
+        }
+        PhoneCard(title: "Shows", footer: "Specials are a show's extra episodes (season 0). Off keeps them out of the season list.") {
+          PhoneSwitch(title: "Show Specials", isOn: $showSpecials)
         }
       }
       .confirmationDialog(
