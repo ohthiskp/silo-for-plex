@@ -89,6 +89,7 @@ h2{font-family:var(--serif);font-weight:400;font-size:clamp(38px,5.4vw,68px);lin
 .row b{font-family:var(--serif);font-size:28px;font-weight:400}
 .row p{color:var(--muted);font-size:16px}
 .row .btn{padding:10px 18px;font-size:15px}
+.btn.soon{border:1px dashed rgba(244,241,236,.22);color:var(--muted);font-weight:500}
 
 footer{margin-top:150px;border-top:1px solid var(--rule);padding:28px 0 56px;color:var(--faint);font-size:14px}
 footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
@@ -132,7 +133,7 @@ footer a{text-decoration:underline;text-underline-offset:3px;text-decoration-col
     <h1>Make yourself at home.</h1>
     <p class="intro">Astra turns your movie and TV collection into your own streaming service, on iPhone, Mac and Apple TV. Every film in the quality it was made in.</p>
     <div class="actions">
-      <a class="btn solid" href="#get"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9s-1.9-.8-3.2-.8C6.5 7.1 5 8.1 4.1 9.6c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.6-1-2.7-4zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>Download for Mac</a>
+      <a class="btn solid mac-dl" href="https://github.com/ohthiskp/silo-for-plex/releases"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9s-1.9-.8-3.2-.8C6.5 7.1 5 8.1 4.1 9.6c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3.1 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.6-1-2.7-4zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>Download for Mac</a>
       <a class="btn line" href="#get">iPhone &amp; Apple TV beta</a>
     </div>
 
@@ -196,9 +197,9 @@ footer a{text-decoration:underline;text-underline-offset:3px;text-decoration-col
   <div class="wrap">
     <h2>Get Astra. It's free.</h2>
     <div class="rows">
-      <div class="row"><b>Mac</b><p>Signed app that updates itself. macOS 26 or later.</p><a class="btn solid" href="#">Download .dmg</a></div>
-      <div class="row"><b>iPhone</b><p>Beta through TestFlight. iOS 26 or later.</p><a class="btn line" href="#">Open TestFlight</a></div>
-      <div class="row"><b>Apple TV</b><p>Same TestFlight link. tvOS 26 or later.</p><a class="btn line" href="#">Open TestFlight</a></div>
+      <div class="row"><b>Mac</b><p>Updates itself when a new version is out. macOS 26 or later.</p><a class="btn solid mac-dl" href="https://github.com/ohthiskp/silo-for-plex/releases">Download for Mac</a></div>
+      <div class="row"><b>iPhone</b><p>Beta through TestFlight. iOS 26 or later.</p><span class="btn soon">Invites coming soon</span></div>
+      <div class="row"><b>Apple TV</b><p>Beta through TestFlight. tvOS 26 or later.</p><span class="btn soon">Invites coming soon</span></div>
     </div>
   </div>
 </section>
@@ -229,6 +230,13 @@ footer a{text-decoration:underline;text-underline-offset:3px;text-decoration-col
   btns.forEach((b,k)=>b.addEventListener('click',()=>show(k)));
   document.documentElement.style.setProperty('--dur', DUR+'ms');
   show(0);
+  // Point Mac buttons at the newest Mac build's zip.
+  fetch('https://api.github.com/repos/ohthiskp/silo-for-plex/releases?per_page=20')
+    .then(r=>r.ok?r.json():[])
+    .then(rs=>{ for(const r of rs){ if(r.draft||!r.tag_name.startsWith('swiftui-')) continue;
+      const a=(r.assets||[]).find(a=>/\.(zip|dmg)$/i.test(a.name)); if(a){
+        document.querySelectorAll('.mac-dl').forEach(el=>el.href=a.browser_download_url); return; } } })
+    .catch(()=>{});
 })();
 </script>
 </body>
