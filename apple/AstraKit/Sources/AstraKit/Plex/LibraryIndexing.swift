@@ -173,14 +173,14 @@ public enum LibraryIndexRun {
     }
 
     await report()
-    for section in wanted {
+    libraries: for section in wanted {
       var library = checkpoint.libraries[section.key]
         ?? LibraryIndexCheckpoint.Library(key: section.key, title: section.title, updatedAt: now())
       if library.complete { continue }
       if library.total == nil {
         library.total = try? await client.libraryCount(sectionKey: section.key)
       }
-      let sectionID = Int(section.key)
+      let sectionID = section.numericID
       while !library.complete {
         try Task.checkCancellation()
         let first = library.fetched
@@ -220,6 +220,9 @@ public enum LibraryIndexRun {
           if failure is CancellationError { throw failure }
           lastError = PlexError.describe(failure)
           await report()
+          // A Jellyfin, Emby or share source that is off or away doesn't
+          // hold up Plex's libraries; it is read again next time.
+          if SourceKey.isSource(section.key) { continue libraries }
           throw failure
         }
         await report()

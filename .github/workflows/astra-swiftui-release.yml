@@ -47,6 +47,14 @@ jobs:
         working-directory: apple
         env:
           TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+          ASTRA_GOOGLE_CLIENT_ID: ${{ secrets.ASTRA_GOOGLE_CLIENT_ID }}
+          ASTRA_DROPBOX_APP_KEY: ${{ secrets.ASTRA_DROPBOX_APP_KEY }}
+          ASTRA_ONEDRIVE_CLIENT_ID: ${{ secrets.ASTRA_ONEDRIVE_CLIENT_ID }}
+          ASTRA_BOX_CLIENT_ID: ${{ secrets.ASTRA_BOX_CLIENT_ID }}
+          ASTRA_BOX_CLIENT_SECRET: ${{ secrets.ASTRA_BOX_CLIENT_SECRET }}
+          ASTRA_PCLOUD_CLIENT_ID: ${{ secrets.ASTRA_PCLOUD_CLIENT_ID }}
+          ASTRA_PCLOUD_CLIENT_SECRET: ${{ secrets.ASTRA_PCLOUD_CLIENT_SECRET }}
+          ASTRA_YANDEX_CLIENT_ID: ${{ secrets.ASTRA_YANDEX_CLIENT_ID }}
           ASTRA_CRASH_TOKEN: ${{ secrets.ASTRA_CRASH_TOKEN }}
         run: |
           set -o pipefail
@@ -61,6 +69,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION=${{ steps.ver.outputs.build }} \
             TMDB_TOKEN="$TMDB_TOKEN" \
+            ASTRA_GOOGLE_CLIENT_ID="$ASTRA_GOOGLE_CLIENT_ID" \
+            ASTRA_DROPBOX_APP_KEY="$ASTRA_DROPBOX_APP_KEY" \
+            ASTRA_ONEDRIVE_CLIENT_ID="$ASTRA_ONEDRIVE_CLIENT_ID" \
+            ASTRA_BOX_CLIENT_ID="$ASTRA_BOX_CLIENT_ID" \
+            ASTRA_BOX_CLIENT_SECRET="$ASTRA_BOX_CLIENT_SECRET" \
+            ASTRA_PCLOUD_CLIENT_ID="$ASTRA_PCLOUD_CLIENT_ID" \
+            ASTRA_PCLOUD_CLIENT_SECRET="$ASTRA_PCLOUD_CLIENT_SECRET" \
+            ASTRA_YANDEX_CLIENT_ID="$ASTRA_YANDEX_CLIENT_ID" \
             ASTRA_CRASH_TOKEN="$ASTRA_CRASH_TOKEN" \
             | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build.log

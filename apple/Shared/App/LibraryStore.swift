@@ -796,7 +796,7 @@ final class LibraryStore {
             let items = (try? await client.libraryItems(sectionKey: section.key, sort: "addedAt:desc", size: 100)) ?? []
             return items.map {
               var item = $0
-              if item.librarySectionID == nil { item.librarySectionID = Int(section.key) }
+              if item.librarySectionID == nil { item.librarySectionID = section.numericID }
               return item
             }
           }
@@ -1360,7 +1360,9 @@ final class LibraryStore {
     var filters = [URLQueryItem(name: "guid", value: guid)]
     if item.type == .episode { filters.append(URLQueryItem(name: "type", value: "4")) }
     var out = [item]
-    for section in allSections where section.type == kind && Int(section.key) != item.librarySectionID {
+    // Plex guids only match on Plex; a source's titles are matched within that source.
+    for section in allSections
+    where section.type == kind && section.numericID != item.librarySectionID && section.sourceID == item.sourceID {
       let found = (try? await client.libraryItems(sectionKey: section.key, size: 5, filters: filters)) ?? []
       // Only the same title (a server that ignores the filter returns the whole library).
       out += found.filter { $0.guid == guid && $0.ratingKey != item.ratingKey }

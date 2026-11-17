@@ -139,17 +139,12 @@ public enum PlaybackResolver {
     guard let media = preferredMedia(item.media, quality: quality), let part = media.parts.first, let key = part.key else {
       throw PlexError.nothingToPlay
     }
-    let url = client.baseURL.appending(plexPath: key)
+    // Plex, Jellyfin, Emby or a share: the source says where the original file is.
+    guard let stream = client.stream(forKey: key) else { throw PlexError.nothingToPlay }
     let offset = resume ? Double(item.viewOffset ?? 0) / 1000 : 0
-    var headers = [
-      "X-Plex-Token": client.token,
-      "X-Plex-Client-Identifier": client.info.clientIdentifier,
-      "X-Plex-Product": client.info.product,
-    ]
-    headers["X-Plex-Platform"] = client.info.platform
     return PlaybackSource(
-      url: url,
-      headers: headers,
+      url: stream.url,
+      headers: stream.headers,
       // Plex keeps a position in the last few seconds of a watched item; start over instead.
       startSeconds: offset > 0 && Double(item.duration ?? 0) / 1000 - offset > 30 ? offset : 0,
       ratingKey: item.ratingKey,
@@ -159,7 +154,7 @@ public enum PlaybackResolver {
       subtitle: item.type == .episode ? [item.episodeLabel, item.title].compactMap { $0 }.joined(separator: " · ") : nil,
       media: media,
       part: part,
-      mpvURL: edl(media.parts.compactMap { $0.key.map { client.baseURL.appending(plexPath: $0) } })
+      mpvURL: edl(media.parts.compactMap { $0.key.flatMap { client.stream(forKey: $0)?.url } })
     )
   }
 
