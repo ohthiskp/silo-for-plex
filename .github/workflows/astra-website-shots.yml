@@ -1,0 +1,87 @@
+name: Astra website screenshots
+run-name: Website screenshots ${{ github.sha }}
+
+# Takes full-size Apple TV screenshots of demo titles for the Astra website
+# (website/img/hero). Printed into the log as JPEGs between
+# ASTRA-SHOT-BEGIN and ASTRA-SHOT-END.
+on:
+  push:
+    branches: [claude/project-thread-pjne7c]
+    paths:
+      - "apple/Shared/App/Demo.swift"
+      - ".github/workflows/astra-website-shots.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astra-website-shots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  launch:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            apple/.build/SourcePackages
+          key: astra-swiftui-tvos-sim-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apple/project.yml') }}
+
+      - name: Build for the simulator
+        working-directory: apple
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          set -o pipefail
+          brew install xcodegen
+          xcodegen generate
+          # build-for-testing: the app plus its remote UI tests.
+          xcodebuild build-for-testing \
+            -project Astra.xcodeproj -scheme AstraTV -configuration Release \
+            -destination 'generic/platform=tvOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            TMDB_TOKEN="$TMDB_TOKEN" \
+            | tee "$RUNNER_TEMP/build.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name "Astra.app" -maxdepth 2 | head -1)
+          test -n "$APP" || { tail -80 "$RUNNER_TEMP/build.log"; exit 1; }
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Website screenshots
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];c=[x for k,v in d.items() if "tvOS" in k for x in v if "Apple TV" in x["name"]];print(next((x["udid"] for x in c if "4K" in x["name"]), c[0]["udid"]))')
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP"
+          BID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          mkdir -p "$RUNNER_TEMP/shots"
+          shot() {
+            name=$1; shift
+            xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$BID" -AstraDemo YES "$@" > /dev/null
+            sleep 30
+            xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shots/$name.png" || true
+          }
+          shot dune -AstraDemoOpen 101
+          shot dark-knight -AstraDemoOpen 105
+          shot infinity-war -AstraDemoOpen 111
+          shot severance -AstraDemoOpen 205
+          shot severance-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
+          shot home
+          for f in "$RUNNER_TEMP"/shots/*.png; do
+            sips -s format jpeg -s formatOptions 88 -Z 1920 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "ASTRA-SHOT-BEGIN $(basename "${f%.png}")"
+            base64 -i "${f%.png}.jpg" | fold -w 4000
+            echo "ASTRA-SHOT-END"
+          done

@@ -82,12 +82,27 @@ enum Demo {
     movie("102", "Oppenheimer", 2023, 872585, "Drama", 10800, "4k"),
     movie("103", "Interstellar", 2014, 157336, "Science Fiction", 10140, "4k"),
     movie("104", "Inception", 2010, 27205, "Action", 8880, "1080"),
-    movie("105", "The Dark Knight", 2008, 155, "Action", 9120, "4k"),
+    movie("105", "The Dark Knight", 2008, 155, "Action", 9120, "4k", atmos: false).merging([
+      "Genre": [["tag": "Action"], ["tag": "Crime"], ["tag": "Drama"]],
+      "summary": "Batman raises the stakes in his war on crime. With the help of Lt. Jim Gordon and District "
+        + "Attorney Harvey Dent, Batman sets out to dismantle the remaining criminal organizations that plague "
+        + "the streets. The partnership proves to be effective, but they soon find themselves prey to a reign "
+        + "of chaos unleashed by a rising criminal mastermind known to the terrified citizens of Gotham as the Joker.",
+      "Director": [["tag": "Christopher Nolan"]],
+    ]) { $1 },
     movie("106", "Joker", 2019, 475557, "Drama", 7320, "1080"),
     movie("107", "The Matrix", 1999, 603, "Science Fiction", 8160, "1080"),
     movie("108", "Blade Runner 2049", 2017, 335984, "Science Fiction", 9840, "4k"),
     movie("109", "The Batman", 2022, 414906, "Action", 10560, "4k"),
     movie("110", "Barbie", 2023, 346698, "Comedy", 6840, "1080"),
+    movie("111", "Avengers: Infinity War", 2018, 299536, "Action", 8940, "4k").merging([
+      "Genre": [["tag": "Adventure"], ["tag": "Action"], ["tag": "Science Fiction"]],
+      "summary": "As the Avengers and their allies have continued to protect the world from threats too large "
+        + "for any one hero to handle, a new danger has emerged from the cosmic shadows: Thanos. A despot of "
+        + "intergalactic infamy, his goal is to collect all six Infinity Stones, artifacts of unimaginable power, "
+        + "and use them to inflict his twisted will on all of reality.",
+      "Director": [["tag": "Anthony Russo"], ["tag": "Joe Russo"]],
+    ]) { $1 },
   ]
 
   nonisolated(unsafe) static let shows: [JSON] = [
@@ -95,7 +110,12 @@ enum Demo {
     show("202", "Stranger Things", 2016, 66732, "Science Fiction", 4),
     show("203", "The Witcher", 2019, 71912, "Action", 3),
     show("204", "Ozark", 2017, 69740, "Drama", 4),
-    show("205", "Severance", 2022, 95396, "Science Fiction", 2),
+    show("205", "Severance", 2022, 95396, "Science Fiction", 2).merging([
+      "Genre": [["tag": "Drama"], ["tag": "Mystery"], ["tag": "Science Fiction"]],
+      "summary": "Mark leads a team of office workers whose memories have been surgically divided between "
+        + "their work and personal lives. When a mysterious colleague appears outside of work, it begins a "
+        + "journey to discover the truth about their jobs.",
+    ]) { $1 },
     show("206", "The Bear", 2022, 136315, "Comedy", 3),
   ]
 
@@ -108,7 +128,7 @@ enum Demo {
       "grandparentTitle": "Severance", "grandparentRatingKey": "205", "parentRatingKey": "2051",
       "parentTitle": "Season 1", "librarySectionID": 2, "year": 2022,
       "summary": "Mark and his team at Lumon dig deeper into the mysteries of the severed floor.",
-      "Media": [media(id: 300 + n, resolution: "1080", seconds: 3000)],
+      "Media": [media(id: 300 + n, resolution: "4k", seconds: 3000)],
       "thumb": demoStill("30\(n)"),
     ]
     if n == 3 { e["viewOffset"] = 1_400_000 }
@@ -138,14 +158,15 @@ enum Demo {
   private static let seasonTwoTitles = ["Hello, Ms. Cobel", "Goodbye, Mrs. Selvig", "Who Is Alive?", "Woe's Hollow"]
 
   private static func movie(
-    _ key: String, _ title: String, _ year: Int, _ tmdb: Int, _ genre: String, _ seconds: Int, _ resolution: String
+    _ key: String, _ title: String, _ year: Int, _ tmdb: Int, _ genre: String, _ seconds: Int, _ resolution: String,
+    atmos: Bool = true
   ) -> JSON {
     [
       "ratingKey": key, "key": "/library/metadata/\(key)", "guid": "plex://movie/\(key)", "type": "movie",
       "title": title, "year": year, "duration": seconds * 1000, "librarySectionID": 1,
       "summary": "A demo copy of \(title) for screenshots.", "contentRating": "PG-13", "audienceRating": 8.4,
       "Guid": [["id": "tmdb://\(tmdb)"]], "Genre": [["tag": genre]],
-      "Media": [media(id: Int(key)!, resolution: resolution, seconds: seconds)],
+      "Media": [media(id: Int(key)!, resolution: resolution, seconds: seconds, atmos: atmos)],
       "addedAt": 1_730_000_000 + Int(key)!,
     ]
   }
@@ -161,7 +182,7 @@ enum Demo {
     ]
   }
 
-  private static func media(id: Int, resolution: String, seconds: Int) -> JSON {
+  private static func media(id: Int, resolution: String, seconds: Int, atmos: Bool = true) -> JSON {
     [
       "id": id, "duration": seconds * 1000, "videoResolution": resolution, "videoCodec": "hevc",
       "audioCodec": "eac3", "audioChannels": 6, "container": "mkv",
@@ -173,8 +194,8 @@ enum Demo {
           "Stream": [
             ["id": id * 10, "streamType": 1, "codec": "hevc", "colorTrc": resolution == "4k" ? "smpte2084" : "bt709",
              "DOVIPresent": resolution == "4k"],
-            ["id": id * 10 + 1, "streamType": 2, "codec": resolution == "4k" ? "truehd" : "eac3",
-             "extendedDisplayTitle": resolution == "4k" ? "English (TrueHD 7.1 Atmos)" : "English (EAC3 5.1)"],
+            ["id": id * 10 + 1, "streamType": 2, "codec": resolution == "4k" && atmos ? "truehd" : "eac3",
+             "extendedDisplayTitle": resolution == "4k" && atmos ? "English (TrueHD 7.1 Atmos)" : "English (EAC3 5.1)"],
           ],
         ]
       ],
