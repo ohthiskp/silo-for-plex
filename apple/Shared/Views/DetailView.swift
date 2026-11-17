@@ -702,11 +702,9 @@ struct EpisodeCard: View {
       RemoteImage(url: library.imageURL(item.thumb, width: width, height: height))
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
+        .watchedLook(library.isWatched(item))
         .overlay(alignment: .bottomLeading) {
           if let progress = item.progress { ProgressBar(value: progress).padding(10) }
-        }
-        .overlay(alignment: .topTrailing) {
-          if library.isWatched(item) { EpisodeWatchedMark().padding(8) }
         }
         .overlay {
           RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous)
@@ -739,17 +737,6 @@ struct EpisodeCard: View {
       DownloadButton(item: item, compact: true)
         .offset(x: 4, y: height + 1)
     }
-  }
-}
-
-/// The white tick on a watched episode's still.
-struct EpisodeWatchedMark: View {
-  var body: some View {
-    Image(systemName: "checkmark.circle.fill")
-      .symbolRenderingMode(.palette)
-      .foregroundStyle(.black, .white)
-      .font(.system(size: 18))
-      .accessibilityHidden(true)
   }
 }
 

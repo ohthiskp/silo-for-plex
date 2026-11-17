@@ -516,17 +516,9 @@ private struct TVEpisodeLabel: View {
       RemoteImage(url: library.imageURL(item.thumb, width: size.width, height: size.height), placeholder: Astra.Color.surface)
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous))
+        .watchedLook(library.isWatched(item), corner: TVLayout.radius, mark: 44, inset: 14)
         .overlay(alignment: .bottom) {
           if let progress = item.progress { TVProgressLine(value: progress).padding(14) }
-        }
-        .overlay(alignment: .topTrailing) {
-          if library.isWatched(item) {
-            Image(systemName: "checkmark.circle.fill")
-              .symbolRenderingMode(.palette)
-              .foregroundStyle(.black, .white)
-              .font(.system(size: 30))
-              .padding(12)
-          }
         }
         .overlay(
           RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)

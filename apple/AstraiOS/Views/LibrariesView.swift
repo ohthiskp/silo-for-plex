@@ -322,15 +322,8 @@ private struct GridPoster: View {
           }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .watchedLook(library.isWatched(item), corner: 12, mark: 24, inset: 6)
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Astra.Color.hairline))
-        .overlay(alignment: .topTrailing) {
-          if library.isWatched(item) {
-            Image(systemName: "checkmark.circle.fill")
-              .font(.system(size: 16, weight: .semibold))
-              .foregroundStyle(.white, .black.opacity(0.5))
-              .padding(6)
-          }
-        }
         .contentShape(Rectangle())
     }
     .buttonStyle(AstraCardButtonStyle())
