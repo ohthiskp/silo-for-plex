@@ -197,7 +197,16 @@ struct MainView: View {
     .background(Astra.Color.bg)
     .clipShape(shape)
     .astraGlassEdge(shape, strength: 0.7)
-    .shadow(color: .black.opacity(0.55), radius: 30, x: -8)
+    // The card's shadow is a plain gradient strip beside its left edge. A
+    // .shadow on the whole card made the Mac blur a window-sized image on
+    // every frame of the slide (KP 2026-11-17: "glitches every time i open
+    // a new thing").
+    .background(alignment: .leading) {
+      LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .leading, endPoint: .trailing)
+        .frame(width: 40)
+        .offset(x: -40)
+        .allowsHitTesting(false)
+    }
   }
 
   private func closeTopCard() {
