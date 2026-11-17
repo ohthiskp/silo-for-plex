@@ -87,6 +87,8 @@ import SwiftUI
   /// The pages Settings opens; also the CI screenshot names.
   enum PhoneSettingsDestination: String, Identifiable, Hashable {
     case appearance, playback, subtitles, library, downloads, server
+    // Sources (CI screenshots): Add Source, the demo share, Add Jellyfin.
+    case sources, source, addserver
 
     var id: String { rawValue }
 
@@ -98,6 +100,9 @@ import SwiftUI
       case .library: PhoneLibraryPage()
       case .downloads: PhoneDownloadsPage()
       case .server: PhoneServerPage()
+      case .sources: AddSourcePage()
+      case .source: SourceDetailPage(id: "demosmb1")
+      case .addserver: AddMediaServerPage(kind: .jellyfin)
       }
     }
   }

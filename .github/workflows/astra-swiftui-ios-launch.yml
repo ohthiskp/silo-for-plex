@@ -106,7 +106,7 @@ jobs:
           shot details-episode -AstraDemoOpen 303
           # Settings, Direction C (KP, 2026-11-14): the root, then each page it opens.
           shot settings -AstraDemoTab settings
-          for page in appearance playback subtitles library downloads server; do
+          for page in appearance playback subtitles library downloads server sources source addserver; do
             shot "settings-$page" -AstraDemoTab settings -AstraDemoSettings "$page"
           done
           # The player (KP's 2026-11-10 redesign) over a 1 h 56 m test video, paused in each state.

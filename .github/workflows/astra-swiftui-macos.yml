@@ -226,6 +226,7 @@ jobs:
           nav mac-nav-details 30 -AstraDemoTab home -AstraDemoOpen 101
           nav mac-nav-settings-playback 30 -AstraDemoTab settings -AstraDemoSettings playback
           nav mac-nav-settings-updates 30 -AstraDemoTab settings -AstraDemoSettings updates
+          nav mac-nav-settings-sources 30 -AstraDemoTab settings -AstraDemoSettings sources
           for f in "$RUNNER_TEMP"/nav/*.png; do
             [ -f "$f" ] || continue
             sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null
