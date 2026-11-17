@@ -57,6 +57,8 @@ targets:
       - package: MPVKit
         product: MPVKit
       - package: AMSMB2
+        # A dynamic library product: it must be copied into the app.
+        embed: true
       - package: Sparkle
     info:
       path: AstraMac/Resources/Info.plist
@@ -129,6 +131,8 @@ targets:
       - package: MPVKit
         product: MPVKit
       - package: AMSMB2
+        # A dynamic library product: it must be copied into the app.
+        embed: true
     info:
       path: AstraiOS/Resources/Info.plist
       properties:
@@ -200,6 +204,8 @@ targets:
       - package: MPVKit
         product: MPVKit
       - package: AMSMB2
+        # A dynamic library product: it must be copied into the app.
+        embed: true
     info:
       path: AstraTV/Resources/Info.plist
       properties:
