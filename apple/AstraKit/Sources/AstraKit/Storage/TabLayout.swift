@@ -5,6 +5,9 @@ import Foundation
 /// default is Home, Search and Library.
 public enum PhoneTab: String, CaseIterable, Sendable, Identifiable {
   case home, search, watchlist, downloads, libraries, settings
+  /// Live TV (KP, 2026-11-16): not part of the saved list; it shows when
+  /// an IPTV source is set up and Settings → Live TV → Show Live tab is on.
+  case live
 
   public var id: String { rawValue }
 
@@ -16,6 +19,7 @@ public enum PhoneTab: String, CaseIterable, Sendable, Identifiable {
     case .downloads: "Downloads"
     case .libraries: "Library"
     case .settings: "Settings"
+    case .live: "Live"
     }
   }
 
@@ -27,6 +31,7 @@ public enum PhoneTab: String, CaseIterable, Sendable, Identifiable {
     case .downloads: "arrow.down.circle.fill"
     case .libraries: "square.stack.fill"
     case .settings: "gearshape.fill"
+    case .live: "dot.radiowaves.left.and.right"
     }
   }
 }
@@ -46,13 +51,22 @@ public enum TabLayout {
   public static func tabs(from stored: String) -> [PhoneTab] {
     var seen = Set<PhoneTab>()
     var out = stored.split(separator: ",").compactMap { PhoneTab(rawValue: String($0)) }
-      .filter { seen.insert($0).inserted }
+      .filter { $0 != .live && seen.insert($0).inserted }
     guard !out.isEmpty else { return defaultTabs }
     if !out.contains(.home) { out.insert(.home, at: 0) }
     if !out.contains(.libraries) { out.append(.libraries) }
     while out.count > maximum, let drop = out.lastIndex(where: { !required.contains($0) }) {
       out.remove(at: drop)
     }
+    return out
+  }
+
+  /// The bar as shown: the saved tabs, plus Live just before Library when
+  /// Live TV is on (it doesn't count towards `maximum`).
+  public static func withLive(_ tabs: [PhoneTab], _ live: Bool) -> [PhoneTab] {
+    var out = tabs.filter { $0 != .live }
+    guard live else { return out }
+    out.insert(.live, at: out.firstIndex(of: .libraries) ?? out.count)
     return out
   }
 
@@ -63,7 +77,7 @@ public enum TabLayout {
   /// The list after switching `tab` on (added at the end) or off. Home and Library can't
   /// be turned off, and nothing is added past `maximum`.
   public static func toggled(_ tabs: [PhoneTab], _ tab: PhoneTab, on: Bool) -> [PhoneTab] {
-    guard !required.contains(tab) else { return tabs }
+    guard !required.contains(tab), tab != .live else { return tabs }
     if on {
       guard !tabs.contains(tab), tabs.count < maximum else { return tabs }
       return tabs + [tab]
