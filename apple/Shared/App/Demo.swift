@@ -109,6 +109,7 @@ enum Demo {
       "parentTitle": "Season 1", "librarySectionID": 2, "year": 2022,
       "summary": "Mark and his team at Lumon dig deeper into the mysteries of the severed floor.",
       "Media": [media(id: 300 + n, resolution: "1080", seconds: 3000)],
+      "thumb": demoStill("30\(n)"),
     ]
     if n == 3 { e["viewOffset"] = 1_400_000 }
     if n < 3 { e["viewCount"] = 1 }
@@ -122,8 +123,13 @@ enum Demo {
         "parentTitle": "Season 2", "librarySectionID": 2, "year": 2025,
         "summary": "Mark returns to Lumon, where the severed floor has changed in his absence.",
         "Media": [media(id: 400 + n, resolution: "4k", seconds: 3300)],
+        "thumb": demoStill("40\(n)"),
       ]
     }
+
+  /// A stand-in still per demo episode, so CI screenshots show each episode's
+  /// own picture (placeholder photos; a real server sends the episode's still).
+  private static func demoStill(_ key: String) -> String { "https://picsum.photos/seed/astra\(key)/1280/720" }
 
   private static let seasonOneTitles = [
     "Good News About Hell", "Half Loop", "In Perpetuity", "The You You Are",

@@ -279,10 +279,22 @@ final class PlayerController {
     #endif
     core.setProperty("demuxer-max-back-bytes", value: "50MiB")
     core.setProperty("demuxer-readahead-secs", value: "30")
-    // Settings → Playback → Subtitles (Astra 4.0).
-    for (name, value) in SubtitlePreference.current().mpvOptions(languages: Locale.preferredLanguages) {
+    // Settings → Playback → Audio Language and Subtitles (KP, 2026-11-16:
+    // default to English). Cleared first, so the last file's choice never lingers.
+    let audioLanguage = PlaybackLanguage.audio()
+    let subtitleLanguage = PlaybackLanguage.subtitle()
+    let subtitleMode = SubtitlePreference.current()
+    core.setProperty("alang", value: audioLanguage.mpvValue)
+    core.setProperty("slang", value: "")
+    for (name, value) in subtitleMode.mpvOptions(languages: Locale.preferredLanguages, preferred: subtitleLanguage) {
       core.setProperty(name, value: value)
     }
+    // Plex's own track choice would otherwise win; these pick the chosen
+    // languages once the file's tracks are known (`applyLanguageDefaults`).
+    audioLanguageApplied = false
+    subtitleLanguageApplied = false
+    pendingAudioLanguage = audioLanguage.isAutomatic ? nil : audioLanguage
+    pendingSubtitleLanguage = subtitleMode == .always && !subtitleLanguage.isAutomatic ? subtitleLanguage : nil
     // Subtitles → Size and Style (saved), Sync back to zero for a new file.
     subtitleSize = .current()
     subtitleLook = .current()
@@ -609,12 +621,14 @@ final class PlayerController {
   }
 
   func selectAudio(_ id: Int) {
+    pendingAudioLanguage = nil
     audioId = id
     core?.setProperty("aid", value: String(id))
     saveStreamChoice(audio: plexAudioID(forTrack: id))
   }
 
   func selectSubtitle(_ id: Int?) {
+    pendingSubtitleLanguage = nil
     subtitleId = id
     core?.setProperty("sid", value: id.map(String.init) ?? "no")
     // 0 is Plex's "no subtitles".
@@ -627,6 +641,42 @@ final class PlayerController {
   private struct TrackInfo {
     var ffIndex: Int?
     var externalFile: String?
+    var language: String?
+  }
+
+  /// Settings → Playback languages still to apply to this file: set at load,
+  /// cleared once a track in that language is picked or someone picks a track.
+  @ObservationIgnored private var pendingAudioLanguage: PlaybackLanguage?
+  @ObservationIgnored private var pendingSubtitleLanguage: PlaybackLanguage?
+  @ObservationIgnored private var audioLanguageApplied = false
+  @ObservationIgnored private var subtitleLanguageApplied = false
+
+  /// Picks the audio and subtitle tracks in the chosen languages, over the
+  /// file's and Plex's defaults, as soon as such a track is listed. Subtitles
+  /// added from Plex arrive a moment later, so this runs on every track list.
+  private func applyLanguageDefaults() {
+    guard let core else { return }
+    func tracks(_ type: String) -> [(id: Int, language: String?)] {
+      trackInfo.compactMap { key, info in
+        guard key.hasPrefix(type + ":"), let id = Int(key.dropFirst(type.count + 1)) else { return nil }
+        return (id, info.language)
+      }
+      .sorted { $0.id < $1.id }
+    }
+    if !audioLanguageApplied, let language = pendingAudioLanguage, let id = language.pick(from: tracks("audio")) {
+      audioLanguageApplied = true
+      if audioId != id {
+        audioId = id
+        core.setProperty("aid", value: String(id))
+      }
+    }
+    if !subtitleLanguageApplied, let language = pendingSubtitleLanguage, let id = language.pick(from: tracks("sub")) {
+      subtitleLanguageApplied = true
+      if subtitleId != id {
+        subtitleId = id
+        core.setProperty("sid", value: String(id))
+      }
+    }
   }
 
   @ObservationIgnored private var selection: StreamSelection?
@@ -685,17 +735,26 @@ final class PlayerController {
     }
     guard let selection, let server = playbackServer else { return }
     selectionApplied = true
+    // A language chosen in Settings beats Plex's pick when the file has it.
+    let audioByLanguage = pendingAudioLanguage.map { language in
+      trackInfo.contains { $0.key.hasPrefix("audio:") && language.matches($0.value.language) }
+    } ?? false
+    let subtitleByLanguage = pendingSubtitleLanguage.map { language in
+      trackInfo.contains { $0.key.hasPrefix("sub:") && language.matches($0.value.language) }
+        || selection.externals.contains { language.matches($0.language) }
+    } ?? false
     for external in selection.externals {
       let url = server.url(forKey: external.key).absoluteString
       externalStreamIDs[url] = external.streamID
       // The token travels in mpv's http-header-fields, as for the video.
-      core.command(["sub-add", url, external.selected ? "select" : "auto", external.title, external.language ?? ""])
+      let select = external.selected && !subtitleByLanguage
+      core.command(["sub-add", url, select ? "select" : "auto", external.title, external.language ?? ""])
     }
-    if let index = selection.audioIndex, let id = trackID("audio", ffIndex: index) {
+    if !audioByLanguage, let index = selection.audioIndex, let id = trackID("audio", ffIndex: index) {
       audioId = id
       core.setProperty("aid", value: String(id))
     }
-    if let index = selection.subtitleIndex, let id = trackID("sub", ffIndex: index) {
+    if !subtitleByLanguage, let index = selection.subtitleIndex, let id = trackID("sub", ffIndex: index) {
       subtitleId = id
       core.setProperty("sid", value: String(id))
     }
@@ -1014,7 +1073,8 @@ final class PlayerController {
       guard let id = (entry["id"] as? Int) ?? (entry["id"] as? Int64).map(Int.init), let type = entry["type"] as? String
       else { continue }
       let ffIndex = (entry["ff-index"] as? Int) ?? (entry["ff-index"] as? Int64).map(Int.init)
-      trackInfo["\(type):\(id)"] = TrackInfo(ffIndex: ffIndex, externalFile: entry["external-filename"] as? String)
+      trackInfo["\(type):\(id)"] = TrackInfo(
+        ffIndex: ffIndex, externalFile: entry["external-filename"] as? String, language: entry["lang"] as? String)
       let lang = (entry["lang"] as? String).map { Locale.current.localizedString(forLanguageCode: $0) ?? $0 }
       let label = [entry["title"] as? String, lang].compactMap { $0 }.first ?? "Track \(id)"
       if type == "audio" {
@@ -1026,6 +1086,7 @@ final class PlayerController {
     audioTracks = audio
     subtitleTracks = subs
     applyStreamsIfReady()
+    applyLanguageDefaults()
   }
 
   // MARK: - Plex progress

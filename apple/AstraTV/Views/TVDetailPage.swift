@@ -17,12 +17,16 @@ struct TVDetailPage: View {
   @State private var item: PlexMetadata?
   @State private var parentShow: PlexMetadata?
   @State private var seasons: [PlexMetadata] = []
+  /// Settings → Library → Show Specials (off by default, KP 2026-11-16).
+  @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
   @State private var selectedSeason: PlexMetadata?
   @State private var episodes: [PlexMetadata] = []
   /// A show's picked episode (KP, 2026-11-14): the header shows its details and
   /// Play / Resume plays it. Selecting an episode picks it and moves focus up
   /// to Play, so a second press plays it.
   @State private var focus: PlexMetadata?
+  /// Once an episode is picked, the backdrop shows its still (KP, 2026-11-14).
+  @State private var episodeArt = false
   @State private var related: [PlexHub] = []
   @State private var notOnServer = false
   @State private var error: String?
@@ -44,6 +48,12 @@ struct TVDetailPage: View {
   }
 
   private var playTarget: PlexMetadata { focus ?? shown }
+
+  /// The picked episode's still, for the backdrop (nil until an episode is picked).
+  private var episodeStill: URL? {
+    guard episodeArt, let focus, focus.type == .episode, let thumb = focus.thumb else { return nil }
+    return library.imageURL(thumb, width: 1920, height: 1080, scale: 1)
+  }
 
   private var isSeries: Bool { shown.type == .show || shown.type == .season || shown.type == .episode }
 
@@ -78,9 +88,17 @@ struct TVDetailPage: View {
     .background {
       ZStack(alignment: .top) {
         AmbientBackdrop(library: library, item: titleItem)
-        // The art sits right with faces clear of the logo and buttons, the
-        // rest softly blurred, like the hero (KP, 2026-11-16, Dune).
-        TVHeroArt(library: library, item: titleItem, kind: .scenery, clearX: TVLayout.leading + 760 + 50, push: 0, maxX: 760)
+        Group {
+          if let still = episodeStill {
+            RemoteImage(url: still, placeholder: Color.clear)
+          } else {
+            // The art sits right with faces clear of the logo and buttons, the
+            // rest softly blurred, like the hero (KP, 2026-11-16, Dune).
+            TVHeroArt(library: library, item: titleItem, kind: .scenery, clearX: TVLayout.leading + 760 + 50, push: 0, maxX: 760)
+          }
+        }
+        .id(episodeStill)
+        .transition(.opacity)
         // Edge to edge: inside the safe area it left a dark strip down the left.
         .frame(width: 1920)
         .frame(height: 1080)
@@ -306,7 +324,10 @@ struct TVDetailPage: View {
         LazyHStack(alignment: .top, spacing: 36) {
           ForEach(episodes) { episode in
             TVEpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
-              withAnimation(.easeInOut(duration: 0.25)) { focus = episode }
+              withAnimation(.easeInOut(duration: 0.25)) {
+              focus = episode
+              episodeArt = true
+            }
               playFocused = true
             }
           }
@@ -438,7 +459,8 @@ struct TVDetailPage: View {
   /// The show's seasons, opened on `season` (else the first one not watched
   /// yet) with `episode` picked (else the one to watch next).
   private func loadSeasons(show: String, season: String?, episode: String?) async throws {
-    seasons = try await library.children(of: show).filter { $0.type == .season }
+    let all = try await library.children(of: show).filter { $0.type == .season }
+    seasons = SeasonList.visible(all, showSpecials: showSpecials, keeping: season)
     let start =
       season.flatMap { key in seasons.first { $0.ratingKey == key } }
       ?? seasons.first { !$0.isWatched && ($0.index ?? 0) > 0 } ?? seasons.first
@@ -494,17 +516,9 @@ private struct TVEpisodeLabel: View {
       RemoteImage(url: library.imageURL(item.thumb, width: size.width, height: size.height), placeholder: Astra.Color.surface)
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous))
+        .watchedLook(library.isWatched(item), corner: TVLayout.radius, mark: 32, inset: 18)
         .overlay(alignment: .bottom) {
           if let progress = item.progress { TVProgressLine(value: progress).padding(14) }
-        }
-        .overlay(alignment: .topTrailing) {
-          if library.isWatched(item) {
-            Image(systemName: "checkmark.circle.fill")
-              .symbolRenderingMode(.palette)
-              .foregroundStyle(.black, .white)
-              .font(.system(size: 30))
-              .padding(12)
-          }
         }
         .overlay(
           RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous)

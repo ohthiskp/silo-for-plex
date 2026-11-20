@@ -8,7 +8,7 @@ run-name: SwiftUI Apple TV launch check ${{ github.sha }}
 # JPEGs (ASTRA-SHOT-BEGIN … END) and uploaded as the "tvos-launch" artifact.
 on:
   push:
-    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r]
+    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-98g8ho]
     paths:
       - "apple/**"
       - ".github/workflows/astra-swiftui-tvos-launch.yml"

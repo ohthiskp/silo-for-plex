@@ -75,7 +75,11 @@ struct PlayerOverlay: View {
       .opacity(visible && !menuOpen ? 1 : 0)
       .allowsHitTesting(false)
 
-      if !player.hasFirstFrame || player.buffering {
+      if !player.hasFirstFrame {
+        // From pressing Play until the first frame: the title card (KP, 2026-11-16).
+        PlayLoadingCard(player: player, library: app.library)
+          .transition(.opacity)
+      } else if player.buffering {
         ProgressView()
           .tint(.white)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -94,7 +98,7 @@ struct PlayerOverlay: View {
       }
 
       chrome
-        .opacity(visible && !menuOpen ? 1 : 0)
+        .opacity(visible && !menuOpen && player.hasFirstFrame ? 1 : 0)
 
       if menuOpen {
         // The video keeps playing, dimmed, under the panel.
@@ -114,6 +118,7 @@ struct PlayerOverlay: View {
     .astraAnimation(Astra.Motion.base, value: visible)
     .astraAnimation(Astra.Motion.base, value: menuOpen)
     .astraAnimation(Astra.Motion.fast, value: player.buffering)
+    .astraAnimation(Astra.Motion.hero, value: player.hasFirstFrame)
     .astraAnimation(Astra.Motion.fast, value: flash?.id)
     // Back while focus is in these controls: SwiftUI gets the press first.
     .onExitCommand(perform: back)

@@ -555,6 +555,8 @@ import SwiftUI
     @AppStorage(Preferences.swipeGesturesKey) private var swipe = true
     @AppStorage(Preferences.twoFingerPauseKey) private var twoFinger = true
     @AppStorage(Preferences.skipSecondsKey) private var skipSeconds = 10
+    @AppStorage(PlaybackLanguage.audioKey) private var audioLanguage = ""
+    @AppStorage(PlaybackLanguage.subtitleKey) private var subtitleLanguage = ""
 
     var body: some View {
       PhoneSettingsSubpage(title: "Playback") {
@@ -566,6 +568,21 @@ import SwiftUI
               ForEach(PlaybackQuality.allCases) { Text($0.title).tag($0) }
             }
             .labelsHidden().pickerStyle(.segmented).fixedSize()
+          }
+        }
+        // KP (2026-11-16): default the audio and subtitles to a language.
+        PhoneCard(title: "Languages", footer: "Audio and subtitles start in these languages whenever the file has them. Automatic leaves it to the file and your Plex server.") {
+          PhoneRow(title: "Audio") {
+            Picker("Audio", selection: $audioLanguage) {
+              ForEach(PlaybackLanguage.choices) { Text($0.title).tag($0.code) }
+            }
+            .labelsHidden().pickerStyle(.menu).tint(Astra.Color.muted)
+          }
+          PhoneRow(title: "Subtitles") {
+            Picker("Subtitles", selection: $subtitleLanguage) {
+              ForEach(PlaybackLanguage.choices) { Text($0.title).tag($0.code) }
+            }
+            .labelsHidden().pickerStyle(.menu).tint(Astra.Color.muted)
           }
         }
         PhoneCard(footer: "Shows in the last 15 seconds of an episode. It never plays on its own.") {
@@ -656,6 +673,7 @@ import SwiftUI
     @AppStorage(LibraryQuality.storageKey) private var libraryQuality: LibraryQuality = .deviceDefault
     @AppStorage(Preferences.qualityBadgesKey) private var qualityBadges = true
     @AppStorage(Preferences.ratingsKey) private var ratings = true
+    @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
     /// A change waiting for the reload to be confirmed (design-audit B-02).
     @State private var pending: LibraryQuality?
 
@@ -675,6 +693,9 @@ import SwiftUI
         ) {
           PhoneSwitch(title: "HD and 4K badges", isOn: $qualityBadges)
           PhoneSwitch(title: "Age ratings", isOn: $ratings)
+        }
+        PhoneCard(title: "Shows", footer: "Specials are a show's extra episodes (season 0). Off keeps them out of the season list.") {
+          PhoneSwitch(title: "Show Specials", isOn: $showSpecials)
         }
       }
       .confirmationDialog(

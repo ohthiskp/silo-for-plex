@@ -294,6 +294,46 @@ private struct TVOptionRow<Choice: Hashable, Label: View>: View {
   }
 }
 
+/// A setting with many values: one pill showing the current value; Select
+/// moves to the next one, Left and Right too.
+private struct TVCycleRow<Choice: Hashable>: View {
+  var title: String
+  var choices: [Choice]
+  var selection: Choice
+  var name: (Choice) -> String
+  var choose: (Choice) -> Void
+
+  private func step(_ by: Int) {
+    guard !choices.isEmpty else { return }
+    let index = choices.firstIndex(of: selection) ?? 0
+    choose(choices[(index + by + choices.count) % choices.count])
+  }
+
+  var body: some View {
+    HStack(spacing: 20) {
+      Text(title)
+        .font(.system(size: 29, weight: .medium))
+        .foregroundStyle(Astra.Color.ink)
+        .lineLimit(1)
+      Spacer(minLength: 12)
+      Button {
+        step(1)
+      } label: {
+        HStack(spacing: 14) {
+          Text(name(selection))
+          Image(systemName: "chevron.up.chevron.down").font(.system(size: 20, weight: .semibold))
+        }
+      }
+      .buttonStyle(TVOptionStyle(isOn: true))
+      .accessibilityLabel("\(title), \(name(selection))")
+      .accessibilityHint("Select for the next language")
+    }
+    .padding(.horizontal, 30)
+    .frame(minHeight: 96)
+    .overlay(alignment: .top) { Rectangle().fill(Astra.Color.hairline).frame(height: 1).padding(.horizontal, 8) }
+  }
+}
+
 extension TVOptionRow where Label == Text {
   init(title: String, choices: [Choice], selection: Choice, name: @escaping (Choice) -> String, choose: @escaping (Choice) -> Void) {
     self.init(title: title, choices: choices, selection: selection, choose: choose) { Text(name($0)) }
@@ -461,6 +501,8 @@ private struct TVHomePreview: View {
 private struct TVPlaybackPane: View {
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
   @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
+  @AppStorage(PlaybackLanguage.audioKey) private var audioLanguage = ""
+  @AppStorage(PlaybackLanguage.subtitleKey) private var subtitleLanguage = ""
 
   var body: some View {
     VStack(alignment: .leading, spacing: 28) {
@@ -470,6 +512,14 @@ private struct TVPlaybackPane: View {
         TVOptionRow(title: "Preferred version", choices: PlaybackQuality.allCases, selection: quality, name: \.title) {
           quality = $0
         }
+      }
+      // KP (2026-11-16): default the audio and subtitles to a language.
+      // Too many to show side by side, so Select steps through them.
+      TVSettingsCard(title: "Languages", footer: "Audio and subtitles start in these languages whenever the file has them. Automatic leaves it to the file and your Plex server.") {
+        TVCycleRow(title: "Audio", choices: PlaybackLanguage.choices.map(\.code), selection: audioLanguage,
+          name: { PlaybackLanguage(code: $0).title }) { audioLanguage = $0 }
+        TVCycleRow(title: "Subtitles", choices: PlaybackLanguage.choices.map(\.code), selection: subtitleLanguage,
+          name: { PlaybackLanguage(code: $0).title }) { subtitleLanguage = $0 }
       }
       TVSettingsCard(footer: "Shows in the last 15 seconds of an episode. It never plays on its own.") {
         TVSwitchRow(title: "Next Episode button", isOn: $nextEpisode)
@@ -528,6 +578,7 @@ private struct TVLibraryPane: View {
   @AppStorage(LibraryQuality.storageKey) private var libraryQuality: LibraryQuality = .deviceDefault
   @AppStorage(Preferences.qualityBadgesKey) private var qualityBadges = true
   @AppStorage(Preferences.ratingsKey) private var ratings = true
+  @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
   /// A change waiting for the reload to be confirmed (design-audit B-02).
   @State private var pending: LibraryQuality?
 
@@ -543,6 +594,9 @@ private struct TVLibraryPane: View {
       ) {
         TVSwitchRow(title: "HD and 4K badges", isOn: $qualityBadges)
         TVSwitchRow(title: "Age ratings", isOn: $ratings)
+      }
+      TVSettingsCard(footer: "Specials are a show's extra episodes (season 0). Off keeps them out of the season list.") {
+        TVSwitchRow(title: "Show Specials", isOn: $showSpecials)
       }
     }
     .confirmationDialog(

@@ -156,15 +156,7 @@ struct PosterCard: View {
         ArtworkImage(library: library, item: item, kind: .poster, width: width, height: height)
           .frame(width: width, height: height)
           .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
-          .overlay(alignment: .topTrailing) {
-            if library.isWatched(item) {
-              Image(systemName: "checkmark.circle.fill")
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(.black, .white)
-                .font(.system(size: 18))
-                .padding(8)
-            }
-          }
+          .watchedLook(library.isWatched(item))
           .overlay(
             RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))
           .pressable()

@@ -11,6 +11,8 @@ struct DetailView: View {
   /// The show an episode or season belongs to, for the + Watchlist button.
   @State private var parentShow: PlexMetadata?
   @State private var seasons: [PlexMetadata] = []
+  /// Settings → Library → Show Specials (off by default, KP 2026-11-16).
+  @AppStorage(Preferences.showSpecialsKey) private var showSpecials = false
   @State private var selectedSeason: PlexMetadata?
   @State private var episodes: [PlexMetadata] = []
   /// A show's picked episode (KP, 2026-11-14): the header shows its details and
@@ -69,16 +71,25 @@ struct DetailView: View {
     return titleItem.summary
   }
 
-  /// Picks an episode without playing it, and brings the header with its details into view.
-  private func pick(_ episode: PlexMetadata, scroll: ScrollViewProxy) {
+  /// Picks an episode without playing it. The page stays where it is
+  /// (KP, 2026-11-16: "dont make it automatically go to top").
+  private func pick(_ episode: PlexMetadata) {
     astraWithAnimation(Astra.Motion.base) {
       focus = episode
       summaryExpanded = false
     }
-    astraWithAnimation(.smooth(duration: 0.45)) { scroll.scrollTo(Self.headerID, anchor: .top) }
+  }
+
+  /// The picked episode's own still for the header, from the moment the page
+  /// opens (KP, 2026-11-16: "each episode should have its own backdrop").
+  private var episodeStill: URL? {
+    guard let focus, focus.type == .episode, let thumb = focus.thumb else { return nil }
+    return library.imageURL(thumb, width: 1920, height: 1080, scale: 1)
   }
 
   private static let headerID = "details.header"
+  /// The header's text column on Mac and iPad.
+  private static let textColumn: CGFloat = 580
   private static let episodesID = "details.episodes"
 
   var body: some View {
@@ -97,7 +108,7 @@ struct DetailView: View {
           // scrolls, so everything below the header covers it as it rises.
           VStack(alignment: .leading, spacing: sectionSpacing) {
             if isSeries, !seasons.isEmpty || !episodes.isEmpty {
-              episodesSection(scroll: scroll)
+              episodesSection
                 .id(Self.episodesID)
             }
             if !titleItem.roles.isEmpty {
@@ -131,14 +142,9 @@ struct DetailView: View {
     .ignoresSafeArea(edges: .top)
     .background { pageBackground }
     #if os(macOS)
-      .overlay(alignment: .topTrailing) {
+      .overlay(alignment: .topLeading) {
+        // KP (2026-11-16): X and ••• at the top left of the card.
         HStack(spacing: 10) {
-          // KP (2026-11-08): ••• beside the X with the title's actions.
-          if !shown.isCatalogOnly {
-            moreMenu
-              .menuStyle(.button)
-              .astraIconButton(size: 36, variant: .clear)
-          }
           // Astra: details are a card on the Mac; X closes it (Esc too).
           Button {
             if let closeCard { closeCard() } else if !path.isEmpty { path.removeLast() }
@@ -151,8 +157,14 @@ struct DetailView: View {
           #endif
           .help("Close (Esc)")
           .accessibilityLabel("Close")
+          // KP (2026-11-08): ••• beside the X with the title's actions.
+          if !shown.isCatalogOnly {
+            moreMenu
+              .menuStyle(.button)
+              .astraIconButton(size: 36, variant: .clear)
+          }
         }
-        .padding(.trailing, 18)
+        .padding(.leading, 18)
         .padding(.top, 18)
       }
     #elseif os(iOS)
@@ -353,6 +365,9 @@ struct DetailView: View {
         Text(error).astraFont(size: 13).foregroundStyle(Astra.Color.muted)
       }
     }
+    // KP (2026-11-16, Dune): the text keeps to a column at the left, so
+    // the faces in the art (framed to its right on the Mac) stay clear.
+    .frame(maxWidth: narrow ? .infinity : Self.textColumn, alignment: .leading)
     .padding(.leading, leading)
     .padding(.trailing, Astra.Spacing.pageTrailing)
     // Room for the backdrop above the text, and for the back button.
@@ -361,11 +376,27 @@ struct DetailView: View {
     .frame(maxWidth: .infinity, minHeight: min(Astra.Layout.detailHeaderHeight, viewport * 0.72), alignment: .bottomLeading)
     .background {
       ZStack {
-        ArtworkImage(library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .clipped()
-          // Darkens a little as the page rises over it.
-          .overlay(Astra.Color.bg.opacity(min(0.55, max(0, scrolled) / 700)))
+        Group {
+          if let still = episodeStill {
+            RemoteImage(url: still, placeholder: Color.clear)
+          } else {
+            #if os(macOS)
+              // Faces found by Vision sit right of the text column (KP,
+              // 2026-11-16: "the text is covering his face"), as on Apple TV.
+              MacHeroArt(
+                library: library, item: titleItem, clearX: leading + Self.textColumn + 40, kind: .scenery, push: 0.3)
+            #else
+              ArtworkImage(
+                library: library, item: titleItem, kind: .scenery, width: 1920, height: 1080, placeholder: Color.clear)
+            #endif
+          }
+        }
+        .id(episodeStill)
+        .transition(.opacity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        // Darkens a little as the page rises over it.
+        .overlay(Astra.Color.bg.opacity(min(0.55, max(0, scrolled) / 700)))
         HeroScrim()
       }
       .tvFullBleed()
@@ -451,63 +482,34 @@ struct DetailView: View {
     #endif
   }
 
-  /// KP (2026-11-14): a season dropdown, then the whole season. Tapping an
-  /// episode shows its details up top; Play / Resume or a double tap plays it.
-  private func episodesSection(scroll: ScrollViewProxy) -> some View {
+  /// KP (2026-11-16, like Infuse): the seasons left to right with no dropdown,
+  /// then the season's episodes left to right. Tapping an episode shows its
+  /// details up top; Play / Resume or a double tap plays it.
+  private var episodesSection: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack(spacing: 12) {
-        SeasonPicker(seasons: seasons, selected: selectedSeason) { season in
+        SeasonTabs(seasons: seasons, selected: selectedSeason, leading: rowLeading) { season in
           Task { await selectSeason(season) }
         }
-        if !episodes.isEmpty {
-          Text("\(episodes.count) Episode\(episodes.count == 1 ? "" : "s")")
-            .astraFont(size: 13, weight: .medium)
-            .foregroundStyle(Astra.Color.muted)
-            .lineLimit(1)
-        }
-        Spacer(minLength: 0)
-        if let selectedSeason, seasons.count > 1 {
-          DownloadButton(item: selectedSeason, compact: true)
+      }
+      .padding(.trailing, rowTrailing)
+      episodeCardRow
+    }
+  }
+
+  /// The season as a row of stills on every device. The row stays in place
+  /// when the season changes; only its cards are replaced.
+  private var episodeCardRow: some View {
+    ScrollView(.horizontal) {
+      LazyHStack(alignment: .top, spacing: narrow ? 12 : 14) {
+        ForEach(episodes) { episode in
+          EpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
+            pick(episode)
+          }
         }
       }
       .padding(.leading, rowLeading)
       .padding(.trailing, rowTrailing)
-      episodeList(scroll: scroll)
-    }
-  }
-
-  @ViewBuilder private func episodeList(scroll: ScrollViewProxy) -> some View {
-    #if os(iOS)
-      if narrow {
-        // iPhone: the season as a list, one episode per line.
-        VStack(spacing: 6) {
-          ForEach(episodes) { episode in
-            PhoneEpisodeRow(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
-              pick(episode, scroll: scroll)
-            }
-          }
-        }
-        .padding(.horizontal, PhoneDetail.margin - PhoneEpisodeRow.inset)
-      } else {
-        episodeCardRow(scroll: scroll)
-      }
-    #else
-      episodeCardRow(scroll: scroll)
-    #endif
-  }
-
-  /// Mac and iPad: the season as a row of stills. The row stays in place when
-  /// the season changes; only its cards are replaced.
-  private func episodeCardRow(scroll: ScrollViewProxy) -> some View {
-    ScrollView(.horizontal) {
-      LazyHStack(alignment: .top, spacing: 14) {
-        ForEach(episodes) { episode in
-          EpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
-            pick(episode, scroll: scroll)
-          }
-        }
-      }
-      .padding(.horizontal, leading)
     }
     .scrollIndicators(.never)
     .scrollClipDisabled()
@@ -604,7 +606,8 @@ struct DetailView: View {
   /// The show's seasons, opened on `season` (else the first one not watched
   /// yet) with `episode` picked (else the one to watch next).
   private func loadSeasons(show: String, season: String?, episode: String?) async throws {
-    seasons = try await library.children(of: show).filter { $0.type == .season }
+    let all = try await library.children(of: show).filter { $0.type == .season }
+    seasons = SeasonList.visible(all, showSpecials: showSpecials, keeping: season)
     let start =
       season.flatMap { key in seasons.first { $0.ratingKey == key } }
       ?? seasons.first { !$0.isWatched && ($0.index ?? 0) > 0 } ?? seasons.first
@@ -627,51 +630,57 @@ struct DetailView: View {
   }
 }
 
-/// "Season 1 ⌄": a glass capsule that opens the list of seasons (KP, 2026-11-14).
-/// A show with one season shows its name without the dropdown.
-struct SeasonPicker: View {
+/// The seasons left to right, like Infuse (KP, 2026-11-16: "no drop down").
+/// The picked season is a glass capsule; the others are quiet text.
+struct SeasonTabs: View {
   var seasons: [PlexMetadata]
   var selected: PlexMetadata?
+  var leading: CGFloat
   var onPick: (PlexMetadata) -> Void
-
-  private var title: String { selected?.title ?? seasons.first?.title ?? "Episodes" }
 
   var body: some View {
     if seasons.count > 1 {
-      Menu {
-        ForEach(seasons) { season in
-          Button {
-            onPick(season)
-          } label: {
-            if season.id == selected?.id {
-              Label(season.title, systemImage: "checkmark")
-            } else {
-              Text(season.title)
+      ScrollViewReader { proxy in
+        ScrollView(.horizontal) {
+          HStack(spacing: 6) {
+            ForEach(seasons) { season in
+              let isOn = season.id == (selected ?? seasons.first)?.id
+              Button {
+                onPick(season)
+              } label: {
+                Text(season.title)
+                  .astraFont(size: 15, weight: isOn ? .semibold : .medium)
+                  .foregroundStyle(isOn ? Astra.Color.ink : Astra.Color.muted)
+                  .lineLimit(1)
+                  .padding(.horizontal, 14)
+                  .frame(height: 36)
+                  .contentShape(Capsule())
+                  .background {
+                    if isOn { Color.clear.astraGlass(in: Capsule(), variant: .regular, interactive: true) }
+                  }
+              }
+              .buttonStyle(.plain)
+              .id(season.id)
+              .accessibilityAddTraits(isOn ? [.isSelected] : [])
             }
           }
+          .padding(.leading, leading - 14)
+          .padding(.trailing, 8)
         }
-      } label: {
-        HStack(spacing: 8) {
-          Text(title).astraFont(size: 16, weight: .semibold).lineLimit(1)
-          Image(systemName: "chevron.down").font(.system(size: 12, weight: .bold))
+        .scrollIndicators(.never)
+        .scrollClipDisabled()
+        .onAppear { if let selected { proxy.scrollTo(selected.id, anchor: .center) } }
+        .onChange(of: selected?.id) { _, id in
+          if let id { astraWithAnimation(Astra.Motion.base) { proxy.scrollTo(id, anchor: .center) } }
         }
-        .foregroundStyle(Astra.Color.ink)
-        .padding(.horizontal, 16)
-        .frame(height: 38)
-        .contentShape(Capsule())
-        .astraGlass(in: Capsule(), variant: .regular, interactive: true)
       }
-      .menuStyle(.button)
-      .buttonStyle(.plain)
-      .menuIndicator(.hidden)
-      .fixedSize()
-      .accessibilityLabel("Season, \(title)")
-      .accessibilityHint("Choose a season")
     } else {
-      Text(title)
+      Text(selected?.title ?? seasons.first?.title ?? "Episodes")
         .astraFont(.rowTitle)
         .foregroundStyle(Astra.Color.ink)
         .lineLimit(1)
+        .padding(.leading, leading)
+      Spacer(minLength: 0)
     }
   }
 }
@@ -693,11 +702,9 @@ struct EpisodeCard: View {
       RemoteImage(url: library.imageURL(item.thumb, width: width, height: height))
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
+        .watchedLook(library.isWatched(item))
         .overlay(alignment: .bottomLeading) {
           if let progress = item.progress { ProgressBar(value: progress).padding(10) }
-        }
-        .overlay(alignment: .topTrailing) {
-          if library.isWatched(item) { EpisodeWatchedMark().padding(8) }
         }
         .overlay {
           RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous)
@@ -730,17 +737,6 @@ struct EpisodeCard: View {
       DownloadButton(item: item, compact: true)
         .offset(x: 4, y: height + 1)
     }
-  }
-}
-
-/// The white tick on a watched episode's still.
-struct EpisodeWatchedMark: View {
-  var body: some View {
-    Image(systemName: "checkmark.circle.fill")
-      .symbolRenderingMode(.palette)
-      .foregroundStyle(.black, .white)
-      .font(.system(size: 18))
-      .accessibilityHidden(true)
   }
 }
 
@@ -856,6 +852,7 @@ struct MetaBadgeRow: View {
   @AppStorage(Preferences.ratingsKey) private var showRatings = true
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
   @AppStorage(Preferences.qualityBadgesKey) private var showQuality = true
+  @Environment(\.astraOnArt) private var onArt
 
   private var pick: PlaybackQuality { quality == .auto ? .current() : quality }
   private var gap: CGFloat { fontSize * 1.25 }
@@ -883,7 +880,7 @@ struct MetaBadgeRow: View {
       badges(size)
     }
     .font(.system(size: size, weight: .regular))
-    .foregroundStyle(Astra.Color.ink.opacity(0.95))
+    .foregroundStyle(Astra.Color.ink(onArt: onArt).opacity(0.95))
     .lineLimit(1)
   }
 
@@ -897,7 +894,7 @@ struct MetaBadgeRow: View {
         .frame(height: fontSize * 1.32)
         .overlay(
           RoundedRectangle(cornerRadius: fontSize * 0.2, style: .continuous)
-            .strokeBorder(Astra.Color.ink.opacity(0.85), lineWidth: max(1, fontSize * 0.06))
+            .strokeBorder(Astra.Color.ink(onArt: onArt).opacity(0.85), lineWidth: max(1, fontSize * 0.06))
         )
         .fixedSize()
         .accessibilityLabel("Rated \(rating)")
@@ -979,6 +976,7 @@ struct FormatBadges: View {
 /// One badge in the format row: clear, with a thin grey outline, rounded
 /// corners and bold text (KP's Avatar mockup, 2026-11-08).
 struct FormatPill<Content: View>: View {
+  @Environment(\.astraOnArt) private var onArt
   /// A Dolby logo: tighter sides so the logo fills the pill and stays
   /// readable (badge audit, 2026-11-16: "VISION" was ~3 pt tall).
   var logo = false
@@ -987,12 +985,12 @@ struct FormatPill<Content: View>: View {
   var body: some View {
     content
       .font(.system(size: 13 * formatBadgeScale, weight: .bold))
-      .foregroundStyle(Astra.Color.ink)
+      .foregroundStyle(Astra.Color.ink(onArt: onArt))
       .padding(.horizontal, (logo ? 7 : 10) * formatBadgeScale)
       .frame(height: 22 * formatBadgeScale)
       .overlay(
         RoundedRectangle(cornerRadius: 6 * formatBadgeScale, style: .continuous)
-          .strokeBorder(Astra.Color.ink.opacity(0.5), lineWidth: 1)
+          .strokeBorder(Astra.Color.ink(onArt: onArt).opacity(0.5), lineWidth: 1)
       )
       .fixedSize()
   }
@@ -1003,6 +1001,7 @@ struct FormatPill<Content: View>: View {
 /// poster or trailer (KP, 2026-11-09: "in a box… look very official"). The
 /// same box on the hero, Details and Apple TV.
 struct RatingBox: View {
+  @Environment(\.astraOnArt) private var onArt
   var text: String
   var fontSize: CGFloat = 12
   /// A soft grey filled box instead of the outlined one (KP's iPhone mockup, 2026-11-09).
@@ -1013,15 +1012,15 @@ struct RatingBox: View {
       .font(.system(size: fontSize, weight: .heavy).width(.condensed))
       .tracking(fontSize * 0.05)
       .monospacedDigit()
-      .foregroundStyle(Astra.Color.ink.opacity(grey ? 0.9 : 1))
+      .foregroundStyle(Astra.Color.ink(onArt: onArt).opacity(grey ? 0.9 : 1))
       .padding(.horizontal, fontSize * 0.5)
       .frame(height: fontSize * 1.75)
       .background {
-        if grey { RoundedRectangle(cornerRadius: fontSize * 0.3, style: .continuous).fill(Astra.Color.ink.opacity(0.22)) }
+        if grey { RoundedRectangle(cornerRadius: fontSize * 0.3, style: .continuous).fill(Astra.Color.ink(onArt: onArt).opacity(0.22)) }
       }
       .overlay(
         RoundedRectangle(cornerRadius: fontSize * 0.16, style: .continuous)
-          .strokeBorder(Astra.Color.ink, lineWidth: grey ? 0 : max(1.25, fontSize * 0.12))
+          .strokeBorder(Astra.Color.ink(onArt: onArt), lineWidth: grey ? 0 : max(1.25, fontSize * 0.12))
       )
       .fixedSize()
       .accessibilityLabel("Rated \(text)")
@@ -1065,14 +1064,15 @@ struct ExpandableSummary: View {
 /// Resume / Play on Details: a solid white capsule with black text (KP's mockup).
 struct SolidCapsuleButtonStyle: ButtonStyle {
   @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.astraOnArt) private var onArt
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.system(size: 16 * Astra.Layout.controlScale, weight: .semibold))
-      .foregroundStyle(Astra.Color.onSelection)
+      .foregroundStyle(Astra.Color.onSelection(onArt: onArt))
       .padding(.horizontal, 22 * Astra.Layout.controlScale)
       .frame(height: 50 * Astra.Layout.controlScale)
-      .background(Capsule().fill(Astra.Color.ink.opacity(isEnabled ? 1 : 0.35)))
+      .background(Capsule().fill(Astra.Color.ink(onArt: onArt).opacity(isEnabled ? 1 : 0.35)))
       .tvFocusLift(1.06)
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
       .astraAnimation(.snappy(duration: 0.15), value: configuration.isPressed)
@@ -1179,17 +1179,11 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
             .lineLimit(summaryExpanded ? nil : 4)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, focus?.type == .episode ? 8 : 16)
-        }
-        if !playTarget.directors.isEmpty {
-          HStack(spacing: 5) {
-            Text("Directed by").foregroundStyle(Astra.Color.muted)
-            Text(playTarget.directors.prefix(2).map(\.tag).joined(separator: ", "))
-              .fontWeight(.semibold)
-              .foregroundStyle(Astra.Color.ink)
-          }
-          .astraFont(size: 15)
-          .lineLimit(1)
-          .padding(.top, 10)
+            .contentShape(Rectangle())
+            .onTapGesture {
+              guard summary.count > 150 else { return }
+              astraWithAnimation(Astra.Motion.base) { summaryExpanded.toggle() }
+            }
         }
         if (headerSummary?.count ?? 0) > 150 {
           Button {
@@ -1209,6 +1203,17 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
           .buttonStyle(.plain)
           .padding(.top, 2)
         }
+        if !playTarget.directors.isEmpty {
+          HStack(spacing: 5) {
+            Text("Directed by").foregroundStyle(Astra.Color.muted)
+            Text(playTarget.directors.prefix(2).map(\.tag).joined(separator: ", "))
+              .fontWeight(.semibold)
+              .foregroundStyle(Astra.Color.ink)
+          }
+          .astraFont(size: 15)
+          .lineLimit(1)
+          .padding(.top, 10)
+        }
         if notOnServer {
           Text("Not on your Plex server.").astraFont(size: 13).foregroundStyle(Astra.Color.muted).padding(.top, 10)
         }
@@ -1225,7 +1230,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
           // KP (2026-11-09): framed so the faces end above the logo, for any title.
           FramedArtwork(
             library: library, item: titleItem, kind: .scenery, zoneHeight: logoTop + 90, limitY: logoTop - 4,
-            topOffset: PhoneDetail.backdropTop, minTop: PhoneDetail.backdropTop + 40)
+            topOffset: PhoneDetail.backdropTop, minTop: PhoneDetail.backdropTop + 40, imageURL: episodeStill)
           PhoneDetail.backdropShade
         }
         .frame(width: width, height: logoTop + 90)
@@ -1287,73 +1292,6 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         }
         .scrollIndicators(.never)
         .scrollClipDisabled()
-      }
-    }
-  }
-
-  /// One line of a season on iPhone: the still, "3. Title", its length and
-  /// synopsis. The picked episode sits on a soft highlight (KP, 2026-11-14).
-  struct PhoneEpisodeRow: View {
-    var library: LibraryStore
-    var item: PlexMetadata
-    var selected: Bool
-    var onSelect: () -> Void
-
-    /// The highlight's padding around the row's content.
-    static let inset: CGFloat = 10
-    private static let still = CGSize(width: 136, height: 77)
-
-    @Environment(\.playItem) private var playItem
-
-    var body: some View {
-      HStack(alignment: .top, spacing: 14) {
-        RemoteImage(url: library.imageURL(item.thumb, width: Self.still.width * 2, height: Self.still.height * 2))
-          .frame(width: Self.still.width, height: Self.still.height)
-          .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-          .overlay(alignment: .bottom) {
-            if let progress = item.progress { ProgressBar(value: progress).padding(.horizontal, 8).padding(.bottom, 7) }
-          }
-          .overlay(alignment: .topTrailing) {
-            if library.isWatched(item) { EpisodeWatchedMark().padding(6) }
-          }
-          .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Astra.Color.hairline)
-          }
-        VStack(alignment: .leading, spacing: 4) {
-          Text(item.index.map { "\($0). \(item.title)" } ?? item.title)
-            .astraFont(size: 15, weight: .semibold)
-            .foregroundStyle(Astra.Color.ink)
-            .lineLimit(2)
-          if let duration = item.durationLabel {
-            Text(duration).astraFont(size: 12.5, weight: .medium).foregroundStyle(Astra.Color.muted)
-          }
-          if let summary = item.summary, !summary.isEmpty {
-            Text(summary).astraFont(size: 12.5).foregroundStyle(Astra.Color.muted).lineLimit(2)
-          }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Room for the download button drawn over this corner.
-        Color.clear.frame(width: 26, height: 1)
-      }
-      .padding(Self.inset)
-      .background {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-          .fill(Astra.Color.ink.opacity(selected ? 0.1 : 0))
-          .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-              .strokeBorder(Astra.Color.ink.opacity(selected ? 0.16 : 0))
-          }
-      }
-      .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-      .episodeTaps(item: item, selected: selected, onSelect: onSelect, play: playItem)
-      .astraAnimation(Astra.Motion.fast, value: selected)
-      .itemMenu(library: library, item: item)
-      .sensoryFeedback(.selection, trigger: selected) { _, now in now }
-      // Outside the row's taps, so it gets its own.
-      .overlay(alignment: .topTrailing) {
-        DownloadButton(item: item, compact: true)
-          .padding(.top, Self.inset - 2)
-          .padding(.trailing, Self.inset - 4)
       }
     }
   }

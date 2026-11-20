@@ -225,6 +225,8 @@ jobs:
           nav mac-nav-search 30 -AstraDemoTab search -AstraDemoQuery dune
           nav mac-nav-settings 30 -AstraDemoTab settings
           nav mac-nav-details 30 -AstraDemoTab home -AstraDemoOpen 101
+          nav mac-nav-settings-playback 30 -AstraDemoTab settings -AstraDemoSettings playback
+          nav mac-nav-settings-updates 30 -AstraDemoTab settings -AstraDemoSettings updates
           for f in "$RUNNER_TEMP"/nav/*.png; do
             [ -f "$f" ] || continue
             sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null
