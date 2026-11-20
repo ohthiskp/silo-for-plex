@@ -100,8 +100,6 @@ final class LibraryStore {
   private(set) var verifiedVersion = 0
   /// How long opening a title took, until its full details showed.
   private(set) var openTimings = OpenTimings.load()
-  /// The last complete index (no aliases), kept while a new read runs.
-  @ObservationIgnored private var completeItems: [String: PlexMetadata] = [:]
   /// Each library's newest titles (`topUpLibraryIndex`), kept in every partial index.
   private let indexExtras = IndexExtras()
   @ObservationIgnored private var indexWaiters: [CheckedContinuation<[String: PlexMetadata], Error>] = []
@@ -542,22 +540,28 @@ final class LibraryStore {
     indexStatus.phase = .indexing
     indexDiskRead = Task { [weak self] in
       // Off the main actor: a big library is thousands of titles to decode and alias.
+      // KP, 2026-11-19: on a 125,491-title library this held the saved
+      // index three times over (the snapshot, it merged with the checkpoint,
+      // and that with aliases) and iOS closed Astra for memory. Now there is
+      // one copy, built in place.
       let disk = await Task.detached(priority: .userInitiated) { () -> DiskIndex in
-        let snapshot = LibraryIndexSnapshot.load(from: url).flatMap { $0.items.isEmpty ? nil : $0 }
-        let checkpoint = LibraryIndexCheckpoint.load(from: checkpointURL)
-        let partial = checkpoint.map { $0.index(order: $0.libraries.keys.sorted()) } ?? [:]
-        let base = (snapshot?.items ?? [:]).merging(partial) { _, read in read }
+        var snapshot = LibraryIndexSnapshot.load(from: url).flatMap { $0.items.isEmpty ? nil : $0 }
+        var base = snapshot?.items ?? [:]
+        snapshot?.items = [:]
+        if let checkpoint = LibraryIndexCheckpoint.load(from: checkpointURL) {
+          base.merge(checkpoint.index(order: checkpoint.libraries.keys.sorted())) { _, read in read }
+        }
+        LibraryMatch.addAliases(to: &base)
         return DiskIndex(
           snapshot: snapshot.map {
             .init(
               savedAt: $0.savedAt, duration: $0.duration, fresh: $0.isFresh(),
               totals: LibraryIndexCheck.canVerify($0) ? $0.totals : nil)
           },
-          complete: snapshot?.items ?? [:], aliased: base.isEmpty ? [:] : LibraryMatch.withAliases(base))
+          aliased: base)
       }.value
       guard let self, !self.isClosed else { return }
       if let saved = disk.snapshot {
-        self.completeItems = disk.complete
         self.indexComplete = true
         self.indexTrusted = saved.fresh
         self.indexStatus.complete = true
@@ -610,7 +614,6 @@ final class LibraryStore {
       var totals: [String: Int]?
     }
     var snapshot: Saved?
-    var complete: [String: PlexMetadata]
     var aliased: [String: PlexMetadata]
   }
 
@@ -631,8 +634,9 @@ final class LibraryStore {
     indexStatus.startedAt = started
     indexStatus.lastError = nil
     indexStatus.retries = 0
+    // The index in use is the one a read in progress adds to (shared, not copied).
     let onProgress = Self.indexProgress(
-      previous: completeItems, extras: indexExtras,
+      previous: libraryIndex ?? [:], eager: !indexComplete, extras: indexExtras,
       store: { [weak self] progress, aliased in await self?.applyIndexProgress(progress, aliased: aliased) })
     indexRun = Task.detached(priority: .utility) { [weak self] in
       do {
@@ -649,8 +653,9 @@ final class LibraryStore {
         // Each library's count, so the next launch can check the index instead of reading it again.
         let totals = await LibraryIndexCheck.counts(client: client, sections: wanted)
         try? LibraryIndexSnapshot(savedAt: Date(), items: items, duration: duration, totals: totals).save(to: url)
-        let aliased = LibraryMatch.withAliases(LibraryIndexer.merging(items, extras.items))
-        await self?.indexFinished(items: items, aliased: aliased, duration: duration)
+        var aliased = LibraryIndexer.merging(items, extras.items)
+        LibraryMatch.addAliases(to: &aliased)
+        await self?.indexFinished(aliased: aliased, duration: duration)
       } catch {
         await self?.indexFailed(error)
       }
@@ -658,19 +663,25 @@ final class LibraryStore {
   }
 
   /// Builds the progress handler off the main actor: merges what has been
-  /// read with the last complete index (what was read wins) and the newest
-  /// titles, and aliases it, only when it is going to be published.
+  /// read with the index in use (`previous`, aliases dropped; what was read
+  /// wins) and the newest titles, and aliases it, only when it is going to
+  /// be published. Nothing is copied for a round that isn't published.
   nonisolated private static func indexProgress(
-    previous: [String: PlexMetadata], extras: IndexExtras,
+    previous: [String: PlexMetadata], eager: Bool, extras: IndexExtras,
     store: @escaping @Sendable (LibraryIndexRun.Progress, [String: PlexMetadata]?) async -> Void
   ) -> @Sendable (LibraryIndexRun.Progress) async -> Void {
-    let gate = PublishGate(eager: previous.isEmpty)
+    // Eager (show titles as they arrive) while there is no complete index yet.
+    let gate = PublishGate(eager: eager)
     return { progress in
       let completed = progress.libraries.filter(\.complete).count
       var aliased: [String: PlexMetadata]?
-      if gate.shouldPublish(completed: completed, count: progress.items.count) {
-        let read = previous.merging(progress.items) { _, read in read }
-        aliased = LibraryMatch.withAliases(LibraryIndexer.merging(read, extras.items))
+      if gate.shouldPublish(completed: completed, count: progress.itemCount) {
+        var read = previous.filter { !$0.key.hasPrefix(LibraryMatch.aliasPrefix) }
+        read.merge(progress.items) { _, read in read }
+        var merged = LibraryIndexer.merging(read, extras.items)
+        read = [:]
+        LibraryMatch.addAliases(to: &merged)
+        aliased = merged
       }
       await store(progress, aliased)
     }
@@ -684,11 +695,10 @@ final class LibraryStore {
     if let aliased, !aliased.isEmpty { setLibraryIndex(aliased) }
   }
 
-  private func indexFinished(items: [String: PlexMetadata], aliased: [String: PlexMetadata], duration: TimeInterval) {
+  private func indexFinished(aliased: [String: PlexMetadata], duration: TimeInterval) {
     indexRunning = false
     guard !isClosed else { return }
     indexFailures = 0
-    completeItems = items
     indexComplete = true
     indexTrusted = true
     indexStatus.phase = .complete
@@ -741,14 +751,16 @@ final class LibraryStore {
   @ObservationIgnored private var serviceIndexVersion: [String: Int] = [:]
 
   /// `aliased` already has its title-and-year aliases (`LibraryMatch.withAliases`).
-  private func setLibraryIndex(_ aliased: [String: PlexMetadata]) {
-    let replacing = libraryIndex != nil
+  private func setLibraryIndex(_ aliased: [String: PlexMetadata], replacing: Bool? = nil) {
+    let replacing = replacing ?? (libraryIndex != nil)
     libraryIndex = aliased
     if !indexReady { indexReady = true }
     indexRevision += 1
-    indexStatus.itemCount = aliased.keys.filter { !$0.hasPrefix(LibraryMatch.aliasPrefix) }.count
+    indexStatus.itemCount = aliased.keys.lazy.filter { !$0.hasPrefix(LibraryMatch.aliasPrefix) }.count
     MemoryClues.index(titles: indexStatus.itemCount)
     indexVersion += 1
+    // Search's folded copy of the old index is made again when Search asks.
+    searchable = nil
     let waiters = indexWaiters
     indexWaiters = []
     waiters.forEach { $0.resume(returning: aliased) }
@@ -786,7 +798,6 @@ final class LibraryStore {
   private func topUpLibraryIndex() {
     let client = client
     let sections = filter.indexSections(allSections)
-    let url = indexURL
     spawn { [weak self] in
       let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
       guard !wanted.isEmpty else { return }
@@ -807,21 +818,20 @@ final class LibraryStore {
       }
       guard let self, !self.isClosed, !newest.isEmpty else { return }
       self.indexExtras.items = newest
-      let base = (self.libraryIndex ?? [:]).filter { !$0.key.hasPrefix(LibraryMatch.aliasPrefix) }
       // Nothing new: leave the index (and every row matched with it) alone.
-      let known = Set(base.values.map(\.ratingKey))
-      guard newest.contains(where: { !known.contains($0.ratingKey) }) else { return }
-      self.setLibraryIndex(LibraryMatch.withAliases(LibraryIndexer.merging(base, newest)))
-      // Only a complete index is saved as one: a partial one lives in the checkpoint.
-      guard self.indexComplete else { return }
-      let complete = LibraryIndexer.merging(self.completeItems, newest)
-      self.completeItems = complete
-      Task.detached(priority: .utility) {
-        guard let saved = LibraryIndexSnapshot.load(from: url) else { return }
-        try? LibraryIndexSnapshot(
-          savedAt: saved.savedAt, items: complete, duration: saved.duration, totals: saved.totals
-        ).save(to: url)
-      }
+      let keyed = LibraryIndexer.keyed(newest)
+      var index = self.libraryIndex ?? [:]
+      let fresh = keyed.filter { index[$0.key]?.ratingKey != $0.value.ratingKey }
+      guard !fresh.isEmpty else { return }
+      // KP, 2026-11-19: this used to copy the whole index three times, then
+      // read the saved index from disk and write it again, all for a few new
+      // titles; on a 125,491-title library that ran the iPhone out of memory.
+      // The titles are added in place, and not saved: they are asked for
+      // again at every launch, and the next full read saves them.
+      let replacing = self.libraryIndex != nil
+      self.libraryIndex = nil
+      LibraryMatch.add(fresh, to: &index)
+      self.setLibraryIndex(index, replacing: replacing)
     }
   }
 

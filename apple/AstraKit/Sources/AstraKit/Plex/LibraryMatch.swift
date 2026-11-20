@@ -25,11 +25,31 @@ public enum LibraryMatch {
   /// whose TMDB id is missing or different. The first item per key wins.
   public static func withAliases(_ index: [String: PlexMetadata]) -> [String: PlexMetadata] {
     var out = index
-    for (key, item) in index.sorted(by: { $0.key < $1.key }) where !key.hasPrefix(aliasPrefix) {
-      guard let title = item.titleMatchKey else { continue }
-      if out[aliasPrefix + title] == nil { out[aliasPrefix + title] = item }
-    }
+    addAliases(to: &out)
     return out
+  }
+
+  /// `withAliases` in place (KP, 2026-11-19: a 125,000-title library ran the
+  /// iPhone out of memory). Only the keys are sorted, never a copy of every
+  /// title, and the index isn't copied when the caller holds the only one.
+  public static func addAliases(to index: inout [String: PlexMetadata]) {
+    for key in index.keys.sorted() where !key.hasPrefix(aliasPrefix) {
+      guard let title = index[key]?.titleMatchKey, index[aliasPrefix + title] == nil else { continue }
+      index[aliasPrefix + title] = index[key]
+    }
+  }
+
+  /// Adds `items` (already keyed and slimmed, see `LibraryIndexer`) to an
+  /// aliased index in place: their own keys, and an alias for each one
+  /// whose title has none yet (or whose alias was an older copy of it).
+  public static func add(_ items: [String: PlexMetadata], to index: inout [String: PlexMetadata]) {
+    for key in items.keys.sorted() {
+      guard let item = items[key] else { continue }
+      index[key] = item
+      guard let title = item.titleMatchKey else { continue }
+      let alias = aliasPrefix + title
+      if index[alias] == nil || index[alias]?.ratingKey == item.ratingKey { index[alias] = item }
+    }
   }
 }
 
