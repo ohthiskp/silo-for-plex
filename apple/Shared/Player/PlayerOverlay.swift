@@ -121,7 +121,7 @@ struct PlayerOverlay: View {
         .allowsHitTesting(visible)
 
       // Astra 4.0: Next Episode in the last 15 s of an episode, tap only;
-      // plus Skip Intro / Skip Credits from Plex's markers (KP, 2026-11-24).
+      // plus Skip Intro / Skip Credits from IntroDB (KP, 2026-11-24).
       // Only in the tree when one of them can show, so it never sits over
       // the swipe and tap areas otherwise.
       if (showNextEpisode && player.upNext != nil) || !player.skipMarkers.isEmpty {
@@ -1506,7 +1506,7 @@ private struct PlayerAtmosTag: View {
 /// Astra 4.0 (KP, 2026-11-08): a small Liquid Glass "Next Episode" button in
 /// the last 15 seconds of an episode that has a next one. Nothing plays
 /// unless it is tapped. KP 2026-11-24: the same button says "Skip Intro" or
-/// "Skip Credits" during Plex's markers, and "Next Episode" from the start of
+/// "Skip Credits" during IntroDB's markers, and "Next Episode" from the start of
 /// an episode's final credits. It reads the position itself, so only it redraws.
 struct NextEpisodeButton: View {
   let player: PlayerController

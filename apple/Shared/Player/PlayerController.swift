@@ -92,7 +92,7 @@ final class PlayerController {
   /// Plex's intro and credits markers for the file playing, for Skip Intro
   /// and Skip Credits (KP, 2026-11-24). Empty until loaded, or when the
   /// server hasn't detected any.
-  private(set) var skipMarkers: [PlexMarker] = []
+  private(set) var skipMarkers: [SkipMarker] = []
   @ObservationIgnored private var reporter: Task<Void, Never>?
   /// Lock screen, Control Center, headphones and media keys.
   @ObservationIgnored private let nowPlaying = NowPlaying()
@@ -338,27 +338,25 @@ final class PlayerController {
     loadMarkers(for: item, source: source)
   }
 
-  /// Fetches the intro and credits markers once, at the start. Plex's own
-  /// markers come first; IntroDB fills in an intro or credits Plex hasn't
-  /// detected (KP, 2026-11-24: none on Entourage). Errors (an offline server
-  /// while a download plays) just mean no skip buttons.
+  /// Fetches the intro and credits times from IntroDB once, at the start
+  /// (KP, 2026-11-24: IntroDB only, not Plex's markers). Errors (offline, or
+  /// a title nobody has timed) just mean no skip buttons.
   private func loadMarkers(for item: PlexMetadata, source started: PlaybackSource) {
     skipMarkers = []
+    if Demo.isOn {
+      skipMarkers = Demo.skipMarkers
+      return
+    }
     guard item.type == .episode || item.type == .movie, let server else { return }
     Task { [weak self] in
-      let plex = (try? await server.markers(ratingKey: item.ratingKey)) ?? []
+      let found = await Self.introDBMarkers(for: item, server: server)
       guard let self, self.isActive, self.source?.url == started.url else { return }
-      self.skipMarkers = plex
-      let kinds = Set(plex.map(\.kind))
-      guard !kinds.contains(.intro) || !kinds.contains(.credits) else { return }
-      let community = await Self.introDBMarkers(for: item, server: server)
-      guard self.isActive, self.source?.url == started.url, !community.isEmpty else { return }
-      self.skipMarkers = PlexMarker.merged(plex: plex, introDB: community)
+      self.skipMarkers = found
     }
   }
 
   /// IntroDB's times for an episode (by its show's IMDb id) or a movie.
-  private static func introDBMarkers(for item: PlexMetadata, server: PlexServerClient) async -> [PlexMarker] {
+  private static func introDBMarkers(for item: PlexMetadata, server: PlexServerClient) async -> [SkipMarker] {
     let imdbID: String?
     var season: Int?
     var episode: Int?

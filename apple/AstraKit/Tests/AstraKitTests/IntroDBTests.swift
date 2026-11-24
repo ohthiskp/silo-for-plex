@@ -19,7 +19,7 @@ final class IntroDBTests: XCTestCase {
     XCTAssertEqual(query, ["imdb_id": "tt0387199", "season": "1", "episode": "1"])
     XCTAssertEqual(
       markers,
-      [PlexMarker(kind: .intro, start: 0, end: 69), PlexMarker(kind: .credits, start: 1700.5, end: 1745, isFinal: true)])
+      [SkipMarker(kind: .intro, start: 0, end: 69), SkipMarker(kind: .credits, start: 1700.5, end: 1745, isFinal: true)])
   }
 
   func testMovieRequestAndNothingTimed() async throws {
@@ -37,15 +37,7 @@ final class IntroDBTests: XCTestCase {
       """
     let transport = FakeTransport { _ in (200, Data(json.utf8)) }
     let markers = try await IntroDBClient(transport: transport).markers(imdbID: "tt1", season: nil, episode: nil)
-    XCTAssertEqual(markers, [PlexMarker(kind: .credits, start: 7000, end: 7400, isFinal: false)])
-  }
-
-  func testPlexMarkersWinAndIntroDBFillsTheGap() {
-    let plexCredits = PlexMarker(kind: .credits, start: 1690, end: 1745, isFinal: true)
-    let merged = PlexMarker.merged(
-      plex: [plexCredits],
-      introDB: [PlexMarker(kind: .intro, start: 0, end: 69), PlexMarker(kind: .credits, start: 1700, end: 1745)])
-    XCTAssertEqual(merged, [PlexMarker(kind: .intro, start: 0, end: 69), plexCredits])
+    XCTAssertEqual(markers, [SkipMarker(kind: .credits, start: 7000, end: 7400, isFinal: false)])
   }
 
   func testIMDbIDFromGuids() {

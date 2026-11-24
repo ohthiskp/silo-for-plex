@@ -1,14 +1,14 @@
 import Foundation
 
-/// An intro or credits marker that Plex Media Server detected in a file
-/// (`Marker` on `/library/metadata/<id>?includeMarkers=1`). Offsets are in ms.
-public struct PlexMarker: Decodable, Sendable, Hashable {
+/// An intro or end-credits stretch of a title, in seconds, from IntroDB
+/// (KP, 2026-11-24: "only use intro db from now on, forget plex").
+public struct SkipMarker: Sendable, Hashable {
   public enum Kind: String, Sendable { case intro, credits }
 
   public var kind: Kind
   public var start: Double
   public var end: Double
-  /// Plex marks the credits that run to the end of the file as `final`.
+  /// Credits that run to the end of the file (no scene after them).
   public var isFinal: Bool
 
   public init(kind: Kind, start: Double, end: Double, isFinal: Bool = false) {
@@ -16,20 +16,6 @@ public struct PlexMarker: Decodable, Sendable, Hashable {
     self.start = start
     self.end = end
     self.isFinal = isFinal
-  }
-
-  enum CodingKeys: String, CodingKey { case type, startTimeOffset, endTimeOffset, final }
-
-  public init(from decoder: Decoder) throws {
-    let c = try decoder.container(keyedBy: CodingKeys.self)
-    let type = try c.decodeLenientString(.type) ?? ""
-    guard let kind = Kind(rawValue: type.lowercased()) else {
-      throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "Not an intro or credits marker")
-    }
-    self.kind = kind
-    start = Double(try c.decodeLenientInt(.startTimeOffset) ?? 0) / 1000
-    end = Double(try c.decodeLenientInt(.endTimeOffset) ?? 0) / 1000
-    isFinal = try c.decodeLenientBool(.final) ?? false
   }
 }
 
@@ -46,7 +32,7 @@ public enum SkipPrompt: Equatable, Sendable {
   /// Which prompt shows at `position`. `hasNext` is true when there is a next
   /// episode and Settings → Playback → Next Episode is on.
   public static func at(
-    _ position: Double, duration: Double, markers: [PlexMarker], hasNext: Bool, nextEpisodeLead: Double = 15
+    _ position: Double, duration: Double, markers: [SkipMarker], hasNext: Bool, nextEpisodeLead: Double = 15
   ) -> SkipPrompt? {
     guard duration > 0, position >= 0 else { return nil }
     let left = duration - position
@@ -64,23 +50,6 @@ public enum SkipPrompt: Equatable, Sendable {
       return .credits(to: min(marker.end, duration))
     }
   }
-}
-
-struct MarkersBody: Decodable {
-  struct Item: Decodable {
-    var markers: [PlexMarker]
-    enum CodingKeys: String, CodingKey { case Marker }
-    init(from decoder: Decoder) throws {
-      let c = try decoder.container(keyedBy: CodingKeys.self)
-      // One unknown marker type (Plex also has "commercial") never drops the rest.
-      markers = (try? c.decode([Lossy].self, forKey: .Marker))?.compactMap(\.marker) ?? []
-    }
-  }
-  struct Lossy: Decodable {
-    var marker: PlexMarker?
-    init(from decoder: Decoder) throws { marker = try? PlexMarker(from: decoder) }
-  }
-  var Metadata: [Item]?
 }
 
 extension SkipPrompt {
