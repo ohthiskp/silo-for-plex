@@ -103,6 +103,12 @@ final class LibraryIndexRunTests: XCTestCase {
     XCTAssertEqual(saved.libraries["1"]?.fetched, 600)
     XCTAssertEqual(saved.libraries["1"]?.total, 1_000)
     XCTAssertEqual(saved.libraries["1"]?.complete, false)
+    XCTAssertEqual(saved.libraries["1"]?.items.count, 600)
+    // KP, 2026-11-19: each round writes only its own titles (two rounds of 300).
+    let parts = try FileManager.default.contentsOfDirectory(
+      atPath: LibraryIndexCheckpoint.partsFolder(for: checkpointURL).path
+    ).sorted()
+    XCTAssertEqual(parts, ["1-0.json", "1-1.json"])
 
     down.value = false
     let before = transport.requests.count
