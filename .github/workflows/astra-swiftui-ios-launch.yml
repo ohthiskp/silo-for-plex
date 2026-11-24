@@ -116,6 +116,7 @@ jobs:
           if [ -f "$RUNNER_TEMP/player.mp4" ]; then
             shot player-controls -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer controls
             shot player-scrub -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer scrub
+            shot player-skip -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer skip
           fi
           # The crash report screen (KP, 2026-11-12): crash on purpose, then the next
           # launch shows the report. Cleared afterwards so the UI tests start clean.

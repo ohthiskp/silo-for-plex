@@ -89,6 +89,10 @@ final class PlayerController {
   /// The episode after the one playing, looked up when playback starts so
   /// the last seconds need no network. Nil for movies and the last episode.
   private(set) var upNext: PlexMetadata?
+  /// Plex's intro and credits markers for the file playing, for Skip Intro
+  /// and Skip Credits (KP, 2026-11-24). Empty until loaded, or when the
+  /// server hasn't detected any.
+  private(set) var skipMarkers: [PlexMarker] = []
   @ObservationIgnored private var reporter: Task<Void, Never>?
   /// Lock screen, Control Center, headphones and media keys.
   @ObservationIgnored private let nowPlaying = NowPlaying()
@@ -331,6 +335,37 @@ final class PlayerController {
       ))
     watchForStall(source)
     findUpNext(after: item, library: library, source: source)
+    loadMarkers(for: item, source: source)
+  }
+
+  /// Fetches the intro and credits markers once, at the start. Errors (an
+  /// offline server while a download plays) just mean no skip buttons.
+  private func loadMarkers(for item: PlexMetadata, source started: PlaybackSource) {
+    skipMarkers = []
+    guard item.type == .episode || item.type == .movie, let server else { return }
+    let ratingKey = item.ratingKey
+    Task { [weak self] in
+      let found = (try? await server.markers(ratingKey: ratingKey)) ?? []
+      guard let self, self.isActive, self.source?.url == started.url else { return }
+      self.skipMarkers = found
+    }
+  }
+
+  /// The skip button to show now: Skip Intro, Skip Credits or Next Episode.
+  /// `nextEpisodeOn` is Settings → Playback → Next Episode.
+  func skipPrompt(nextEpisodeOn: Bool) -> SkipPrompt? {
+    guard isActive, hasFirstFrame else { return nil }
+    return SkipPrompt.at(
+      position, duration: duration, markers: skipMarkers, hasNext: nextEpisodeOn && upNext != nil,
+      nextEpisodeLead: Self.nextEpisodeLead)
+  }
+
+  /// A skip button was pressed. Nothing here ever happens on its own.
+  func perform(_ prompt: SkipPrompt) {
+    switch prompt {
+    case .intro(let end), .credits(let end): seek(to: end)
+    case .nextEpisode: playUpNext()
+    }
   }
 
   /// Looks up the next episode once, at the start, for the Next Episode button.
