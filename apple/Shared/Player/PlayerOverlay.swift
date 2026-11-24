@@ -120,11 +120,12 @@ struct PlayerOverlay: View {
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible)
 
-      // Astra 4.0: Next Episode in the last 15 s of an episode, tap only.
-      // Only in the tree for an episode with a next one, so it never sits
-      // over the swipe and tap areas otherwise.
-      if showNextEpisode, player.upNext != nil {
-        NextEpisodeButton(player: player, onFrame: onNextEpisodeFrame)
+      // Astra 4.0: Next Episode in the last 15 s of an episode, tap only;
+      // plus Skip Intro / Skip Credits from Plex's markers (KP, 2026-11-24).
+      // Only in the tree when one of them can show, so it never sits over
+      // the swipe and tap areas otherwise.
+      if (showNextEpisode && player.upNext != nil) || !player.skipMarkers.isEmpty {
+        NextEpisodeButton(player: player, nextEpisodeOn: showNextEpisode, onFrame: onNextEpisodeFrame)
           #if os(macOS)
             .padding(.trailing, 28)
             .padding(.bottom, 150)
@@ -707,6 +708,7 @@ struct PlayerOverlay: View {
       player.setPaused(true)
       switch shot {
       case "scrub": scrubbing = player.duration * 0.35
+      case "skip": hide()
       default: poke()
       }
     }
@@ -1500,18 +1502,17 @@ private struct PlayerAtmosTag: View {
 
 /// Astra 4.0 (KP, 2026-11-08): a small Liquid Glass "Next Episode" button in
 /// the last 15 seconds of an episode that has a next one. Nothing plays
-/// unless it is tapped. It reads the position itself, so only it redraws.
+/// unless it is tapped. KP 2026-11-24: the same button says "Skip Intro" or
+/// "Skip Credits" during Plex's markers, and "Next Episode" from the start of
+/// an episode's final credits. It reads the position itself, so only it redraws.
 struct NextEpisodeButton: View {
   let player: PlayerController
+  var nextEpisodeOn = true
   /// iPhone: where the button is while shown (nil once it goes), so the
   /// player's window-wide tap recognizers leave taps on it alone.
   var onFrame: (CGRect?) -> Void = { _ in }
 
-  private var shown: Bool {
-    guard player.upNext != nil, player.duration > 0, player.hasFirstFrame else { return false }
-    let left = player.duration - player.position
-    return left > 0 && left <= PlayerController.nextEpisodeLead
-  }
+  private var prompt: SkipPrompt? { player.skipPrompt(nextEpisodeOn: nextEpisodeOn) }
 
   var body: some View {
     // Spacers place it bottom right without anything that catches touches
@@ -1520,31 +1521,31 @@ struct NextEpisodeButton: View {
       Spacer(minLength: 0)
       HStack(spacing: 0) {
         Spacer(minLength: 0)
-        if shown {
+        if let prompt {
           Button {
-            player.playUpNext()
-        } label: {
-          HStack(spacing: 8) {
-            Text("Next Episode")
-            Image(systemName: "forward.end.fill")
+            player.perform(prompt)
+          } label: {
+            HStack(spacing: 8) {
+              Text(prompt.title)
+              Image(systemName: prompt.symbol)
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .frame(height: 44)
+            .astraGlass(in: Capsule(), variant: .regular, interactive: true)
+            .contentShape(Capsule())
           }
-          .font(.system(size: 15, weight: .semibold))
-          .foregroundStyle(.white)
-          .padding(.horizontal, 18)
-          .frame(height: 44)
-          .astraGlass(in: Capsule(), variant: .regular, interactive: true)
-          .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-          .accessibilityIdentifier("next-episode")
-          .accessibilityHint(player.upNext?.displayTitle ?? "")
+          .buttonStyle(.plain)
+          .accessibilityIdentifier(prompt == .nextEpisode ? "next-episode" : "skip-marker")
+          .accessibilityHint(prompt == .nextEpisode ? (player.upNext?.displayTitle ?? "") : "")
           .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { onFrame($0) }
           .onDisappear { onFrame(nil) }
           .astraTransition(.opacity.combined(with: .scale(scale: 0.95)))
         }
       }
     }
-    .astraAnimation(Astra.Motion.base, value: shown)
+    .astraAnimation(Astra.Motion.base, value: prompt)
   }
 }
 

@@ -115,6 +115,14 @@ public struct PlexServerClient: Sendable {
     return item
   }
 
+  /// The intro and credits markers Plex detected in an item, sorted by start time.
+  /// Empty when the server hasn't analysed it (Plex Pass server feature).
+  public func markers(ratingKey: String) async throws -> [PlexMarker] {
+    let body: MarkersBody = try await get(
+      "/library/metadata/\(ratingKey)", query: [.init(name: "includeMarkers", value: "1")])
+    return (body.Metadata?.first?.markers ?? []).sorted { $0.start < $1.start }
+  }
+
   /// Seasons of a show, or episodes of a season.
   public func children(ratingKey: String) async throws -> [PlexMetadata] {
     let body: MetadataBody = try await get("/library/metadata/\(ratingKey)/children")

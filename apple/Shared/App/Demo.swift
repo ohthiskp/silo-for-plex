@@ -24,7 +24,7 @@ enum Demo {
   /// `-AstraDemoPlay <path>`: a local video file to open in the player at launch (UI tests).
   static var videoPath: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlay") : nil }
   /// `-AstraDemoPlayer <state>`: once the demo video plays, pause it and show a player state for a
-  /// screenshot: `controls`, `scrub` (iPhone and Mac), or the Apple TV top menu's
+  /// screenshot: `controls`, `scrub`, `skip` (controls hidden, Skip Intro showing), or the Apple TV top menu's
   /// `info`, `settings`, `subtitles`.
   static var playerShot: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlayer") : nil }
 
@@ -209,6 +209,18 @@ enum Demo {
       let hits = all.filter { ($0["title"] as? String ?? "").lowercased().contains(text) }
       return ["Hub": [["hubIdentifier": "search", "title": "Results", "Metadata": hits]]]
     default: break
+    }
+    // Skip Intro (KP, 2026-11-24): the demo movie has a 90 s intro, so the
+    // player screenshots show the skip button.
+    if path == "/library/metadata/101", query["includeMarkers"] == "1" {
+      return [
+        "Metadata": [
+          [
+            "ratingKey": "101", "type": "movie", "title": "Dune: Part Two",
+            "Marker": [["type": "intro", "startTimeOffset": 0, "endTimeOffset": 90_000]],
+          ]
+        ]
+      ]
     }
     let parts = path.split(separator: "/").map(String.init)
     if parts.count == 4, parts[0] == "library", parts[1] == "sections", parts[3] == "all" {

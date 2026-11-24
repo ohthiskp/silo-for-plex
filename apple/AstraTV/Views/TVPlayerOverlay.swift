@@ -35,7 +35,7 @@ struct PlayerOverlay: View {
   @FocusState private var focus: Field?
 
   enum Field: Hashable {
-    case bar, captions, next
+    case bar, captions, skip
     case tab(TVPlayerTab)
     case row(String)
   }
@@ -100,6 +100,11 @@ struct PlayerOverlay: View {
       chrome
         .opacity(visible && !menuOpen && player.hasFirstFrame ? 1 : 0)
 
+      if let prompt = skipPrompt, !menuOpen {
+        skipButton(prompt)
+          .transition(.opacity)
+      }
+
       if menuOpen {
         // The video keeps playing, dimmed, under the panel.
         Color.black.opacity(0.45)
@@ -120,6 +125,7 @@ struct PlayerOverlay: View {
     .astraAnimation(Astra.Motion.fast, value: player.buffering)
     .astraAnimation(Astra.Motion.hero, value: player.hasFirstFrame)
     .astraAnimation(Astra.Motion.fast, value: flash?.id)
+    .astraAnimation(Astra.Motion.base, value: skipPrompt)
     // Back while focus is in these controls: SwiftUI gets the press first.
     .onExitCommand(perform: back)
     .onAppear {
@@ -129,7 +135,15 @@ struct PlayerOverlay: View {
     }
     .onChange(of: visible) {
       // Hidden controls keep focus on the timeline, so the remote stays live.
-      if !visible, !menuOpen { focus = .bar } else { activity &+= 1 }
+      if !visible, !menuOpen { focus = skipPrompt == nil ? .bar : .skip } else { activity &+= 1 }
+    }
+    .onChange(of: skipPrompt) { old, new in
+      // A new skip button takes focus from the timeline; when it goes, focus returns.
+      if new != nil, old == nil, !menuOpen, focus == .bar || focus == nil {
+        focus = .skip
+      } else if new == nil, focus == .skip {
+        focus = .bar
+      }
     }
     .onChange(of: focus) { _, field in
       // Focusing a tab shows it (tvOS tab bars switch on focus).
@@ -141,7 +155,7 @@ struct PlayerOverlay: View {
     }
     .task(id: activity) {
       try? await Task.pause(5)
-      guard !Task.isCancelled, !player.paused, scrubbing == nil, !menuOpen, focus == .bar || focus == nil
+      guard !Task.isCancelled, !player.paused, scrubbing == nil, !menuOpen, focus == .bar || focus == .skip || focus == nil
       else { return }
       visible = false
     }
@@ -217,6 +231,7 @@ struct PlayerOverlay: View {
       case "info": openMenu(.info)
       case "settings": openMenu(.settings)
       case "subtitles": openMenu(.subtitles)
+      case "skip": visible = false
       default: poke()
       }
     }
@@ -290,21 +305,6 @@ struct PlayerOverlay: View {
           }
         }
         Spacer(minLength: 24)
-        if showNextEpisode, nextEpisodeShown {
-          Button {
-            player.playUpNext()
-          } label: {
-            Label("Next Episode", systemImage: "forward.end.fill")
-              .font(.system(size: 24, weight: .semibold))
-              .foregroundStyle(focus == .next ? Color.black : Color.white)
-              .padding(.horizontal, 26)
-              .frame(height: 66)
-              .background(Capsule().fill(focus == .next ? Color.white : Color.black.opacity(0.35)))
-              .overlay(Capsule().stroke(Color.white.opacity(focus == .next ? 0 : 0.22), lineWidth: 1))
-          }
-          .buttonStyle(TVBareButtonStyle())
-          .focused($focus, equals: .next)
-        }
         // The subtitle button opens the top menu on Subtitles.
         Button {
           openMenu(.subtitles)
@@ -330,10 +330,40 @@ struct PlayerOverlay: View {
     .focusSection()
   }
 
-  private var nextEpisodeShown: Bool {
-    guard player.upNext != nil, player.duration > 0, player.hasFirstFrame else { return false }
-    let left = player.duration - player.position
-    return left > 0 && left <= PlayerController.nextEpisodeLead
+  /// Skip Intro, Skip Credits or Next Episode (KP, 2026-11-24).
+  private var skipPrompt: SkipPrompt? { player.skipPrompt(nextEpisodeOn: showNextEpisode) }
+
+  /// The skip button, bottom right, shown with or without the controls. It
+  /// takes focus when it appears, so one press of Select skips; Play/Pause
+  /// still pauses and a swipe down moves focus back to the timeline.
+  private func skipButton(_ prompt: SkipPrompt) -> some View {
+    VStack(spacing: 0) {
+      Spacer(minLength: 0)
+      HStack(spacing: 0) {
+        Spacer(minLength: 0)
+        Button {
+          player.perform(prompt)
+          focus = .bar
+          poke()
+        } label: {
+          Label(prompt.title, systemImage: prompt.symbol)
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(focus == .skip ? Color.black : Color.white)
+            .padding(.horizontal, 26)
+            .frame(height: 66)
+            .background(Capsule().fill(focus == .skip ? Color.white : Color.black.opacity(0.35)))
+            .overlay(Capsule().stroke(Color.white.opacity(focus == .skip ? 0 : 0.22), lineWidth: 1))
+            .shadow(color: .black.opacity(focus == .skip ? 0.35 : 0), radius: 18, y: 8)
+        }
+        .buttonStyle(TVBareButtonStyle())
+        .focused($focus, equals: .skip)
+        .onPlayPauseCommand { player.togglePause() }
+        .accessibilityIdentifier(prompt == .nextEpisode ? "next-episode" : "skip-marker")
+      }
+    }
+    .padding(.trailing, Self.inset)
+    .padding(.bottom, visible ? 250 : 100)
+    .focusSection()
   }
 
   // MARK: Top menu
