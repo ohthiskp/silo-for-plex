@@ -70,14 +70,93 @@ public struct LibraryIndexCheckpoint: Codable, Sendable, Equatable {
     self.startedAt = startedAt
   }
 
-  public static func load(from url: URL) -> LibraryIndexCheckpoint? {
-    guard let data = try? Data(contentsOf: url) else { return nil }
-    return try? JSONDecoder().decode(LibraryIndexCheckpoint.self, from: data)
+  // On disk (KP, 2026-11-19: iOS closed Astra for memory on a 125,491-title
+  // library): `<index>.checkpoint.json` holds each library's progress, and
+  // the titles are in `<index>.checkpoint.json.parts/<library>-<n>.json`,
+  // one file per round read. Before, the whole checkpoint (every title read
+  // so far) was encoded again after every round of 750 titles. Checkpoints
+  // from older builds, with every title in the one file, still load.
+
+  struct Manifest: Codable {
+    struct Head: Codable {
+      var key: String
+      var title: String
+      var total: Int?
+      var fetched: Int
+      var complete: Bool
+      var updatedAt: Date
+      /// Part files written for this library: `<key>-0.json` up to `<key>-<parts - 1>.json`.
+      var parts: Int
+    }
+
+    var format: Int
+    var startedAt: Date
+    var libraries: [String: Head]
   }
 
+  /// A checkpoint as read from disk, with how many part files each library has.
+  struct Stored {
+    var checkpoint: LibraryIndexCheckpoint
+    var parts: [String: Int]
+    /// From an older build: every title in the one file, no parts.
+    var legacy: Bool
+  }
+
+  static func partsFolder(for url: URL) -> URL {
+    url.deletingLastPathComponent().appendingPathComponent(url.lastPathComponent + ".parts")
+  }
+
+  static func partURL(_ folder: URL, library: String, part: Int) -> URL {
+    let safe = library.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+    return folder.appendingPathComponent("\(safe.isEmpty ? "library" : safe)-\(part).json")
+  }
+
+  static func loadStored(from url: URL) -> Stored? {
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    guard data.count < 1 << 20, let manifest = try? JSONDecoder().decode(Manifest.self, from: data) else {
+      return (try? JSONDecoder().decode(LibraryIndexCheckpoint.self, from: data)).map {
+        Stored(checkpoint: $0, parts: [:], legacy: true)
+      }
+    }
+    let folder = partsFolder(for: url)
+    var checkpoint = LibraryIndexCheckpoint(startedAt: manifest.startedAt)
+    var parts: [String: Int] = [:]
+    for (key, head) in manifest.libraries {
+      var items: [String: PlexMetadata] = [:]
+      for n in 0..<head.parts {
+        // A missing part: that library starts over rather than keep a gap.
+        guard let part = IndexParts.read(partURL(folder, library: key, part: n)) else {
+          items = [:]
+          break
+        }
+        items.merge(part) { first, _ in first }
+      }
+      guard head.parts == 0 || !items.isEmpty else { continue }
+      checkpoint.libraries[key] = Library(
+        key: head.key, title: head.title, total: head.total, fetched: head.fetched, complete: head.complete,
+        items: items, updatedAt: head.updatedAt)
+      parts[key] = head.parts
+    }
+    return Stored(checkpoint: checkpoint, parts: parts, legacy: false)
+  }
+
+  public static func load(from url: URL) -> LibraryIndexCheckpoint? {
+    loadStored(from: url)?.checkpoint
+  }
+
+  /// Writes the whole checkpoint (each library's titles in parts).
   public func save(to url: URL) throws {
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try JSONEncoder().encode(self).write(to: url, options: .atomic)
+    let writer = try CheckpointWriter(url: url, startedAt: startedAt, parts: [:])
+    for library in libraries.values {
+      try writer.write(library, newItems: library.items, saveManifest: false)
+    }
+    try writer.saveManifest()
+  }
+
+  /// Removes the checkpoint and its parts.
+  public static func remove(at url: URL) {
+    try? FileManager.default.removeItem(at: url)
+    try? FileManager.default.removeItem(at: partsFolder(for: url))
   }
 
   /// Every library's items in `order`, the first library's copy of a title winning.
@@ -88,6 +167,56 @@ public struct LibraryIndexCheckpoint: Codable, Sendable, Equatable {
       out.merge(library.items) { first, _ in first }
     }
     return out
+  }
+}
+
+/// Saves a read in progress a round at a time: only the titles that round
+/// added are written, plus the small manifest.
+final class CheckpointWriter {
+  private let url: URL
+  private let folder: URL
+  private let startedAt: Date
+  private var heads: [String: LibraryIndexCheckpoint.Manifest.Head] = [:]
+  private var parts: [String: Int]
+
+  init(url: URL, startedAt: Date, parts: [String: Int]) throws {
+    self.url = url
+    folder = LibraryIndexCheckpoint.partsFolder(for: url)
+    self.startedAt = startedAt
+    self.parts = parts
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+  }
+
+  /// Records `library`'s progress and writes `newItems` as its next part.
+  func write(_ library: LibraryIndexCheckpoint.Library, newItems: [String: PlexMetadata], saveManifest: Bool = true) throws {
+    var count = parts[library.key] ?? 0
+    if !newItems.isEmpty {
+      // Large sets (an older checkpoint being moved over) are split up too.
+      let written = try IndexParts.write(newItems, to: folder, name: { n in
+        LibraryIndexCheckpoint.partURL(self.folder, library: library.key, part: count + n).lastPathComponent
+      })
+      count += written
+    }
+    parts[library.key] = count
+    heads[library.key] = .init(
+      key: library.key, title: library.title, total: library.total, fetched: library.fetched,
+      complete: library.complete, updatedAt: library.updatedAt, parts: count)
+    if saveManifest { try self.saveManifest() }
+  }
+
+  /// A library whose saved progress is kept as it is (finished, or resumed).
+  func keep(_ library: LibraryIndexCheckpoint.Library) {
+    heads[library.key] = .init(
+      key: library.key, title: library.title, total: library.total, fetched: library.fetched,
+      complete: library.complete, updatedAt: library.updatedAt, parts: parts[library.key] ?? 0)
+  }
+
+  /// A library read again from the start: its old parts are not used.
+  func restart(_ key: String) { parts[key] = 0 }
+
+  func saveManifest() throws {
+    let manifest = LibraryIndexCheckpoint.Manifest(format: 2, startedAt: startedAt, libraries: heads)
+    try JSONEncoder().encode(manifest).write(to: url, options: .atomic)
   }
 }
 
@@ -133,10 +262,17 @@ public struct LibraryIndexStatus: Sendable, Equatable {
 public enum LibraryIndexRun {
   public struct Progress: Sendable {
     public var libraries: [LibraryIndexStatus.Library]
-    /// Everything read so far in this read (resumed libraries included).
-    public var items: [String: PlexMetadata]
+    /// Titles read so far (each library's own count, added up).
+    public var itemCount: Int
     public var retries: Int
     public var lastError: String?
+    /// What has been read, shared with the read (not copied) until asked for.
+    let read: LibraryIndexCheckpoint
+    let order: [String]
+
+    /// Everything read so far in this read (resumed libraries included).
+    /// Built when asked for: on a big library it's a copy of every title.
+    public var items: [String: PlexMetadata] { read.index(order: order) }
   }
 
   /// Reads every movie and show library in `parallel` pages of `pageSize`,
@@ -153,36 +289,68 @@ public enum LibraryIndexRun {
   ) async throws -> [String: PlexMetadata] {
     let wanted = sections.filter { $0.type == "movie" || $0.type == "show" }
     let order = wanted.map(\.key)
-    var checkpoint = LibraryIndexCheckpoint.load(from: checkpointURL) ?? LibraryIndexCheckpoint(startedAt: now())
+    let stored = LibraryIndexCheckpoint.loadStored(from: checkpointURL)
+    var checkpoint = stored?.checkpoint ?? LibraryIndexCheckpoint(startedAt: now())
     let start = now()
     checkpoint.libraries = checkpoint.libraries.filter {
       order.contains($0.key) && start.timeIntervalSince($0.value.updatedAt) < maxAge
     }
+    let writer = try CheckpointWriter(
+      url: checkpointURL, startedAt: checkpoint.startedAt,
+      parts: stored.map { $0.legacy ? [:] : $0.parts.filter { checkpoint.libraries[$0.key] != nil } } ?? [:])
+    if stored?.legacy == true {
+      // An older build's single-file checkpoint is moved over to parts once.
+      for library in checkpoint.libraries.values {
+        try? writer.write(library, newItems: library.items, saveManifest: false)
+      }
+    } else {
+      checkpoint.libraries.values.forEach(writer.keep)
+    }
+    try? writer.saveManifest()
     let retries = Counter()
     var lastError: String?
 
-    func report() async {
+    /// `current` is the library being read, held apart from `checkpoint` so
+    /// adding titles to it never copies everything it has read so far.
+    func report(_ current: LibraryIndexCheckpoint.Library? = nil) async {
+      var read = checkpoint
+      if let current { read.libraries[current.key] = current }
       let libraries = wanted.map { section in
-        let library = checkpoint.libraries[section.key]
+        let library = read.libraries[section.key]
         return LibraryIndexStatus.Library(
           id: section.key, title: section.title, fetched: library?.fetched ?? 0, total: library?.total,
           complete: library?.complete ?? false)
       }
       await onProgress(
-        Progress(libraries: libraries, items: checkpoint.index(order: order), retries: retries.value, lastError: lastError))
+        Progress(
+          libraries: libraries, itemCount: read.libraries.values.reduce(0) { $0 + $1.items.count },
+          retries: retries.value, lastError: lastError, read: read, order: order))
     }
 
     await report()
     libraries: for section in wanted {
-      var library = checkpoint.libraries[section.key]
-        ?? LibraryIndexCheckpoint.Library(key: section.key, title: section.title, updatedAt: now())
-      if library.complete { continue }
+      var library: LibraryIndexCheckpoint.Library
+      if let saved = checkpoint.libraries.removeValue(forKey: section.key) {
+        library = saved
+      } else {
+        library = LibraryIndexCheckpoint.Library(key: section.key, title: section.title, updatedAt: now())
+        writer.restart(section.key)
+      }
+      if library.complete {
+        checkpoint.libraries[section.key] = library
+        continue
+      }
       if library.total == nil {
         library.total = try? await client.libraryCount(sectionKey: section.key)
       }
       let sectionID = section.numericID
       while !library.complete {
-        try Task.checkCancellation()
+        do {
+          try Task.checkCancellation()
+        } catch {
+          checkpoint.libraries[section.key] = library
+          throw error
+        }
         let first = library.fetched
         let pages = await withTaskGroup(of: (Int, Result<[PlexMetadata], Error>).self) { group in
           for i in 0..<max(1, parallel) {
@@ -198,13 +366,18 @@ public enum LibraryIndexRun {
         }
         // Only pages that arrived in order, with no gap before them, count.
         var failure: Error?
+        var added: [String: PlexMetadata] = [:]
         for result in pages {
           switch result {
           case .success(let items):
             for var item in items {
               if item.librarySectionID == nil { item.librarySectionID = sectionID }
               let key = item.tmdbKey ?? item.titleMatchKey.map { LibraryMatch.titlePrefix + $0 }
-              if let key, library.items[key] == nil { library.items[key] = item.slimmed }
+              if let key, library.items[key] == nil {
+                let slim = item.slimmed
+                library.items[key] = slim
+                added[key] = slim
+              }
             }
             library.fetched += items.count
             if items.count < pageSize { library.complete = true }
@@ -214,9 +387,9 @@ public enum LibraryIndexRun {
           if library.complete || failure != nil { break }
         }
         library.updatedAt = now()
-        checkpoint.libraries[section.key] = library
-        try? checkpoint.save(to: checkpointURL)
+        try? writer.write(library, newItems: added)
         if let failure {
+          checkpoint.libraries[section.key] = library
           if failure is CancellationError { throw failure }
           lastError = PlexError.describe(failure)
           await report()
@@ -225,12 +398,13 @@ public enum LibraryIndexRun {
           if SourceKey.isSource(section.key) { continue libraries }
           throw failure
         }
-        await report()
+        await report(library)
       }
+      checkpoint.libraries[section.key] = library
     }
     let index = checkpoint.index(order: order)
     guard !index.isEmpty else { throw URLError(.zeroByteResource) }
-    try? FileManager.default.removeItem(at: checkpointURL)
+    LibraryIndexCheckpoint.remove(at: checkpointURL)
     return index
   }
 

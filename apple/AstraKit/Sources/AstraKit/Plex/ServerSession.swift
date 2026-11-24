@@ -138,6 +138,11 @@ public enum LibraryIndexer {
     return out
   }
 
+  /// `items` keyed as in `merging`, slimmed (the later copy of a key wins).
+  public static func keyed(_ items: [PlexMetadata]) -> [String: PlexMetadata] {
+    merging([:], items)
+  }
+
   /// One section's items in order, `parallel` pages per round, until a short page.
   static func items(
     in section: PlexLibrarySection, client: PlexServerClient, pageSize: Int, parallel: Int
@@ -184,6 +189,11 @@ extension PlexMetadata {
     item.roles = []
     item.directors = []
     item.images = []
+    // The file's path on the server is never shown or played from; on a big
+    // library it was a long string per title in memory and on disk.
+    for m in item.media.indices {
+      for p in item.media[m].parts.indices { item.media[m].parts[p].file = nil }
+    }
     return item
   }
 }
@@ -216,14 +226,66 @@ public struct LibraryIndexSnapshot: Codable, Sendable {
     return folder.appendingPathComponent("\(safe.isEmpty ? "server" : safe).json")
   }
 
+  // On disk (KP, 2026-11-19: iOS closed Astra for memory while a
+  // 125,491-title index loaded): `<server>.json` is a small header and the
+  // titles are in `<server>.json.parts-<id>/<n>.json`, `IndexParts.size` per
+  // file, so a load or save never holds the whole file and its JSON at once
+  // (one 200+ MB file took about three times its size to decode). Files from
+  // older builds, with every title in the one file, still load.
+
+  /// The header saved at `url`.
+  struct Header: Codable {
+    var format: Int
+    var savedAt: Date
+    var duration: TimeInterval?
+    var totals: [String: Int]?
+    var count: Int
+    /// The parts folder's name, next to the header.
+    var folder: String
+    var parts: Int
+  }
+
   public static func load(from url: URL) -> LibraryIndexSnapshot? {
     guard let data = try? Data(contentsOf: url) else { return nil }
-    return try? JSONDecoder().decode(LibraryIndexSnapshot.self, from: data)
+    // A header is a few hundred bytes; an older build's file is every title.
+    guard data.count < 1 << 20, let header = try? JSONDecoder().decode(Header.self, from: data) else {
+      return try? JSONDecoder().decode(LibraryIndexSnapshot.self, from: data)
+    }
+    let folder = url.deletingLastPathComponent().appendingPathComponent(header.folder)
+    var items: [String: PlexMetadata] = [:]
+    items.reserveCapacity(header.count)
+    for n in 0..<header.parts {
+      // A missing part means a damaged copy: no index rather than half of one.
+      guard let part = IndexParts.read(folder.appendingPathComponent("\(n).json")) else { return nil }
+      items.merge(part) { first, _ in first }
+    }
+    return LibraryIndexSnapshot(savedAt: header.savedAt, items: items, duration: header.duration, totals: header.totals)
   }
 
   public func save(to url: URL) throws {
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try JSONEncoder().encode(self).write(to: url, options: .atomic)
+    let fm = FileManager.default
+    let parent = url.deletingLastPathComponent()
+    try fm.createDirectory(at: parent, withIntermediateDirectories: true)
+    // A new parts folder each time; the header is swapped in last, so a save
+    // cut short leaves the previous copy whole.
+    let name = url.lastPathComponent + ".parts-" + UUID().uuidString
+    let folder = parent.appendingPathComponent(name)
+    try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+    let parts: Int
+    do {
+      parts = try IndexParts.write(items, to: folder)
+      let header = Header(
+        format: 2, savedAt: savedAt, duration: duration, totals: totals, count: items.count, folder: name, parts: parts)
+      try JSONEncoder().encode(header).write(to: url, options: .atomic)
+    } catch {
+      try? fm.removeItem(at: folder)
+      throw error
+    }
+    // Older parts folders of this index are no longer used.
+    let prefix = url.lastPathComponent + ".parts-"
+    for old in (try? fm.contentsOfDirectory(atPath: parent.path)) ?? [] where old.hasPrefix(prefix) && old != name {
+      try? fm.removeItem(at: parent.appendingPathComponent(old))
+    }
   }
 
   /// Older than this, the saved index is used but read again in the background.
@@ -231,6 +293,49 @@ public struct LibraryIndexSnapshot: Codable, Sendable {
 
   public func isFresh(now: Date = Date()) -> Bool { now.timeIntervalSince(savedAt) < Self.freshFor }
 }
+
+/// Index titles written a few thousand per file (see `LibraryIndexSnapshot`).
+enum IndexParts {
+  static let size = 4_000
+
+  /// Writes `items` as numbered files `0.json`, `1.json`… in `folder`; returns how many.
+  static func write(
+    _ items: [String: PlexMetadata], to folder: URL, name: (Int) -> String = { "\($0).json" }
+  ) throws -> Int {
+    var part: [String: PlexMetadata] = [:]
+    part.reserveCapacity(min(size, items.count))
+    var n = 0
+    for (key, item) in items {
+      part[key] = item
+      if part.count == size {
+        try write(part: part, to: folder.appendingPathComponent(name(n)))
+        n += 1
+        part.removeAll(keepingCapacity: true)
+      }
+    }
+    if !part.isEmpty {
+      try write(part: part, to: folder.appendingPathComponent(name(n)))
+      n += 1
+    }
+    return n
+  }
+
+  static func write(part: [String: PlexMetadata], to url: URL) throws {
+    try autoreleasepool { try JSONEncoder().encode(part).write(to: url, options: .atomic) }
+  }
+
+  static func read(_ url: URL) -> [String: PlexMetadata]? {
+    autoreleasepool { () -> [String: PlexMetadata]? in
+      guard let data = try? Data(contentsOf: url) else { return nil }
+      return try? JSONDecoder().decode([String: PlexMetadata].self, from: data)
+    }
+  }
+}
+
+#if !canImport(ObjectiveC)
+  /// Linux (CI's AstraKit tests) has no autorelease pool.
+  @inline(__always) func autoreleasepool<T>(invoking body: () throws -> T) rethrows -> T { try body() }
+#endif
 
 /// Astra (KP, 2026-11-07: "why does it take so long to connect each time,
 /// when Plex or Infuse open immediately"): the last server that worked,
