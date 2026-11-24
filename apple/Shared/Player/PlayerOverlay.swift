@@ -708,7 +708,10 @@ struct PlayerOverlay: View {
       player.setPaused(true)
       switch shot {
       case "scrub": scrubbing = player.duration * 0.35
-      case "skip": hide()
+      case "skip":
+        // After the pause's own reveal of the controls.
+        try? await Task.pause(1)
+        hide()
       default: poke()
       }
     }

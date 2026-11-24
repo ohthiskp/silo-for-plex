@@ -210,9 +210,10 @@ enum Demo {
       return ["Hub": [["hubIdentifier": "search", "title": "Results", "Metadata": hits]]]
     default: break
     }
-    // Skip Intro (KP, 2026-11-24): the demo movie has a 90 s intro, so the
-    // player screenshots show the skip button.
-    if path == "/library/metadata/101", query["includeMarkers"] == "1" {
+    // Skip Intro (KP, 2026-11-24): for the player screenshots only, the demo
+    // movie has a 90 s intro, so they show the skip button. The gesture UI
+    // tests get no markers: their double taps would land on the button.
+    if path == "/library/metadata/101", query["includeMarkers"] == "1", playerShot != nil {
       return [
         "Metadata": [
           [
