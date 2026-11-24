@@ -92,7 +92,7 @@ final class PlayerController {
   /// Plex's intro and credits markers for the file playing, for Skip Intro
   /// and Skip Credits (KP, 2026-11-24). Empty until loaded, or when the
   /// server hasn't detected any.
-  private(set) var skipMarkers: [PlexMarker] = []
+  private(set) var skipMarkers: [SkipMarker] = []
   @ObservationIgnored private var reporter: Task<Void, Never>?
   /// Lock screen, Control Center, headphones and media keys.
   @ObservationIgnored private let nowPlaying = NowPlaying()
@@ -338,17 +338,40 @@ final class PlayerController {
     loadMarkers(for: item, source: source)
   }
 
-  /// Fetches the intro and credits markers once, at the start. Errors (an
-  /// offline server while a download plays) just mean no skip buttons.
+  /// Fetches the intro and credits times from IntroDB once, at the start
+  /// (KP, 2026-11-24: IntroDB only, not Plex's markers). Errors (offline, or
+  /// a title nobody has timed) just mean no skip buttons.
   private func loadMarkers(for item: PlexMetadata, source started: PlaybackSource) {
     skipMarkers = []
+    if Demo.isOn {
+      skipMarkers = Demo.skipMarkers
+      return
+    }
     guard item.type == .episode || item.type == .movie, let server else { return }
-    let ratingKey = item.ratingKey
     Task { [weak self] in
-      let found = (try? await server.markers(ratingKey: ratingKey)) ?? []
+      let found = await Self.introDBMarkers(for: item, server: server)
       guard let self, self.isActive, self.source?.url == started.url else { return }
       self.skipMarkers = found
     }
+  }
+
+  /// IntroDB's times for an episode (by its show's IMDb id) or a movie.
+  private static func introDBMarkers(for item: PlexMetadata, server: PlexServerClient) async -> [SkipMarker] {
+    let imdbID: String?
+    var season: Int?
+    var episode: Int?
+    if item.type == .episode {
+      guard let show = item.grandparentRatingKey, let s = item.parentIndex, let e = item.index else { return [] }
+      imdbID = try? await server.metadata(ratingKey: show).imdbID
+      season = s
+      episode = e
+    } else if let id = item.imdbID {
+      imdbID = id
+    } else {
+      imdbID = try? await server.metadata(ratingKey: item.ratingKey).imdbID
+    }
+    guard let imdbID else { return [] }
+    return (try? await IntroDBClient().markers(imdbID: imdbID, season: season, episode: episode)) ?? []
   }
 
   /// The skip button to show now: Skip Intro, Skip Credits or Next Episode.

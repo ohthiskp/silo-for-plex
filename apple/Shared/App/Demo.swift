@@ -27,6 +27,10 @@ enum Demo {
   /// screenshot: `controls`, `scrub`, `skip` (controls hidden, Skip Intro showing), or the Apple TV top menu's
   /// `info`, `settings`, `subtitles`.
   static var playerShot: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlayer") : nil }
+  /// Skip Intro (KP, 2026-11-24): for the player screenshots only, the demo
+  /// movie has a 90 s intro, so they show the skip button. The gesture UI
+  /// tests get none: their double taps would land on the button.
+  static var skipMarkers: [SkipMarker] { playerShot != nil ? [SkipMarker(kind: .intro, start: 0, end: 90)] : [] }
 
   /// The demo movie and a source that plays `videoPath` from disk.
   static func playback() -> (PlexMetadata, PlaybackSource)? {
@@ -209,19 +213,6 @@ enum Demo {
       let hits = all.filter { ($0["title"] as? String ?? "").lowercased().contains(text) }
       return ["Hub": [["hubIdentifier": "search", "title": "Results", "Metadata": hits]]]
     default: break
-    }
-    // Skip Intro (KP, 2026-11-24): for the player screenshots only, the demo
-    // movie has a 90 s intro, so they show the skip button. The gesture UI
-    // tests get no markers: their double taps would land on the button.
-    if path == "/library/metadata/101", query["includeMarkers"] == "1", playerShot != nil {
-      return [
-        "Metadata": [
-          [
-            "ratingKey": "101", "type": "movie", "title": "Dune: Part Two",
-            "Marker": [["type": "intro", "startTimeOffset": 0, "endTimeOffset": 90_000]],
-          ]
-        ]
-      ]
     }
     let parts = path.split(separator: "/").map(String.init)
     if parts.count == 4, parts[0] == "library", parts[1] == "sections", parts[3] == "all" {
