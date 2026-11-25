@@ -38,3 +38,36 @@ final class SkipMarkersTests: XCTestCase {
     XCTAssertNil(SkipPrompt.at(70, duration: 0, markers: [intro], hasNext: false))
   }
 }
+
+final class AutoSkipCountdownTests: XCTestCase {
+  func testFillsOverFiveSecondsThenFiresOnce() {
+    var c = AutoSkipCountdown()
+    let p = SkipPrompt.intro(to: 69)
+    XCTAssertEqual(c.update(prompt: p, position: 10, intro: true, credits: false).progress, 0)
+    XCTAssertEqual(c.update(prompt: p, position: 12.5, intro: true, credits: false).progress, 0.5)
+    XCTAssertEqual(c.update(prompt: p, position: 15, intro: true, credits: false), .init(progress: 1, fire: true))
+    // Seeking back into the same intro doesn't start it again.
+    XCTAssertEqual(c.update(prompt: p, position: 11, intro: true, credits: false), .init(progress: nil, fire: false))
+  }
+
+  func testOffNextEpisodeAndCreditsSetting() {
+    var c = AutoSkipCountdown()
+    XCTAssertNil(c.update(prompt: .intro(to: 69), position: 3, intro: false, credits: true).progress)
+    XCTAssertNil(c.update(prompt: .nextEpisode, position: 3, intro: true, credits: true).progress)
+    XCTAssertNil(c.update(prompt: .credits(to: 3420), position: 3300, intro: true, credits: false).progress)
+    XCTAssertEqual(c.update(prompt: .credits(to: 3420), position: 3300, intro: false, credits: true).progress, 0)
+  }
+
+  func testCancelKeepsTheButtonButStopsTheFill() {
+    var c = AutoSkipCountdown()
+    _ = c.update(prompt: .intro(to: 69), position: 1, intro: true, credits: false)
+    c.cancel()
+    XCTAssertEqual(c.update(prompt: .intro(to: 69), position: 9, intro: true, credits: false), .init(progress: nil, fire: false))
+  }
+
+  func testSeekBackWithinTheCountdownRestartsIt() {
+    var c = AutoSkipCountdown()
+    _ = c.update(prompt: .intro(to: 69), position: 20, intro: true, credits: false)
+    XCTAssertEqual(c.update(prompt: .intro(to: 69), position: 18, intro: true, credits: false).progress, 0)
+  }
+}

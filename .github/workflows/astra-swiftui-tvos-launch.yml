@@ -121,6 +121,7 @@ jobs:
             shot player-controls -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer controls
             shot player-scrub -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer scrub
             shot player-skip -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer skip
+            shot player-autoskip -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer autoskip
             shot player-info -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer info
             shot player-settings -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer settings
             shot player-subtitles -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer subtitles

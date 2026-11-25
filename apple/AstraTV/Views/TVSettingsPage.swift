@@ -499,6 +499,8 @@ private struct TVHomePreview: View {
 private struct TVPlaybackPane: View {
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
   @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
+  @AppStorage(Preferences.autoSkipIntroKey) private var autoSkipIntro = false
+  @AppStorage(Preferences.autoSkipCreditsKey) private var autoSkipCredits = false
   @AppStorage(PlaybackLanguage.audioKey) private var audioLanguage = ""
   @AppStorage(PlaybackLanguage.subtitleKey) private var subtitleLanguage = ""
 
@@ -521,6 +523,10 @@ private struct TVPlaybackPane: View {
       }
       TVSettingsCard(footer: "Shows in the last 15 seconds of an episode. It never plays on its own.") {
         TVSwitchRow(title: "Next Episode button", isOn: $nextEpisode)
+      }
+      TVSettingsCard(footer: "Intros and credits are skipped after a 5-second countdown on the button. Press Select to skip right away. Times come from IntroDB.") {
+        TVSwitchRow(title: "Skip Intros Automatically", isOn: $autoSkipIntro)
+        TVSwitchRow(title: "Skip Credits Automatically", isOn: $autoSkipCredits)
       }
     }
   }

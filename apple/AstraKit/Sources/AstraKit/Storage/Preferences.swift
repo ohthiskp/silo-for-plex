@@ -155,6 +155,10 @@ extension Preferences {
   public static let skipSecondsKey = "astra.gestures.skipSeconds"
   /// Playback → Next Episode button at the end of an episode.
   public static let nextEpisodeKey = "astra.playback.nextEpisode"
+  /// Playback → Skip Intros Automatically (off by default, KP 2026-11-25).
+  public static let autoSkipIntroKey = "astra.playback.autoSkipIntro"
+  /// Playback → Skip Credits Automatically (off by default).
+  public static let autoSkipCreditsKey = "astra.playback.autoSkipCredits"
   /// Appearance → Theme colour: icons and the tab bar, as "RRGGBB".
   public static let themeKey = "astra.appearance.theme"
   /// Appearance → Streaming Service Logo Colours (off: plain white logos on glass).

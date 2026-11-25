@@ -409,6 +409,8 @@ struct PlaybackSettings: View {
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
   @AppStorage(SubtitlePreference.storageKey) private var subtitles: SubtitlePreference = .automatic
   @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
+  @AppStorage(Preferences.autoSkipIntroKey) private var autoSkipIntro = false
+  @AppStorage(Preferences.autoSkipCreditsKey) private var autoSkipCredits = false
   @AppStorage(Preferences.swipeGesturesKey) private var swipe = true
   @AppStorage(Preferences.twoFingerPauseKey) private var twoFinger = true
   @AppStorage(Preferences.skipSecondsKey) private var skipSeconds = 10
@@ -443,6 +445,12 @@ struct PlaybackSettings: View {
         Text("Shows")
       } footer: {
         Text("A Next Episode button in the last 15 seconds of an episode. It never plays on its own.")
+      }
+      Section {
+        Toggle("Skip Intros Automatically", isOn: $autoSkipIntro).tint(Astra.Color.switchOn)
+        Toggle("Skip Credits Automatically", isOn: $autoSkipCredits).tint(Astra.Color.switchOn)
+      } footer: {
+        Text("Intros and credits are skipped after a 5-second countdown on the button. Tap it to skip right away. Times come from IntroDB.")
       }
       #if os(iOS)
         Section {

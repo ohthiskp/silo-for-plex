@@ -704,11 +704,12 @@ struct PlayerOverlay: View {
     guard let shot = Demo.playerShot else { return }
     Task { @MainActor in
       for _ in 0..<60 where !player.hasFirstFrame { try? await Task.pause(0.25) }
-      try? await Task.pause(1)
+      // Auto-skip: let the button fill part way first.
+      try? await Task.pause(shot == "autoskip" ? 3 : 1)
       player.setPaused(true)
       switch shot {
       case "scrub": scrubbing = player.duration * 0.35
-      case "skip":
+      case "skip", "autoskip":
         // After the pause's own reveal of the controls.
         try? await Task.pause(1)
         hide()
@@ -1528,16 +1529,8 @@ struct NextEpisodeButton: View {
           Button {
             player.perform(prompt)
           } label: {
-            HStack(spacing: 8) {
-              Text(prompt.title)
-              Image(systemName: prompt.symbol)
-            }
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 18)
-            .frame(height: 44)
-            .astraGlass(in: Capsule(), variant: .regular, interactive: true)
-            .contentShape(Capsule())
+            SkipBox(prompt: prompt, progress: player.autoSkipProgress)
+              .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
           }
           .buttonStyle(.plain)
           .accessibilityIdentifier(prompt == .nextEpisode ? "next-episode" : "skip-marker")
