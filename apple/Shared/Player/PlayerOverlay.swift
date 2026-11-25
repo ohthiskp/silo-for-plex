@@ -1302,6 +1302,8 @@ struct PhoneScrubber: View {
   @Binding var scrubbing: Double?
   var poke: () -> Void
   @AppStorage("astra.player.showEndsAt") private var showEndsAt = false
+  /// Mac: where the pointer rests on the bar, for the preview.
+  @State private var hoverAt: Double?
 
   /// 160 pt on iPhone (KP's mockup); larger on the Mac's bigger window.
   #if os(macOS)
@@ -1326,8 +1328,20 @@ struct PhoneScrubber: View {
         .overlay(alignment: .bottomLeading) {
           if let target = scrubbing {
             preview(at: target, fraction: fraction, width: width)
+          } else if let target = hoverAt, player.duration > 0 {
+            // Mac (KP, 2026-11-25): the preview follows the pointer over the bar, without a click.
+            preview(at: target, fraction: min(1, max(0, target / player.duration)), width: width)
           }
         }
+        #if os(macOS)
+          .onContinuousHover { phase in
+            switch phase {
+            case .active(let point):
+              hoverAt = Double(min(1, max(0, point.x / max(width, 1)))) * player.duration
+            case .ended: hoverAt = nil
+            }
+          }
+        #endif
         .gesture(
           DragGesture(minimumDistance: 0)
             .onChanged { drag in
