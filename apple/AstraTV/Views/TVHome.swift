@@ -433,6 +433,7 @@ private struct TVServiceSidebar: View {
 
   private func circle(_ service: StreamingService?) -> some View {
     let selected = library.selectedService == service
+    let lit = barAt == (service?.id ?? Self.forYou)
     let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
     return Button {
       library.select(service)
@@ -444,8 +445,9 @@ private struct TVServiceSidebar: View {
             .resizable()
             .scaledToFit()
             .frame(width: TVLayout.sidebarCircle * 0.78, height: min(service.logoHeight * 1.0, 28))
-            // White until chosen; the chosen one in its brand colour (KP).
-            .foregroundStyle(selected ? brand : .white)
+            // White and dimmed until the bar is on it; then its brand
+            // colour (KP, 2026-11-25).
+            .foregroundStyle(lit ? brand : .white)
         } else {
           Image(systemName: "house.fill")
             .font(.system(size: 30, weight: .semibold))
@@ -456,36 +458,34 @@ private struct TVServiceSidebar: View {
     }
     .buttonStyle(
       TVSidebarButtonStyle(
-        selected: selected, hasBar: barAt == (service?.id ?? Self.forYou), barSpace: barSpace))
+        hasBar: lit, barSpace: barSpace))
     .focused($focused, equals: service?.id ?? Self.forYou)
     .accessibilityLabel(service?.label ?? "Home, all services")
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }
 
-/// A sidebar logo (option E): no chrome, no bubble (KP, 2026-11-25). Others
-/// dimmed; the chosen and the focused one lit. One white bar at the left
+/// A sidebar logo (option E): no chrome, no bubble (KP, 2026-11-25). White
+/// and dimmed unless the bar is on it. One white bar at the left
 /// glides from logo to logo as focus moves (matched geometry).
 private struct TVSidebarButtonStyle: ButtonStyle {
-  var selected: Bool
   var hasBar: Bool
   var barSpace: Namespace.ID
 
   func makeBody(configuration: Configuration) -> some View {
-    TVSidebarButtonBody(configuration: configuration, selected: selected, hasBar: hasBar, barSpace: barSpace)
+    TVSidebarButtonBody(configuration: configuration, hasBar: hasBar, barSpace: barSpace)
   }
 }
 
 private struct TVSidebarButtonBody: View {
   let configuration: ButtonStyleConfiguration
-  var selected: Bool
   var hasBar: Bool
   var barSpace: Namespace.ID
   @Environment(\.isFocused) private var focused
 
   var body: some View {
     configuration.label
-      .opacity(selected || focused ? 1 : 0.5)
+      .opacity(hasBar ? 1 : 0.5)
       .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
       .overlay(alignment: .leading) {
         if hasBar {

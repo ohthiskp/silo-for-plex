@@ -393,13 +393,21 @@ private struct MacBarButtonStyle: ButtonStyle {
 // MARK: - Streaming services
 
 /// Home and the streaming services down the left of Home, as on Apple TV
-/// (KP, 2026-11-12). Since 2026-11-25 (KP's option E) they're bare logos:
-/// dimmed until chosen; the chosen one lit with a bar beside it. Scrolls when
-/// the window is too short for all of them.
+/// (KP, 2026-11-12). Since 2026-11-25 (KP's option E) they're bare logos,
+/// white and dimmed. One white bar sits on the logo under the pointer (or the
+/// chosen one when the pointer is away) and glides between them; only the
+/// logo under the bar is lit and in its brand colour. Scrolls when the window
+/// is too short for all of them.
 struct MacServiceRail: View {
   var library: LibraryStore
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
   @Namespace private var barSpace
+  /// The logo under the pointer. Cleared only when the pointer leaves the
+  /// whole rail, so the bar doesn't snap back while crossing the gaps.
+  @State private var hovered: String?
+
+  private static let home = "home"
+  private var barAt: String { hovered ?? library.selectedService?.id ?? Self.home }
 
   var body: some View {
     ViewThatFits(in: .vertical) {
@@ -417,15 +425,22 @@ struct MacServiceRail: View {
       circle(nil)
       ForEach(StreamingService.all) { circle($0) }
     }
-    // The white bar glides to the newly chosen logo (KP, 2026-11-25).
-    .astraAnimation(.smooth(duration: 0.32), value: library.selectedService)
+    .onHover { inside in if !inside { hovered = nil } }
+    // The white bar glides from logo to logo (KP, 2026-11-25).
+    .astraAnimation(.smooth(duration: 0.32), value: barAt)
   }
 
   private func circle(_ service: StreamingService?) -> some View {
-    let selected = library.selectedService == service
+    let id = service?.id ?? Self.home
+    let lit = barAt == id
     let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
-    return MacServiceCircle(selected: selected, barSpace: barSpace, label: service?.label ?? "Home, all services") {
+    return MacServiceCircle(
+      selected: library.selectedService == service, lit: lit, barSpace: barSpace,
+      label: service?.label ?? "Home, all services"
+    ) {
       library.select(service)
+    } hover: {
+      hovered = id
     } content: {
       if let service {
         Image(service.logo)
@@ -433,7 +448,8 @@ struct MacServiceRail: View {
           .resizable()
           .scaledToFit()
           .frame(width: Astra.Sidebar.collapsedWidth * 0.8, height: min(service.logoHeight * 0.8, 20))
-          .foregroundStyle(selected ? brand : .white)
+          // White until the bar is on it; then its brand colour (KP).
+          .foregroundStyle(lit ? brand : .white)
       } else {
         Image(systemName: "house.fill")
           .font(.system(size: 19, weight: .semibold))
@@ -443,26 +459,26 @@ struct MacServiceRail: View {
   }
 }
 
-/// One streaming logo (KP's option E, 2026-11-25): no circle or glass, just
-/// the logo. The others are dimmed; the chosen one is lit (in its brand
-/// colour) with a short white bar at its left. Brighter under the pointer.
+/// One streaming logo (KP's option E): no circle or glass. Dimmed unless the
+/// rail's white bar is on it.
 private struct MacServiceCircle<Content: View>: View {
   var selected: Bool
+  var lit: Bool
   var barSpace: Namespace.ID
   var label: String
   var action: () -> Void
+  var hover: () -> Void
   @ViewBuilder var content: Content
-  @State private var hovering = false
 
   var body: some View {
     let size = Astra.Sidebar.collapsedWidth
     Button(action: action) {
       content
         .frame(width: size, height: size * 0.86)
-        .opacity(selected ? 1 : (hovering ? 0.85 : 0.5))
+        .opacity(lit ? 1 : 0.5)
         .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
         .overlay(alignment: .leading) {
-          if selected {
+          if lit {
             Capsule().fill(.white)
               .frame(width: 4, height: size * 0.5)
               .shadow(color: .white.opacity(0.55), radius: 5)
@@ -471,10 +487,9 @@ private struct MacServiceCircle<Content: View>: View {
           }
         }
         .contentShape(Rectangle())
-        .scaleEffect(hovering && !selected ? 1.06 : 1)
     }
     .buttonStyle(MacBarButtonStyle())
-    .onHover { h in astraWithAnimation(.snappy(duration: 0.18)) { hovering = h } }
+    .onHover { if $0 { hover() } }
     .help(label)
     .accessibilityLabel(label)
     .accessibilityAddTraits(selected ? .isSelected : [])
