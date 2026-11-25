@@ -313,7 +313,7 @@ struct ServicePill: View {
       } label: {
         content()
           .padding(.horizontal, service == nil ? 0 : 14)
-          .frame(width: service == nil ? 38 : nil)
+          .frame(width: service == nil ? 54 : nil)
           .frame(minWidth: service == nil ? nil : 80)
           .frame(height: 38)
           .background {

@@ -397,9 +397,10 @@ private struct TVDots: View {
 
 // MARK: - Streaming sidebar
 
-/// For You and the streaming services as floating glass circles down the
-/// left of Home (KP, 2026-11-09): a fixed list, the logo in each; it doesn't
-/// open or grow. The chosen one is ringed in its brand colour.
+/// Home and the streaming services down the left of Home (KP, 2026-11-09): a
+/// fixed list that doesn't open or grow. Since 2026-11-25 (KP's option E)
+/// they're bare logos, no circles: dimmed until chosen, the chosen one lit in
+/// its brand colour with a white bar beside it.
 private struct TVServiceSidebar: View {
   var library: LibraryStore
   /// Right from a circle, when tvOS finds nothing to its right by itself.
@@ -411,7 +412,7 @@ private struct TVServiceSidebar: View {
   private var chosen: String { library.selectedService?.id ?? Self.forYou }
 
   var body: some View {
-    VStack(spacing: 16) {
+    VStack(spacing: 8) {
       circle(nil)
       ForEach(StreamingService.all) { circle($0) }
     }
@@ -437,12 +438,12 @@ private struct TVServiceSidebar: View {
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
-            .frame(width: TVLayout.sidebarCircle * 0.62, height: min(service.logoHeight * 0.9, 26))
+            .frame(width: TVLayout.sidebarCircle * 0.78, height: min(service.logoHeight * 1.0, 28))
             // White until chosen; the chosen one in its brand colour (KP).
             .foregroundStyle(selected ? brand : .white)
         } else {
           Image(systemName: "house.fill")
-            .font(.system(size: 28, weight: .semibold))
+            .font(.system(size: 30, weight: .semibold))
             .foregroundStyle(.white)
         }
       }
@@ -455,8 +456,9 @@ private struct TVServiceSidebar: View {
   }
 }
 
-/// A sidebar circle: clear glass, lighter and larger when focused; the
-/// chosen service ringed in its brand colour.
+/// A sidebar logo (option E): no chrome at rest. Others dimmed, the chosen
+/// one lit with a white bar at its left. Focus adds a soft clear-glass
+/// circle behind the logo and lifts it, so you can see where you are.
 private struct TVSidebarButtonStyle: ButtonStyle {
   var selected: Bool
   var brand: Color
@@ -474,16 +476,26 @@ private struct TVSidebarButtonBody: View {
 
   var body: some View {
     configuration.label
-      .background { Circle().fill(.black.opacity(focused ? 0.15 : 0.3)) }
-      .background { if focused { Circle().fill(.white.opacity(0.35)) } }
-      .astraGlass(in: Circle(), variant: .clear, interactive: true)
-      .overlay { if selected { Circle().strokeBorder(brand, lineWidth: 3) } }
-      .overlay { if focused { Circle().strokeBorder(.white, lineWidth: 3) } }
+      .opacity(selected || focused ? 1 : 0.5)
+      .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
+      .background {
+        if focused {
+          Circle().fill(.white.opacity(0.2))
+            .astraGlass(in: Circle(), variant: .clear, interactive: true)
+        }
+      }
+      .overlay(alignment: .leading) {
+        if selected {
+          Capsule().fill(.white)
+            .frame(width: 5, height: TVLayout.sidebarCircle * 0.42)
+            .offset(x: -16)
+        }
+      }
       .contentShape(Circle())
       .scaleEffect(configuration.isPressed ? 0.95 : (focused ? 1.12 : 1))
-      .shadow(color: .black.opacity(focused ? 0.4 : 0.2), radius: focused ? 16 : 8, y: 6)
       .focusEffectDisabled()
       .animation(.snappy(duration: 0.22), value: focused)
+      .animation(.snappy(duration: 0.22), value: selected)
   }
 }
 
