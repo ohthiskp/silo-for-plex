@@ -21,7 +21,7 @@ struct LoadingView: View {
   #endif
 
   /// How far right of its square's centre the arrow's visible shape sits, as a share of the square.
-  static let opticalShift: CGFloat = 0.04
+  static let opticalShift: CGFloat = 0.025
 
   var body: some View {
     ZStack {
