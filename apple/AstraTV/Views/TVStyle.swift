@@ -414,7 +414,7 @@ struct TVLandscapeCard: View {
       VStack(alignment: .leading, spacing: 14) {
         TVCardArt(width: width, height: height) {
           if item.type == .episode, item.thumb != nil {
-            RemoteImage(url: library.imageURL(item.thumb, width: width, height: height), placeholder: TVColor.surface)
+            EpisodeStill(library: library, item: item, width: width, height: height, placeholder: TVColor.surface)
           } else {
             ArtworkImage(library: library, item: item, kind: .backdrop, width: width, height: height)
           }

@@ -1073,6 +1073,37 @@ final class LibraryStore {
     return result
   }
 
+  /// Each season's TMDB stills ("1421:2" → episode number → path), asked once per season.
+  private var seasonStills: [String: [Int: String]] = [:]
+  private var seasonStillTasks: [String: Task<[Int: String], Never>] = [:]
+
+  /// An episode's still: TMDB's full-size one when TMDB has it, else the
+  /// server's. Some shows' stills on the server are small and came out
+  /// blurry when enlarged (KP, 2026-11-25: Modern Family).
+  func episodeStillURL(for episode: PlexMetadata, width: CGFloat, height: CGFloat, scale: CGFloat = 2) async -> URL? {
+    let plex = imageURL(episode.thumb, width: width, height: height, scale: scale)
+    guard let tmdb, episode.type == .episode, let season = episode.parentIndex, let number = episode.index,
+      let showKey = episode.grandparentRatingKey
+    else { return plex }
+    let show: PlexMetadata?
+    if let cached = detailCache[showKey] { show = cached } else { show = try? await details(showKey) }
+    guard let key = show?.tmdbKey, key.hasPrefix("tv:"), let showID = Int(key.dropFirst(3)) else { return plex }
+    let seasonKey = "\(showID):\(season)"
+    let stills: [Int: String]
+    if let known = seasonStills[seasonKey] {
+      stills = known
+    } else {
+      let task =
+        seasonStillTasks[seasonKey] ?? Task { (try? await tmdb.seasonStills(showID: showID, season: season)) ?? [:] }
+      seasonStillTasks[seasonKey] = task
+      stills = await task.value
+      seasonStillTasks[seasonKey] = nil
+      seasonStills[seasonKey] = stills
+    }
+    guard let path = stills[number] else { return plex }
+    return TMDBArtwork.url(path, size: width * scale > 780 ? "original" : "w780") ?? plex
+  }
+
   /// The artwork URL for a card or header: TMDB's when it has one, else Plex's.
   /// Episodes keep Plex's stills.
   func artworkURL(for item: PlexMetadata, _ kind: ArtKind, width: CGFloat, height: CGFloat) async -> URL? {

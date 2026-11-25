@@ -52,14 +52,23 @@ struct TVDetailPage: View {
   /// The picked episode's still, for the backdrop (nil until an episode is picked).
   private var episodeStill: URL? {
     guard episodeArt, let focus, focus.type == .episode, let thumb = focus.thumb else { return nil }
-    return library.imageURL(thumb, width: 1920, height: 1080, scale: 1)
+    return sharpStills[focus.ratingKey] ?? library.imageURL(thumb, width: 1920, height: 1080, scale: 1)
   }
+  /// TMDB stills found for the picked episodes (KP, 2026-11-25: some shows' server stills are blurry).
+  @State private var sharpStills: [String: URL] = [:]
 
   private var isSeries: Bool { shown.type == .show || shown.type == .season || shown.type == .episode }
 
   var body: some View {
     // KP (2026-11-14): Details stays Frosted Glass, even on the Light theme.
     page.astraDetailsTheme()
+      .task(id: focus?.ratingKey) {
+        guard let focus, focus.type == .episode, sharpStills[focus.ratingKey] == nil,
+          let url = await library.episodeStillURL(for: focus, width: 1920, height: 1080, scale: 1),
+          url.host() == "image.tmdb.org", !Task.isCancelled
+        else { return }
+        sharpStills[focus.ratingKey] = url
+      }
   }
 
   @ViewBuilder private var page: some View {
@@ -513,7 +522,7 @@ private struct TVEpisodeLabel: View {
   var body: some View {
     let size = TVLayout.episodeCard
     VStack(alignment: .leading, spacing: 12) {
-      RemoteImage(url: library.imageURL(item.thumb, width: size.width, height: size.height), placeholder: Astra.Color.surface)
+      EpisodeStill(library: library, item: item, width: size.width, height: size.height, placeholder: Astra.Color.surface)
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous))
         .watchedLook(library.isWatched(item), corner: TVLayout.radius, mark: 32, inset: 18)

@@ -726,6 +726,20 @@ final class TMDBTests: XCTestCase {
     XCTAssertNil(TMDBArtwork.url(nil, size: "w500"))
   }
 
+  func testSeasonStillsByEpisodeNumber() async throws {
+    let transport = FakeTransport { _ in
+      (
+        200,
+        Data(
+          #"{"episodes":[{"episode_number":1,"still_path":"/a.jpg"},{"episode_number":2,"still_path":null},{"episode_number":3,"still_path":"/c.jpg"}]}"#
+            .utf8)
+      )
+    }
+    let stills = try await TMDBClient(token: "t", transport: transport).seasonStills(showID: 1421, season: 2)
+    XCTAssertEqual(stills, [1: "/a.jpg", 3: "/c.jpg"])
+    XCTAssertEqual(transport.requests.first?.url?.path, "/3/tv/1421/season/2")
+  }
+
   func testTMDBAsksAgainAfterTooManyRequests() async throws {
     let calls = Counter()
     let transport = FakeTransport { _ in

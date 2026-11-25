@@ -313,6 +313,26 @@ public struct TMDBClient: Sendable {
     return try JSONDecoder().decode(Raw.self, from: data).item(forcedKind: kind)
   }
 
+  /// Each episode's still in one season, by episode number. Some shows'
+  /// stills on the Plex server are small (KP, 2026-11-25: Modern Family's
+  /// were blurry); TMDB has them full size.
+  public func seasonStills(showID: Int, season: Int) async throws -> [Int: String] {
+    struct Season: Decodable {
+      struct Episode: Decodable {
+        var episode_number: Int?
+        var still_path: String?
+      }
+      var episodes: [Episode]?
+    }
+    let data = try await get("/tv/\(showID)/season/\(season)", [:])
+    var stills: [Int: String] = [:]
+    for episode in try JSONDecoder().decode(Season.self, from: data).episodes ?? [] {
+      guard let number = episode.episode_number, let path = episode.still_path, !path.isEmpty else { continue }
+      stills[number] = path
+    }
+    return stills
+  }
+
   /// Poster, backdrop and title logo for one title.
   public func artwork(id: Int, kind: TMDBItem.Kind) async throws -> TMDBArtwork {
     let data = try await get(
