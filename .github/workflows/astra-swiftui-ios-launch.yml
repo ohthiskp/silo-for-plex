@@ -96,6 +96,8 @@ jobs:
             xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shots/$name.png" || true
           }
           shot home
+          # The launch screen, held up (its logo must sit in the middle of the screen).
+          shot loading -AstraDemoLoading YES
           shot home-rows -AstraDemoScroll 640
           shot search -AstraDemoTab search
           shot search-dune -AstraDemoTab search -AstraDemoQuery dune

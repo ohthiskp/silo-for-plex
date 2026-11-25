@@ -179,6 +179,8 @@ jobs:
             sleep 3
           }
           mshot mac-details-show -AstraDemoOpen 205
+          # The launch screen, held up (its logo must sit in the middle of the window).
+          mshot mac-loading -AstraDemoLoading YES
           mshot mac-details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
           mshot mac-details-episode -AstraDemoOpen 303
           for f in "$RUNNER_TEMP"/shots/*.png; do

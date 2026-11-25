@@ -98,6 +98,8 @@ struct RootView: View {
   #endif
 
   private func updateLoader(for phase: AppModel.Phase) {
+    // CI screenshot of the launch screen: it stays up.
+    if Demo.holdLoading { return }
     switch phase {
     case .launching, .connecting:
       loader = .loading

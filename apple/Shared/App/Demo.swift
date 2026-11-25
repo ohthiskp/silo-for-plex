@@ -27,6 +27,8 @@ enum Demo {
   /// screenshot: `controls`, `scrub`, `skip` (controls hidden, Skip Intro showing), or the Apple TV top menu's
   /// `info`, `settings`, `subtitles`.
   static var playerShot: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlayer") : nil }
+  /// `-AstraDemoLoading YES`: keep the launch screen (the animated logo) up, for its screenshot.
+  static var holdLoading: Bool { isOn && UserDefaults.standard.bool(forKey: "AstraDemoLoading") }
   /// Skip Intro (KP, 2026-11-24): for the player screenshots only, the demo
   /// movie has a 90 s intro, so they show the skip button. The gesture UI
   /// tests get none: their double taps would land on the button.
