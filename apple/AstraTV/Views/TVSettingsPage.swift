@@ -28,9 +28,14 @@ struct TVSettingsPage: View {
         TVServerBand()
           .focusSection()
         HStack(alignment: .top, spacing: 56) {
+          // The list's focus area runs the full height of the pane, so Left
+          // from any setting, however far down, goes back to the list.
           categoryList
+            .frame(maxHeight: .infinity, alignment: .top)
+            .focusSection()
           pane
         }
+        .fixedSize(horizontal: false, vertical: true)
         .focusSection()
       }
       .padding(.horizontal, TVLayout.leading)
