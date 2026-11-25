@@ -421,7 +421,7 @@ struct MacServiceRail: View {
   private func circle(_ service: StreamingService?) -> some View {
     let selected = library.selectedService == service
     let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
-    return MacServiceCircle(selected: selected, brand: brand, label: service?.label ?? "For You") {
+    return MacServiceCircle(selected: selected, brand: brand, label: service?.label ?? "Home, all services") {
       library.select(service)
     } content: {
       if let service {
@@ -432,7 +432,7 @@ struct MacServiceRail: View {
           .frame(width: Astra.Sidebar.collapsedWidth * 0.66, height: min(service.logoHeight * 0.7, 18))
           .foregroundStyle(selected ? brand : .white)
       } else {
-        Image(systemName: "sparkles")
+        Image(systemName: "house.fill")
           .font(.system(size: 17, weight: .semibold))
           .foregroundStyle(.white)
       }

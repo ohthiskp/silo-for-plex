@@ -441,7 +441,7 @@ private struct TVServiceSidebar: View {
             // White until chosen; the chosen one in its brand colour (KP).
             .foregroundStyle(selected ? brand : .white)
         } else {
-          Image(systemName: "sparkles")
+          Image(systemName: "house.fill")
             .font(.system(size: 28, weight: .semibold))
             .foregroundStyle(.white)
         }
@@ -450,7 +450,7 @@ private struct TVServiceSidebar: View {
     }
     .buttonStyle(TVSidebarButtonStyle(selected: selected, brand: brand))
     .focused($focused, equals: service?.id ?? Self.forYou)
-    .accessibilityLabel(service?.label ?? "For You")
+    .accessibilityLabel(service?.label ?? "Home, all services")
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }

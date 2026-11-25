@@ -268,9 +268,10 @@ struct ServicePill: View {
       // on brighter glass. For You, when chosen, is a white pill.
       ScrollView(.horizontal) {
         HStack(spacing: 10) {
-          railChip(nil, label: "For You") {
-            Text("For You")
-              .font(.system(size: 14.5, weight: .bold))
+          // KP (2026-11-25): a Home icon, not the words "For You".
+          railChip(nil, label: "Home, all services") {
+            Image(systemName: "house.fill")
+              .font(.system(size: 16, weight: .semibold))
               .foregroundStyle(library.selectedService == nil ? Color.black : Color.white)
           }
           ForEach(StreamingService.all) { service in
@@ -311,7 +312,8 @@ struct ServicePill: View {
         library.select(service)
       } label: {
         content()
-          .padding(.horizontal, service == nil ? 18 : 14)
+          .padding(.horizontal, service == nil ? 0 : 14)
+          .frame(width: service == nil ? 38 : nil)
           .frame(minWidth: service == nil ? nil : 80)
           .frame(height: 38)
           .background {
@@ -337,8 +339,8 @@ struct ServicePill: View {
 
   private var chips: some View {
     HStack(spacing: 2) {
-      chip(nil, label: "For You") {
-        Text("For You").font(.system(size: 14 * Astra.Layout.controlScale, weight: .bold))
+      chip(nil, label: "Home, all services") {
+        Image(systemName: "house.fill").font(.system(size: 14 * Astra.Layout.controlScale, weight: .semibold))
       }
       ForEach(StreamingService.all) { service in
         chip(service, label: service.label) {
