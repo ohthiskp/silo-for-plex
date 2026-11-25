@@ -130,9 +130,10 @@ struct PlayerOverlay: View {
             .padding(.trailing, 28)
             .padding(.bottom, 150)
           #else
-            // Clear of the captions/quality capsule and the timeline (KP: "spaced better").
+            // KP (2026-11-25): near the bottom while the controls are hidden;
+            // up above the captions capsule and the timeline once a tap shows them.
             .padding(.trailing, 20)
-            .padding(.bottom, 132)
+            .padding(.bottom, visible ? 132 : 28)
           #endif
       }
 
