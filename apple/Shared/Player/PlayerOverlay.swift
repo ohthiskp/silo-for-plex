@@ -265,7 +265,7 @@ struct PlayerOverlay: View {
                 HStack(spacing: 8) {
                   Text(player.title).font(.system(size: 24, weight: .bold)).lineLimit(1)
                   // The real resolution of the frames playing; nothing until it is known.
-                  if let badge = resolutionTag { ResolutionTag(text: badge, size: 10) }
+                  if let badge = resolutionTag { ResolutionTag(text: badge, size: 15) }
                 }
                 if let subtitle = player.subtitle, !subtitle.isEmpty {
                   Text(subtitle).font(.system(size: 14, weight: .medium)).foregroundStyle(.white.opacity(0.65))
@@ -294,10 +294,11 @@ struct PlayerOverlay: View {
           .padding(.bottom, 10)
           .opacity(scrubbing == nil ? 1 : 0)
           .allowsHitTesting(scrubbing == nil)
+          // Full width, so the bar starts and ends exactly under the title and
+          // the buttons (KP, 2026-11-17: "line up the titles with the bottom bar").
           PhoneScrubber(player: player, scrubbing: $scrubbing, poke: poke)
-            .frame(maxWidth: 1400)
         }
-        transport(small: 28, large: 42, gap: 64, framedPause: false)
+        transport(small: 28, large: 42, gap: 40, framedPause: false)
           .opacity(scrubbing == nil ? 1 : 0)
           .allowsHitTesting(scrubbing == nil)
       }
@@ -329,7 +330,7 @@ struct PlayerOverlay: View {
     /// The small floating window: play/pause and a button back to full size.
     private var miniChrome: some View {
       ZStack {
-        transport(small: 22, large: 28, gap: 26, framedPause: false)
+        transport(small: 20, large: 26, gap: 14, framedPause: false)
         VStack {
           HStack {
             Spacer()
@@ -379,7 +380,7 @@ struct PlayerOverlay: View {
               HStack(spacing: 8) {
                 Text(player.title).font(.system(size: 22, weight: .bold)).lineLimit(1)
                 // The real resolution of the frames playing; nothing until it is known.
-                if let badge = resolutionTag { ResolutionTag(text: badge, size: 9) }
+                if let badge = resolutionTag { ResolutionTag(text: badge, size: 13) }
               }
               // Episodes only: "S2 · E4 · Episode Title". Movies show nothing here.
               if let subtitle = player.subtitle, !subtitle.isEmpty {
@@ -524,16 +525,17 @@ struct PlayerOverlay: View {
     PlayerTimeline(player: player, scrubbing: $scrubbing, poke: poke)
   }
 
-  /// Back 10 s, play/pause, forward 10 s: bold white glyphs.
+  /// Back 10 s, play/pause, forward 10 s: white glyphs in round buttons of
+  /// clear Liquid Glass you can see the picture through (KP, 2026-11-17).
   private func transport(small: CGFloat, large: CGFloat, gap: CGFloat, framedPause: Bool) -> some View {
     HStack(spacing: gap) {
       Button {
         player.seek(by: -10)
         poke()
       } label: {
-        Image(systemName: "gobackward.10").font(.system(size: small, weight: .regular))
+        Image(systemName: "gobackward.10").font(.system(size: small * 0.82, weight: .medium))
       }
-      .buttonStyle(PlayerGlyphButtonStyle(size: small * 1.6))
+      .buttonStyle(PlayerGlassButtonStyle(size: small * 2))
       .keyboardShortcut(.leftArrow, modifiers: [])
       .accessibilityLabel("Back 10 Seconds")
 
@@ -542,9 +544,11 @@ struct PlayerOverlay: View {
       } label: {
         // Swapped at once (no symbol animation), so play/pause feels instant.
         Image(systemName: player.paused ? "play.fill" : "pause.fill")
-          .font(.system(size: large, weight: .bold))
+          .font(.system(size: large * 0.78, weight: .bold))
+          // The play triangle looks centred a touch to the right.
+          .offset(x: player.paused ? large * 0.05 : 0)
       }
-      .buttonStyle(PlayerGlyphButtonStyle(size: framedPause ? large * 2.3 : large * 1.6, filled: framedPause, square: true))
+      .buttonStyle(PlayerGlassButtonStyle(size: large * 2))
       .keyboardShortcut(.space, modifiers: [])
       .accessibilityLabel(player.paused ? "Play" : "Pause")
 
@@ -552,13 +556,13 @@ struct PlayerOverlay: View {
         player.seek(by: 10)
         poke()
       } label: {
-        Image(systemName: "goforward.10").font(.system(size: small, weight: .regular))
+        Image(systemName: "goforward.10").font(.system(size: small * 0.82, weight: .medium))
       }
-      .buttonStyle(PlayerGlyphButtonStyle(size: small * 1.6))
+      .buttonStyle(PlayerGlassButtonStyle(size: small * 2))
       .keyboardShortcut(.rightArrow, modifiers: [])
       .accessibilityLabel("Forward 10 Seconds")
     }
-    .shadow(color: .black.opacity(0.35), radius: 8)
+    .astraGlassGroup(spacing: gap)
   }
 
   private func pipButton(size: CGFloat) -> some View {
@@ -908,6 +912,26 @@ struct PlayerGlyphButtonStyle: ButtonStyle {
       .contentShape(Rectangle())
       .scaleEffect(configuration.isPressed ? 0.9 : 1)
       .opacity(configuration.isPressed ? 0.8 : 1)
+      .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
+  }
+}
+
+/// A round button of clear Liquid Glass for the Mac player's transport
+/// (KP, 2026-11-17: "completely liquid glass so you can see through it"):
+/// no tint and no fill, so the picture shows through; the glass reacts to
+/// the pointer and presses like Apple's. The glyph keeps a soft shadow so it
+/// reads over bright scenes.
+struct PlayerGlassButtonStyle: ButtonStyle {
+  var size: CGFloat
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .foregroundStyle(.white)
+      .shadow(color: .black.opacity(0.35), radius: 4)
+      .frame(width: size, height: size)
+      .contentShape(Circle())
+      .astraGlass(in: Circle(), variant: .clear, interactive: true)
+      .scaleEffect(configuration.isPressed ? 0.92 : 1)
       .astraAnimation(Astra.Motion.fast, value: configuration.isPressed)
   }
 }

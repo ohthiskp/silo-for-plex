@@ -298,8 +298,8 @@ struct PlayerOverlay: View {
               .font(.system(size: 50, weight: .bold))
               .foregroundStyle(.white)
               .lineLimit(1)
-            // About 40% of the title's height.
-            if let tag = resolutionTag { ResolutionTag(text: tag, size: 19) }
+            // Plain bold text, the subtitle line's size.
+            if let tag = resolutionTag { ResolutionTag(text: tag, size: 28) }
           }
           if let subtitle = player.subtitle, !subtitle.isEmpty {
             Text(subtitle)
@@ -431,7 +431,7 @@ struct PlayerOverlay: View {
             .font(.system(size: 46, weight: .bold))
             .foregroundStyle(.white)
             .lineLimit(1)
-          if let tag = resolutionTag { ResolutionTag(text: tag, size: 18) }
+          if let tag = resolutionTag { ResolutionTag(text: tag, size: 26) }
         }
         HStack(spacing: 16) {
           if let year = item?.year { Text(String(year)) }
