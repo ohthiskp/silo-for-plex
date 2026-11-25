@@ -106,6 +106,9 @@ jobs:
           shot details-show -AstraDemoOpen 205
           shot details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
           shot details-episode -AstraDemoOpen 303
+          # Modern Family episode stills (KP, 2026-11-25): the server's small ones, then TMDB's.
+          shot mf-before -AstraDemoOpen 502 -AstraDemoScroll 1 -AstraDemoServerStills YES
+          shot mf-after -AstraDemoOpen 502 -AstraDemoScroll 1
           # Settings, Direction C (KP, 2026-11-14): the root, then each page it opens.
           shot settings -AstraDemoTab settings
           for page in appearance playback subtitles library downloads server; do

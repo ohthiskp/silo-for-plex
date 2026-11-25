@@ -184,6 +184,8 @@ jobs:
           mshot mac-loading -AstraDemoLoading YES
           mshot mac-details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
           mshot mac-details-episode -AstraDemoOpen 303
+          mshot mac-mf-before -AstraDemoOpen 502 -AstraDemoServerStills YES
+          mshot mac-mf-after -AstraDemoOpen 502
           for f in "$RUNNER_TEMP"/shots/*.png; do
             [ -f "$f" ] || continue
             sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null

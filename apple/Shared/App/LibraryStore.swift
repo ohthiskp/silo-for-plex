@@ -1082,7 +1082,7 @@ final class LibraryStore {
   /// blurry when enlarged (KP, 2026-11-25: Modern Family).
   func episodeStillURL(for episode: PlexMetadata, width: CGFloat, height: CGFloat, scale: CGFloat = 2) async -> URL? {
     let plex = imageURL(episode.thumb, width: width, height: height, scale: scale)
-    guard let tmdb, episode.type == .episode, let season = episode.parentIndex, let number = episode.index,
+    guard let tmdb, !Demo.serverStillsOnly, episode.type == .episode, let season = episode.parentIndex, let number = episode.index,
       let showKey = episode.grandparentRatingKey
     else { return plex }
     let show: PlexMetadata?

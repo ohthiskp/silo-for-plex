@@ -105,6 +105,7 @@ enum Demo {
     show("204", "Ozark", 2017, 69740, "Drama", 4),
     show("205", "Severance", 2022, 95396, "Science Fiction", 2),
     show("206", "The Bear", 2022, 136315, "Comedy", 3),
+    show("207", "Modern Family", 2009, 1421, "Comedy", 11),
   ]
 
   /// Severance: six Season 1 episodes (two partly watched shows for Continue
@@ -134,6 +135,25 @@ enum Demo {
         "thumb": demoStill("40\(n)"),
       ]
     }
+
+    // Modern Family, Season 1 (KP, 2026-11-25): its stills on KP's server are
+    // small, so the stand-ins here are small too (320×180), to compare with TMDB's.
+    + (1...4).map { n -> JSON in
+      [
+        "ratingKey": "50\(n)", "key": "/library/metadata/50\(n)", "type": "episode",
+        "title": modernFamilyTitles[n - 1], "index": n, "parentIndex": 1, "duration": 1_320_000,
+        "grandparentTitle": "Modern Family", "grandparentRatingKey": "207", "parentRatingKey": "2071",
+        "parentTitle": "Season 1", "librarySectionID": 2, "year": 2009,
+        "summary": "The Pritchett-Dunphy-Tucker clan, filmed documentary style.",
+        "Media": [media(id: 500 + n, resolution: "1080", seconds: 1320)],
+        "thumb": "https://picsum.photos/seed/astra50\(n)/320/180",
+      ]
+    }
+
+  private static let modernFamilyTitles = ["Pilot", "The Bicycle Thief", "Come Fly with Me", "The Incident"]
+
+  /// `-AstraDemoServerStills YES`: episode stills from the server only (the old behaviour), for a before/after.
+  static var serverStillsOnly: Bool { isOn && UserDefaults.standard.bool(forKey: "AstraDemoServerStills") }
 
   /// A stand-in still per demo episode, so CI screenshots show each episode's
   /// own picture (placeholder photos; a real server sends the episode's still).
@@ -251,7 +271,16 @@ enum Demo {
             ]
           ]
         }
-        if key == "2051" || key == "2052" {
+        if key == "207" {
+          return [
+            "Metadata": [
+              ["ratingKey": "2071", "key": "/library/metadata/2071/children", "type": "season", "title": "Season 1",
+               "index": 1, "parentRatingKey": "207", "parentTitle": "Modern Family", "leafCount": 4,
+               "viewedLeafCount": 0]
+            ]
+          ]
+        }
+        if key == "2051" || key == "2052" || key == "2071" {
           return ["Metadata": episodes.filter { $0["parentRatingKey"] as? String == key }]
         }
         return ["Metadata": []]
