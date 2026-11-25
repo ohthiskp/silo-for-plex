@@ -28,9 +28,14 @@ struct TVSettingsPage: View {
         TVServerBand()
           .focusSection()
         HStack(alignment: .top, spacing: 56) {
+          // The list's focus area runs the full height of the pane, so Left
+          // from any setting, however far down, goes back to the list.
           categoryList
+            .frame(maxHeight: .infinity, alignment: .top)
+            .focusSection()
           pane
         }
+        .fixedSize(horizontal: false, vertical: true)
         .focusSection()
       }
       .padding(.horizontal, TVLayout.leading)
@@ -499,6 +504,9 @@ private struct TVHomePreview: View {
 private struct TVPlaybackPane: View {
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
   @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
+  @AppStorage(Preferences.autoSkipIntroKey) private var autoSkipIntro = false
+  @AppStorage(Preferences.autoSkipCreditsKey) private var autoSkipCredits = false
+  @AppStorage(Preferences.autoSkipDelayKey) private var autoSkipDelay = AutoSkipCountdown.defaultDelay
   @AppStorage(PlaybackLanguage.audioKey) private var audioLanguage = ""
   @AppStorage(PlaybackLanguage.subtitleKey) private var subtitleLanguage = ""
 
@@ -521,6 +529,13 @@ private struct TVPlaybackPane: View {
       }
       TVSettingsCard(footer: "Shows in the last 15 seconds of an episode. It never plays on its own.") {
         TVSwitchRow(title: "Next Episode button", isOn: $nextEpisode)
+      }
+      TVSettingsCard(footer: "With a delay, the button fills up first; press Select to skip right away. None skips as soon as the intro or credits start. Times come from IntroDB.") {
+        TVSwitchRow(title: "Skip Intros Automatically", isOn: $autoSkipIntro)
+        TVSwitchRow(title: "Skip Credits Automatically", isOn: $autoSkipCredits)
+        TVOptionRow(title: "Delay", choices: AutoSkipCountdown.delays, selection: autoSkipDelay, name: { $0 == 0 ? "None" : "\($0) s" }) {
+          autoSkipDelay = $0
+        }
       }
     }
   }

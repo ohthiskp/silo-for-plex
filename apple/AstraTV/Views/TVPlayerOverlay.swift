@@ -176,6 +176,9 @@ struct PlayerOverlay: View {
     } else if scrubbing != nil {
       scrubbing = nil
       poke()
+    } else if player.autoSkipProgress != nil {
+      // Auto-skip counting down: Back stops it; the button stays, to press.
+      player.cancelAutoSkip()
     } else {
       player.close()
     }
@@ -224,14 +227,15 @@ struct PlayerOverlay: View {
     guard let shot = Demo.playerShot else { return }
     Task { @MainActor in
       for _ in 0..<60 where !player.hasFirstFrame { try? await Task.pause(0.25) }
-      try? await Task.pause(1)
+      // Auto-skip: let the button fill part way first.
+      try? await Task.pause(shot == "autoskip" ? 3 : 1)
       player.setPaused(true)
       switch shot {
       case "scrub": scrubbing = player.duration * 0.35
       case "info": openMenu(.info)
       case "settings": openMenu(.settings)
       case "subtitles": openMenu(.subtitles)
-      case "skip": visible = false
+      case "skip", "autoskip": visible = false
       default: poke()
       }
     }
@@ -346,14 +350,7 @@ struct PlayerOverlay: View {
           focus = .bar
           poke()
         } label: {
-          Label(prompt.title, systemImage: prompt.symbol)
-            .font(.system(size: 24, weight: .semibold))
-            .foregroundStyle(focus == .skip ? Color.black : Color.white)
-            .padding(.horizontal, 26)
-            .frame(height: 66)
-            .background(Capsule().fill(focus == .skip ? Color.white : Color.black.opacity(0.35)))
-            .overlay(Capsule().stroke(Color.white.opacity(focus == .skip ? 0 : 0.22), lineWidth: 1))
-            .shadow(color: .black.opacity(focus == .skip ? 0.35 : 0), radius: 18, y: 8)
+          SkipBox(prompt: prompt, progress: player.autoSkipProgress, focused: focus == .skip, tv: true)
         }
         .buttonStyle(TVBareButtonStyle())
         .focused($focus, equals: .skip)

@@ -69,3 +69,68 @@ extension SkipPrompt {
     }
   }
 }
+
+/// Auto-skip (KP, 2026-11-25): with Settings → Skip Intros (or Credits)
+/// Automatically on, the skip button fills up over the chosen delay of
+/// playback, then skips by itself. A delay of 0 skips at once, with no fill. Counted in playback time, so pausing pauses
+/// the fill. Each intro or credits runs its countdown once; a cancelled or
+/// finished one doesn't start again if the viewer seeks back into it.
+/// Next Episode never plays on its own.
+public struct AutoSkipCountdown: Sendable, Equatable {
+  /// Settings → Auto-skip delay choices, in seconds (0 = right away).
+  public static let delays = [0, 3, 5, 10]
+  public static let defaultDelay = 5
+
+  public struct Step: Equatable, Sendable {
+    /// 0…1 while the button fills; nil when no countdown runs.
+    public var progress: Double?
+    /// True once: the countdown just finished, so skip now.
+    public var fire: Bool
+  }
+
+  private var running: SkipPrompt?
+  private var startedAt: Double = 0
+  private var done: Set<Double> = []
+
+  public init() {}
+
+  /// Advances the countdown for the prompt showing at `position`.
+  public mutating func update(
+    prompt: SkipPrompt?, position: Double, intro: Bool, credits: Bool, delay: Double = Double(defaultDelay)
+  ) -> Step {
+    guard let prompt, let end = Self.end(of: prompt), !done.contains(end) else {
+      running = nil
+      return Step(progress: nil, fire: false)
+    }
+    switch prompt {
+    case .intro where !intro, .credits where !credits:
+      running = nil
+      return Step(progress: nil, fire: false)
+    default: break
+    }
+    if running != prompt || position < startedAt {
+      running = prompt
+      startedAt = position
+    }
+    let progress = delay > 0 ? min(max((position - startedAt) / delay, 0), 1) : 1
+    if progress >= 1 {
+      done.insert(end)
+      running = nil
+      return Step(progress: delay > 0 ? 1 : nil, fire: true)
+    }
+    return Step(progress: progress, fire: false)
+  }
+
+  /// Stops the countdown showing now (Apple TV: Back); the button stays, to tap.
+  public mutating func cancel() {
+    if let running, let end = Self.end(of: running) { done.insert(end) }
+    running = nil
+  }
+
+  private static func end(of prompt: SkipPrompt) -> Double? {
+    switch prompt {
+    case .intro(let end), .credits(let end): end
+    case .nextEpisode: nil
+    }
+  }
+}
