@@ -159,6 +159,9 @@ extension Preferences {
   public static let autoSkipIntroKey = "astra.playback.autoSkipIntro"
   /// Playback → Skip Credits Automatically (off by default).
   public static let autoSkipCreditsKey = "astra.playback.autoSkipCredits"
+  /// Playback → Auto-skip delay in seconds: 0 skips at once with no fill
+  /// (KP 2026-11-25), otherwise the button fills over this long first.
+  public static let autoSkipDelayKey = "astra.playback.autoSkipDelay"
   /// Appearance → Theme colour: icons and the tab bar, as "RRGGBB".
   public static let themeKey = "astra.appearance.theme"
   /// Appearance → Streaming Service Logo Colours (off: plain white logos on glass).

@@ -378,6 +378,7 @@ import SwiftUI
     @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
     @AppStorage(Preferences.autoSkipIntroKey) private var autoSkipIntro = false
     @AppStorage(Preferences.autoSkipCreditsKey) private var autoSkipCredits = false
+    @AppStorage(Preferences.autoSkipDelayKey) private var autoSkipDelay = AutoSkipCountdown.defaultDelay
     @AppStorage(PlaybackLanguage.audioKey) private var audioLanguage = ""
     @AppStorage(PlaybackLanguage.subtitleKey) private var subtitleLanguage = ""
 
@@ -411,6 +412,12 @@ import SwiftUI
         SettingSwitch(title: "Next Episode button", isOn: $nextEpisode)
         SettingSwitch(title: "Skip intros automatically", isOn: $autoSkipIntro)
         SettingSwitch(title: "Skip credits automatically", isOn: $autoSkipCredits)
+        SettingRow(title: "Auto-skip delay") {
+          Picker("Auto-skip delay", selection: $autoSkipDelay) {
+            ForEach(AutoSkipCountdown.delays, id: \.self) { Text($0 == 0 ? "None" : "\($0) s").tag($0) }
+          }
+          .labelsHidden().pickerStyle(.segmented).fixedSize()
+        }
       }
       .help("Astra always plays the original file. Quality picks between the versions on your server. Audio and subtitles start in these languages whenever the file has them. Automatic leaves it to the file and your Plex server.")
     }

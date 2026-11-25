@@ -390,7 +390,7 @@ final class PlayerController {
   }
 
   /// Runs the auto-skip countdown on each position update: the button fills
-  /// over 5 s of playback, then skips. Settings → Playback switches; Next
+  /// over the chosen delay of playback, then skips (no delay: at once). Settings → Playback switches; Next
   /// Episode never plays on its own.
   private func updateAutoSkip() {
     let defaults = UserDefaults.standard
@@ -400,7 +400,9 @@ final class PlayerController {
     guard intro || credits || autoSkipProgress != nil else { return }
     let nextOn = defaults.object(forKey: Preferences.nextEpisodeKey) as? Bool ?? true
     let prompt = skipPrompt(nextEpisodeOn: nextOn)
-    let step = autoSkip.update(prompt: prompt, position: position, intro: intro, credits: credits)
+    let delay = defaults.object(forKey: Preferences.autoSkipDelayKey) as? Int ?? AutoSkipCountdown.defaultDelay
+    let step = autoSkip.update(
+      prompt: prompt, position: position, intro: intro, credits: credits, delay: Double(demo ? 5 : delay))
     // Steps of 2 %, so the button doesn't redraw on every frame.
     let rounded = step.progress.map { ($0 * 50).rounded() / 50 }
     if autoSkipProgress != rounded { autoSkipProgress = rounded }

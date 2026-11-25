@@ -71,3 +71,17 @@ final class AutoSkipCountdownTests: XCTestCase {
     XCTAssertEqual(c.update(prompt: .intro(to: 69), position: 18, intro: true, credits: false).progress, 0)
   }
 }
+
+extension AutoSkipCountdownTests {
+  func testNoDelaySkipsAtOnceWithoutAFill() {
+    var c = AutoSkipCountdown()
+    XCTAssertEqual(
+      c.update(prompt: .intro(to: 69), position: 0, intro: true, credits: false, delay: 0), .init(progress: nil, fire: true))
+  }
+
+  func testTenSecondDelay() {
+    var c = AutoSkipCountdown()
+    _ = c.update(prompt: .intro(to: 69), position: 0, intro: true, credits: false, delay: 10)
+    XCTAssertEqual(c.update(prompt: .intro(to: 69), position: 5, intro: true, credits: false, delay: 10).progress, 0.5)
+  }
+}

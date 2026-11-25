@@ -71,13 +71,15 @@ extension SkipPrompt {
 }
 
 /// Auto-skip (KP, 2026-11-25): with Settings → Skip Intros (or Credits)
-/// Automatically on, the skip button fills up over `length` seconds of
-/// playback, then skips by itself. Counted in playback time, so pausing pauses
+/// Automatically on, the skip button fills up over the chosen delay of
+/// playback, then skips by itself. A delay of 0 skips at once, with no fill. Counted in playback time, so pausing pauses
 /// the fill. Each intro or credits runs its countdown once; a cancelled or
 /// finished one doesn't start again if the viewer seeks back into it.
 /// Next Episode never plays on its own.
 public struct AutoSkipCountdown: Sendable, Equatable {
-  public static let length: Double = 5
+  /// Settings → Auto-skip delay choices, in seconds (0 = right away).
+  public static let delays = [0, 3, 5, 10]
+  public static let defaultDelay = 5
 
   public struct Step: Equatable, Sendable {
     /// 0…1 while the button fills; nil when no countdown runs.
@@ -93,7 +95,9 @@ public struct AutoSkipCountdown: Sendable, Equatable {
   public init() {}
 
   /// Advances the countdown for the prompt showing at `position`.
-  public mutating func update(prompt: SkipPrompt?, position: Double, intro: Bool, credits: Bool) -> Step {
+  public mutating func update(
+    prompt: SkipPrompt?, position: Double, intro: Bool, credits: Bool, delay: Double = Double(defaultDelay)
+  ) -> Step {
     guard let prompt, let end = Self.end(of: prompt), !done.contains(end) else {
       running = nil
       return Step(progress: nil, fire: false)
@@ -108,11 +112,11 @@ public struct AutoSkipCountdown: Sendable, Equatable {
       running = prompt
       startedAt = position
     }
-    let progress = min(max((position - startedAt) / Self.length, 0), 1)
+    let progress = delay > 0 ? min(max((position - startedAt) / delay, 0), 1) : 1
     if progress >= 1 {
       done.insert(end)
       running = nil
-      return Step(progress: 1, fire: true)
+      return Step(progress: delay > 0 ? 1 : nil, fire: true)
     }
     return Step(progress: progress, fire: false)
   }
