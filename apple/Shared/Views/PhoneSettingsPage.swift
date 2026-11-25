@@ -535,6 +535,9 @@ import SwiftUI
   private struct PhonePlaybackPage: View {
     @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
     @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
+    @AppStorage(Preferences.autoSkipIntroKey) private var autoSkipIntro = false
+    @AppStorage(Preferences.autoSkipCreditsKey) private var autoSkipCredits = false
+    @AppStorage(Preferences.autoSkipDelayKey) private var autoSkipDelay = AutoSkipCountdown.defaultDelay
     @AppStorage(Preferences.swipeGesturesKey) private var swipe = true
     @AppStorage(Preferences.twoFingerPauseKey) private var twoFinger = true
     @AppStorage(Preferences.skipSecondsKey) private var skipSeconds = 10
@@ -570,6 +573,16 @@ import SwiftUI
         }
         PhoneCard(footer: "Shows in the last 15 seconds of an episode. It never plays on its own.") {
           PhoneSwitch(title: "Next Episode button", isOn: $nextEpisode)
+        }
+        PhoneCard(footer: "With a delay, the button fills up first; tap it to skip right away. None skips as soon as the intro or credits start. Times come from IntroDB.") {
+          PhoneSwitch(title: "Skip Intros Automatically", isOn: $autoSkipIntro)
+          PhoneSwitch(title: "Skip Credits Automatically", isOn: $autoSkipCredits)
+          PhoneRow(title: "Delay") {
+            Picker("Delay", selection: $autoSkipDelay) {
+              ForEach(AutoSkipCountdown.delays, id: \.self) { Text($0 == 0 ? "None" : "\($0) s").tag($0) }
+            }
+            .labelsHidden().pickerStyle(.segmented).fixedSize()
+          }
         }
         PhoneCard(
           title: "Gestures in the player",

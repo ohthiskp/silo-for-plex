@@ -93,6 +93,10 @@ final class PlayerController {
   /// and Skip Credits (KP, 2026-11-24). Empty until loaded, or when the
   /// server hasn't detected any.
   private(set) var skipMarkers: [SkipMarker] = []
+  /// Auto-skip (KP, 2026-11-25): how full the skip button is, 0…1, while its
+  /// countdown runs; nil otherwise.
+  private(set) var autoSkipProgress: Double?
+  @ObservationIgnored private var autoSkip = AutoSkipCountdown()
   @ObservationIgnored private var reporter: Task<Void, Never>?
   /// Lock screen, Control Center, headphones and media keys.
   @ObservationIgnored private let nowPlaying = NowPlaying()
@@ -343,6 +347,8 @@ final class PlayerController {
   /// a title nobody has timed) just mean no skip buttons.
   private func loadMarkers(for item: PlexMetadata, source started: PlaybackSource) {
     skipMarkers = []
+    autoSkip = AutoSkipCountdown()
+    autoSkipProgress = nil
     if Demo.isOn {
       skipMarkers = Demo.skipMarkers
       return
@@ -383,7 +389,36 @@ final class PlayerController {
       nextEpisodeLead: Self.nextEpisodeLead)
   }
 
-  /// A skip button was pressed. Nothing here ever happens on its own.
+  /// Runs the auto-skip countdown on each position update: the button fills
+  /// over the chosen delay of playback, then skips (no delay: at once). Settings → Playback switches; Next
+  /// Episode never plays on its own.
+  private func updateAutoSkip() {
+    let defaults = UserDefaults.standard
+    let demo = Demo.playerShot == "autoskip"
+    let intro = demo || defaults.bool(forKey: Preferences.autoSkipIntroKey)
+    let credits = defaults.bool(forKey: Preferences.autoSkipCreditsKey)
+    guard intro || credits || autoSkipProgress != nil else { return }
+    let nextOn = defaults.object(forKey: Preferences.nextEpisodeKey) as? Bool ?? true
+    let prompt = skipPrompt(nextEpisodeOn: nextOn)
+    let delay = defaults.object(forKey: Preferences.autoSkipDelayKey) as? Int ?? AutoSkipCountdown.defaultDelay
+    let step = autoSkip.update(
+      prompt: prompt, position: position, intro: intro, credits: credits, delay: Double(demo ? 5 : delay))
+    // Steps of 2 %, so the button doesn't redraw on every frame.
+    let rounded = step.progress.map { ($0 * 50).rounded() / 50 }
+    if autoSkipProgress != rounded { autoSkipProgress = rounded }
+    if step.fire, let prompt {
+      autoSkipProgress = nil
+      perform(prompt)
+    }
+  }
+
+  /// Apple TV Back during a countdown: stop it; the button stays, to press.
+  func cancelAutoSkip() {
+    autoSkip.cancel()
+    autoSkipProgress = nil
+  }
+
+  /// A skip button was pressed, or its auto-skip countdown finished.
   func perform(_ prompt: SkipPrompt) {
     switch prompt {
     case .intro(let end), .credits(let end): seek(to: end)
@@ -842,6 +877,7 @@ final class PlayerController {
         // A seek in flight (up to 5 s): keep the target on the bar.
         if let since = seekingSince, Date().timeIntervalSince(since) < 5 { break }
         position = v
+        updateAutoSkip()
       }
     case "duration":
       if let v = value as? Double, v > 0 {

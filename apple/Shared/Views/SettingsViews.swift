@@ -409,6 +409,9 @@ struct PlaybackSettings: View {
   @AppStorage(PlaybackQuality.storageKey) private var quality: PlaybackQuality = .auto
   @AppStorage(SubtitlePreference.storageKey) private var subtitles: SubtitlePreference = .automatic
   @AppStorage(Preferences.nextEpisodeKey) private var nextEpisode = true
+  @AppStorage(Preferences.autoSkipIntroKey) private var autoSkipIntro = false
+  @AppStorage(Preferences.autoSkipCreditsKey) private var autoSkipCredits = false
+  @AppStorage(Preferences.autoSkipDelayKey) private var autoSkipDelay = AutoSkipCountdown.defaultDelay
   @AppStorage(Preferences.swipeGesturesKey) private var swipe = true
   @AppStorage(Preferences.twoFingerPauseKey) private var twoFinger = true
   @AppStorage(Preferences.skipSecondsKey) private var skipSeconds = 10
@@ -443,6 +446,15 @@ struct PlaybackSettings: View {
         Text("Shows")
       } footer: {
         Text("A Next Episode button in the last 15 seconds of an episode. It never plays on its own.")
+      }
+      Section {
+        Toggle("Skip Intros Automatically", isOn: $autoSkipIntro).tint(Astra.Color.switchOn)
+        Toggle("Skip Credits Automatically", isOn: $autoSkipCredits).tint(Astra.Color.switchOn)
+        Picker("Delay", selection: $autoSkipDelay) {
+          ForEach(AutoSkipCountdown.delays, id: \.self) { Text($0 == 0 ? "None" : "\($0) s").tag($0) }
+        }
+      } footer: {
+        Text("With a delay, the button fills up first; tap it to skip right away. None skips as soon as the intro or credits start. Times come from IntroDB.")
       }
       #if os(iOS)
         Section {
