@@ -399,6 +399,7 @@ private struct MacBarButtonStyle: ButtonStyle {
 struct MacServiceRail: View {
   var library: LibraryStore
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
+  @Namespace private var barSpace
 
   var body: some View {
     ViewThatFits(in: .vertical) {
@@ -416,12 +417,14 @@ struct MacServiceRail: View {
       circle(nil)
       ForEach(StreamingService.all) { circle($0) }
     }
+    // The white bar glides to the newly chosen logo (KP, 2026-11-25).
+    .astraAnimation(.smooth(duration: 0.32), value: library.selectedService)
   }
 
   private func circle(_ service: StreamingService?) -> some View {
     let selected = library.selectedService == service
     let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
-    return MacServiceCircle(selected: selected, brand: brand, label: service?.label ?? "Home, all services") {
+    return MacServiceCircle(selected: selected, barSpace: barSpace, label: service?.label ?? "Home, all services") {
       library.select(service)
     } content: {
       if let service {
@@ -445,7 +448,7 @@ struct MacServiceRail: View {
 /// colour) with a short white bar at its left. Brighter under the pointer.
 private struct MacServiceCircle<Content: View>: View {
   var selected: Bool
-  var brand: Color
+  var barSpace: Namespace.ID
   var label: String
   var action: () -> Void
   @ViewBuilder var content: Content
@@ -462,6 +465,8 @@ private struct MacServiceCircle<Content: View>: View {
           if selected {
             Capsule().fill(.white)
               .frame(width: 4, height: size * 0.5)
+              .shadow(color: .white.opacity(0.55), radius: 5)
+              .matchedGeometryEffect(id: "rail-bar", in: barSpace)
               .offset(x: -12)
           }
         }
@@ -470,7 +475,6 @@ private struct MacServiceCircle<Content: View>: View {
     }
     .buttonStyle(MacBarButtonStyle())
     .onHover { h in astraWithAnimation(.snappy(duration: 0.18)) { hovering = h } }
-    .astraAnimation(.snappy(duration: 0.22), value: selected)
     .help(label)
     .accessibilityLabel(label)
     .accessibilityAddTraits(selected ? .isSelected : [])

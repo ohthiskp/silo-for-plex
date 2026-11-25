@@ -407,15 +407,20 @@ private struct TVServiceSidebar: View {
   var right: () -> Void = {}
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
   @FocusState private var focused: String?
+  @Namespace private var barSpace
 
   private static let forYou = "for-you"
   private var chosen: String { library.selectedService?.id ?? Self.forYou }
+  /// The white bar sits on the logo you're on, or on the chosen service
+  /// when focus is elsewhere, and glides between them (KP, 2026-11-25).
+  private var barAt: String { focused ?? chosen }
 
   var body: some View {
     VStack(spacing: 8) {
       circle(nil)
       ForEach(StreamingService.all) { circle($0) }
     }
+    .animation(.smooth(duration: 0.32), value: barAt)
     .frame(maxHeight: .infinity, alignment: .center)
     .focusSection()
     .onMoveCommand { if $0 == .right { right() } }
@@ -449,53 +454,52 @@ private struct TVServiceSidebar: View {
       }
       .frame(width: TVLayout.sidebarCircle, height: TVLayout.sidebarCircle)
     }
-    .buttonStyle(TVSidebarButtonStyle(selected: selected, brand: brand))
+    .buttonStyle(
+      TVSidebarButtonStyle(
+        selected: selected, hasBar: barAt == (service?.id ?? Self.forYou), barSpace: barSpace))
     .focused($focused, equals: service?.id ?? Self.forYou)
     .accessibilityLabel(service?.label ?? "Home, all services")
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }
 
-/// A sidebar logo (option E): no chrome at rest. Others dimmed, the chosen
-/// one lit with a white bar at its left. Focus adds a soft clear-glass
-/// circle behind the logo and lifts it, so you can see where you are.
+/// A sidebar logo (option E): no chrome, no bubble (KP, 2026-11-25). Others
+/// dimmed; the chosen and the focused one lit. One white bar at the left
+/// glides from logo to logo as focus moves (matched geometry).
 private struct TVSidebarButtonStyle: ButtonStyle {
   var selected: Bool
-  var brand: Color
+  var hasBar: Bool
+  var barSpace: Namespace.ID
 
   func makeBody(configuration: Configuration) -> some View {
-    TVSidebarButtonBody(configuration: configuration, selected: selected, brand: brand)
+    TVSidebarButtonBody(configuration: configuration, selected: selected, hasBar: hasBar, barSpace: barSpace)
   }
 }
 
 private struct TVSidebarButtonBody: View {
   let configuration: ButtonStyleConfiguration
   var selected: Bool
-  var brand: Color
+  var hasBar: Bool
+  var barSpace: Namespace.ID
   @Environment(\.isFocused) private var focused
 
   var body: some View {
     configuration.label
       .opacity(selected || focused ? 1 : 0.5)
       .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
-      .background {
-        if focused {
-          Circle().fill(.white.opacity(0.2))
-            .astraGlass(in: Circle(), variant: .clear, interactive: true)
-        }
-      }
       .overlay(alignment: .leading) {
-        if selected {
+        if hasBar {
           Capsule().fill(.white)
             .frame(width: 5, height: TVLayout.sidebarCircle * 0.42)
+            .shadow(color: .white.opacity(0.55), radius: 6)
+            .matchedGeometryEffect(id: "sidebar-bar", in: barSpace)
             .offset(x: -16)
         }
       }
-      .contentShape(Circle())
-      .scaleEffect(configuration.isPressed ? 0.95 : (focused ? 1.12 : 1))
+      .contentShape(Rectangle())
+      .scaleEffect(configuration.isPressed ? 0.95 : 1)
       .focusEffectDisabled()
-      .animation(.snappy(duration: 0.22), value: focused)
-      .animation(.snappy(duration: 0.22), value: selected)
+      .animation(.smooth(duration: 0.25), value: focused)
   }
 }
 
