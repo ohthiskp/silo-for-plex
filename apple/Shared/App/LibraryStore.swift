@@ -1073,6 +1073,38 @@ final class LibraryStore {
     return result
   }
 
+  /// The logo chosen for each title (tmdbKey → path), and the choosing in flight.
+  private var lightLogos: [String: String] = [:]
+  private var lightLogoTasks: [String: Task<String?, Never>] = [:]
+
+  /// A mostly white logo for the title (KP, 2026-11-25: Modern Family's
+  /// best-voted logo is black and disappears on the dark screens). Looks at
+  /// the ranked logos in order, small, and takes the first that is mostly
+  /// white; if none is, the lightest. Nil keeps TMDB's best one.
+  private func lightLogoPath(for key: String?, _ art: TMDBArtwork) async -> String? {
+    guard let key, art.logoCandidates.count > 1 else { return nil }
+    if let known = lightLogos[key] { return known }
+    let task =
+      lightLogoTasks[key]
+      ?? Task { () -> String? in
+        var lightest: (path: String, share: Double)?
+        for path in art.logoCandidates {
+          guard let url = TMDBArtwork.url(path, size: "w92"),
+            let image = await ImagePipeline.shared.image(for: url), let rgba = image.rgbaSample()
+          else { continue }
+          let share = LogoTone.lightShare(rgba: rgba)
+          if share >= 0.5 { return path }
+          if share > (lightest?.share ?? -1) { lightest = (path, share) }
+        }
+        return lightest?.path
+      }
+    lightLogoTasks[key] = task
+    let chosen = await task.value
+    lightLogoTasks[key] = nil
+    if let chosen { lightLogos[key] = chosen }
+    return chosen
+  }
+
   /// Each season's TMDB stills ("1421:2" → episode number → path), asked once per season.
   private var seasonStills: [String: [Int: String]] = [:]
   private var seasonStillTasks: [String: Task<[Int: String], Never>] = [:]
@@ -1119,7 +1151,7 @@ final class LibraryStore {
         case .backdrop: TMDBArtwork.url(art.backdropPath, size: "w1280")
         case .heroBackdrop: TMDBArtwork.url(art.backdropPath, size: "original")
         case .scenery: TMDBArtwork.url(art.sceneryPath ?? art.backdropPath, size: "original")
-        case .logo: TMDBArtwork.url(art.logoPath, size: "w500")
+        case .logo: TMDBArtwork.url(await lightLogoPath(for: item.tmdbKey, art) ?? art.logoPath, size: "w500")
         }
       if let url { return url }
     }
