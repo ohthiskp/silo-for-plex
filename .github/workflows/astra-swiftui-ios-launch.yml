@@ -96,6 +96,8 @@ jobs:
             xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shots/$name.png" || true
           }
           shot home
+          # The launch screen, held up (its logo must sit in the middle of the screen).
+          shot loading -AstraDemoLoading YES
           shot home-rows -AstraDemoScroll 640
           shot search -AstraDemoTab search
           shot search-dune -AstraDemoTab search -AstraDemoQuery dune
@@ -104,6 +106,9 @@ jobs:
           shot details-show -AstraDemoOpen 205
           shot details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
           shot details-episode -AstraDemoOpen 303
+          # Modern Family episode stills (KP, 2026-11-25): the server's small ones, then TMDB's.
+          shot mf-before -AstraDemoOpen 502 -AstraDemoScroll 1 -AstraDemoServerStills YES
+          shot mf-after -AstraDemoOpen 502 -AstraDemoScroll 1
           # Settings, Direction C (KP, 2026-11-14): the root, then each page it opens.
           shot settings -AstraDemoTab settings
           for page in appearance playback subtitles library downloads server; do
@@ -117,6 +122,7 @@ jobs:
             shot player-controls -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer controls
             shot player-scrub -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer scrub
             shot player-skip -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer skip
+            shot player-loading -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer loading
             shot player-autoskip -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer autoskip
           fi
           # The crash report screen (KP, 2026-11-12): crash on purpose, then the next

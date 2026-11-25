@@ -131,14 +131,18 @@ public struct TMDBArtwork: Sendable, Hashable {
   public var runtimeMinutes: Int?
   /// A show's number of seasons.
   public var seasons: Int?
+  /// The title's logos best first (`logoPath` leads), for picking a mostly white one.
+  public var logoCandidates: [String] = []
 
   public init(
-    posterPath: String?, backdropPath: String?, logoPath: String?, certification: String? = nil,
+    posterPath: String?, backdropPath: String?, logoPath: String?, logoCandidates: [String] = [],
+    certification: String? = nil,
     sceneryPath: String? = nil, genres: [String] = [], runtimeMinutes: Int? = nil, seasons: Int? = nil
   ) {
     self.posterPath = posterPath
     self.backdropPath = backdropPath
     self.logoPath = logoPath
+    self.logoCandidates = logoCandidates
     self.certification = certification
     self.sceneryPath = sceneryPath
     self.genres = genres
@@ -313,6 +317,26 @@ public struct TMDBClient: Sendable {
     return try JSONDecoder().decode(Raw.self, from: data).item(forcedKind: kind)
   }
 
+  /// Each episode's still in one season, by episode number. Some shows'
+  /// stills on the Plex server are small (KP, 2026-11-25: Modern Family's
+  /// were blurry); TMDB has them full size.
+  public func seasonStills(showID: Int, season: Int) async throws -> [Int: String] {
+    struct Season: Decodable {
+      struct Episode: Decodable {
+        var episode_number: Int?
+        var still_path: String?
+      }
+      var episodes: [Episode]?
+    }
+    let data = try await get("/tv/\(showID)/season/\(season)", [:])
+    var stills: [Int: String] = [:]
+    for episode in try JSONDecoder().decode(Season.self, from: data).episodes ?? [] {
+      guard let number = episode.episode_number, let path = episode.still_path, !path.isEmpty else { continue }
+      stills[number] = path
+    }
+    return stills
+  }
+
   /// Poster, backdrop and title logo for one title.
   public func artwork(id: Int, kind: TMDBItem.Kind) async throws -> TMDBArtwork {
     let data = try await get(
@@ -325,6 +349,7 @@ public struct TMDBClient: Sendable {
     return TMDBArtwork(
       posterPath: raw.poster_path, backdropPath: raw.backdrop_path,
       logoPath: Self.bestLogo(raw.images?.logos ?? [], original: raw.original_language),
+      logoCandidates: Self.rankedLogos(raw.images?.logos ?? [], original: raw.original_language),
       certification: raw.usCertification, sceneryPath: Self.bestScenery(raw.images?.backdrops ?? []),
       genres: (raw.genres ?? []).compactMap(\.name), runtimeMinutes: raw.runtime.flatMap { $0 > 0 ? $0 : nil },
       seasons: raw.number_of_seasons.flatMap { $0 > 0 ? $0 : nil })
@@ -346,6 +371,13 @@ public struct TMDBClient: Sendable {
   /// can't decode SVG); English first, then the title's own language, then
   /// text-free, then any; the best voted within each.
   static func bestLogo(_ logos: [ArtworkRaw.Images.Image], original: String?) -> String? {
+    rankedLogos(logos, original: original).first
+  }
+
+  /// The PNG logos best first (as `bestLogo` ranks them), only those in the
+  /// winner's language group, at most `limit`: the app picks the first that is
+  /// mostly white from these (KP, 2026-11-25: Modern Family's top logo is black).
+  static func rankedLogos(_ logos: [ArtworkRaw.Images.Image], original: String?, limit: Int = 6) -> [String] {
     let png = logos.filter { $0.file_path?.hasSuffix(".png") == true }
     func rank(_ logo: ArtworkRaw.Images.Image) -> Int {
       switch logo.iso_639_1 {
@@ -355,10 +387,11 @@ public struct TMDBClient: Sendable {
       default: 3
       }
     }
-    return png.enumerated()
-      .min { a, b in
-        (rank(a.element), -(a.element.vote_average ?? 0), a.offset) < (rank(b.element), -(b.element.vote_average ?? 0), b.offset)
-      }?.element.file_path
+    let sorted = png.enumerated().sorted { a, b in
+      (rank(a.element), -(a.element.vote_average ?? 0), a.offset) < (rank(b.element), -(b.element.vote_average ?? 0), b.offset)
+    }.map(\.element)
+    guard let top = sorted.first else { return [] }
+    return sorted.filter { rank($0) == rank(top) }.prefix(limit).compactMap(\.file_path)
   }
 
   func get(_ path: String, _ query: [String: String]) async throws -> Data {
@@ -715,4 +748,34 @@ public enum SearchRank {
       .replacingOccurrences(of: ":", with: "")
       .trimmingCharacters(in: .whitespaces)
   }
+}
+
+/// How white a logo is: the share of its visible pixels that are light
+/// (KP, 2026-11-25: "use a logo that has mainly white"; a black logo
+/// disappears on Astra's dark screens).
+public enum LogoTone {
+  /// `rgba` is 8-bit RGBA, 4 bytes a pixel (premultiplied or not). Pixels
+  /// under half opacity are ignored; a light pixel has luminance of 0.6 or more.
+  public static func lightShare(rgba: [UInt8]) -> Double {
+    var visible = 0
+    var light = 0
+    var i = 0
+    while i + 3 < rgba.count {
+      let a = Double(rgba[i + 3])
+      if a >= 128 {
+        visible += 1
+        // Undo premultiplication when there is any, so edges count by their colour.
+        let scale = 255 / a
+        let r = min(255, Double(rgba[i]) * scale)
+        let g = min(255, Double(rgba[i + 1]) * scale)
+        let b = min(255, Double(rgba[i + 2]) * scale)
+        if (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 >= 0.6 { light += 1 }
+      }
+      i += 4
+    }
+    return visible == 0 ? 0 : Double(light) / Double(visible)
+  }
+
+  /// Mostly white: at least half of what shows is light.
+  public static func isMostlyLight(rgba: [UInt8]) -> Bool { lightShare(rgba: rgba) >= 0.5 }
 }
