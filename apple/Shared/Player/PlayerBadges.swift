@@ -12,12 +12,7 @@ struct ResolutionTag: View {
     Text(text)
       .font(.system(size: size, weight: .bold))
       .foregroundStyle(.white.opacity(0.7))
-      .padding(.horizontal, size * 0.4)
-      .padding(.vertical, size * 0.12)
-      .overlay(
-        RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
-          .strokeBorder(.white.opacity(0.5), lineWidth: 1)
-      )
+      // Plain text, no box around it (KP, 2026-11-25: "just put HD by itself").
       .fixedSize()
       .accessibilityLabel(text)
   }
