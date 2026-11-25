@@ -156,7 +156,6 @@ jobs:
           }
           shot mac-player-controls -AstraDemoPlayer controls
           shot mac-player-scrub -AstraDemoPlayer scrub
-          shot mac-player-loading -AstraDemoPlayer loading
           "$BIN" -AstraDemo YES -AstraDemoTab settings > /dev/null 2>&1 &
           pid=$!
           sleep 25
@@ -180,12 +179,8 @@ jobs:
             sleep 3
           }
           mshot mac-details-show -AstraDemoOpen 205
-          # The launch screen, held up (its logo must sit in the middle of the window).
-          mshot mac-loading -AstraDemoLoading YES
           mshot mac-details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
           mshot mac-details-episode -AstraDemoOpen 303
-          mshot mac-mf-before -AstraDemoOpen 502 -AstraDemoServerStills YES
-          mshot mac-mf-after -AstraDemoOpen 502
           for f in "$RUNNER_TEMP"/shots/*.png; do
             [ -f "$f" ] || continue
             sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null
@@ -231,6 +226,15 @@ jobs:
           nav mac-nav-details 30 -AstraDemoTab home -AstraDemoOpen 101
           nav mac-nav-settings-playback 30 -AstraDemoTab settings -AstraDemoSettings playback
           nav mac-nav-settings-updates 30 -AstraDemoTab settings -AstraDemoSettings updates
+          # KP (2026-11-25): the launch logo centred; the player inside the app window,
+          # with its title card held up; Modern Family's episode stills, server's then TMDB's.
+          nav mac-loading 20 -AstraDemoLoading YES
+          if [ -f "$RUNNER_TEMP/player.mp4" ]; then
+            nav mac-player-loading 40 -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer loading
+            nav mac-player-in-app 40 -AstraDemoPlay "$RUNNER_TEMP/player.mp4" -AstraDemoPlayer controls
+          fi
+          nav mac-mf-before 30 -AstraDemoOpen 502 -AstraDemoServerStills YES
+          nav mac-mf-after 30 -AstraDemoOpen 502
           for f in "$RUNNER_TEMP"/nav/*.png; do
             [ -f "$f" ] || continue
             sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null
