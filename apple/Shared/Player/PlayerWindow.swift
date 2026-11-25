@@ -3,7 +3,9 @@
   import AstraKit
   import SwiftUI
 
-  /// The Mac player's own window.
+  /// The Mac player's window, laid exactly over the app's window so playback
+  /// happens inside the app (KP, 2026-11-25: "dont make mac player another
+  /// external box just leave it in the app if u exit it just goes back").
   ///
   /// The shared mpv core puts its video layer at the bottom of the window's
   /// content view layer. Under Flutter that view is a plain NSView. A SwiftUI
@@ -12,6 +14,11 @@
   /// window's content view is a plain layer-backed NSView: the video layer
   /// sits at the bottom and the SwiftUI controls are a transparent hosting
   /// view on top of it, the same layering the Flutter app uses.
+  ///
+  /// It is a child of the app's window: it moves, resizes and goes full
+  /// screen with it, has the same rounded corners, and closing the player
+  /// leaves the app where it was. Only the small floating player (the Mac's
+  /// picture in picture) leaves the app's window.
   @MainActor
   final class PlayerWindowHost: NSObject, NSWindowDelegate {
     let window: NSWindow
@@ -22,33 +29,32 @@
     /// Called when the window leaves the small floating size on its own
     /// (the person dragged it bigger), so the controls switch back.
     var onMiniChange: ((Bool) -> Void)?
-    private var fittedToVideo = false
-    /// True from the start of a full-screen change until it ends; the frame
-    /// mustn't be set meanwhile.
-    private var inFullScreenTransition = false
+    /// The player put the app's window into full screen (F); it leaves full
+    /// screen again when the player closes.
+    private var enteredFullScreen = false
+    private var observers: [NSObjectProtocol] = []
+    /// While matching one window's frame to the other's.
+    private var syncing = false
 
     init(over main: NSWindow, content: AnyView) {
       mainWindow = main
-      let visible = (main.screen ?? NSScreen.main)?.visibleFrame ?? main.frame
-      // A comfortable size centred on the app's window, not over all of it.
-      let frame = PlayerGeometry.initialFrame(over: main.frame, visible: visible)
+      let frame = main.frame
       let window = NSWindow(
         contentRect: frame,
-        styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+        styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
         backing: .buffered, defer: false)
       window.setFrame(frame, display: false)
-      // Astra: the window moves by its title-bar strip only; dragging over the
-      // video moves the control panel instead (KP, 2026-11-07).
       window.isMovable = true
       window.title = "Astra"
       window.titleVisibility = .hidden
       window.titlebarAppearsTransparent = true
       window.backgroundColor = .black
       window.isReleasedWhenClosed = false
-      window.collectionBehavior = [.fullScreenPrimary]
-      // Small enough for the floating mini player.
-      window.minSize = NSSize(width: 320, height: 180)
+      // Full screen is the app window's (F and the green button go to it).
+      window.collectionBehavior = [.fullScreenAuxiliary, .fullScreenNone]
+      window.minSize = main.minSize
       window.appearance = NSAppearance(named: .darkAqua)
+      window.standardWindowButton(.zoomButton)?.isEnabled = true
 
       let root = NSView(frame: NSRect(origin: .zero, size: frame.size))
       root.wantsLayer = true
@@ -61,94 +67,140 @@
       self.window = window
       super.init()
       window.delegate = self
+      // The green button fills the screen with the app (and the player in it).
+      if let zoom = window.standardWindowButton(.zoomButton) {
+        zoom.target = self
+        zoom.action = #selector(zoomPressed)
+      }
     }
 
+    @objc private func zoomPressed() { toggleFullScreen() }
+
     func show() {
-      window.makeKeyAndOrderFront(nil)
-      // KP (2026-11-12): the player starts full screen. Leaving full screen
-      // (F or the green button) gives the window its normal size over the app.
-      if !window.styleMask.contains(.fullScreen) {
-        window.toggleFullScreen(nil)
+      guard let main = mainWindow else {
+        window.makeKeyAndOrderFront(nil)
+        return
       }
+      window.setFrame(main.frame, display: false)
+      main.addChildWindow(window, ordered: .above)
+      window.makeKeyAndOrderFront(nil)
+      // The app's window moving, resizing or changing full screen: the player follows.
+      let center = NotificationCenter.default
+      for name in [
+        NSWindow.didResizeNotification, NSWindow.didMoveNotification,
+        NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification,
+      ] {
+        observers.append(
+          center.addObserver(forName: name, object: main, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.followMain() }
+          })
+      }
+    }
+
+    /// Lays the player over the app's window again.
+    private func followMain() {
+      guard !isMini, !syncing, let main = mainWindow, window.frame != main.frame else { return }
+      syncing = true
+      window.setFrame(main.frame, display: true)
+      syncing = false
+    }
+
+    /// The person resized the player by its edge: the app's window takes the same size.
+    func windowDidResize(_ notification: Notification) {
+      guard !isMini, !syncing, let main = mainWindow, main.frame != window.frame,
+        !main.styleMask.contains(.fullScreen)
+      else { return }
+      syncing = true
+      main.setFrame(window.frame, display: true)
+      syncing = false
+    }
+
+    func windowDidMove(_ notification: Notification) {
+      guard !isMini, !syncing, let main = mainWindow, main.frame.origin != window.frame.origin,
+        !main.styleMask.contains(.fullScreen)
+      else { return }
+      syncing = true
+      main.setFrameOrigin(window.frame.origin)
+      syncing = false
     }
 
     func dismiss() {
       let alreadyClosing = closingFromCode
       closingFromCode = true
       window.delegate = nil
+      for observer in observers { NotificationCenter.default.removeObserver(observer) }
+      observers = []
+      mainWindow?.removeChildWindow(window)
       if !alreadyClosing {
         window.orderOut(nil)
         window.close()
+      }
+      if enteredFullScreen, let main = mainWindow, main.styleMask.contains(.fullScreen) {
+        main.toggleFullScreen(nil)
       }
       mainWindow?.makeKeyAndOrderFront(nil)
     }
 
     func toggleFullScreen() {
       if isMini { _ = toggleMini() }
-      window.toggleFullScreen(nil)
+      guard let main = mainWindow else { return }
+      enteredFullScreen = !main.styleMask.contains(.fullScreen)
+      main.toggleFullScreen(nil)
+      window.makeKeyAndOrderFront(nil)
     }
 
     private(set) var isMini = false
-    private var fullFrame: NSRect?
+    private var videoAspect: Double?
 
-    /// Matches the window to the video's shape once its size is known, keeping
-    /// the width (and the window on screen). Later resizes keep that shape.
+    /// The video's shape, for the small floating window. The player in the
+    /// app keeps the app window's size and letterboxes.
     func fitVideo(width: Double, height: Double) {
       guard width > 0, height > 0 else { return }
-      window.contentAspectRatio = NSSize(width: width, height: height)
-      guard !fittedToVideo, !inFullScreenTransition, !window.styleMask.contains(.fullScreen) else { return }
-      fittedToVideo = true
-      let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? window.frame
-      let frame = PlayerGeometry.fit(window.frame, videoWidth: width, videoHeight: height, visible: visible)
-      window.setFrame(frame, display: true, animate: false)
+      videoAspect = width / height
+      if isMini { window.contentAspectRatio = NSSize(width: width, height: height) }
     }
 
-    /// The small window was dragged to a normal size: it is a normal window again.
+    /// The small window was dragged to a normal size: it goes back into the app.
     func windowDidEndLiveResize(_ notification: Notification) {
       guard isMini, window.frame.width > 720 else { return }
-      leaveMini(restoreFrame: false)
+      leaveMini()
       onMiniChange?(false)
     }
 
-    func windowWillEnterFullScreen(_ notification: Notification) {
-      inFullScreenTransition = true
-      // Full screen sizes itself; leaving it later keeps the window as it was.
-      fittedToVideo = true
-      if isMini {
-        leaveMini(restoreFrame: false)
-        onMiniChange?(false)
-      }
-    }
-
-    func windowDidEnterFullScreen(_ notification: Notification) { inFullScreenTransition = false }
-    func windowDidFailToEnterFullScreen(_ window: NSWindow) { inFullScreenTransition = false }
-    func windowWillExitFullScreen(_ notification: Notification) { inFullScreenTransition = true }
-    func windowDidExitFullScreen(_ notification: Notification) { inFullScreenTransition = false }
-
-    private func leaveMini(restoreFrame: Bool) {
-      window.level = .normal
-      window.collectionBehavior = [.fullScreenPrimary]
-      if restoreFrame, let fullFrame { window.setFrame(fullFrame, display: true, animate: true) }
-      fullFrame = nil
+    private func leaveMini() {
       isMini = false
+      window.level = .normal
+      window.collectionBehavior = [.fullScreenAuxiliary, .fullScreenNone]
+      window.contentResizeIncrements = NSSize(width: 1, height: 1)
+      if let main = mainWindow {
+        syncing = true
+        window.setFrame(main.frame, display: true, animate: true)
+        syncing = false
+        main.addChildWindow(window, ordered: .above)
+      }
+      window.makeKeyAndOrderFront(nil)
     }
 
     /// Shrinks the player into a small window floating in the screen's
     /// bottom-right corner, above other windows and on every Space, or
-    /// puts it back. Returns whether it is now small.
+    /// puts it back into the app. Returns whether it is now small.
     func toggleMini() -> Bool {
-      if window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
       if isMini {
-        leaveMini(restoreFrame: true)
+        leaveMini()
       } else {
-        fullFrame = window.frame
+        if let main = mainWindow, main.styleMask.contains(.fullScreen) {
+          enteredFullScreen = false
+          main.toggleFullScreen(nil)
+        }
+        mainWindow?.removeChildWindow(window)
         let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? window.frame
-        let aspect = window.frame.height > 0 ? window.frame.width / window.frame.height : 16 / 9
+        let aspect = videoAspect ?? 16 / 9
         let frame = PlayerGeometry.miniFrame(aspect: aspect, visible: visible)
+        isMini = true
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.contentAspectRatio = NSSize(width: aspect, height: 1)
         window.setFrame(frame, display: true, animate: true)
-        isMini = true
       }
       return isMini
     }

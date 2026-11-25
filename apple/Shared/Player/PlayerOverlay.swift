@@ -153,6 +153,9 @@ struct PlayerOverlay: View {
     #if os(macOS)
       .onContinuousHover { phase in
         // Every mouse move reaches here; restart the hide timer at most a few times a second.
+        // Until the first frame the title card is the whole screen: moving the
+        // mouse doesn't put the controls over its logo (a click still does).
+        guard player.hasFirstFrame else { return }
         if case .active = phase, !visible || Date().timeIntervalSince(lastPoke) > 0.25 { poke() }
       }
     #endif
