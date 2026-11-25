@@ -156,6 +156,7 @@ jobs:
           }
           shot mac-player-controls -AstraDemoPlayer controls
           shot mac-player-scrub -AstraDemoPlayer scrub
+          shot mac-player-loading -AstraDemoPlayer loading
           "$BIN" -AstraDemo YES -AstraDemoTab settings > /dev/null 2>&1 &
           pid=$!
           sleep 25

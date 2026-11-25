@@ -27,6 +27,8 @@ enum Demo {
   /// screenshot: `controls`, `scrub`, `skip` (controls hidden, Skip Intro showing), or the Apple TV top menu's
   /// `info`, `settings`, `subtitles`.
   static var playerShot: String? { isOn ? UserDefaults.standard.string(forKey: "AstraDemoPlayer") : nil }
+  /// `-AstraDemoPlayer loading`: the title card stays up over the playing video, with the controls.
+  static var holdPlayLoading: Bool { playerShot == "loading" }
   /// `-AstraDemoLoading YES`: keep the launch screen (the animated logo) up, for its screenshot.
   static var holdLoading: Bool { isOn && UserDefaults.standard.bool(forKey: "AstraDemoLoading") }
   /// Skip Intro (KP, 2026-11-24): for the player screenshots only, the demo

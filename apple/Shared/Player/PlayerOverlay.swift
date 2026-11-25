@@ -111,7 +111,7 @@ struct PlayerOverlay: View {
 
       // From pressing Play until the first frame: the title card (KP,
       // 2026-11-16), under the controls, fading into the video.
-      if !player.hasFirstFrame {
+      if !player.hasFirstFrame || Demo.holdPlayLoading {
         PlayLoadingCard(player: player, library: app.library)
           .transition(.opacity)
       }
