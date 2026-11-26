@@ -664,9 +664,10 @@ struct HeroInfo: View {
         Button {
           openItem(item)
         } label: {
+          // KP (2026-11-26): the title's own coloured logo, as on the Details card.
           HeroTitle(
             library: library, item: item, maxWidth: Self.logoBox.width, maxHeight: Self.logoBox.height,
-            alignment: .bottom
+            alignment: .bottom, kind: .officialLogo
           )
           .frame(maxWidth: .infinity)
           .frame(height: Self.logoBox.height, alignment: .bottom)
