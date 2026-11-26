@@ -397,24 +397,30 @@ private struct TVDots: View {
 
 // MARK: - Streaming sidebar
 
-/// For You and the streaming services as floating glass circles down the
-/// left of Home (KP, 2026-11-09): a fixed list, the logo in each; it doesn't
-/// open or grow. The chosen one is ringed in its brand colour.
+/// Home and the streaming services down the left of Home (KP, 2026-11-09): a
+/// fixed list that doesn't open or grow. Since 2026-11-25 (KP's option E)
+/// they're bare logos, no circles: dimmed until chosen, the chosen one lit in
+/// its brand colour with a white bar beside it.
 private struct TVServiceSidebar: View {
   var library: LibraryStore
   /// Right from a circle, when tvOS finds nothing to its right by itself.
   var right: () -> Void = {}
   @AppStorage(Preferences.serviceLogoColorsKey) private var logoColors = true
   @FocusState private var focused: String?
+  @Namespace private var barSpace
 
   private static let forYou = "for-you"
   private var chosen: String { library.selectedService?.id ?? Self.forYou }
+  /// The white bar sits on the logo you're on, or on the chosen service
+  /// when focus is elsewhere, and glides between them (KP, 2026-11-25).
+  private var barAt: String { focused ?? chosen }
 
   var body: some View {
-    VStack(spacing: 16) {
+    VStack(spacing: 8) {
       circle(nil)
       ForEach(StreamingService.all) { circle($0) }
     }
+    .animation(.smooth(duration: 0.32), value: barAt)
     .frame(maxHeight: .infinity, alignment: .center)
     .focusSection()
     .onMoveCommand { if $0 == .right { right() } }
@@ -427,6 +433,7 @@ private struct TVServiceSidebar: View {
 
   private func circle(_ service: StreamingService?) -> some View {
     let selected = library.selectedService == service
+    let lit = barAt == (service?.id ?? Self.forYou)
     let brand = logoColors ? (service.map { Color(hex: $0.accent) } ?? .white) : .white
     return Button {
       library.select(service)
@@ -437,53 +444,62 @@ private struct TVServiceSidebar: View {
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
-            .frame(width: TVLayout.sidebarCircle * 0.62, height: min(service.logoHeight * 0.9, 26))
-            // White until chosen; the chosen one in its brand colour (KP).
-            .foregroundStyle(selected ? brand : .white)
+            .frame(width: TVLayout.sidebarCircle * 0.78, height: min(service.logoHeight * 1.0, 28))
+            // White and dimmed until the bar is on it; then its brand
+            // colour (KP, 2026-11-25).
+            .foregroundStyle(lit ? brand : .white)
         } else {
-          Image(systemName: "sparkles")
-            .font(.system(size: 28, weight: .semibold))
+          Image(systemName: "house.fill")
+            .font(.system(size: 30, weight: .semibold))
             .foregroundStyle(.white)
         }
       }
       .frame(width: TVLayout.sidebarCircle, height: TVLayout.sidebarCircle)
     }
-    .buttonStyle(TVSidebarButtonStyle(selected: selected, brand: brand))
+    .buttonStyle(
+      TVSidebarButtonStyle(
+        hasBar: lit, barSpace: barSpace))
     .focused($focused, equals: service?.id ?? Self.forYou)
-    .accessibilityLabel(service?.label ?? "For You")
+    .accessibilityLabel(service?.label ?? "Home, all services")
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }
 
-/// A sidebar circle: clear glass, lighter and larger when focused; the
-/// chosen service ringed in its brand colour.
+/// A sidebar logo (option E): no chrome, no bubble (KP, 2026-11-25). White
+/// and dimmed unless the bar is on it. One white bar at the left
+/// glides from logo to logo as focus moves (matched geometry).
 private struct TVSidebarButtonStyle: ButtonStyle {
-  var selected: Bool
-  var brand: Color
+  var hasBar: Bool
+  var barSpace: Namespace.ID
 
   func makeBody(configuration: Configuration) -> some View {
-    TVSidebarButtonBody(configuration: configuration, selected: selected, brand: brand)
+    TVSidebarButtonBody(configuration: configuration, hasBar: hasBar, barSpace: barSpace)
   }
 }
 
 private struct TVSidebarButtonBody: View {
   let configuration: ButtonStyleConfiguration
-  var selected: Bool
-  var brand: Color
+  var hasBar: Bool
+  var barSpace: Namespace.ID
   @Environment(\.isFocused) private var focused
 
   var body: some View {
     configuration.label
-      .background { Circle().fill(.black.opacity(focused ? 0.15 : 0.3)) }
-      .background { if focused { Circle().fill(.white.opacity(0.35)) } }
-      .astraGlass(in: Circle(), variant: .clear, interactive: true)
-      .overlay { if selected { Circle().strokeBorder(brand, lineWidth: 3) } }
-      .overlay { if focused { Circle().strokeBorder(.white, lineWidth: 3) } }
-      .contentShape(Circle())
-      .scaleEffect(configuration.isPressed ? 0.95 : (focused ? 1.12 : 1))
-      .shadow(color: .black.opacity(focused ? 0.4 : 0.2), radius: focused ? 16 : 8, y: 6)
+      .opacity(hasBar ? 1 : 0.5)
+      .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
+      .overlay(alignment: .leading) {
+        if hasBar {
+          Capsule().fill(.white)
+            .frame(width: 5, height: TVLayout.sidebarCircle * 0.42)
+            .shadow(color: .white.opacity(0.55), radius: 6)
+            .matchedGeometryEffect(id: "sidebar-bar", in: barSpace)
+            .offset(x: -16)
+        }
+      }
+      .contentShape(Rectangle())
+      .scaleEffect(configuration.isPressed ? 0.95 : 1)
       .focusEffectDisabled()
-      .animation(.snappy(duration: 0.22), value: focused)
+      .animation(.smooth(duration: 0.25), value: focused)
   }
 }
 

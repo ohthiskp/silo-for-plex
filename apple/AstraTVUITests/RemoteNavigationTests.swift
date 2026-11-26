@@ -152,7 +152,7 @@ final class RemoteNavigationTests: XCTestCase {
     press(.left, times: 2)
     sleep(1)
     shot("sidebar-focused")
-    let services = ["For You", "Netflix", "Apple TV+", "Prime Video", "Disney+", "HBO Max", "Hulu"]
+    let services = ["Home, all services", "Netflix", "Apple TV+", "Prime Video", "Disney+", "HBO Max", "Hulu"]
     XCTAssertTrue(services.contains(focusedElement.label), "Moving left didn't reach the streaming circles")
     // A fixed list: the circles don't grow into a panel.
     XCTAssertEqual(netflix.frame.width, size.width, accuracy: 30, "The sidebar changed size")
@@ -193,7 +193,7 @@ final class RemoteNavigationTests: XCTestCase {
 
   // MARK: Focus (KP, 2026-11-16)
 
-  private static let services = ["For You", "Netflix", "Apple TV+", "Prime Video", "Disney+", "HBO Max", "Hulu"]
+  private static let services = ["Home, all services", "Netflix", "Apple TV+", "Prime Video", "Disney+", "HBO Max", "Hulu"]
   private var onCircle: Bool { Self.services.contains(focusedElement.label) }
   private var heroPage: String { app.descendants(matching: .any)["astra.hero.page"].firstMatch.label }
 
