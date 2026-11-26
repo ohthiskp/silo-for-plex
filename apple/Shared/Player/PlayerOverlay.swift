@@ -111,7 +111,7 @@ struct PlayerOverlay: View {
 
       // From pressing Play until the first frame: the title card (KP,
       // 2026-11-16), under the controls, fading into the video.
-      if !player.hasFirstFrame {
+      if !player.hasFirstFrame || Demo.holdPlayLoading {
         PlayLoadingCard(player: player, library: app.library)
           .transition(.opacity)
       }
@@ -130,9 +130,10 @@ struct PlayerOverlay: View {
             .padding(.trailing, 28)
             .padding(.bottom, 150)
           #else
-            // Clear of the captions/quality capsule and the timeline (KP: "spaced better").
+            // KP (2026-11-25): near the bottom while the controls are hidden;
+            // up above the captions capsule and the timeline once a tap shows them.
             .padding(.trailing, 20)
-            .padding(.bottom, 132)
+            .padding(.bottom, visible ? 132 : 28)
           #endif
       }
 
@@ -153,6 +154,9 @@ struct PlayerOverlay: View {
     #if os(macOS)
       .onContinuousHover { phase in
         // Every mouse move reaches here; restart the hide timer at most a few times a second.
+        // Until the first frame the title card is the whole screen: moving the
+        // mouse doesn't put the controls over its logo (a click still does).
+        guard player.hasFirstFrame else { return }
         if case .active = phase, !visible || Date().timeIntervalSince(lastPoke) > 0.25 { poke() }
       }
     #endif
@@ -704,11 +708,12 @@ struct PlayerOverlay: View {
     guard let shot = Demo.playerShot else { return }
     Task { @MainActor in
       for _ in 0..<60 where !player.hasFirstFrame { try? await Task.pause(0.25) }
-      try? await Task.pause(1)
+      // Auto-skip: let the button fill part way first.
+      try? await Task.pause(shot == "autoskip" ? 3 : 1)
       player.setPaused(true)
       switch shot {
       case "scrub": scrubbing = player.duration * 0.35
-      case "skip":
+      case "skip", "autoskip":
         // After the pause's own reveal of the controls.
         try? await Task.pause(1)
         hide()
@@ -1299,6 +1304,8 @@ struct PhoneScrubber: View {
   @Binding var scrubbing: Double?
   var poke: () -> Void
   @AppStorage("astra.player.showEndsAt") private var showEndsAt = false
+  /// Mac: where the pointer rests on the bar, for the preview.
+  @State private var hoverAt: Double?
 
   /// 160 pt on iPhone (KP's mockup); larger on the Mac's bigger window.
   #if os(macOS)
@@ -1323,8 +1330,20 @@ struct PhoneScrubber: View {
         .overlay(alignment: .bottomLeading) {
           if let target = scrubbing {
             preview(at: target, fraction: fraction, width: width)
+          } else if let target = hoverAt, player.duration > 0 {
+            // Mac (KP, 2026-11-25): the preview follows the pointer over the bar, without a click.
+            preview(at: target, fraction: min(1, max(0, target / player.duration)), width: width)
           }
         }
+        #if os(macOS)
+          .onContinuousHover { phase in
+            switch phase {
+            case .active(let point):
+              hoverAt = Double(min(1, max(0, point.x / max(width, 1)))) * player.duration
+            case .ended: hoverAt = nil
+            }
+          }
+        #endif
         .gesture(
           DragGesture(minimumDistance: 0)
             .onChanged { drag in
@@ -1528,16 +1547,8 @@ struct NextEpisodeButton: View {
           Button {
             player.perform(prompt)
           } label: {
-            HStack(spacing: 8) {
-              Text(prompt.title)
-              Image(systemName: prompt.symbol)
-            }
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 18)
-            .frame(height: 44)
-            .astraGlass(in: Capsule(), variant: .regular, interactive: true)
-            .contentShape(Capsule())
+            SkipBox(prompt: prompt, progress: player.autoSkipProgress)
+              .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
           }
           .buttonStyle(.plain)
           .accessibilityIdentifier(prompt == .nextEpisode ? "next-episode" : "skip-marker")

@@ -20,6 +20,9 @@ struct LoadingView: View {
     private static let markSize: CGFloat = 132
   #endif
 
+  /// How far right of its square's centre the arrow's visible shape sits, as a share of the square.
+  static let opticalShift: CGFloat = 0.025
+
   var body: some View {
     ZStack {
       Astra.Color.bg
@@ -27,6 +30,10 @@ struct LoadingView: View {
         AstraLoadingMark(time: context.date.timeIntervalSince(start), settled: reduceMotion)
       }
       .frame(width: Self.markSize, height: Self.markSize)
+      // The arrow's visible shape sits right of its square (the speed lines
+      // fade out to the left), so it read as off centre on the narrow iPhone
+      // and Mac screens (KP, 2026-11-25). Moved left by that much.
+      .offset(x: -Self.markSize * Self.opticalShift)
       .opacity(appeared ? 1 : 0)
     }
     .ignoresSafeArea()

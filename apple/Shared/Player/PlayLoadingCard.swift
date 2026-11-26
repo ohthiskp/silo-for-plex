@@ -26,14 +26,19 @@ struct PlayLoadingCard: View {
 
   var body: some View {
     ZStack {
+      // The artwork fills the screen as an overlay of it: laid out on its own,
+      // a 16:9 backdrop filling a screen of another shape came out wider (Mac)
+      // or taller (iPhone) than the screen and pushed the whole player with it,
+      // so the logo sat off centre and the controls ran off the edges.
       Color.black
-      if let library, let item = titleItem ?? player.nowPlayingItem {
-        ArtworkImage(library: library, item: item, kind: .backdrop, width: 640, height: 360, placeholder: Color.clear)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .clipped()
-          .blur(radius: 50, opaque: true)
-          .opacity(0.45)
-      }
+        .overlay {
+          if let library, let item = titleItem ?? player.nowPlayingItem {
+            ArtworkImage(library: library, item: item, kind: .backdrop, width: 640, height: 360, placeholder: Color.clear)
+              .blur(radius: 50, opaque: true)
+              .opacity(0.45)
+          }
+        }
+        .clipped()
       title
         .opacity(breathing ? 0.78 : 1)
         .padding(.horizontal, 40)

@@ -92,7 +92,7 @@ struct ContinueCard: View {
     } label: {
       ZStack(alignment: .bottomLeading) {
         if item.type == .episode, item.thumb != nil {
-          RemoteImage(url: library.imageURL(item.thumb, width: width, height: height))
+          EpisodeStill(library: library, item: item, width: width, height: height)
         } else {
           // Movies, and an episode without its own still: the (show's) backdrop.
           ArtworkImage(library: library, item: item, kind: .backdrop, width: width, height: height)
@@ -286,5 +286,26 @@ struct ItemMenuItems: View {
         Label("Remove", systemImage: "minus.circle")
       }
     }
+  }
+}
+
+/// An episode's still: TMDB's full-size one when TMDB has it, else the
+/// server's (KP, 2026-11-25: some shows' stills on the server are small and
+/// looked blurry). Nothing shows until the address is known, so a card never
+/// swaps one picture for another.
+struct EpisodeStill: View {
+  var library: LibraryStore
+  var item: PlexMetadata
+  var width: CGFloat
+  var height: CGFloat
+  var placeholder: Color = Astra.Color.surface2
+
+  @State private var url: URL?
+
+  var body: some View {
+    RemoteImage(url: url, placeholder: placeholder)
+      .task(id: item.ratingKey) {
+        url = await library.episodeStillURL(for: item, width: width, height: height)
+      }
   }
 }

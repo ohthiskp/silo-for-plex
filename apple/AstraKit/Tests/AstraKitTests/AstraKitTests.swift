@@ -726,6 +726,47 @@ final class TMDBTests: XCTestCase {
     XCTAssertNil(TMDBArtwork.url(nil, size: "w500"))
   }
 
+  func testLogoCandidatesStayInTheBestLanguageGroup() async throws {
+    let art = try await TMDBClient(
+      token: "t",
+      transport: FakeTransport { _ in
+        (
+          200,
+          Data(
+            #"{"images":{"logos":[{"file_path":"/black.png","iso_639_1":"en","vote_average":5.5},{"file_path":"/white.png","iso_639_1":"en","vote_average":5.2},{"file_path":"/x.svg","iso_639_1":"en"},{"file_path":"/fr.png","iso_639_1":"fr","vote_average":9}]}}"#
+              .utf8)
+        )
+      }
+    ).artwork(id: 1421, kind: .tv)
+    XCTAssertEqual(art.logoPath, "/black.png")
+    XCTAssertEqual(art.logoCandidates, ["/black.png", "/white.png"])
+  }
+
+  func testLogoToneCountsLightVisiblePixels() {
+    let white: [UInt8] = [250, 250, 250, 255]
+    let black: [UInt8] = [10, 10, 10, 255]
+    let clear: [UInt8] = [0, 0, 0, 0]
+    XCTAssertTrue(LogoTone.isMostlyLight(rgba: white + white + black + clear + clear))
+    XCTAssertFalse(LogoTone.isMostlyLight(rgba: black + black + white + clear))
+    XCTAssertEqual(LogoTone.lightShare(rgba: clear + clear), 0)
+    // Premultiplied half-transparent white still counts as white.
+    XCTAssertTrue(LogoTone.isMostlyLight(rgba: [128, 128, 128, 128]))
+  }
+
+  func testSeasonStillsByEpisodeNumber() async throws {
+    let transport = FakeTransport { _ in
+      (
+        200,
+        Data(
+          #"{"episodes":[{"episode_number":1,"still_path":"/a.jpg"},{"episode_number":2,"still_path":null},{"episode_number":3,"still_path":"/c.jpg"}]}"#
+            .utf8)
+      )
+    }
+    let stills = try await TMDBClient(token: "t", transport: transport).seasonStills(showID: 1421, season: 2)
+    XCTAssertEqual(stills, [1: "/a.jpg", 3: "/c.jpg"])
+    XCTAssertEqual(transport.requests.first?.url?.path, "/3/tv/1421/season/2")
+  }
+
   func testTMDBAsksAgainAfterTooManyRequests() async throws {
     let calls = Counter()
     let transport = FakeTransport { _ in

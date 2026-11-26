@@ -629,7 +629,7 @@ private struct TVContinueLabel: View {
   var body: some View {
     ZStack(alignment: .bottomLeading) {
       if item.type == .episode, item.thumb != nil {
-        RemoteImage(url: library.imageURL(item.thumb, width: size.width, height: size.height), placeholder: Astra.Color.surface)
+        EpisodeStill(library: library, item: item, width: size.width, height: size.height, placeholder: Astra.Color.surface)
       } else {
         ArtworkImage(library: library, item: item, kind: .backdrop, width: size.width, height: size.height)
       }

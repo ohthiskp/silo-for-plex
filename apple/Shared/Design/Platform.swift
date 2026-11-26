@@ -21,6 +21,31 @@ extension Image {
 }
 
 extension PlatformImage {
+  /// The image's pixels as 8-bit RGBA (premultiplied), drawn at most `side` points
+  /// wide or high; for judging a logo's tone (LogoTone), not for display.
+  func rgbaSample(side: Int = 48) -> [UInt8]? {
+    #if os(macOS)
+      guard let cg = cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+    #else
+      guard let cg = cgImage else { return nil }
+    #endif
+    guard cg.width > 0, cg.height > 0 else { return nil }
+    let scale = min(1, Double(side) / Double(max(cg.width, cg.height)))
+    let w = max(1, Int(Double(cg.width) * scale))
+    let h = max(1, Int(Double(cg.height) * scale))
+    var bytes = [UInt8](repeating: 0, count: w * h * 4)
+    let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
+      guard
+        let context = CGContext(
+          data: buffer.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+      else { return false }
+      context.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+      return true
+    }
+    return drawn ? bytes : nil
+  }
+
   static func decoded(_ cgImage: CGImage) -> PlatformImage {
     #if os(macOS)
       NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
