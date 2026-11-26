@@ -28,6 +28,8 @@ struct TVDetailPage: View {
   /// The episode the season row scrolls to once it loads (KP, 2026-11-26: a
   /// Continue Watching episode opens on that episode, not the season's start).
   @State private var revealEpisode: String?
+  /// The season row's scroll position, by episode.
+  @State private var rowPosition: String?
   /// Moving down into the row lands on the picked episode.
   @FocusState private var episodeFocus: String?
   /// Once an episode is picked, the backdrop shows its still (KP, 2026-11-14).
@@ -349,16 +351,19 @@ struct TVDetailPage: View {
               .id(episode.ratingKey)
             }
           }
+          .scrollTargetLayout()
           .padding(.horizontal, TVLayout.leading)
           .padding(.vertical, 20)
         }
         .scrollClipDisabled()
         .focusSection()
         .defaultFocus($episodeFocus, focus?.ratingKey)
+        .scrollPosition(id: $rowPosition, anchor: .center)
         .task(id: revealEpisode) {
           guard let key = revealEpisode else { return }
-          // Let the season's cards lay out first, then bring the episode in.
-          try? await Task.pause(0.05)
+          // Let the season's cards finish coming in, then bring the episode in.
+          try? await Task.pause(0.4)
+          rowPosition = key
           proxy.scrollTo(key, anchor: .center)
           revealEpisode = nil
         }

@@ -22,6 +22,8 @@ struct DetailView: View {
   /// The episode the season row scrolls to once it loads (KP, 2026-11-26: a
   /// Continue Watching episode opens on that episode, not the season's start).
   @State private var revealEpisode: String?
+  /// The season row's scroll position, by episode.
+  @State private var rowPosition: String?
   @State private var related: [PlexHub] = []
   @State private var error: String?
   /// A TMDB title that isn't on the Plex server: shown, but nothing to play.
@@ -523,15 +525,18 @@ struct DetailView: View {
             .id(episode.ratingKey)
           }
         }
+        .scrollTargetLayout()
         .padding(.leading, rowLeading)
         .padding(.trailing, rowTrailing)
       }
       .scrollIndicators(.never)
       .scrollClipDisabled()
+      .scrollPosition(id: $rowPosition, anchor: .center)
       .task(id: revealEpisode) {
         guard let key = revealEpisode else { return }
-        // Let the season's cards lay out first, then bring the episode in.
-        try? await Task.pause(0.05)
+        // Let the season's cards finish coming in, then bring the episode in.
+        try? await Task.pause(0.4)
+        rowPosition = key
         proxy.scrollTo(key, anchor: .center)
         revealEpisode = nil
       }
