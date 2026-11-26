@@ -246,7 +246,8 @@ struct DetailView: View {
   @ViewBuilder private var pageBackground: some View {
     #if os(iOS)
       if narrow {
-        PhoneFrostedBackground(library: library, item: titleItem)
+        // The same picture as the card's art, so the colour runs on from it (KP, 2026-11-26).
+        PhoneFrostedBackground(library: library, item: titleItem, kind: .keyArt, imageURL: episodeStill)
       } else {
         Astra.Color.bg.ignoresSafeArea()
       }
@@ -1128,7 +1129,9 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     /// Where the logo starts, as a share of the width (175 pt on a 393 pt phone).
     static let logoTop: CGFloat = 0.6
     /// Where the logo sits on the card, as a share of the card's height (Plex's card, 2026-11-26).
-    static let logoShare: CGFloat = 0.44
+    static let logoShare: CGFloat = 0.5
+    /// How much slower than the page the card's art scrolls away (0 = with the page).
+    static let artParallax: CGFloat = 0.4
     /// The card's top corners (Plex's card, 2026-11-26).
     static let cardRadius: CGFloat = 34
     /// The X's distance from the card's top and leading edges.
@@ -1178,7 +1181,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       let width = max(pageWidth, 320)
       // The logo sits where the art starts to fade, a little over half way
       // down the card (Plex's card, 2026-11-26).
-      let logoTop = min(420, max(300, viewport * PhoneDetail.logoShare))
+      let logoTop = min(470, max(320, viewport * PhoneDetail.logoShare))
       return VStack(alignment: .leading, spacing: 0) {
         HeroTitle(
           library: library, item: titleItem,
@@ -1263,16 +1266,19 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         ZStack {
           // KP (2026-11-09): framed so the faces end above the logo, for any title.
           FramedArtwork(
-            library: library, item: titleItem, kind: .scenery, zoneHeight: logoTop + 90, limitY: logoTop - 4,
+            library: library, item: titleItem, kind: .keyArt, zoneHeight: logoTop + 90, limitY: logoTop - 4,
             imageURL: episodeStill, fadesTop: false)
           PhoneDetail.backdropShade
         }
         .frame(width: width, height: logoTop + 90)
         // Sharp at the card's top edge, melting into the colour below (Plex's card).
         .mask(PhoneDetail.cardArtMask)
-        // Held in place while the page rises over it (KP, 2026-11-07).
-        .offset(y: max(0, scrolled))
-        .opacity(max(0, 1 - max(0, scrolled) / 420))
+        // KP (2026-11-26, "how everything acts", like the Apple TV app): pulling
+        // the page down past the top stretches the art from its top edge, and
+        // scrolling up carries it up with the page, a little slower (parallax),
+        // instead of holding it still and fading it.
+        .scaleEffect(1 + max(0, -scrolled) / (logoTop + 90), anchor: .bottom)
+        .offset(y: max(0, scrolled) * PhoneDetail.artParallax)
       }
     }
 
@@ -1375,8 +1381,9 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       LinearGradient(
         stops: [
           .init(color: .black, location: 0),
-          .init(color: .black, location: 0.5),
-          .init(color: .black.opacity(0.55), location: 0.72),
+          .init(color: .black, location: 0.55),
+          .init(color: .black.opacity(0.7), location: 0.72),
+          .init(color: .black.opacity(0.25), location: 0.88),
           .init(color: .black.opacity(0), location: 1),
         ], startPoint: .top, endPoint: .bottom)
     }
@@ -1436,35 +1443,48 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
   }
 
-  /// The page behind iPhone Details: the title's artwork, heavily blurred and
-  /// dimmed like frosted glass, held still while the page scrolls over it.
+  /// The colour behind the iPhone Details card (KP, 2026-11-26, "the blur and
+  /// cover art" like Plex and the Apple TV app): the card's own picture, so
+  /// tiny and so blurred it becomes one smooth wash of its colours, richer
+  /// than the picture and deepening towards the bottom. It holds still while
+  /// the page scrolls over it.
   struct PhoneFrostedBackground: View {
     var library: LibraryStore
     var item: PlexMetadata
+    var kind: LibraryStore.ArtKind = .heroBackdrop
+    /// A picture to use instead of the title's artwork (a picked episode's still).
+    var imageURL: URL? = nil
 
     var body: some View {
       GeometryReader { geo in
         ZStack {
           Astra.Color.bg
-          // A small image is enough under this much blur, and cheaper to draw.
-          ArtworkImage(library: library, item: item, kind: .heroBackdrop, width: 480, height: 270, placeholder: Color.clear)
-            .frame(width: geo.size.width * 1.4, height: geo.size.height * 1.1)
-            .clipped()
-            .blur(radius: 60, opaque: true)
-            // Richer, so the card takes on the artwork's colour like Plex's (KP, 2026-11-26).
-            .saturation(1.5)
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
-          // Darker toward the bottom so the synopsis and rows read easily
-          // (lighter on the Light theme, where the text is dark).
-          let light = AstraAppearance.shared.palette.isLight
+          // A tiny image is all this much blur needs, and cheap to draw.
+          Group {
+            if let imageURL {
+              RemoteImage(url: imageURL, contentMode: .fill, placeholder: Color.clear)
+            } else {
+              ArtworkImage(library: library, item: item, kind: kind, width: 240, height: 360, placeholder: Color.clear)
+            }
+          }
+          .frame(width: geo.size.width * 1.6, height: geo.size.height * 1.3)
+          .clipped()
+          .blur(radius: 90, opaque: true)
+          .saturation(1.6)
+          .frame(width: geo.size.width, height: geo.size.height)
+          .clipped()
+          .id(imageURL)
+          .transition(.opacity)
+          // Light where the art ends, deep at the foot, so the rows read easily.
           LinearGradient(
             stops: [
-              .init(color: Astra.Color.bg.opacity(light ? 0.62 : 0.3), location: 0),
-              .init(color: Astra.Color.bg.opacity(light ? 0.74 : 0.5), location: 0.45),
-              .init(color: Astra.Color.bg.opacity(light ? 0.84 : 0.62), location: 1),
+              .init(color: Astra.Color.bg.opacity(0.2), location: 0),
+              .init(color: Astra.Color.bg.opacity(0.32), location: 0.45),
+              .init(color: Astra.Color.bg.opacity(0.62), location: 0.8),
+              .init(color: Astra.Color.bg.opacity(0.78), location: 1),
             ], startPoint: .top, endPoint: .bottom)
         }
+        .astraAnimation(Astra.Motion.page, value: imageURL)
       }
       .ignoresSafeArea()
       .allowsHitTesting(false)

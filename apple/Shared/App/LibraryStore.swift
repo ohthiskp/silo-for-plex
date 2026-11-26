@@ -1039,7 +1039,8 @@ final class LibraryStore {
 
   /// `scenery` is the Details backdrop: TMDB's best text-free wide shot,
   /// else the usual backdrop.
-  enum ArtKind { case poster, backdrop, heroBackdrop, scenery, logo }
+  /// `keyArt`: a tall text-free poster for the iPhone Details card, else the scenery.
+  enum ArtKind { case poster, backdrop, heroBackdrop, scenery, keyArt, logo }
 
   private var artwork: [String: TMDBArtwork] = [:]
   private var artworkTasks: [String: Task<TMDBArtwork?, Never>] = [:]
@@ -1142,7 +1143,8 @@ final class LibraryStore {
     // Full artwork if fetched; else the poster and backdrop TMDB's lists gave
     // (no logo in those); else one lookup.
     var art = item.tmdbKey.flatMap { artwork[$0] }
-    if art == nil, kind != .logo { art = item.tmdbKey.flatMap { seededArt[$0] } }
+    // The logo and the key art are only in the full lookup, not the lists' seeds.
+    if art == nil, kind != .logo, kind != .keyArt { art = item.tmdbKey.flatMap { seededArt[$0] } }
     if art == nil { art = await tmdbArtwork(for: item) }
     if let art {
       let url: URL? =
@@ -1151,6 +1153,9 @@ final class LibraryStore {
         case .backdrop: TMDBArtwork.url(art.backdropPath, size: "w1280")
         case .heroBackdrop: TMDBArtwork.url(art.backdropPath, size: "original")
         case .scenery: TMDBArtwork.url(art.sceneryPath ?? art.backdropPath, size: "original")
+        case .keyArt:
+          art.keyArtPath.flatMap { TMDBArtwork.url($0, size: "w1280") }
+            ?? TMDBArtwork.url(art.sceneryPath ?? art.backdropPath, size: "original")
         case .logo: TMDBArtwork.url(await lightLogoPath(for: item.tmdbKey, art) ?? art.logoPath, size: "w500")
         }
       if let url { return url }
@@ -1158,7 +1163,7 @@ final class LibraryStore {
     let plexPath: String? =
       switch kind {
       case .poster: item.poster
-      case .backdrop, .heroBackdrop, .scenery: item.backdrop
+      case .backdrop, .heroBackdrop, .scenery, .keyArt: item.backdrop
       case .logo: item.clearLogo
       }
     return imageURL(plexPath, width: width, height: height)

@@ -125,6 +125,9 @@ public struct TMDBArtwork: Sendable, Hashable {
   /// The best-voted text-free wide shot, for the Details page (KP,
   /// 2026-11-09: "a more cinematic, scenic shot"). Nil when TMDB has none.
   public var sceneryPath: String?
+  /// The best-voted text-free poster: tall key art for the top of the iPhone
+  /// Details card (KP, 2026-11-26, like Plex and the Apple TV app). Nil when TMDB has none.
+  public var keyArtPath: String?
   /// Genre names in TMDB's order ("Science Fiction", "Adventure").
   public var genres: [String] = []
   /// A movie's length in minutes.
@@ -137,7 +140,8 @@ public struct TMDBArtwork: Sendable, Hashable {
   public init(
     posterPath: String?, backdropPath: String?, logoPath: String?, logoCandidates: [String] = [],
     certification: String? = nil,
-    sceneryPath: String? = nil, genres: [String] = [], runtimeMinutes: Int? = nil, seasons: Int? = nil
+    sceneryPath: String? = nil, keyArtPath: String? = nil, genres: [String] = [], runtimeMinutes: Int? = nil,
+    seasons: Int? = nil
   ) {
     self.posterPath = posterPath
     self.backdropPath = backdropPath
@@ -145,6 +149,7 @@ public struct TMDBArtwork: Sendable, Hashable {
     self.logoCandidates = logoCandidates
     self.certification = certification
     self.sceneryPath = sceneryPath
+    self.keyArtPath = keyArtPath
     self.genres = genres
     self.runtimeMinutes = runtimeMinutes
     self.seasons = seasons
@@ -351,6 +356,7 @@ public struct TMDBClient: Sendable {
       logoPath: Self.bestLogo(raw.images?.logos ?? [], original: raw.original_language),
       logoCandidates: Self.rankedLogos(raw.images?.logos ?? [], original: raw.original_language),
       certification: raw.usCertification, sceneryPath: Self.bestScenery(raw.images?.backdrops ?? []),
+      keyArtPath: Self.bestKeyArt(raw.images?.posters ?? []),
       genres: (raw.genres ?? []).compactMap(\.name), runtimeMinutes: raw.runtime.flatMap { $0 > 0 ? $0 : nil },
       seasons: raw.number_of_seasons.flatMap { $0 > 0 ? $0 : nil })
   }
@@ -360,6 +366,18 @@ public struct TMDBClient: Sendable {
   static func bestScenery(_ backdrops: [ArtworkRaw.Images.Image]) -> String? {
     backdrops.enumerated()
       .filter { $0.element.iso_639_1 == nil && $0.element.file_path != nil && ($0.element.width ?? 1920) >= 1280 }
+      .min { a, b in
+        (-(a.element.vote_average ?? 0), -(a.element.vote_count ?? 0), a.offset)
+          < (-(b.element.vote_average ?? 0), -(b.element.vote_count ?? 0), b.offset)
+      }?.element.file_path
+  }
+
+  /// The iPhone Details card's key art: a text-free poster (no title on it,
+  /// the logo is drawn over it), at least 1000 wide, the best voted (ties:
+  /// more votes, then TMDB's order).
+  static func bestKeyArt(_ posters: [ArtworkRaw.Images.Image]) -> String? {
+    posters.enumerated()
+      .filter { $0.element.iso_639_1 == nil && $0.element.file_path != nil && ($0.element.width ?? 2000) >= 1000 }
       .min { a, b in
         (-(a.element.vote_average ?? 0), -(a.element.vote_count ?? 0), a.offset)
           < (-(b.element.vote_average ?? 0), -(b.element.vote_count ?? 0), b.offset)
@@ -426,6 +444,7 @@ public struct TMDBClient: Sendable {
       }
       var logos: [Image]?
       var backdrops: [Image]?
+      var posters: [Image]?
     }
     var poster_path: String?
     var backdrop_path: String?
