@@ -125,11 +125,13 @@ struct FramedArtwork: View {
         // KP (2026-11-09, "why is the cut off that drastic?"): a blurred copy
         // of the same picture fills the whole hero, so where the sharp art
         // ends its colours carry on, softly, into the page.
+        // The iPhone Details card (fadesTop false) has no blurred copy: its art
+        // fades straight into one colour (KP, 2026-11-26: "too much blur").
         RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
           .frame(width: geo.size.width, height: zoneHeight)
           .clipped()
           .blur(radius: 44, opaque: true)
-          .opacity(0.8)
+          .opacity(fadesTop ? 0.8 : 0)
           .mask {
             LinearGradient(
               stops: [

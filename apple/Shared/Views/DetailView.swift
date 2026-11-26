@@ -1443,11 +1443,10 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
   }
 
-  /// The colour behind the iPhone Details card (KP, 2026-11-26, "the blur and
-  /// cover art" like Plex and the Apple TV app): the card's own picture, so
-  /// tiny and so blurred it becomes one smooth wash of its colours, richer
-  /// than the picture and deepening towards the bottom. It holds still while
-  /// the page scrolls over it.
+  /// The colour behind the iPhone Details card (KP, 2026-11-26, like Plex):
+  /// no blur, one smooth colour taken from the card's own picture, rich just
+  /// under the art and deepening to near black at the foot. It holds still
+  /// while the page scrolls, and eases to the new colour when the episode changes.
   struct PhoneFrostedBackground: View {
     var library: LibraryStore
     var item: PlexMetadata
@@ -1455,40 +1454,37 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     /// A picture to use instead of the title's artwork (a picked episode's still).
     var imageURL: URL? = nil
 
+    @State private var colour: ArtColour?
+
     var body: some View {
-      GeometryReader { geo in
-        ZStack {
-          Astra.Color.bg
-          // A tiny image is all this much blur needs, and cheap to draw.
-          Group {
-            if let imageURL {
-              RemoteImage(url: imageURL, contentMode: .fill, placeholder: Color.clear)
-            } else {
-              ArtworkImage(library: library, item: item, kind: kind, width: 240, height: 360, placeholder: Color.clear)
-            }
-          }
-          .frame(width: geo.size.width * 1.6, height: geo.size.height * 1.3)
-          .clipped()
-          .blur(radius: 90, opaque: true)
-          .saturation(1.6)
-          .frame(width: geo.size.width, height: geo.size.height)
-          .clipped()
-          .id(imageURL)
-          .transition(.opacity)
-          // Light where the art ends, deep at the foot, so the rows read easily.
+      ZStack {
+        Astra.Color.bg
+        if let colour {
           LinearGradient(
             stops: [
-              .init(color: Astra.Color.bg.opacity(0.2), location: 0),
-              .init(color: Astra.Color.bg.opacity(0.32), location: 0.45),
-              .init(color: Astra.Color.bg.opacity(0.62), location: 0.8),
-              .init(color: Astra.Color.bg.opacity(0.78), location: 1),
+              .init(color: colour.top, location: 0),
+              .init(color: colour.top, location: 0.3),
+              .init(color: colour.bottom, location: 1),
             ], startPoint: .top, endPoint: .bottom)
+          .transition(.opacity)
         }
-        .astraAnimation(Astra.Motion.page, value: imageURL)
       }
+      .astraAnimation(Astra.Motion.page, value: colour)
       .ignoresSafeArea()
       .allowsHitTesting(false)
       .accessibilityHidden(true)
+      .task(id: "\(item.id)|\(imageURL?.absoluteString ?? "")") {
+        let found: URL?
+        if let imageURL { found = imageURL } else { found = await library.artworkURL(for: item, kind, width: 780, height: 1170) }
+        guard let found, !Task.isCancelled else { return }
+        if let hit = ArtColourStore.shared.cached(found) {
+          colour = hit
+          return
+        }
+        let measured = await ArtColourStore.shared.colour(for: found)
+        guard !Task.isCancelled, let measured else { return }
+        colour = measured
+      }
     }
   }
 
