@@ -19,6 +19,9 @@ struct HomeView: View {
     @State private var scrollPosition = ScrollPosition(edge: .top)
   #endif
 
+  /// How far under the hero its colour takes to fade into the page's foot.
+  private static let washFade: CGFloat = 260
+
   private var heroHeight: CGFloat {
     min(Astra.Layout.heroHeight, max(380, viewport * Astra.Layout.heroShare))
   }
@@ -164,6 +167,16 @@ struct HomeView: View {
         }
       }
       .padding(.bottom, 110)
+      #if os(iOS)
+        // KP (2026-11-26, option C): the art's colour sits behind the hero and
+        // fades into the darker foot just under it, scrolling with the page.
+        .background(alignment: .top) {
+          if let item = heroItem ?? library.homeHero.first, AstraAppearance.shared.palette.ambient > 0 {
+            PhoneFrostedBackground(library: library, item: item, kind: .heroBackdrop, style: .hero)
+              .frame(height: heroHeight + Self.washFade)
+          }
+        }
+      #endif
       .onGeometryChange(for: Bool.self, of: { $0.frame(in: .scrollView).minY > -60 }) { showsTopBar = $0 }
     }
     .scrollIndicators(.never)
@@ -1146,7 +1159,9 @@ struct HomeBackdrop: View {
   var body: some View {
     #if os(iOS)
       if let item, AstraAppearance.shared.palette.ambient > 0 {
-        PhoneFrostedBackground(library: library, item: item, kind: .heroBackdrop)
+        // The fixed page is the dark foot colour; the bright part scrolls
+        // away with the hero (HomeHeroWash), so rows sit on the dark tone.
+        PhoneFrostedBackground(library: library, item: item, kind: .heroBackdrop, style: .base)
       } else {
         AmbientBackdrop(library: library, item: item)
       }

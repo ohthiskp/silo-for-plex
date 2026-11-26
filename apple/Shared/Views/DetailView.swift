@@ -1458,23 +1458,44 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     /// A picture to use instead of the title's artwork (a picked episode's still).
     var imageURL: URL? = nil
 
+    /// How the colour is laid out: `.page` fills the screen (Details);
+    /// `.base` is only the dark foot colour (Home's fixed page); `.hero` is the
+    /// bright colour fading into that foot, scrolling with Home's hero.
+    var style: Style = .page
+
+    enum Style { case page, base, hero }
+
     @State private var colour: ArtColour?
 
     var body: some View {
       ZStack {
-        Astra.Color.bg
+        if style != .hero { Astra.Color.bg }
         if let colour {
-          LinearGradient(
-            stops: [
-              .init(color: colour.top, location: 0),
-              .init(color: colour.top, location: 0.3),
-              .init(color: colour.bottom, location: 1),
-            ], startPoint: .top, endPoint: .bottom)
+          Group {
+            switch style {
+            case .page:
+              LinearGradient(
+                stops: [
+                  .init(color: colour.top, location: 0),
+                  .init(color: colour.top, location: 0.3),
+                  .init(color: colour.bottom, location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+            case .base:
+              colour.bottom
+            case .hero:
+              LinearGradient(
+                stops: [
+                  .init(color: colour.top, location: 0),
+                  .init(color: colour.top, location: 0.6),
+                  .init(color: colour.bottom, location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+            }
+          }
           .transition(.opacity)
         }
       }
       .astraAnimation(Astra.Motion.page, value: colour)
-      .ignoresSafeArea()
+      .ignoresSafeArea(edges: style == .hero ? .top : .all)
       .allowsHitTesting(false)
       .accessibilityHidden(true)
       .task(id: "\(item.id)|\(imageURL?.absoluteString ?? "")") {
