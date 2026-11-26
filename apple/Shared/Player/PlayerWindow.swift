@@ -39,12 +39,13 @@
     init(over main: NSWindow, content: AnyView) {
       mainWindow = main
       let frame = main.frame
-      let window = NSWindow(
+      let window = PlayerHostWindow(
         contentRect: frame,
         styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
         backing: .buffered, defer: false)
       window.setFrame(frame, display: false)
-      window.isMovable = true
+      // Moved only through the app window while inside it (PlayerHostWindow).
+      window.isMovable = false
       window.title = "Astra"
       window.titleVisibility = .hidden
       window.titlebarAppearsTransparent = true
@@ -106,21 +107,29 @@
     }
 
     /// The person resized the player by its edge: the app's window takes the same size.
+    /// A child window moves along when its parent moves, so after the app's
+    /// window takes the new frame the player is put back on it (resizing
+    /// from the left or bottom edge moves the origin too).
     func windowDidResize(_ notification: Notification) {
       guard !isMini, !syncing, let main = mainWindow, main.frame != window.frame,
         !main.styleMask.contains(.fullScreen)
       else { return }
+      let frame = window.frame
       syncing = true
-      main.setFrame(window.frame, display: true)
+      main.setFrame(frame, display: true)
+      window.setFrame(main.frame, display: true)
       syncing = false
     }
 
+    /// The player in the app never moves by itself: dragging it moves the
+    /// app's window (PlayerHostWindow), and the player rides along. Moving
+    /// both here doubled every step and made the window jump (KP, 2026-11-26).
     func windowDidMove(_ notification: Notification) {
-      guard !isMini, !syncing, let main = mainWindow, main.frame.origin != window.frame.origin,
+      guard !isMini, !syncing, let main = mainWindow, window.frame.origin != main.frame.origin,
         !main.styleMask.contains(.fullScreen)
       else { return }
       syncing = true
-      main.setFrameOrigin(window.frame.origin)
+      window.setFrameOrigin(main.frame.origin)
       syncing = false
     }
 
@@ -169,6 +178,7 @@
 
     private func leaveMini() {
       isMini = false
+      window.isMovable = false
       window.level = .normal
       window.collectionBehavior = [.fullScreenAuxiliary, .fullScreenNone]
       window.contentResizeIncrements = NSSize(width: 1, height: 1)
@@ -197,6 +207,7 @@
         let aspect = videoAspect ?? 16 / 9
         let frame = PlayerGeometry.miniFrame(aspect: aspect, visible: visible)
         isMini = true
+        window.isMovable = true
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.contentAspectRatio = NSSize(width: aspect, height: 1)
@@ -210,6 +221,26 @@
       // The window is already closing; the controller's dismiss() must not close it again.
       closingFromCode = true
       onUserClose?()
+    }
+  }
+
+  /// The player's window. While it sits in the app's window (a child window),
+  /// a drag that would move it moves the app's window instead; the player
+  /// follows as its child. Dragging the child itself fought the parent
+  /// following it, and the window jumped around (KP, 2026-11-26).
+  final class PlayerHostWindow: NSWindow {
+    override func sendEvent(_ event: NSEvent) {
+      // Only where AppKit itself would drag: the title strip, off its buttons.
+      if event.type == .leftMouseDown, event.clickCount == 1, let parent, !styleMask.contains(.fullScreen),
+        event.locationInWindow.y >= contentLayoutRect.maxY,
+        let frameView = contentView?.superview,
+        let hit = frameView.hitTest(frameView.convert(event.locationInWindow, from: nil)),
+        hit.mouseDownCanMoveWindow, !(hit is NSControl)
+      {
+        parent.performDrag(with: event)
+        return
+      }
+      super.sendEvent(event)
     }
   }
 
@@ -251,7 +282,7 @@
           let point = convert(event.locationInWindow, from: nil)
           let fromTop = isFlipped ? point.y : bounds.height - point.y
           if fromTop < 32 || window.level != .normal {
-            window.performDrag(with: event)
+            (window.parent ?? window).performDrag(with: event)
             return
           }
         }
