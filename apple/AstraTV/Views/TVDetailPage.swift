@@ -25,6 +25,13 @@ struct TVDetailPage: View {
   /// Play / Resume plays it. Selecting an episode picks it and moves focus up
   /// to Play, so a second press plays it.
   @State private var focus: PlexMetadata?
+  /// The episode the season row scrolls to once it loads (KP, 2026-11-26: a
+  /// Continue Watching episode opens on that episode, not the season's start).
+  @State private var revealEpisode: String?
+  /// The season row's scroll position, by episode.
+  @State private var rowPosition: String?
+  /// Moving down into the row lands on the picked episode.
+  @FocusState private var episodeFocus: String?
   /// Once an episode is picked, the backdrop shows its still (KP, 2026-11-14).
   @State private var episodeArt = false
   @State private var related: [PlexHub] = []
@@ -329,23 +336,38 @@ struct TVDetailPage: View {
       }
       .padding(.horizontal, TVLayout.leading)
       .padding(.top, 4)
-      ScrollView(.horizontal, showsIndicators: false) {
-        LazyHStack(alignment: .top, spacing: 36) {
-          ForEach(episodes) { episode in
-            TVEpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
-              withAnimation(.easeInOut(duration: 0.25)) {
-              focus = episode
-              episodeArt = true
-            }
-              playFocused = true
+      ScrollViewReader { proxy in
+        ScrollView(.horizontal, showsIndicators: false) {
+          LazyHStack(alignment: .top, spacing: 36) {
+            ForEach(episodes) { episode in
+              TVEpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                  focus = episode
+                  episodeArt = true
+                }
+                playFocused = true
+              }
+              .focused($episodeFocus, equals: episode.ratingKey)
+              .id(episode.ratingKey)
             }
           }
+          .scrollTargetLayout()
+          .padding(.horizontal, TVLayout.leading)
+          .padding(.vertical, 20)
         }
-        .padding(.horizontal, TVLayout.leading)
-        .padding(.vertical, 20)
+        .scrollClipDisabled()
+        .focusSection()
+        .defaultFocus($episodeFocus, focus?.ratingKey)
+        .scrollPosition(id: $rowPosition, anchor: .center)
+        .task(id: revealEpisode) {
+          guard let key = revealEpisode else { return }
+          // Let the season's cards finish coming in, then bring the episode in.
+          try? await Task.pause(0.4)
+          rowPosition = key
+          proxy.scrollTo(key, anchor: .center)
+          revealEpisode = nil
+        }
       }
-      .scrollClipDisabled()
-      .focusSection()
     }
   }
 
@@ -481,7 +503,10 @@ struct TVDetailPage: View {
     let found =
       key.flatMap { key in episodes.first { $0.ratingKey == key } }
       ?? episodes.first { ($0.viewOffset ?? 0) > 0 } ?? episodes.first { !library.isWatched($0) } ?? episodes.first
-    if let found { focus = found }
+    if let found {
+      focus = found
+      revealEpisode = found.ratingKey
+    }
   }
 
   private func selectSeason(_ season: PlexMetadata) async {

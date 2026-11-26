@@ -107,6 +107,8 @@ jobs:
           shot details-show -AstraDemoOpen 201
           shot details-show-episodes -AstraDemoOpen 205
           shot details-episode -AstraDemoOpen 303
+          # Continue Watching episode late in its season (KP, 2026-11-26): the row opens on it.
+          shot details-episode-late -AstraDemoOpen 306
           shot watchlist -AstraDemoTab watchlist
           shot settings -AstraDemoTab settings
           # Settings, Direction C (KP, 2026-11-14): each category in the right pane.
