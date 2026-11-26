@@ -538,6 +538,7 @@ struct TopTenCard: View {
         ArtworkImage(library: library, item: item, kind: .poster, width: width, height: height)
           .frame(width: width, height: height)
           .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
+          .detailZoomSource(item)
           .overlay(
             RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))
           .shadow(color: .black.opacity(0.45), radius: 6, x: -3, y: 0)
@@ -1057,6 +1058,8 @@ struct WatchlistButton: View {
       // A tap anywhere opens Details; Play and + keep their own action.
       .contentShape(Rectangle())
       .onTapGesture { openItem(item) }
+      // iPhone: Details grows out of the hero and shrinks back into it.
+      .detailZoomSource(item)
     }
   }
 

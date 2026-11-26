@@ -109,6 +109,9 @@ struct FramedArtwork: View {
   var minTop: CGFloat = 0
   /// A picture to frame instead of the title's artwork (a picked episode's still).
   var imageURL: URL? = nil
+  /// False when the art starts at a card's top edge (iPhone Details, KP
+  /// 2026-11-26, like Plex): sharp right to the top instead of fading in.
+  var fadesTop = true
 
   @State private var url: URL?
   @State private var focus: ArtFocus?
@@ -142,7 +145,7 @@ struct FramedArtwork: View {
           .mask {
             LinearGradient(
               stops: [
-                .init(color: .clear, location: 0), .init(color: .black, location: 0.14),
+                .init(color: fadesTop ? .clear : .black, location: 0), .init(color: .black, location: 0.14),
                 .init(color: .black, location: 0.5), .init(color: .black.opacity(0.8), location: 0.65),
                 .init(color: .black.opacity(0.45), location: 0.8), .init(color: .black.opacity(0.15), location: 0.92),
                 .init(color: .clear, location: 1),

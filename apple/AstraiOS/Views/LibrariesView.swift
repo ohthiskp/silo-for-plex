@@ -322,6 +322,7 @@ private struct GridPoster: View {
           }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .detailZoomSource(item)
         .watchedLook(library.isWatched(item), corner: 12, mark: 17, inset: 8)
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Astra.Color.hairline))
         .contentShape(Rectangle())
@@ -346,6 +347,7 @@ private struct ListRow: View {
         ArtworkImage(library: library, item: item, kind: .poster, width: 56, height: 84)
           .frame(width: 56, height: 84)
           .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+          .detailZoomSource(item)
         VStack(alignment: .leading, spacing: 4) {
           Text(item.displayTitle).astraFont(size: 16, weight: .semibold).foregroundStyle(Astra.Color.ink)
             .lineLimit(2)
