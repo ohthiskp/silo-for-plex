@@ -13,8 +13,6 @@ struct MainView: View {
 
   /// Settings → Navigation (Astra 4.0): which tabs the bar shows.
   @AppStorage(TabLayout.storageKey) private var storedTabs = ""
-  /// Details zooms out of the tapped artwork and back into it (KP, 2026-11-26).
-  @Namespace private var detailZoom
   @State private var tab: TabID = Demo.tab.flatMap(PhoneTab.init(rawValue:)) ?? .home
   @State private var paths: [TabID: [Route]] = [
     .home: Demo.openKey.flatMap(Demo.item).map { [.details($0)] } ?? []
@@ -96,16 +94,13 @@ struct MainView: View {
         .navigationDestination(for: Route.self) { route in
           switch route {
           case .details(let item):
-            // KP (2026-11-26): the Apple TV app's motion. The card grows out of the
-            // tapped poster, follows the finger when dragged down or sideways,
-            // and springs back into the poster when let go.
+            // KP (2026-11-26): a plain card like Plex, no drag-to-close; its X
+            // goes back to whatever was there before.
             DetailView(library: library, seed: item, path: path)
-              .detailZoomDestination(item, in: detailZoom)
           }
         }
     }
     .environment(\.openItem) { item in path.wrappedValue.append(.details(item)) }
-    .environment(\.detailZoom, detailZoom)
   }
 }
 

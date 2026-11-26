@@ -425,7 +425,6 @@ private struct ResultRow: View {
           ArtworkImage(library: library, item: item, kind: .poster, width: 78, height: 117)
             .frame(width: 78, height: 117)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .detailZoomSource(item)
           VStack(alignment: .leading, spacing: 6) {
             Text(item.displayTitle)
               .astraFont(size: 17, weight: .bold)

@@ -184,7 +184,7 @@ struct DetailView: View {
       }
     #elseif os(iOS)
       // iPad keeps the system back button (Liquid Glass on iOS 26). The iPhone
-      // card has its own X; swipe-back and drag-to-close come from the zoom.
+      // card has its own X (KP, 2026-11-26: no drag-to-close).
       .toolbarBackground(.hidden, for: .navigationBar)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar(narrow ? .hidden : .automatic, for: .navigationBar)
@@ -1406,8 +1406,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
 
   /// iPhone Details as a card (KP, 2026-11-26, like Plex): the page is
   /// clipped to a card whose rounded top sits just under the status bar, with
-  /// a round glass X at its top left. The whole card is what the zoom
-  /// transition moves, so dragging it shrinks and follows the finger.
+  /// a round glass X at its top left that goes back to the previous page.
   struct PhoneDetailCard: ViewModifier {
     var enabled: Bool
     var close: () -> Void
@@ -1785,7 +1784,6 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         }
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .detailZoomSource(item)
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Astra.Color.hairline))
         .contentShape(Rectangle())
       }

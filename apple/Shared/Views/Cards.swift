@@ -52,7 +52,6 @@ struct ArtCard: View {
         }
           .frame(width: width, height: height)
           .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
-          .detailZoomSource(item)
           .overlay(alignment: .bottomLeading) {
             if let progress = item.progress { ProgressBar(value: progress).padding(10) }
           }
@@ -115,7 +114,6 @@ struct ContinueCard: View {
       }
       .frame(width: width, height: height)
       .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
-      .detailZoomSource(item)
       .overlay(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))
       .contentShape(Rectangle())
       .pressable(hoverScale: 1.03)
@@ -158,7 +156,6 @@ struct PosterCard: View {
         ArtworkImage(library: library, item: item, kind: .poster, width: width, height: height)
           .frame(width: width, height: height)
           .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
-          .detailZoomSource(item)
           .watchedLook(library.isWatched(item))
           .overlay(
             RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))

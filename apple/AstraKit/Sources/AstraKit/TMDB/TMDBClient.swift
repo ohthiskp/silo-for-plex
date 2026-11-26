@@ -797,4 +797,26 @@ public enum LogoTone {
 
   /// Mostly white: at least half of what shows is light.
   public static func isMostlyLight(rgba: [UInt8]) -> Bool { lightShare(rgba: rgba) >= 0.5 }
+
+  /// How far the logo's lettering sits from the middle of its picture, as a
+  /// share of the picture's width (negative = left of centre). Faint glows and
+  /// lens flares are left out: only pixels at least `minAlpha` opaque count
+  /// (KP, 2026-11-26: Dune: Part Two's logo has a flare off its right side, so
+  /// centring the picture put the word itself off centre). Nil when nothing
+  /// is solid enough to tell.
+  public static func inkOffset(rgba: [UInt8], width: Int, height: Int, minAlpha: UInt8 = 160) -> Double? {
+    guard width > 0, height > 0, rgba.count >= width * height * 4 else { return nil }
+    var first = Int.max
+    var last = -1
+    for y in 0..<height {
+      let row = y * width * 4
+      for x in 0..<width where rgba[row + x * 4 + 3] >= minAlpha {
+        first = min(first, x)
+        last = max(last, x)
+      }
+    }
+    guard last >= first else { return nil }
+    let middle = (Double(first) + Double(last) + 1) / 2
+    return middle / Double(width) - 0.5
+  }
 }

@@ -753,6 +753,21 @@ final class TMDBTests: XCTestCase {
     XCTAssertTrue(LogoTone.isMostlyLight(rgba: [128, 128, 128, 128]))
   }
 
+  func testLogoInkOffsetIgnoresFaintFlare() {
+    let solid: [UInt8] = [250, 250, 250, 255]
+    let flare: [UInt8] = [120, 60, 20, 90]
+    let clear: [UInt8] = [0, 0, 0, 0]
+    // 10 wide: lettering in columns 0-5, a faint flare in 6-9.
+    let row = Array(repeating: solid, count: 6).flatMap { $0 } + Array(repeating: flare, count: 4).flatMap { $0 }
+    let offset = LogoTone.inkOffset(rgba: row + row, width: 10, height: 2)
+    XCTAssertEqual(offset ?? 0, -0.2, accuracy: 0.0001)
+    // Centred lettering: no offset.
+    let centred = clear + clear + Array(repeating: solid, count: 6).flatMap { $0 } + clear + clear
+    XCTAssertEqual(LogoTone.inkOffset(rgba: centred, width: 10, height: 1) ?? 1, 0, accuracy: 0.0001)
+    // Nothing solid: nil.
+    XCTAssertNil(LogoTone.inkOffset(rgba: flare + flare, width: 2, height: 1))
+  }
+
   func testSeasonStillsByEpisodeNumber() async throws {
     let transport = FakeTransport { _ in
       (

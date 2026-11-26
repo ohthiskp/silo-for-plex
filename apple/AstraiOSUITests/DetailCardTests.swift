@@ -1,7 +1,7 @@
 import XCTest
 
-/// Astra (KP, 2026-11-26): the iPhone Details card grows out of the tapped
-/// poster and can be dragged around to close, like the Apple TV app. Driven
+/// Astra (KP, 2026-11-26): the iPhone Details card is a plain card like Plex's.
+/// Dragging it doesn't close it; its X goes back to the page before. Driven
 /// slowly against the demo server while the launch-check workflow records the
 /// simulator's screen, so the motion can be watched without a phone.
 final class DetailCardTests: XCTestCase {
@@ -40,32 +40,21 @@ final class DetailCardTests: XCTestCase {
 
   private var closeButton: XCUIElement { app.buttons["Close"].firstMatch }
 
-  func testDragTheCardAroundToClose() {
+  func testOnlyTheXClosesTheCard() {
     openTitle()
     XCTAssertTrue(closeButton.waitForExistence(timeout: 10), "Details didn't open as a card")
     shot("card-open")
 
-    // A short drag let go early: the card springs back open.
-    point(0.5, 0.3).press(forDuration: 0.15, thenDragTo: point(0.55, 0.42), withVelocity: .slow, thenHoldForDuration: 0.6)
-    sleep(2)
-    XCTAssertTrue(closeButton.exists, "A short drag closed the card")
-
-    // Down and to the side, held, then let go: it shrinks back into the poster.
+    // Dragging the card down and to the side scrolls it; it stays open.
     point(0.5, 0.3).press(forDuration: 0.15, thenDragTo: point(0.72, 0.78), withVelocity: .slow, thenHoldForDuration: 0.8)
     sleep(2)
     shot("after-drag")
-    XCTAssertFalse(closeButton.exists, "Dragging the card down didn't close it")
+    XCTAssertTrue(closeButton.exists, "Dragging the card closed it")
 
-    // Again from the left edge, like swiping back.
-    openTitle()
-    point(0.01, 0.5).press(forDuration: 0.1, thenDragTo: point(0.8, 0.55), withVelocity: .slow, thenHoldForDuration: 0.6)
-    sleep(2)
-    XCTAssertFalse(closeButton.exists, "Swiping from the left edge didn't close the card")
-
-    // And the X.
-    openTitle()
-    if closeButton.waitForExistence(timeout: 5) { closeButton.tap() }
+    // The X goes back to Home.
+    closeButton.tap()
     sleep(2)
     XCTAssertFalse(closeButton.exists, "The X didn't close the card")
+    shot("after-close")
   }
 }

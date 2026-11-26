@@ -553,7 +553,6 @@ struct TopTenCard: View {
         ArtworkImage(library: library, item: item, kind: .poster, width: width, height: height)
           .frame(width: width, height: height)
           .clipShape(RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous))
-          .detailZoomSource(item)
           .overlay(
             RoundedRectangle(cornerRadius: Astra.Radius.card, style: .continuous).stroke(Astra.Color.hairline))
           .shadow(color: .black.opacity(0.45), radius: 6, x: -3, y: 0)
@@ -882,8 +881,15 @@ struct HeroTitle: View {
     ZStack(alignment: alignment) {
       if let logo {
         // Logos sit where the title block does (the left on Mac), not centred in their box.
+        let ink = inkShift
         RemoteImage(url: logo, contentMode: .fit, placeholder: Color.clear, alignment: alignment)
           .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
+          // A centred logo is centred on its lettering, not on faint flares
+          // around it (KP, 2026-11-26: Dune: Part Two sat left of centre).
+          .visualEffect { content, proxy in
+            let drawn = ink.map { min(proxy.size.width, proxy.size.height * $0.aspect) } ?? 0
+            return content.offset(x: -(ink?.offset ?? 0) * drawn)
+          }
           .shadow(color: .black.opacity(0.5), radius: 14, y: 4)
       } else if resolved {
         Text(item.displayTitle)
@@ -901,7 +907,33 @@ struct HeroTitle: View {
     .task(id: item.id) {
       logo = await library.artworkURL(for: item, kind, width: maxWidth, height: maxHeight)
       resolved = true
+      if let logo, alignment.horizontal == .center { inkShift = await Self.ink(of: logo) }
     }
+  }
+
+  @State private var inkShift: Ink?
+
+  /// Where a logo's lettering sits in its picture, and the picture's shape.
+  struct Ink: Sendable, Equatable {
+    var offset: CGFloat
+    var aspect: CGFloat
+  }
+
+  private static var inks: [URL: Ink] = [:]
+
+  private static func ink(of url: URL) async -> Ink? {
+    if let known = inks[url] { return known }
+    guard let image = await ImagePipeline.shared.image(for: url),
+      let pixels = image.rgbaPixels(side: 160), pixels.height > 0,
+      let offset = LogoTone.inkOffset(rgba: pixels.bytes, width: pixels.width, height: pixels.height)
+    else { return nil }
+    // Small differences are just the lettering's own shape; leave those.
+    let ink = Ink(
+      offset: abs(offset) < 0.015 ? 0 : CGFloat(max(-0.2, min(0.2, offset))),
+      aspect: CGFloat(pixels.width) / CGFloat(pixels.height))
+    if inks.count > 300 { inks.removeAll() }
+    inks[url] = ink
+    return ink
   }
 }
 
@@ -1088,8 +1120,6 @@ struct WatchlistButton: View {
       // A tap anywhere opens Details; Play and + keep their own action.
       .contentShape(Rectangle())
       .onTapGesture { openItem(item) }
-      // iPhone: Details grows out of the hero and shrinks back into it.
-      .detailZoomSource(item)
     }
   }
 

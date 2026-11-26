@@ -23,7 +23,10 @@ extension Image {
 extension PlatformImage {
   /// The image's pixels as 8-bit RGBA (premultiplied), drawn at most `side` points
   /// wide or high; for judging a logo's tone (LogoTone), not for display.
-  func rgbaSample(side: Int = 48) -> [UInt8]? {
+  func rgbaSample(side: Int = 48) -> [UInt8]? { rgbaPixels(side: side)?.bytes }
+
+  /// The picture drawn small as 8-bit RGBA, with its size.
+  func rgbaPixels(side: Int) -> (bytes: [UInt8], width: Int, height: Int)? {
     #if os(macOS)
       guard let cg = cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
     #else
@@ -43,7 +46,7 @@ extension PlatformImage {
       context.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
       return true
     }
-    return drawn ? bytes : nil
+    return drawn ? (bytes, w, h) : nil
   }
 
   static func decoded(_ cgImage: CGImage) -> PlatformImage {
