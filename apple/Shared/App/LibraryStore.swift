@@ -1040,7 +1040,9 @@ final class LibraryStore {
   /// `scenery` is the Details backdrop: TMDB's best text-free wide shot,
   /// else the usual backdrop.
   /// `keyArt`: a tall text-free poster for the iPhone Details card, else the scenery.
-  enum ArtKind { case poster, backdrop, heroBackdrop, scenery, keyArt, logo }
+  /// `officialLogo`: TMDB's top logo in its own colours (the iPhone Details
+  /// card, KP 2026-11-26, like the Apple TV app), unless it's too dark to read.
+  enum ArtKind { case poster, backdrop, heroBackdrop, scenery, keyArt, logo, officialLogo }
 
   private var artwork: [String: TMDBArtwork] = [:]
   private var artworkTasks: [String: Task<TMDBArtwork?, Never>] = [:]
@@ -1106,6 +1108,23 @@ final class LibraryStore {
     return chosen
   }
 
+  /// TMDB's top logo as it is, coloured (the Apple TV app shows Mario's red and
+  /// blue one), unless it is nearly all dark and would vanish on the card;
+  /// then the white one `lightLogoPath` picks.
+  private func readableOfficialLogoPath(for key: String?, _ art: TMDBArtwork) async -> String? {
+    guard let key, let top = art.logoPath else { return nil }
+    if let known = officialLogos[key] { return known }
+    var chosen = top
+    if let url = TMDBArtwork.url(top, size: "w92"), let image = await ImagePipeline.shared.image(for: url),
+      let rgba = image.rgbaSample(), LogoTone.lightShare(rgba: rgba) < 0.15
+    {
+      chosen = await lightLogoPath(for: key, art) ?? top
+    }
+    officialLogos[key] = chosen
+    return chosen
+  }
+  private var officialLogos: [String: String] = [:]
+
   /// Each season's TMDB stills ("1421:2" → episode number → path), asked once per season.
   private var seasonStills: [String: [Int: String]] = [:]
   private var seasonStillTasks: [String: Task<[Int: String], Never>] = [:]
@@ -1144,7 +1163,9 @@ final class LibraryStore {
     // (no logo in those); else one lookup.
     var art = item.tmdbKey.flatMap { artwork[$0] }
     // The logo and the key art are only in the full lookup, not the lists' seeds.
-    if art == nil, kind != .logo, kind != .keyArt { art = item.tmdbKey.flatMap { seededArt[$0] } }
+    if art == nil, kind != .logo, kind != .officialLogo, kind != .keyArt {
+      art = item.tmdbKey.flatMap { seededArt[$0] }
+    }
     if art == nil { art = await tmdbArtwork(for: item) }
     if let art {
       let url: URL? =
@@ -1157,6 +1178,8 @@ final class LibraryStore {
           art.keyArtPath.flatMap { TMDBArtwork.url($0, size: "w1280") }
             ?? TMDBArtwork.url(art.sceneryPath ?? art.backdropPath, size: "original")
         case .logo: TMDBArtwork.url(await lightLogoPath(for: item.tmdbKey, art) ?? art.logoPath, size: "w500")
+        case .officialLogo:
+          TMDBArtwork.url(await readableOfficialLogoPath(for: item.tmdbKey, art) ?? art.logoPath, size: "w500")
         }
       if let url { return url }
     }
@@ -1164,7 +1187,7 @@ final class LibraryStore {
       switch kind {
       case .poster: item.poster
       case .backdrop, .heroBackdrop, .scenery, .keyArt: item.backdrop
-      case .logo: item.clearLogo
+      case .logo, .officialLogo: item.clearLogo
       }
     return imageURL(plexPath, width: width, height: height)
   }

@@ -1132,6 +1132,8 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let logoShare: CGFloat = 0.5
     /// How much slower than the page the card's art scrolls away (0 = with the page).
     static let artParallax: CGFloat = 0.4
+    /// The card's logo box: smaller, like the Apple TV app's (KP, 2026-11-26).
+    static let cardLogo = CGSize(width: 230, height: 96)
     /// The card's top corners (Plex's card, 2026-11-26).
     static let cardRadius: CGFloat = 34
     /// The X's distance from the card's top and leading edges.
@@ -1183,14 +1185,16 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       // down the card (Plex's card, 2026-11-26).
       let logoTop = min(470, max(320, viewport * PhoneDetail.logoShare))
       return VStack(alignment: .leading, spacing: 0) {
+        // KP (2026-11-26, the Apple TV app): the title's own coloured logo,
+        // smaller, sitting on the art just above the info.
         HeroTitle(
           library: library, item: titleItem,
-          maxWidth: min(PhoneDetail.logoMaxWidth, width - PhoneDetail.margin - PhoneDetail.trailing),
-          maxHeight: PhoneDetail.logoHeight,
-          alignment: .bottom
+          maxWidth: min(PhoneDetail.cardLogo.width, width - PhoneDetail.margin - PhoneDetail.trailing),
+          maxHeight: PhoneDetail.cardLogo.height,
+          alignment: .bottom, kind: .officialLogo
         )
         .frame(maxWidth: .infinity)
-        .frame(height: PhoneDetail.logoHeight, alignment: .bottom)
+        .frame(height: PhoneDetail.cardLogo.height, alignment: .bottom)
         if let focus, focus.type == .episode {
           // "One Day in the Valley", then "S3 · E2 · 26m" (Plex's episode card).
           VStack(spacing: 4) {

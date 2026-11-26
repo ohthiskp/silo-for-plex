@@ -857,6 +857,8 @@ struct HeroTitle: View {
   var maxHeight: CGFloat = 140
   /// The hero centres its logo over the text (KP's mockup, 2026-11-09).
   var alignment: Alignment = .bottomLeading
+  /// `.officialLogo` keeps the title's own colours (iPhone Details card).
+  var kind: LibraryStore.ArtKind = .logo
 
   @State private var logo: URL?
   @State private var resolved = false
@@ -883,7 +885,7 @@ struct HeroTitle: View {
     }
     .frame(minHeight: 44, alignment: alignment)
     .task(id: item.id) {
-      logo = await library.artworkURL(for: item, .logo, width: maxWidth, height: maxHeight)
+      logo = await library.artworkURL(for: item, kind, width: maxWidth, height: maxHeight)
       resolved = true
     }
   }
