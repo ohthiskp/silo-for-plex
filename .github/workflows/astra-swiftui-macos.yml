@@ -181,6 +181,7 @@ jobs:
           mshot mac-details-show -AstraDemoOpen 205
           mshot mac-details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
           mshot mac-details-episode -AstraDemoOpen 303
+          mshot mac-details-episode-late -AstraDemoOpen 306 -AstraDemoScroll 1
           for f in "$RUNNER_TEMP"/shots/*.png; do
             [ -f "$f" ] || continue
             sips -s format jpeg -s formatOptions 60 -Z 1400 "$f" --out "${f%.png}.jpg" > /dev/null

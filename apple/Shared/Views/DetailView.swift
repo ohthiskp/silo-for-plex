@@ -19,6 +19,9 @@ struct DetailView: View {
   /// Resume / Play plays it. Tapping an episode picks it; only Play or a
   /// double tap plays.
   @State private var focus: PlexMetadata?
+  /// The episode the season row scrolls to once it loads (KP, 2026-11-26: a
+  /// Continue Watching episode opens on that episode, not the season's start).
+  @State private var revealEpisode: String?
   @State private var related: [PlexHub] = []
   @State private var error: String?
   /// A TMDB title that isn't on the Plex server: shown, but nothing to play.
@@ -510,19 +513,29 @@ struct DetailView: View {
   /// The season as a row of stills on every device. The row stays in place
   /// when the season changes; only its cards are replaced.
   private var episodeCardRow: some View {
-    ScrollView(.horizontal) {
-      LazyHStack(alignment: .top, spacing: narrow ? 12 : 14) {
-        ForEach(episodes) { episode in
-          EpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
-            pick(episode)
+    ScrollViewReader { proxy in
+      ScrollView(.horizontal) {
+        LazyHStack(alignment: .top, spacing: narrow ? 12 : 14) {
+          ForEach(episodes) { episode in
+            EpisodeCard(library: library, item: episode, selected: episode.ratingKey == focus?.ratingKey) {
+              pick(episode)
+            }
+            .id(episode.ratingKey)
           }
         }
+        .padding(.leading, rowLeading)
+        .padding(.trailing, rowTrailing)
       }
-      .padding(.leading, rowLeading)
-      .padding(.trailing, rowTrailing)
+      .scrollIndicators(.never)
+      .scrollClipDisabled()
+      .task(id: revealEpisode) {
+        guard let key = revealEpisode else { return }
+        // Let the season's cards lay out first, then bring the episode in.
+        try? await Task.pause(0.05)
+        proxy.scrollTo(key, anchor: .center)
+        revealEpisode = nil
+      }
     }
-    .scrollIndicators(.never)
-    .scrollClipDisabled()
   }
 
   private var castRow: some View {
@@ -630,7 +643,10 @@ struct DetailView: View {
     let found =
       key.flatMap { key in episodes.first { $0.ratingKey == key } }
       ?? episodes.first { ($0.viewOffset ?? 0) > 0 } ?? episodes.first { !library.isWatched($0) } ?? episodes.first
-    if let found { astraWithAnimation(Astra.Motion.base) { focus = found } }
+    if let found {
+      astraWithAnimation(Astra.Motion.base) { focus = found }
+      revealEpisode = found.ratingKey
+    }
   }
 
   private func selectSeason(_ season: PlexMetadata) async {

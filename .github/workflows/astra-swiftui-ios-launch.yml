@@ -106,6 +106,8 @@ jobs:
           shot details-show -AstraDemoOpen 205
           shot details-show-episodes -AstraDemoOpen 205 -AstraDemoScroll 1
           shot details-episode -AstraDemoOpen 303
+          # Continue Watching episode late in its season (KP, 2026-11-26): the row opens on it.
+          shot details-episode-late -AstraDemoOpen 306 -AstraDemoScroll 1
           # Modern Family episode stills (KP, 2026-11-25): the server's small ones, then TMDB's.
           shot mf-before -AstraDemoOpen 502 -AstraDemoScroll 1 -AstraDemoServerStills YES
           shot mf-after -AstraDemoOpen 502 -AstraDemoScroll 1
