@@ -52,7 +52,9 @@ struct HomeView: View {
       // left (MacServiceRail in MainView), as on Apple TV.
     }
     // KP (2026-11-09): frosted Liquid Glass over the hero's artwork, not flat black.
-    .background(AmbientBackdrop(library: library, item: heroItem ?? library.homeHero.first))
+    // iPhone (KP, 2026-11-26, option C): no blur; the hero's art fades into one
+    // smooth colour taken from it, as on the Details card.
+    .background(HomeBackdrop(library: library, item: heroItem ?? library.homeHero.first))
     // Astra: the chosen service's brand colour accents the page (Apple TV+'s is white).
     // Settings → Appearance → Streaming Service Accents turns it off.
     .environment(
@@ -951,6 +953,11 @@ struct WatchlistButton: View {
     var library: LibraryStore
     var items: [PlexMetadata]
     var height: CGFloat
+    #if os(iOS)
+      private static let phone = true
+    #else
+      private static let phone = false
+    #endif
     /// The title now showing (for the page's frosted background).
     var onCurrent: (PlexMetadata) -> Void = { _ in }
 
@@ -1007,9 +1014,10 @@ struct WatchlistButton: View {
         ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
           #if os(iOS)
             // KP (2026-11-09): the faces always end above the logo, for any title.
+            // KP (2026-11-26, option C): sharp right to the top edge, no haze.
             FramedArtwork(
               library: library, item: item, kind: .heroBackdrop, zoneHeight: height,
-              limitY: height - 30 - HeroInfo.blockHeight - 16, topOffset: 24, minTop: 110
+              limitY: height - 30 - HeroInfo.blockHeight - 16, fadesTop: false
             )
             .opacity(i == 0 ? 1 : mix)
           #else
@@ -1034,10 +1042,16 @@ struct WatchlistButton: View {
           // logo and buttons and only fades at the very bottom.
           // On Light the art (and its shade) reach further down, so the
           // white meta line and buttons sit on art, not on the pale page.
-          stops: [
-            .init(color: .black, location: AstraAppearance.shared.palette.isLight ? 0.9 : 0.8),
-            .init(color: .clear, location: 1),
-          ],
+          // iPhone (KP, 2026-11-26, option C): a short, soft fade into the art's colour.
+          stops: Self.phone
+            ? [
+              .init(color: .black, location: 0.7), .init(color: .black.opacity(0.45), location: 0.86),
+              .init(color: .clear, location: 1),
+            ]
+            : [
+              .init(color: .black, location: AstraAppearance.shared.palette.isLight ? 0.9 : 0.8),
+              .init(color: .clear, location: 1),
+            ],
           startPoint: .top, endPoint: .bottom)
       }
       .clipped()
@@ -1115,5 +1129,26 @@ private struct PageProgressReader: ViewModifier {
         astraWithAnimation(.snappy(duration: 0.3)) { progress = CGFloat(new ?? 0) }
       }
     }
+  }
+}
+
+/// Home's page background. iPhone (KP, 2026-11-26, option C): one smooth
+/// colour taken from the hero's art, the same as behind the Details card, so
+/// the art fades into it with no blur. OLED stays black; Mac and Apple TV keep
+/// the frosted artwork.
+struct HomeBackdrop: View {
+  var library: LibraryStore
+  var item: PlexMetadata?
+
+  var body: some View {
+    #if os(iOS)
+      if let item, AstraAppearance.shared.palette.ambient > 0 {
+        PhoneFrostedBackground(library: library, item: item, kind: .heroBackdrop)
+      } else {
+        AmbientBackdrop(library: library, item: item)
+      }
+    #else
+      AmbientBackdrop(library: library, item: item)
+    #endif
   }
 }
