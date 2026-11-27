@@ -202,7 +202,11 @@ struct DetailView: View {
       }
       // KP (2026-11-26): a card like Plex's, rounded at the top just under the
       // status bar, with a glass X.
-      .modifier(PhoneDetailCard(enabled: narrow) { if !path.isEmpty { path.removeLast() } })
+      .modifier(
+        PhoneDetailCard(
+          enabled: narrow,
+          download: shown.type != .collection && !shown.isCatalogOnly ? shown : nil
+        ) { if !path.isEmpty { path.removeLast() } })
       .sheet(isPresented: $showAllCast) { PhoneCastList(roles: titleItem.roles) }
       .sheet(item: $allRelated) { hub in
         PhoneRelatedGrid(library: library, hub: hub) { picked in
@@ -1139,8 +1143,10 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let cardLogoHeight: CGFloat = 104
     /// The widest a long logo gets (Severance at the card's full width was too much).
     static let cardLogoWidth: CGFloat = 290
-    /// The gap between the card's round action buttons.
-    static let actionGap: CGFloat = 28
+    /// The gap between Resume and the round buttons beside it.
+    static let actionGap: CGFloat = 10
+    /// The card's corner buttons (X, Download).
+    static let cornerButton: CGFloat = 40
     /// The card's top corners (Plex's card, 2026-11-26).
     static let cardRadius: CGFloat = 34
     /// The X's distance from the card's top and leading edges.
@@ -1233,10 +1239,8 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
         }
-        phonePlayButton
+        phonePlayRow
           .padding(.top, 18)
-        phoneActions
-          .padding(.top, 16)
         if let summary = headerSummary, !summary.isEmpty {
           Text(summary)
             .astraFont(size: 15)
@@ -1316,21 +1320,18 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       .disabled(shown.isCatalogOnly || !app.canPlay(playTarget))
     }
 
-    /// My List, Mark as Watched and Download: plain round glass, centred
-    /// under Play (KP, 2026-11-26: no labels, and no More button).
-    private var phoneActions: some View {
+    /// Resume, then My List and Mark as Watched as round glass to its right
+    /// (KP, 2026-11-27). Download sits in the card's top-right corner.
+    private var phonePlayRow: some View {
       HStack(spacing: PhoneDetail.actionGap) {
+        phonePlayButton
         if let target = watchlistTarget {
           PhoneWatchlistColumn(item: target)
         }
         if !shown.isCatalogOnly, shown.type == .movie || playTarget.type == .episode {
           PhoneWatchedColumn(library: library, item: playTarget)
         }
-        if shown.type != .collection, !shown.isCatalogOnly {
-          DownloadButton(item: shown, labeled: true)
-        }
       }
-      .frame(maxWidth: .infinity)
     }
 
     var phoneCastRow: some View {
@@ -1404,9 +1405,12 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
 
   /// iPhone Details as a card (KP, 2026-11-26, like Plex): the page is
   /// clipped to a card whose rounded top sits just under the status bar, with
-  /// a round glass X at its top left that goes back to the previous page.
+  /// a round glass X at its top left that goes back to the previous page,
+  /// and Download at its top right.
   struct PhoneDetailCard: ViewModifier {
     var enabled: Bool
+    /// The title the top-right Download button saves (KP, 2026-11-27), if any.
+    var download: PlexMetadata? = nil
     var close: () -> Void
 
     @State private var topInset: CGFloat = Self.windowTopInset
@@ -1426,9 +1430,15 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
             Button(action: close) {
               Image(systemName: "xmark")
             }
-            .astraIconButton(size: 40, variant: .clear)
+            .astraIconButton(size: PhoneDetail.cornerButton, variant: .clear)
             .accessibilityLabel("Close")
             .padding(PhoneDetail.closeInset)
+          }
+          .overlay(alignment: .topTrailing) {
+            if let download {
+              DownloadButton(item: download, corner: true)
+                .padding(PhoneDetail.closeInset)
+            }
           }
           .clipShape(card)
           .overlay(card.stroke(Astra.Color.hairline).allowsHitTesting(false))

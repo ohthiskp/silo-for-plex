@@ -12,6 +12,9 @@ struct DownloadButton: View {
   var wide = false
   /// A round glass icon with a short label under it (iPhone Details, KP's mockup).
   var labeled = false
+  /// A clear glass circle matching the Details card's X, for its top-right
+  /// corner (iPhone, KP 2026-11-27).
+  var corner = false
 
   @Environment(AppModel.self) private var app
   @State private var confirmDelete = false
@@ -47,6 +50,14 @@ struct DownloadButton: View {
             .frame(maxWidth: .infinity)
         }
         .astraSecondaryButton()
+      } else if corner {
+        #if os(iOS)
+          Button(action: tap) { icon }
+            .astraIconButton(size: PhoneDetail.cornerButton, variant: .clear)
+        #else
+          Button(action: tap) { icon }
+            .modifier(ActionButtonShape(round: true))
+        #endif
       } else if labeled {
         #if os(iOS)
           Button(action: tap) { PhoneActionLabel(title: shortTitle) { icon } }
