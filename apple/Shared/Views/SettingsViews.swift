@@ -371,7 +371,7 @@ struct TabsSettings: View {
       } footer: {
         Text("Drag to reorder. Home and Library always stay; up to \(TabLayout.maximum) tabs.")
       }
-      let more = PhoneTab.allCases.filter { !tabs.contains($0) }
+      let more = PhoneTab.allCases.filter { $0 != .live && !tabs.contains($0) }
       if !more.isEmpty {
         Section("Add a Tab") {
           ForEach(more) { tab in

@@ -760,6 +760,14 @@ struct PlayerTimeline: View {
   var height: CGFloat = 3
 
   var body: some View {
+    if player.isLive {
+      LivePlayerStrip(size: 13)
+    } else {
+      standard
+    }
+  }
+
+  @ViewBuilder private var standard: some View {
     let shown = scrubbing ?? player.position
     ScrubBar(
       fraction: player.duration > 0 ? shown / player.duration : 0, knob: knob, height: height,
@@ -1315,6 +1323,14 @@ struct PhoneScrubber: View {
   #endif
 
   var body: some View {
+    if player.isLive {
+      LivePlayerStrip(size: 13)
+    } else {
+      standard
+    }
+  }
+
+  @ViewBuilder private var standard: some View {
     let shown = scrubbing ?? player.position
     let fraction = player.duration > 0 ? min(1, max(0, shown / player.duration)) : 0
     VStack(spacing: 6) {
@@ -1564,3 +1580,4 @@ struct NextEpisodeButton: View {
 }
 
 #endif
+

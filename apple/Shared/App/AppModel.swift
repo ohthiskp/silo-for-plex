@@ -41,6 +41,8 @@ final class AppModel {
   var serverSwitch: ServerSwitch?
   let player = PlayerController()
   let downloads = DownloadStore()
+  /// Live TV (KP, 2026-11-16): an IPTV source, separate from Plex.
+  let liveTV = LiveTVStore()
 
   let info: PlexClientInfo
   private let account: PlexAccountClient
@@ -372,6 +374,18 @@ final class AppModel {
     // The old server's requests stop; anything still in flight is ignored.
     old?.close()
     Task { await store.loadHome() }
+  }
+
+  /// Plays a Live TV channel full screen (no Plex involved).
+  func playLive(_ channel: LiveChannel) {
+    let now = liveTV.nowOn(channel)
+    do {
+      try player.playLive(
+        url: channel.stream, title: now?.title ?? channel.name, subtitle: now == nil ? nil : channel.name,
+        artwork: channel.logo)
+    } catch {
+      player.lastError = error.localizedDescription
+    }
   }
 
   /// Plays an item; a show or season plays its next episode.

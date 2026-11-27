@@ -21,6 +21,7 @@ import SwiftUI
     @AppStorage(Preferences.qualityBadgesKey) private var qualityBadges = true
     @AppStorage(TabLayout.storageKey) private var storedTabs = ""
     @AppStorage(SubtitleSize.storageKey) private var subtitleSize: SubtitleSize = .medium
+    @AppStorage(LiveTVStore.shownKey) private var liveShown = true
     /// CI screenshots (`-AstraDemoSettings appearance|playback|…`): open that page.
     @State private var demoPage: PhoneSettingsDestination?
 
@@ -45,6 +46,7 @@ import SwiftUI
               PhoneLibraryPage()
             }
             PhoneLinkRow(title: "Downloads", value: downloadsValue) { PhoneDownloadsPage() }
+            PhoneLinkRow(title: "Live TV", value: liveValue) { PhoneLiveTVPage() }
           }
           PhoneCard {
             PhoneLinkRow(title: "Tab Bar", value: "\(TabLayout.tabs(from: storedTabs).count) tabs") {
@@ -74,6 +76,20 @@ import SwiftUI
     }
 
     private var downloadsValue: String { phoneDownloadsSummary(app) }
+
+    /// "Off", "Not set up" or "412 channels".
+    private var liveValue: String {
+      guard app.liveTV.source != nil else { return "Not set up" }
+      guard liveShown else { return "Hidden" }
+      return app.liveTV.channels.isEmpty ? "On" : "\(app.liveTV.channels.count) channels"
+    }
+  }
+
+  /// Settings → Live TV (KP, 2026-11-16).
+  private struct PhoneLiveTVPage: View {
+    var body: some View {
+      PhoneSettingsSubpage(title: "Live TV") { LiveTVSettingsContent() }
+    }
   }
 
   /// "None", or "3 · 4.2 GB": the saved-titles summary on the root and the Downloads page.
@@ -85,7 +101,7 @@ import SwiftUI
 
   /// The pages Settings opens; also the CI screenshot names.
   enum PhoneSettingsDestination: String, Identifiable, Hashable {
-    case appearance, playback, subtitles, library, downloads, server
+    case appearance, playback, subtitles, library, downloads, server, live
 
     var id: String { rawValue }
 
@@ -97,6 +113,7 @@ import SwiftUI
       case .library: PhoneLibraryPage()
       case .downloads: PhoneDownloadsPage()
       case .server: PhoneServerPage()
+      case .live: PhoneLiveTVPage()
       }
     }
   }

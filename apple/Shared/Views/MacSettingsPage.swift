@@ -76,6 +76,9 @@ import SwiftUI
         case .library:
           LibraryBlock()
           DownloadsBlock()
+        case .live:
+          // Live TV (KP, 2026-11-16).
+          LiveTVSettingsContent()
         case .updates:
           UpdatesBlock()
           SettingsFooter()
@@ -85,7 +88,7 @@ import SwiftUI
   }
 
   enum MacSettingsCategory: String, CaseIterable, Identifiable {
-    case appearance, playback, subtitles, library, updates
+    case appearance, playback, subtitles, library, live, updates
 
     var id: String { rawValue }
 
@@ -95,6 +98,7 @@ import SwiftUI
       case .playback: "Playback"
       case .subtitles: "Subtitles"
       case .library: "Library"
+      case .live: "Live TV"
       case .updates: "Updates and About"
       }
     }
