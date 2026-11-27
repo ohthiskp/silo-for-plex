@@ -25,6 +25,11 @@ packages:
   MPVKit:
     url: https://github.com/edde746/mpv-build
     revision: 43324582df6c1413c8ea2094563f5e3517317eef
+  # SMB network shares (KP, 2026-11-17: "add support for all that infuse has").
+  # MIT, statically linking libsmb2 (LGPL-2.1, GPL-3.0 compatible). Exact so it only changes on purpose.
+  AMSMB2:
+    url: https://github.com/amosavian/AMSMB2
+    exactVersion: 4.0.3
   # In-app updates on Mac (MIT).
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
@@ -51,6 +56,9 @@ targets:
       - package: AstraKit
       - package: MPVKit
         product: MPVKit
+      - package: AMSMB2
+        # A dynamic library product: it must be copied into the app.
+        embed: true
       - package: Sparkle
     info:
       path: AstraMac/Resources/Info.plist
@@ -69,6 +77,23 @@ targets:
         # TMDB read token for artwork and the streaming switcher, from the
         # TMDB_TOKEN build setting / environment (GitHub secret in CI). Empty: Plex artwork only.
         AstraTMDBToken: $(TMDB_TOKEN)
+        # Cloud drives (KP, 2026-11-17): Astra's registration with each service, from
+        # GitHub secrets of the same name. Empty: that service isn't offered.
+        # ASTRA_GOOGLE_CLIENT_ID is the part before ".apps.googleusercontent.com".
+        AstraGoogleClientID: $(ASTRA_GOOGLE_CLIENT_ID)
+        AstraDropboxAppKey: $(ASTRA_DROPBOX_APP_KEY)
+        AstraOneDriveClientID: $(ASTRA_ONEDRIVE_CLIENT_ID)
+        AstraBoxClientID: $(ASTRA_BOX_CLIENT_ID)
+        AstraBoxClientSecret: $(ASTRA_BOX_CLIENT_SECRET)
+        AstraPCloudClientID: $(ASTRA_PCLOUD_CLIENT_ID)
+        AstraPCloudClientSecret: $(ASTRA_PCLOUD_CLIENT_SECRET)
+        AstraYandexClientID: $(ASTRA_YANDEX_CLIENT_ID)
+        # Where the cloud sign-in pages send the browser back.
+        CFBundleURLTypes:
+          - CFBundleURLName: app.astra.oauth
+            CFBundleURLSchemes:
+              - astra
+              - com.googleusercontent.apps.$(ASTRA_GOOGLE_CLIENT_ID)
         # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
         # ASTRA_CRASH_TOKEN build setting (GitHub secret in CI). Empty: nothing is sent.
         AstraCrashToken: $(ASTRA_CRASH_TOKEN)
@@ -78,7 +103,7 @@ targets:
           # Plex servers on the LAN are plain http on 32400.
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
-        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
+        NSLocalNetworkUsageDescription: Astra connects to your Plex, Jellyfin and Emby servers and network shares on your local network.
     entitlements:
       path: AstraMac/Resources/Astra.entitlements
       properties:
@@ -122,6 +147,9 @@ targets:
       - package: AstraKit
       - package: MPVKit
         product: MPVKit
+      - package: AMSMB2
+        # A dynamic library product: it must be copied into the app.
+        embed: true
     info:
       path: AstraiOS/Resources/Info.plist
       properties:
@@ -147,10 +175,27 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
-        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
-        NSBonjourServices: [_plexmediasvr._tcp]
+        NSLocalNetworkUsageDescription: Astra connects to your Plex, Jellyfin and Emby servers and network shares on your local network.
+        NSBonjourServices: [_plexmediasvr._tcp, _smb._tcp]
         ITSAppUsesNonExemptEncryption: false
         AstraTMDBToken: $(TMDB_TOKEN)
+        # Cloud drives (KP, 2026-11-17): Astra's registration with each service, from
+        # GitHub secrets of the same name. Empty: that service isn't offered.
+        # ASTRA_GOOGLE_CLIENT_ID is the part before ".apps.googleusercontent.com".
+        AstraGoogleClientID: $(ASTRA_GOOGLE_CLIENT_ID)
+        AstraDropboxAppKey: $(ASTRA_DROPBOX_APP_KEY)
+        AstraOneDriveClientID: $(ASTRA_ONEDRIVE_CLIENT_ID)
+        AstraBoxClientID: $(ASTRA_BOX_CLIENT_ID)
+        AstraBoxClientSecret: $(ASTRA_BOX_CLIENT_SECRET)
+        AstraPCloudClientID: $(ASTRA_PCLOUD_CLIENT_ID)
+        AstraPCloudClientSecret: $(ASTRA_PCLOUD_CLIENT_SECRET)
+        AstraYandexClientID: $(ASTRA_YANDEX_CLIENT_ID)
+        # Where the cloud sign-in pages send the browser back.
+        CFBundleURLTypes:
+          - CFBundleURLName: app.astra.oauth
+            CFBundleURLSchemes:
+              - astra
+              - com.googleusercontent.apps.$(ASTRA_GOOGLE_CLIENT_ID)
         # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
         # ASTRA_CRASH_TOKEN build setting (GitHub secret in CI). Empty: nothing is sent.
         AstraCrashToken: $(ASTRA_CRASH_TOKEN)
@@ -192,6 +237,9 @@ targets:
       - package: AstraKit
       - package: MPVKit
         product: MPVKit
+      - package: AMSMB2
+        # A dynamic library product: it must be copied into the app.
+        embed: true
     info:
       path: AstraTV/Resources/Info.plist
       properties:
@@ -206,10 +254,27 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
-        NSLocalNetworkUsageDescription: Astra connects to your Plex server on your local network.
-        NSBonjourServices: [_plexmediasvr._tcp]
+        NSLocalNetworkUsageDescription: Astra connects to your Plex, Jellyfin and Emby servers and network shares on your local network.
+        NSBonjourServices: [_plexmediasvr._tcp, _smb._tcp]
         ITSAppUsesNonExemptEncryption: false
         AstraTMDBToken: $(TMDB_TOKEN)
+        # Cloud drives (KP, 2026-11-17): Astra's registration with each service, from
+        # GitHub secrets of the same name. Empty: that service isn't offered.
+        # ASTRA_GOOGLE_CLIENT_ID is the part before ".apps.googleusercontent.com".
+        AstraGoogleClientID: $(ASTRA_GOOGLE_CLIENT_ID)
+        AstraDropboxAppKey: $(ASTRA_DROPBOX_APP_KEY)
+        AstraOneDriveClientID: $(ASTRA_ONEDRIVE_CLIENT_ID)
+        AstraBoxClientID: $(ASTRA_BOX_CLIENT_ID)
+        AstraBoxClientSecret: $(ASTRA_BOX_CLIENT_SECRET)
+        AstraPCloudClientID: $(ASTRA_PCLOUD_CLIENT_ID)
+        AstraPCloudClientSecret: $(ASTRA_PCLOUD_CLIENT_SECRET)
+        AstraYandexClientID: $(ASTRA_YANDEX_CLIENT_ID)
+        # Where the cloud sign-in pages send the browser back.
+        CFBundleURLTypes:
+          - CFBundleURLName: app.astra.oauth
+            CFBundleURLSchemes:
+              - astra
+              - com.googleusercontent.apps.$(ASTRA_GOOGLE_CLIENT_ID)
         # Crash reports filed automatically as issues in a private repo (KP, 2026-11-15).
         # ASTRA_CRASH_TOKEN build setting (GitHub secret in CI). Empty: nothing is sent.
         AstraCrashToken: $(ASTRA_CRASH_TOKEN)

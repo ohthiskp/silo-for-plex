@@ -41,6 +41,8 @@ final class AppModel {
   var serverSwitch: ServerSwitch?
   let player = PlayerController()
   let downloads = DownloadStore()
+  /// Jellyfin, Emby, SMB, WebDAV and cloud-drive sources next to Plex (the engine; KP designs its screens).
+  let sources: SourcesModel
 
   let info: PlexClientInfo
   private let account: PlexAccountClient
@@ -85,9 +87,15 @@ final class AppModel {
     )
     account = PlexAccountClient(info: info)
     connector = ServerConnector(info: info)
+    sources = SourcesModel(info: info)
     self.tokens = tokens
     self.serverTokens = serverTokens
     player.playNext = { [weak self] next in self?.playEpisode(next) }
+    // A source added, removed or re-read: the library is rebuilt with it.
+    sources.onChange = { [weak self] in
+      guard let self, let session = self.session else { return }
+      self.commit(session)
+    }
   }
 
   /// Next Episode (tap only): plays `episode`, from its download when there is one.
@@ -104,6 +112,7 @@ final class AppModel {
 
   func start() async {
     guard phase == .launching else { return }
+    Task { await sources.start() }
     // Astra: CI screenshots run against a fake server (Demo.swift).
     if Demo.isOn {
       PerfProbe.start(app: self)
@@ -337,6 +346,8 @@ final class AppModel {
   /// confirmed unreachable (KP: don't keep trying to play while it's offline).
   func canPlay(_ item: PlexMetadata) -> Bool {
     if downloads.source(for: item) != nil { return true }
+    // Jellyfin, Emby and shares don't depend on the Plex server being up.
+    if item.sourceID != nil { return true }
     return health?.state.allowsStreaming ?? true
   }
 
@@ -347,7 +358,9 @@ final class AppModel {
     commit(session)
   }
 
-  private func commit(_ session: ServerSession) {
+  private func commit(_ plexSession: ServerSession) {
+    // Every source's libraries, search and Continue Watching join Plex's.
+    let session = plexSession.with(sources: sources.currentRouter)
     self.session = session
     let old = library
     let store = LibraryStore(session: session)

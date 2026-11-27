@@ -21,6 +21,14 @@ public struct ServerSession: Sendable {
     self.client = client
     self.sections = sections
   }
+
+  /// The session with the sources from Settings → Sources merged in: their
+  /// keys route to them, and their libraries follow Plex's.
+  public func with(sources: SourceRouter) -> ServerSession {
+    ServerSession(
+      generation: generation, serverID: serverID, client: client.with(sources: sources),
+      sections: sections.filter { !SourceKey.isSource($0.key) } + sources.sections)
+  }
 }
 
 /// Opens and validates server sessions. Nothing is committed here: the caller
@@ -85,9 +93,16 @@ public enum LibraryIndexer {
     var perSection: [[PlexMetadata]] = []
     for section in wanted {
       // Astra: a section's own listing leaves each item's library out; Library Quality needs it.
-      let sectionID = Int(section.key)
+      let sectionID = section.numericID
+      // A source that can't be reached adds nothing rather than failing Plex's index.
+      let read: [PlexMetadata]
+      if SourceKey.isSource(section.key) {
+        read = (try? await items(in: section, client: client, pageSize: pageSize, parallel: parallel)) ?? []
+      } else {
+        read = try await items(in: section, client: client, pageSize: pageSize, parallel: parallel)
+      }
       perSection.append(
-        try await items(in: section, client: client, pageSize: pageSize, parallel: parallel).map {
+        read.map {
           var item = $0
           if item.librarySectionID == nil { item.librarySectionID = sectionID }
           return item

@@ -166,6 +166,10 @@ extension PlaybackResolver {
 
   /// The original file's download URL; the token goes in a header.
   public static func downloadRequest(partKey: String, client: PlexServerClient) -> URLRequest {
+    // A Jellyfin, Emby or share file: the source's own URL for the original.
+    if SourceKey.isSource(partKey) {
+      return client.stream(forKey: partKey)?.urlRequest ?? URLRequest(url: URL(string: "about:blank")!)
+    }
     var request = URLRequest(url: client.baseURL.appending(plexPath: partKey + (partKey.contains("?") ? "&" : "?") + "download=1"))
     request.setValue(client.token, forHTTPHeaderField: "X-Plex-Token")
     request.setValue(client.info.clientIdentifier, forHTTPHeaderField: "X-Plex-Client-Identifier")
