@@ -45,5 +45,18 @@ The orchestrator updates this file; dates are when the state changed.
 - [ ] Notarize the Mac build
 - [ ] Decide the update feed if the repo goes private
 
+## SwiftUI stabilization (apple/), started 2026-11-07
+Order set by KP. A milestone is done only after CI is green, KP has tried it, and QA reviewed it.
+
+| # | Milestone | State | Updated |
+|---|---|---|---|
+| S1 | Connections: server switching, provider loading, diagnostics | Code done, CI + QA review; waiting on KP's test | 2026-11-07 |
+| S2 | Player: size, drag, first-frame state, mini-window restore | Code done, CI + QA review; waiting on KP's test | 2026-11-07 |
+| S3 | Downloads: real progress, failure reasons, no silent cancel | Code done, CI + QA review; waiting on KP's test | 2026-11-07 |
+| S4 | Layout: sidebar indicator, switcher overlap, accents, snapshot tests | Code done except snapshot tests; waiting on KP's test | 2026-11-07 |
+| S5 | Seek thumbnails, loading screen, Sparkle (added) | Code done, CI + QA review; waiting on KP's test | 2026-11-07 |
+
+Audit and dependency report: https://claude.ai/artifact/8NZSQ7ScHNXa2324e58SWL
+
 ## Decisions pending
 - Swift/SwiftUI rewrite: revisit after M2 (scope in the audit report).
