@@ -1137,6 +1137,8 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     /// Long thin logos widen instead of shrinking (KP: Inception was tiny).
     static let cardLogo = CGSize(width: 230, height: 96)
     static let cardLogoHeight: CGFloat = 104
+    /// The widest a long logo gets (Severance at the card's full width was too much).
+    static let cardLogoWidth: CGFloat = 290
     /// The gap between the card's round action buttons.
     static let actionGap: CGFloat = 28
     /// The card's top corners (Plex's card, 2026-11-26).
@@ -1193,7 +1195,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         // smaller, sitting on the art just above the info.
         HeroTitle(
           library: library, item: titleItem,
-          maxWidth: width - PhoneDetail.margin - PhoneDetail.trailing,
+          maxWidth: min(PhoneDetail.cardLogoWidth, width - PhoneDetail.margin - PhoneDetail.trailing),
           maxHeight: PhoneDetail.cardLogoHeight,
           alignment: .bottom, kind: .officialLogo,
           area: PhoneDetail.cardLogo.width * PhoneDetail.cardLogo.height
