@@ -202,7 +202,11 @@ struct DetailView: View {
       }
       // KP (2026-11-26): a card like Plex's, rounded at the top just under the
       // status bar, with a glass X.
-      .modifier(PhoneDetailCard(enabled: narrow) { if !path.isEmpty { path.removeLast() } })
+      .modifier(
+        PhoneDetailCard(
+          enabled: narrow,
+          download: shown.type != .collection && !shown.isCatalogOnly ? shown : nil
+        ) { if !path.isEmpty { path.removeLast() } })
       .sheet(isPresented: $showAllCast) { PhoneCastList(roles: titleItem.roles) }
       .sheet(item: $allRelated) { hub in
         PhoneRelatedGrid(library: library, hub: hub) { picked in
@@ -1132,8 +1136,17 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let logoShare: CGFloat = 0.5
     /// How much slower than the page the card's art scrolls away (0 = with the page).
     static let artParallax: CGFloat = 0.4
-    /// The card's logo box: smaller, like the Apple TV app's (KP, 2026-11-26).
+    /// The card's logo: smaller, like the Apple TV app's (KP, 2026-11-26),
+    /// about as much area as a 230 × 96 box, never taller than `cardLogoHeight`.
+    /// Long thin logos widen instead of shrinking (KP: Inception was tiny).
     static let cardLogo = CGSize(width: 230, height: 96)
+    static let cardLogoHeight: CGFloat = 104
+    /// The widest a long logo gets (Severance at the card's full width was too much).
+    static let cardLogoWidth: CGFloat = 290
+    /// The gap between Resume and the round buttons beside it.
+    static let actionGap: CGFloat = 10
+    /// The card's corner buttons (X, Download).
+    static let cornerButton: CGFloat = 40
     /// The card's top corners (Plex's card, 2026-11-26).
     static let cardRadius: CGFloat = 34
     /// The X's distance from the card's top and leading edges.
@@ -1150,7 +1163,6 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let logoMaxWidth: CGFloat = 360
     static let logoHeight: CGFloat = 120
     static let sectionGap: CGFloat = 26
-    static let actionColumn: CGFloat = 76
     static let actionCircle: CGFloat = 46
     static let resumeHeight: CGFloat = 48
     static let castPhoto = CGSize(width: 78, height: 62)
@@ -1189,12 +1201,13 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         // smaller, sitting on the art just above the info.
         HeroTitle(
           library: library, item: titleItem,
-          maxWidth: min(PhoneDetail.cardLogo.width, width - PhoneDetail.margin - PhoneDetail.trailing),
-          maxHeight: PhoneDetail.cardLogo.height,
-          alignment: .bottom, kind: .officialLogo
+          maxWidth: min(PhoneDetail.cardLogoWidth, width - PhoneDetail.margin - PhoneDetail.trailing),
+          maxHeight: PhoneDetail.cardLogoHeight,
+          alignment: .bottom, kind: .officialLogo,
+          area: PhoneDetail.cardLogo.width * PhoneDetail.cardLogo.height
         )
         .frame(maxWidth: .infinity)
-        .frame(height: PhoneDetail.cardLogo.height, alignment: .bottom)
+        .frame(height: PhoneDetail.cardLogoHeight, alignment: .bottom)
         if let focus, focus.type == .episode {
           // "One Day in the Valley", then "S3 · E2 · 26m" (Plex's episode card).
           VStack(spacing: 4) {
@@ -1226,10 +1239,8 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
         }
-        phonePlayButton
+        phonePlayRow
           .padding(.top, 18)
-        phoneActions
-          .padding(.top, 16)
         if let summary = headerSummary, !summary.isEmpty {
           Text(summary)
             .astraFont(size: 15)
@@ -1309,28 +1320,16 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       .disabled(shown.isCatalogOnly || !app.canPlay(playTarget))
     }
 
-    /// My List, Mark as Watched, Download and More: round glass with the name
-    /// under each, spread across the card (Plex's card).
-    private var phoneActions: some View {
-      HStack(alignment: .top, spacing: 0) {
+    /// Resume, then My List and Mark as Watched as round glass to its right
+    /// (KP, 2026-11-27). Download sits in the card's top-right corner.
+    private var phonePlayRow: some View {
+      HStack(spacing: PhoneDetail.actionGap) {
+        phonePlayButton
         if let target = watchlistTarget {
-          PhoneWatchlistColumn(item: target).frame(maxWidth: .infinity)
+          PhoneWatchlistColumn(item: target)
         }
         if !shown.isCatalogOnly, shown.type == .movie || playTarget.type == .episode {
-          PhoneWatchedColumn(library: library, item: playTarget).frame(maxWidth: .infinity)
-        }
-        if shown.type != .collection, !shown.isCatalogOnly {
-          DownloadButton(item: shown, labeled: true).frame(maxWidth: .infinity)
-        }
-        if !shown.isCatalogOnly {
-          Menu {
-            ItemMenuItems(library: library, item: playTarget, onDetails: true)
-          } label: {
-            PhoneActionLabel(title: "More") { Image(systemName: "ellipsis") }
-          }
-          .menuIndicator(.hidden)
-          .buttonStyle(PhoneActionButtonStyle())
-          .frame(maxWidth: .infinity)
+          PhoneWatchedColumn(library: library, item: playTarget)
         }
       }
     }
@@ -1406,9 +1405,12 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
 
   /// iPhone Details as a card (KP, 2026-11-26, like Plex): the page is
   /// clipped to a card whose rounded top sits just under the status bar, with
-  /// a round glass X at its top left that goes back to the previous page.
+  /// a round glass X at its top left that goes back to the previous page,
+  /// and Download at its top right.
   struct PhoneDetailCard: ViewModifier {
     var enabled: Bool
+    /// The title the top-right Download button saves (KP, 2026-11-27), if any.
+    var download: PlexMetadata? = nil
     var close: () -> Void
 
     @State private var topInset: CGFloat = Self.windowTopInset
@@ -1428,9 +1430,15 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
             Button(action: close) {
               Image(systemName: "xmark")
             }
-            .astraIconButton(size: 40, variant: .clear)
+            .astraIconButton(size: PhoneDetail.cornerButton, variant: .clear)
             .accessibilityLabel("Close")
             .padding(PhoneDetail.closeInset)
+          }
+          .overlay(alignment: .topTrailing) {
+            if let download {
+              DownloadButton(item: download, corner: true)
+                .padding(PhoneDetail.closeInset)
+            }
           }
           .clipShape(card)
           .overlay(card.stroke(Astra.Color.hairline).allowsHitTesting(false))
@@ -1563,31 +1571,22 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
   }
 
-  /// A round glass icon with its name under it (KP, 2026-11-26: like Plex's
-  /// card; replaces the 2026-11-09 icon-only circles).
+  /// A round glass icon, no label (KP, 2026-11-26: "dont label those
+  /// buttons"); the name is still read out by VoiceOver.
   struct PhoneActionLabel<Icon: View>: View {
     var title: String
     @ViewBuilder var icon: Icon
 
     var body: some View {
-      VStack(spacing: 7) {
-        icon
-          .font(.system(size: 18, weight: .semibold))
-          .foregroundStyle(Astra.Color.ink)
-          .frame(width: PhoneDetail.actionCircle, height: PhoneDetail.actionCircle)
-          .astraGlass(in: Circle(), variant: .regular, interactive: true)
-          .astraGlassEdge(Circle(), strength: 0.6)
-        Text(title)
-          .astraFont(size: 11.5, weight: .medium)
-          .foregroundStyle(Astra.Color.muted)
-          .multilineTextAlignment(.center)
-          .lineLimit(2)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-      .frame(width: PhoneDetail.actionColumn)
-      .contentShape(Rectangle())
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(title)
+      icon
+        .font(.system(size: 18, weight: .semibold))
+        .foregroundStyle(Astra.Color.ink)
+        .frame(width: PhoneDetail.actionCircle, height: PhoneDetail.actionCircle)
+        .astraGlass(in: Circle(), variant: .regular, interactive: true)
+        .astraGlassEdge(Circle(), strength: 0.6)
+        .contentShape(Circle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
     }
   }
 
