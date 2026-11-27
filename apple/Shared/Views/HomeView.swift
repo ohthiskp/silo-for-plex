@@ -872,8 +872,14 @@ struct HeroTitle: View {
   var alignment: Alignment = .bottomLeading
   /// `.officialLogo` keeps the title's own colours (iPhone Details card).
   var kind: LibraryStore.ArtKind = .logo
+  /// When set, logos are sized to about this many square points instead of
+  /// filling the box, so a long thin one (Inception) gets as wide as
+  /// `maxWidth` allows and a tall one stays inside `maxHeight` (KP,
+  /// 2026-11-26: some Details logos were very small).
+  var area: CGFloat? = nil
 
   @State private var logo: URL?
+  @State private var inkReady = false
   @State private var resolved = false
   @Environment(\.astraOnArt) private var onArt
 
@@ -882,8 +888,11 @@ struct HeroTitle: View {
       if let logo {
         // Logos sit where the title block does (the left on Mac), not centred in their box.
         let ink = inkShift
+        let size = box
         RemoteImage(url: logo, contentMode: .fit, placeholder: Color.clear, alignment: alignment)
-          .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
+          .frame(maxWidth: size.width, maxHeight: size.height, alignment: alignment)
+          // Sized by area: shown once its shape is known, so it doesn't jump.
+          .opacity(area == nil || inkReady ? 1 : 0)
           // A centred logo is centred on its lettering, not on faint flares
           // around it (KP, 2026-11-26: Dune: Part Two sat left of centre).
           .visualEffect { content, proxy in
@@ -907,8 +916,22 @@ struct HeroTitle: View {
     .task(id: item.id) {
       logo = await library.artworkURL(for: item, kind, width: maxWidth, height: maxHeight)
       resolved = true
-      if let logo, alignment.horizontal == .center { inkShift = await Self.ink(of: logo) }
+      if let logo, alignment.horizontal == .center || area != nil { inkShift = await Self.ink(of: logo) }
+      inkReady = true
     }
+  }
+
+  /// The logo's box: `maxWidth` × `maxHeight`, or sized by `area` once the
+  /// logo's shape is known.
+  private var box: CGSize {
+    guard let area, let aspect = inkShift?.aspect, aspect > 0 else {
+      return CGSize(width: maxWidth, height: maxHeight)
+    }
+    var width = (area * aspect).squareRoot()
+    var height = width / aspect
+    if width > maxWidth { width = maxWidth; height = width / aspect }
+    if height > maxHeight { height = maxHeight; width = height * aspect }
+    return CGSize(width: width, height: height)
   }
 
   @State private var inkShift: Ink?
