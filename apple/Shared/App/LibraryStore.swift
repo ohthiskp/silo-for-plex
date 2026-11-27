@@ -1129,6 +1129,30 @@ final class LibraryStore {
   private var seasonStills: [String: [Int: String]] = [:]
   private var seasonStillTasks: [String: Task<[Int: String], Never>] = [:]
 
+  /// Each show's TMDB id (Plex rating key → id, nil when TMDB has no match).
+  private var showTMDBIDs: [String: Int?] = [:]
+  private var showTMDBIDTasks: [String: Task<Int?, Never>] = [:]
+
+  /// The show's TMDB id: its TMDB guid, else found from its TVDB or IMDb id
+  /// or its title. Shows matched by Plex's older TheTVDB agent have no TMDB
+  /// guid, and their server stills are TVDB's small ones (KP, 2026-11-26:
+  /// Modern Family was still blurry).
+  private func tmdbShowID(for show: PlexMetadata) async -> Int? {
+    if let key = show.tmdbKey, key.hasPrefix("tv:"), let id = Int(key.dropFirst(3)) { return id }
+    guard let tmdb else { return nil }
+    if let known = showTMDBIDs[show.ratingKey] { return known }
+    let task =
+      showTMDBIDTasks[show.ratingKey]
+      ?? Task {
+        await tmdb.showID(refs: TMDBShowRef.refs(guid: show.guid, guids: show.guids), title: show.title, year: show.year)
+      }
+    showTMDBIDTasks[show.ratingKey] = task
+    let id = await task.value
+    showTMDBIDTasks[show.ratingKey] = nil
+    showTMDBIDs[show.ratingKey] = id
+    return id
+  }
+
   /// An episode's still: TMDB's full-size one when TMDB has it, else the
   /// server's. Some shows' stills on the server are small and came out
   /// blurry when enlarged (KP, 2026-11-25: Modern Family).
@@ -1139,7 +1163,7 @@ final class LibraryStore {
     else { return plex }
     let show: PlexMetadata?
     if let cached = detailCache[showKey] { show = cached } else { show = try? await details(showKey) }
-    guard let key = show?.tmdbKey, key.hasPrefix("tv:"), let showID = Int(key.dropFirst(3)) else { return plex }
+    guard let show, let showID = await tmdbShowID(for: show) else { return plex }
     let seasonKey = "\(showID):\(season)"
     let stills: [Int: String]
     if let known = seasonStills[seasonKey] {

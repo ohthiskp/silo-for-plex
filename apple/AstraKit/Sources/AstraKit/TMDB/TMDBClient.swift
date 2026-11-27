@@ -161,6 +161,35 @@ public struct TMDBArtwork: Sendable, Hashable {
   }
 }
 
+/// An id a show's TMDB id can be found from.
+public enum TMDBShowRef: Equatable, Sendable {
+  case tmdb(Int)
+  case tvdb(Int)
+  case imdb(String)
+
+  /// The show's ids: TMDB first, then TVDB, then IMDb, from Plex's guids and
+  /// from the older agents' own guid ("com.plexapp.agents.thetvdb://95011?lang=en").
+  public static func refs(guid: String?, guids: [PlexGuid]) -> [TMDBShowRef] {
+    var tmdb: [TMDBShowRef] = [], tvdb: [TMDBShowRef] = [], imdb: [TMDBShowRef] = []
+    func add(_ scheme: Substring, _ value: Substring) {
+      let value = value.prefix { $0 != "?" && $0 != "/" }
+      switch scheme {
+      case "tmdb", "com.plexapp.agents.themoviedb": if let id = Int(value) { tmdb.append(.tmdb(id)) }
+      case "tvdb", "com.plexapp.agents.thetvdb": if let id = Int(value) { tvdb.append(.tvdb(id)) }
+      case "imdb", "com.plexapp.agents.imdb": if value.hasPrefix("tt") { imdb.append(.imdb(String(value))) }
+      default: break
+      }
+    }
+    for id in guids.map(\.id) + [guid].compactMap({ $0 }) {
+      guard let range = id.range(of: "://") else { continue }
+      add(id[..<range.lowerBound], id[range.upperBound...])
+    }
+    var seen: [TMDBShowRef] = []
+    for ref in tmdb + tvdb + imdb where !seen.contains(ref) { seen.append(ref) }
+    return seen
+  }
+}
+
 extension PlexMetadata {
   /// "movie:603" / "tv:1399" for a movie or show with a TMDB guid; nil otherwise.
   public var tmdbKey: String? {
@@ -340,6 +369,45 @@ public struct TMDBClient: Sendable {
       stills[number] = path
     }
     return stills
+  }
+
+  /// A show's TMDB id from another id or its title, for shows whose Plex
+  /// match has no TMDB guid (Plex's older TheTVDB agent; KP, 2026-11-26:
+  /// Modern Family). Ids are tried in order, then a title search.
+  public func showID(refs: [TMDBShowRef], title: String?, year: Int?) async -> Int? {
+    struct Found: Decodable {
+      struct Show: Decodable { var id: Int }
+      var tv_results: [Show]?
+    }
+    for ref in refs {
+      switch ref {
+      case .tmdb(let id): return id
+      case .tvdb(let id):
+        if let data = try? await get("/find/\(id)", ["external_source": "tvdb_id"]),
+          let id = (try? JSONDecoder().decode(Found.self, from: data))?.tv_results?.first?.id
+        { return id }
+      case .imdb(let id):
+        if let data = try? await get("/find/\(id)", ["external_source": "imdb_id"]),
+          let id = (try? JSONDecoder().decode(Found.self, from: data))?.tv_results?.first?.id
+        { return id }
+      }
+    }
+    guard let title, !title.isEmpty else { return nil }
+    struct Page: Decodable {
+      struct Show: Decodable {
+        var id: Int
+        var name: String?
+        var first_air_date: String?
+      }
+      var results: [Show]
+    }
+    var query = ["query": title, "include_adult": "false"]
+    if let year { query["first_air_date_year"] = String(year) }
+    guard let data = try? await get("/search/tv", query), let page = try? JSONDecoder().decode(Page.self, from: data)
+    else { return nil }
+    // Only a result with the same name: a wrong show's stills are worse than blurry ones.
+    let wanted = title.lowercased()
+    return page.results.first { $0.name?.lowercased() == wanted }?.id
   }
 
   /// Poster, backdrop and title logo for one title.

@@ -105,7 +105,10 @@ enum Demo {
     show("204", "Ozark", 2017, 69740, "Drama", 4),
     show("205", "Severance", 2022, 95396, "Science Fiction", 2),
     show("206", "The Bear", 2022, 136315, "Comedy", 3),
-    show("207", "Modern Family", 2009, 1421, "Comedy", 11),
+    // Matched like KP's copy by Plex's older TheTVDB agent: no TMDB guid
+    // (KP, 2026-11-26), so its TMDB stills have to be found from the TVDB id.
+    show("207", "Modern Family", 2009, 1421, "Comedy", 11)
+      .merging(["guid": "com.plexapp.agents.thetvdb://95011?lang=en", "Guid": [JSON]()]) { $1 },
   ]
 
   /// Severance: six Season 1 episodes (two partly watched shows for Continue

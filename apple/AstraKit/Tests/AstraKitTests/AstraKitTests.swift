@@ -782,6 +782,37 @@ final class TMDBTests: XCTestCase {
     XCTAssertEqual(transport.requests.first?.url?.path, "/3/tv/1421/season/2")
   }
 
+  func testShowRefsFromOlderAgentsAndGuids() {
+    XCTAssertEqual(
+      TMDBShowRef.refs(guid: "com.plexapp.agents.thetvdb://95011?lang=en", guids: []), [.tvdb(95011)])
+    XCTAssertEqual(
+      TMDBShowRef.refs(
+        guid: "plex://show/5d9c", guids: [PlexGuid(id: "imdb://tt1442437"), PlexGuid(id: "tvdb://95011"), PlexGuid(id: "tmdb://1421")]),
+      [.tmdb(1421), .tvdb(95011), .imdb("tt1442437")])
+    XCTAssertEqual(TMDBShowRef.refs(guid: "com.plexapp.agents.themoviedb://1421?lang=en", guids: []), [.tmdb(1421)])
+    XCTAssertEqual(TMDBShowRef.refs(guid: "com.plexapp.agents.none://abc", guids: []), [])
+  }
+
+  func testShowIDFoundFromTVDBThenTitle() async throws {
+    let found = FakeTransport { request in
+      request.url?.path == "/3/find/95011" ? (200, Data(#"{"tv_results":[{"id":1421}]}"#.utf8)) : (404, Data())
+    }
+    let viaTVDB = await TMDBClient(token: "t", transport: found).showID(refs: [.tvdb(95011)], title: "Modern Family", year: 2009)
+    XCTAssertEqual(viaTVDB, 1421)
+    XCTAssertTrue(found.requests.first?.url?.query?.contains("external_source=tvdb_id") ?? false)
+
+    let search = FakeTransport { request in
+      request.url?.path == "/3/search/tv"
+        ? (200, Data(#"{"results":[{"id":9,"name":"Modern Family Ties"},{"id":1421,"name":"Modern Family"}]}"#.utf8))
+        : (200, Data(#"{"tv_results":[]}"#.utf8))
+    }
+    let viaTitle = await TMDBClient(token: "t", transport: search).showID(refs: [.tvdb(1)], title: "Modern Family", year: 2009)
+    XCTAssertEqual(viaTitle, 1421)
+    let none = FakeTransport { _ in (200, Data(#"{"results":[{"id":9,"name":"Other"}]}"#.utf8)) }
+    let missing = await TMDBClient(token: "t", transport: none).showID(refs: [], title: "Modern Family", year: nil)
+    XCTAssertNil(missing)
+  }
+
   func testTMDBAsksAgainAfterTooManyRequests() async throws {
     let calls = Counter()
     let transport = FakeTransport { _ in
