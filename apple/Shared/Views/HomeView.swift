@@ -19,6 +19,9 @@ struct HomeView: View {
     @State private var scrollPosition = ScrollPosition(edge: .top)
   #endif
 
+  /// How far under the hero its colour takes to fade into the page's foot.
+  private static let washFade: CGFloat = 260
+
   private var heroHeight: CGFloat {
     min(Astra.Layout.heroHeight, max(380, viewport * Astra.Layout.heroShare))
   }
@@ -52,7 +55,9 @@ struct HomeView: View {
       // left (MacServiceRail in MainView), as on Apple TV.
     }
     // KP (2026-11-09): frosted Liquid Glass over the hero's artwork, not flat black.
-    .background(AmbientBackdrop(library: library, item: heroItem ?? library.homeHero.first))
+    // iPhone (KP, 2026-11-26, option C): no blur; the hero's art fades into one
+    // smooth colour taken from it, as on the Details card.
+    .background(HomeBackdrop(library: library, item: heroItem ?? library.homeHero.first))
     // Astra: the chosen service's brand colour accents the page (Apple TV+'s is white).
     // Settings → Appearance → Streaming Service Accents turns it off.
     .environment(
@@ -162,6 +167,16 @@ struct HomeView: View {
         }
       }
       .padding(.bottom, 110)
+      #if os(iOS)
+        // KP (2026-11-26, option C): the art's colour sits behind the hero and
+        // fades into the darker foot just under it, scrolling with the page.
+        .background(alignment: .top) {
+          if let item = heroItem ?? library.homeHero.first, AstraAppearance.shared.palette.ambient > 0 {
+            PhoneFrostedBackground(library: library, item: item, kind: .heroBackdrop, style: .hero)
+              .frame(height: heroHeight + Self.washFade)
+          }
+        }
+      #endif
       .onGeometryChange(for: Bool.self, of: { $0.frame(in: .scrollView).minY > -60 }) { showsTopBar = $0 }
     }
     .scrollIndicators(.never)
@@ -661,9 +676,10 @@ struct HeroInfo: View {
         Button {
           openItem(item)
         } label: {
+          // KP (2026-11-26): the title's own coloured logo, as on the Details card.
           HeroTitle(
             library: library, item: item, maxWidth: Self.logoBox.width, maxHeight: Self.logoBox.height,
-            alignment: .bottom
+            alignment: .bottom, kind: .officialLogo
           )
           .frame(maxWidth: .infinity)
           .frame(height: Self.logoBox.height, alignment: .bottom)
@@ -854,6 +870,8 @@ struct HeroTitle: View {
   var maxHeight: CGFloat = 140
   /// The hero centres its logo over the text (KP's mockup, 2026-11-09).
   var alignment: Alignment = .bottomLeading
+  /// `.officialLogo` keeps the title's own colours (iPhone Details card).
+  var kind: LibraryStore.ArtKind = .logo
 
   @State private var logo: URL?
   @State private var resolved = false
@@ -863,8 +881,15 @@ struct HeroTitle: View {
     ZStack(alignment: alignment) {
       if let logo {
         // Logos sit where the title block does (the left on Mac), not centred in their box.
+        let ink = inkShift
         RemoteImage(url: logo, contentMode: .fit, placeholder: Color.clear, alignment: alignment)
           .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment)
+          // A centred logo is centred on its lettering, not on faint flares
+          // around it (KP, 2026-11-26: Dune: Part Two sat left of centre).
+          .visualEffect { content, proxy in
+            let drawn = ink.map { min(proxy.size.width, proxy.size.height * $0.aspect) } ?? 0
+            return content.offset(x: -(ink?.offset ?? 0) * drawn)
+          }
           .shadow(color: .black.opacity(0.5), radius: 14, y: 4)
       } else if resolved {
         Text(item.displayTitle)
@@ -880,9 +905,35 @@ struct HeroTitle: View {
     }
     .frame(minHeight: 44, alignment: alignment)
     .task(id: item.id) {
-      logo = await library.artworkURL(for: item, .logo, width: maxWidth, height: maxHeight)
+      logo = await library.artworkURL(for: item, kind, width: maxWidth, height: maxHeight)
       resolved = true
+      if let logo, alignment.horizontal == .center { inkShift = await Self.ink(of: logo) }
     }
+  }
+
+  @State private var inkShift: Ink?
+
+  /// Where a logo's lettering sits in its picture, and the picture's shape.
+  struct Ink: Sendable, Equatable {
+    var offset: CGFloat
+    var aspect: CGFloat
+  }
+
+  private static var inks: [URL: Ink] = [:]
+
+  private static func ink(of url: URL) async -> Ink? {
+    if let known = inks[url] { return known }
+    guard let image = await ImagePipeline.shared.image(for: url),
+      let pixels = image.rgbaPixels(side: 160), pixels.height > 0,
+      let offset = LogoTone.inkOffset(rgba: pixels.bytes, width: pixels.width, height: pixels.height)
+    else { return nil }
+    // Small differences are just the lettering's own shape; leave those.
+    let ink = Ink(
+      offset: abs(offset) < 0.015 ? 0 : CGFloat(max(-0.2, min(0.2, offset))),
+      aspect: CGFloat(pixels.width) / CGFloat(pixels.height))
+    if inks.count > 300 { inks.removeAll() }
+    inks[url] = ink
+    return ink
   }
 }
 
@@ -950,6 +1001,11 @@ struct WatchlistButton: View {
     var library: LibraryStore
     var items: [PlexMetadata]
     var height: CGFloat
+    #if os(iOS)
+      private static let phone = true
+    #else
+      private static let phone = false
+    #endif
     /// The title now showing (for the page's frosted background).
     var onCurrent: (PlexMetadata) -> Void = { _ in }
 
@@ -1006,9 +1062,10 @@ struct WatchlistButton: View {
         ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
           #if os(iOS)
             // KP (2026-11-09): the faces always end above the logo, for any title.
+            // KP (2026-11-26, option C): sharp right to the top edge, no haze.
             FramedArtwork(
               library: library, item: item, kind: .heroBackdrop, zoneHeight: height,
-              limitY: height - 30 - HeroInfo.blockHeight - 16, topOffset: 24, minTop: 110
+              limitY: height - 30 - HeroInfo.blockHeight - 16, fadesTop: false
             )
             .opacity(i == 0 ? 1 : mix)
           #else
@@ -1033,10 +1090,16 @@ struct WatchlistButton: View {
           // logo and buttons and only fades at the very bottom.
           // On Light the art (and its shade) reach further down, so the
           // white meta line and buttons sit on art, not on the pale page.
-          stops: [
-            .init(color: .black, location: AstraAppearance.shared.palette.isLight ? 0.9 : 0.8),
-            .init(color: .clear, location: 1),
-          ],
+          // iPhone (KP, 2026-11-26, option C): a short, soft fade into the art's colour.
+          stops: Self.phone
+            ? [
+              .init(color: .black, location: 0.7), .init(color: .black.opacity(0.45), location: 0.86),
+              .init(color: .clear, location: 1),
+            ]
+            : [
+              .init(color: .black, location: AstraAppearance.shared.palette.isLight ? 0.9 : 0.8),
+              .init(color: .clear, location: 1),
+            ],
           startPoint: .top, endPoint: .bottom)
       }
       .clipped()
@@ -1112,5 +1175,28 @@ private struct PageProgressReader: ViewModifier {
         astraWithAnimation(.snappy(duration: 0.3)) { progress = CGFloat(new ?? 0) }
       }
     }
+  }
+}
+
+/// Home's page background. iPhone (KP, 2026-11-26, option C): one smooth
+/// colour taken from the hero's art, the same as behind the Details card, so
+/// the art fades into it with no blur. OLED stays black; Mac and Apple TV keep
+/// the frosted artwork.
+struct HomeBackdrop: View {
+  var library: LibraryStore
+  var item: PlexMetadata?
+
+  var body: some View {
+    #if os(iOS)
+      if let item, AstraAppearance.shared.palette.ambient > 0 {
+        // The fixed page is the dark foot colour; the bright part scrolls
+        // away with the hero (HomeHeroWash), so rows sit on the dark tone.
+        PhoneFrostedBackground(library: library, item: item, kind: .heroBackdrop, style: .base)
+      } else {
+        AmbientBackdrop(library: library, item: item)
+      }
+    #else
+      AmbientBackdrop(library: library, item: item)
+    #endif
   }
 }

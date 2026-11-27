@@ -289,6 +289,17 @@ final class SceneryBackdropTests: XCTestCase {
     XCTAssertEqual(pick, "/scenic.jpg")
   }
 
+  func testPicksTheBestVotedTextFreePosterForKeyArt() {
+    let pick = TMDBClient.bestKeyArt([
+      image("/titled.jpg", "en", vote: 9.9, width: 2000),
+      image("/small.jpg", nil, vote: 9.5, width: 500),
+      image("/plain.jpg", nil, vote: 5.3, width: 2000),
+      image("/key.jpg", nil, vote: 6.1, width: 2000),
+    ])
+    XCTAssertEqual(pick, "/key.jpg")
+    XCTAssertNil(TMDBClient.bestKeyArt([image("/titled.jpg", "en", vote: 8)]))
+  }
+
   func testNoTextFreeBackdropFallsBack() {
     XCTAssertNil(TMDBClient.bestScenery([image("/titled.jpg", "en", vote: 8)]))
     let art = TMDBArtwork(posterPath: nil, backdropPath: "/main.jpg", logoPath: nil)

@@ -183,12 +183,15 @@ struct DetailView: View {
         .padding(.top, 18)
       }
     #elseif os(iOS)
-      // iPhone keeps the system back button (Liquid Glass on iOS 26) and swipe-back.
+      // iPad keeps the system back button (Liquid Glass on iOS 26). The iPhone
+      // card has its own X (KP, 2026-11-26: no drag-to-close).
       .toolbarBackground(.hidden, for: .navigationBar)
       .navigationBarTitleDisplayMode(.inline)
+      .toolbar(narrow ? .hidden : .automatic, for: .navigationBar)
       .toolbar {
         // KP (2026-11-08): ••• top right with the title's actions (the bar gives it its glass).
-        if !shown.isCatalogOnly {
+        // On iPhone it's More in the row of actions (KP, 2026-11-26, like Plex).
+        if !shown.isCatalogOnly, !narrow {
           ToolbarItem(placement: .topBarTrailing) { moreMenu }
         }
       }
@@ -197,6 +200,9 @@ struct DetailView: View {
       .overlay(alignment: .bottom) {
         if narrow { BottomEdgeBlur() }
       }
+      // KP (2026-11-26): a card like Plex's, rounded at the top just under the
+      // status bar, with a glass X.
+      .modifier(PhoneDetailCard(enabled: narrow) { if !path.isEmpty { path.removeLast() } })
       .sheet(isPresented: $showAllCast) { PhoneCastList(roles: titleItem.roles) }
       .sheet(item: $allRelated) { hub in
         PhoneRelatedGrid(library: library, hub: hub) { picked in
@@ -240,7 +246,8 @@ struct DetailView: View {
   @ViewBuilder private var pageBackground: some View {
     #if os(iOS)
       if narrow {
-        PhoneFrostedBackground(library: library, item: titleItem)
+        // The same picture as the card's art, so the colour runs on from it (KP, 2026-11-26).
+        PhoneFrostedBackground(library: library, item: titleItem, kind: .keyArt, imageURL: episodeStill)
       } else {
         Astra.Color.bg.ignoresSafeArea()
       }
@@ -1121,6 +1128,16 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let trailing: CGFloat = 22
     /// Where the logo starts, as a share of the width (175 pt on a 393 pt phone).
     static let logoTop: CGFloat = 0.6
+    /// Where the logo sits on the card, as a share of the card's height (Plex's card, 2026-11-26).
+    static let logoShare: CGFloat = 0.5
+    /// How much slower than the page the card's art scrolls away (0 = with the page).
+    static let artParallax: CGFloat = 0.4
+    /// The card's logo box: smaller, like the Apple TV app's (KP, 2026-11-26).
+    static let cardLogo = CGSize(width: 230, height: 96)
+    /// The card's top corners (Plex's card, 2026-11-26).
+    static let cardRadius: CGFloat = 34
+    /// The X's distance from the card's top and leading edges.
+    static let closeInset: CGFloat = 16
     /// The backdrop's height as a share of the width, fading into the page.
     /// Taller, and starting below the Dynamic Island so faces aren't cut
     /// off by it (KP, 2026-11-09: "the poster should be more down").
@@ -1133,8 +1150,8 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     static let logoMaxWidth: CGFloat = 360
     static let logoHeight: CGFloat = 120
     static let sectionGap: CGFloat = 26
-    static let actionColumn: CGFloat = 50
-    static let actionCircle: CGFloat = 50
+    static let actionColumn: CGFloat = 76
+    static let actionCircle: CGFloat = 46
     static let resumeHeight: CGFloat = 48
     static let castPhoto = CGSize(width: 78, height: 62)
     /// Related rows are 2:3 posters (KP, 2026-11-09: "the posters below are way too small").
@@ -1157,26 +1174,50 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
   }
 
   extension DetailView {
-    /// Logo, meta line, badges, Resume with Download and My List beside it,
-    /// the progress line, synopsis, director and More, in that order.
+    /// KP (2026-11-26, "like the Plex card"): the artwork runs sharp to the
+    /// card's top edge, then everything is centred under it: logo, the picked
+    /// episode's name, the meta line, a full-width white Play / "Resume · 20m
+    /// left", and a row of round actions with their names under them. The
+    /// synopsis, director and the file's Video / Audio / Subtitles follow.
     var phoneHeader: some View {
       let width = max(pageWidth, 320)
-      // KP's mockup (2026-11-09): the logo sits at about 38 % of the screen,
-      // centred, with the faces framed above it.
-      let logoTop = min(360, max(280, viewport * 0.377))
+      // The logo sits where the art starts to fade, a little over half way
+      // down the card (Plex's card, 2026-11-26).
+      let logoTop = min(470, max(320, viewport * PhoneDetail.logoShare))
       return VStack(alignment: .leading, spacing: 0) {
+        // KP (2026-11-26, the Apple TV app): the title's own coloured logo,
+        // smaller, sitting on the art just above the info.
         HeroTitle(
           library: library, item: titleItem,
-          maxWidth: min(PhoneDetail.logoMaxWidth, width - PhoneDetail.margin - PhoneDetail.trailing),
-          maxHeight: PhoneDetail.logoHeight,
-          alignment: .bottom
+          maxWidth: min(PhoneDetail.cardLogo.width, width - PhoneDetail.margin - PhoneDetail.trailing),
+          maxHeight: PhoneDetail.cardLogo.height,
+          alignment: .bottom, kind: .officialLogo
         )
         .frame(maxWidth: .infinity)
-        .frame(height: PhoneDetail.logoHeight, alignment: .bottom)
+        .frame(height: PhoneDetail.cardLogo.height, alignment: .bottom)
+        if let focus, focus.type == .episode {
+          // "One Day in the Valley", then "S3 · E2 · 26m" (Plex's episode card).
+          VStack(spacing: 4) {
+            Text(focus.title)
+              .astraFont(size: 19, weight: .semibold)
+              .foregroundStyle(Astra.Color.ink.opacity(0.92))
+              .lineLimit(1)
+              .minimumScaleFactor(0.85)
+            Text([focus.episodeLabel, focus.durationLabel].compactMap { $0 }.joined(separator: "  ·  "))
+              .astraFont(size: 13.5, weight: .medium)
+              .foregroundStyle(Astra.Color.muted)
+          }
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: .infinity)
+          .padding(.top, 12)
+          .id(focus.ratingKey)
+          .transition(.opacity)
+          .accessibilityElement(children: .combine)
+        }
         // "2024 • 2h 46m • [PG-13] [HD] [Dolby Atmos]", the genres under it.
         MetaBadgeRow(item: titleItem, playTarget: playTarget, library: library, fontSize: 14, alignment: .center)
         .frame(maxWidth: .infinity)
-        .padding(.top, 12)
+        .padding(.top, 10)
         if !titleItem.genres.isEmpty {
           Text(titleItem.genres.prefix(3).map(\.tag).joined(separator: " · "))
             .astraFont(size: 13.5)
@@ -1185,65 +1226,34 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
         }
+        phonePlayButton
+          .padding(.top, 18)
         phoneActions
           .padding(.top, 16)
-        if let left = timeLeft, let progress = resumeProgress {
-          HStack(spacing: 14) {
-            PhoneProgressLine(value: progress)
-            Text(left)
-              .astraFont(size: 13, weight: .medium)
-              .monospacedDigit()
-              .foregroundStyle(Astra.Color.muted)
-              .fixedSize()
-          }
-          .padding(.top, 14)
-        }
-        if focus?.type == .episode {
-          episodeHeading
-            .padding(.top, 18)
-        }
         if let summary = headerSummary, !summary.isEmpty {
           Text(summary)
             .astraFont(size: 15)
             .lineSpacing(3)
             .foregroundStyle(Astra.Color.ink.opacity(0.86))
-            .lineLimit(summaryExpanded ? nil : 4)
+            .lineLimit(summaryExpanded ? nil : 3)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, focus?.type == .episode ? 8 : 16)
+            .padding(.top, 20)
             .contentShape(Rectangle())
             .onTapGesture {
-              guard summary.count > 150 else { return }
+              guard summary.count > 120 else { return }
               astraWithAnimation(Astra.Motion.base) { summaryExpanded.toggle() }
             }
-        }
-        if (headerSummary?.count ?? 0) > 150 {
-          Button {
-            astraWithAnimation(Astra.Motion.base) { summaryExpanded.toggle() }
-          } label: {
-            HStack(spacing: 6) {
-              Text(summaryExpanded ? "Less" : "More")
-              Image(systemName: "chevron.down")
-                .font(.system(size: 12, weight: .bold))
-                .rotationEffect(.degrees(summaryExpanded ? 180 : 0))
-            }
-            .astraFont(size: 15, weight: .semibold)
-            .foregroundStyle(Astra.Color.ink)
-            .frame(minHeight: 32)
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          .padding(.top, 2)
+            .accessibilityHint(summary.count > 120 ? "Shows the whole synopsis" : "")
         }
         if !playTarget.directors.isEmpty {
-          HStack(spacing: 5) {
-            Text("Directed by").foregroundStyle(Astra.Color.muted)
-            Text(playTarget.directors.prefix(2).map(\.tag).joined(separator: ", "))
-              .fontWeight(.semibold)
-              .foregroundStyle(Astra.Color.ink)
-          }
-          .astraFont(size: 15)
-          .lineLimit(1)
-          .padding(.top, 10)
+          Text("Directed by \(playTarget.directors.prefix(2).map(\.tag).joined(separator: ", "))")
+            .astraFont(size: 14, weight: .semibold)
+            .foregroundStyle(Astra.Color.muted)
+            .lineLimit(1)
+            .padding(.top, 8)
+        }
+        if let file = PhoneFileInfo(item: playTarget) {
+          file.padding(.top, 22)
         }
         if notOnServer {
           Text("Not on your Plex server.").astraFont(size: 13).foregroundStyle(Astra.Color.muted).padding(.top, 10)
@@ -1260,39 +1270,67 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         ZStack {
           // KP (2026-11-09): framed so the faces end above the logo, for any title.
           FramedArtwork(
-            library: library, item: titleItem, kind: .scenery, zoneHeight: logoTop + 90, limitY: logoTop - 4,
-            topOffset: PhoneDetail.backdropTop, minTop: PhoneDetail.backdropTop + 40, imageURL: episodeStill)
+            library: library, item: titleItem, kind: .keyArt, zoneHeight: logoTop + 90, limitY: logoTop - 4,
+            imageURL: episodeStill, fadesTop: false)
           PhoneDetail.backdropShade
         }
         .frame(width: width, height: logoTop + 90)
-        // Both edges melt into the frosted blur behind the page instead of into black,
-        // and the sharp art dissolves into it as the page scrolls (KP, 2026-11-09).
-        .mask(PhoneDetail.backdropMask)
-        .opacity(max(0, 1 - max(0, scrolled) / 420))
-        // Held in place while the page rises over it (KP, 2026-11-07).
-        .offset(y: max(0, scrolled))
+        // Sharp at the card's top edge, melting into the colour below (Plex's card).
+        .mask(PhoneDetail.cardArtMask)
+        // KP (2026-11-26, "how everything acts", like the Apple TV app): pulling
+        // the page down past the top stretches the art from its top edge, and
+        // scrolling up carries it up with the page, a little slower (parallax),
+        // instead of holding it still and fading it.
+        .scaleEffect(1 + max(0, -scrolled) / (logoTop + 90), anchor: .bottom)
+        .offset(y: max(0, scrolled) * PhoneDetail.artParallax)
       }
     }
 
-    /// Resume (the strongest thing on the page), then quieter round Download and My List.
-    private var phoneActions: some View {
-      HStack(alignment: .center, spacing: 14) {
-        Button {
-          playItem(playTarget)
-        } label: {
-          Label(playLabel, systemImage: "play.fill")
-            .frame(maxWidth: .infinity)
+    /// The full-width white Play, or "Resume · 20m left" with a ring showing
+    /// how much is watched (Plex's card).
+    private var phonePlayButton: some View {
+      Button {
+        playItem(playTarget)
+      } label: {
+        HStack(spacing: 10) {
+          if let progress = resumeProgress {
+            PhoneProgressRing(value: progress)
+          } else {
+            Image(systemName: "play.fill")
+          }
+          Text(timeLeft.map { "\(playLabel) · \($0)" } ?? playLabel)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
             .contentTransition(.opacity)
         }
-        // KP's mockup (2026-11-09): a white Play, like the hero's.
-        .buttonStyle(SolidCapsuleButtonStyle())
-        .disabled(shown.isCatalogOnly || !app.canPlay(playTarget))
+        .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(SolidCapsuleButtonStyle())
+      .disabled(shown.isCatalogOnly || !app.canPlay(playTarget))
+    }
 
-        if shown.type != .collection, !shown.isCatalogOnly {
-          DownloadButton(item: shown, labeled: true)
-        }
+    /// My List, Mark as Watched, Download and More: round glass with the name
+    /// under each, spread across the card (Plex's card).
+    private var phoneActions: some View {
+      HStack(alignment: .top, spacing: 0) {
         if let target = watchlistTarget {
-          PhoneWatchlistColumn(item: target)
+          PhoneWatchlistColumn(item: target).frame(maxWidth: .infinity)
+        }
+        if !shown.isCatalogOnly, shown.type == .movie || playTarget.type == .episode {
+          PhoneWatchedColumn(library: library, item: playTarget).frame(maxWidth: .infinity)
+        }
+        if shown.type != .collection, !shown.isCatalogOnly {
+          DownloadButton(item: shown, labeled: true).frame(maxWidth: .infinity)
+        }
+        if !shown.isCatalogOnly {
+          Menu {
+            ItemMenuItems(library: library, item: playTarget, onDetails: true)
+          } label: {
+            PhoneActionLabel(title: "More") { Image(systemName: "ellipsis") }
+          }
+          .menuIndicator(.hidden)
+          .buttonStyle(PhoneActionButtonStyle())
+          .frame(maxWidth: .infinity)
         }
       }
     }
@@ -1341,6 +1379,19 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         ], startPoint: .top, endPoint: .bottom)
     }
 
+    /// The card's artwork: sharp at the top edge, fading out under the logo
+    /// so the colour of the card takes over without a seam (Plex's card).
+    static var cardArtMask: some View {
+      LinearGradient(
+        stops: [
+          .init(color: .black, location: 0),
+          .init(color: .black, location: 0.55),
+          .init(color: .black.opacity(0.7), location: 0.72),
+          .init(color: .black.opacity(0.25), location: 0.88),
+          .init(color: .black.opacity(0), location: 1),
+        ], startPoint: .top, endPoint: .bottom)
+    }
+
     /// A light shade on the lower artwork so the logo and meta line stay readable.
     @MainActor static var backdropShade: some View {
       LinearGradient(
@@ -1353,38 +1404,111 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
   }
 
-  /// The page behind iPhone Details: the title's artwork, heavily blurred and
-  /// dimmed like frosted glass, held still while the page scrolls over it.
+  /// iPhone Details as a card (KP, 2026-11-26, like Plex): the page is
+  /// clipped to a card whose rounded top sits just under the status bar, with
+  /// a round glass X at its top left that goes back to the previous page.
+  struct PhoneDetailCard: ViewModifier {
+    var enabled: Bool
+    var close: () -> Void
+
+    @State private var topInset: CGFloat = Self.windowTopInset
+
+    /// The status bar's height before the first layout, so the card never jumps.
+    private static var windowTopInset: CGFloat {
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.keyWindow?.safeAreaInsets.top
+        ?? 59
+    }
+
+    func body(content: Content) -> some View {
+      if enabled {
+        let card = UnevenRoundedRectangle(
+          topLeadingRadius: PhoneDetail.cardRadius, topTrailingRadius: PhoneDetail.cardRadius, style: .continuous)
+        content
+          .overlay(alignment: .topLeading) {
+            Button(action: close) {
+              Image(systemName: "xmark")
+            }
+            .astraIconButton(size: 40, variant: .clear)
+            .accessibilityLabel("Close")
+            .padding(PhoneDetail.closeInset)
+          }
+          .clipShape(card)
+          .overlay(card.stroke(Astra.Color.hairline).allowsHitTesting(false))
+          .padding(.top, topInset)
+          .background(Astra.Color.bg)
+          .ignoresSafeArea(edges: .top)
+          .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { inset in
+            if inset > 0 { topInset = inset }
+          }
+      } else {
+        content
+      }
+    }
+  }
+
+  /// The colour behind the iPhone Details card (KP, 2026-11-26, like Plex):
+  /// no blur, one smooth colour taken from the card's own picture, rich just
+  /// under the art and deepening to near black at the foot. It holds still
+  /// while the page scrolls, and eases to the new colour when the episode changes.
   struct PhoneFrostedBackground: View {
     var library: LibraryStore
     var item: PlexMetadata
+    var kind: LibraryStore.ArtKind = .heroBackdrop
+    /// A picture to use instead of the title's artwork (a picked episode's still).
+    var imageURL: URL? = nil
+
+    /// How the colour is laid out: `.page` fills the screen (Details);
+    /// `.base` is only the dark foot colour (Home's fixed page); `.hero` is the
+    /// bright colour fading into that foot, scrolling with Home's hero.
+    var style: Style = .page
+
+    enum Style { case page, base, hero }
+
+    @State private var colour: ArtColour?
 
     var body: some View {
-      GeometryReader { geo in
-        ZStack {
-          Astra.Color.bg
-          // A small image is enough under this much blur, and cheaper to draw.
-          ArtworkImage(library: library, item: item, kind: .heroBackdrop, width: 480, height: 270, placeholder: Color.clear)
-            .frame(width: geo.size.width * 1.4, height: geo.size.height * 1.1)
-            .clipped()
-            .blur(radius: 60, opaque: true)
-            .saturation(1.25)
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
-          // Darker toward the bottom so the synopsis and rows read easily
-          // (lighter on the Light theme, where the text is dark).
-          let light = AstraAppearance.shared.palette.isLight
-          LinearGradient(
-            stops: [
-              .init(color: Astra.Color.bg.opacity(light ? 0.62 : 0.3), location: 0),
-              .init(color: Astra.Color.bg.opacity(light ? 0.74 : 0.5), location: 0.45),
-              .init(color: Astra.Color.bg.opacity(light ? 0.84 : 0.62), location: 1),
-            ], startPoint: .top, endPoint: .bottom)
+      ZStack {
+        if style != .hero { Astra.Color.bg }
+        if let colour {
+          Group {
+            switch style {
+            case .page:
+              LinearGradient(
+                stops: [
+                  .init(color: colour.top, location: 0),
+                  .init(color: colour.top, location: 0.3),
+                  .init(color: colour.bottom, location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+            case .base:
+              colour.bottom
+            case .hero:
+              LinearGradient(
+                stops: [
+                  .init(color: colour.top, location: 0),
+                  .init(color: colour.top, location: 0.6),
+                  .init(color: colour.bottom, location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+            }
+          }
+          .transition(.opacity)
         }
       }
-      .ignoresSafeArea()
+      .astraAnimation(Astra.Motion.page, value: colour)
+      .ignoresSafeArea(edges: style == .hero ? .top : .all)
       .allowsHitTesting(false)
       .accessibilityHidden(true)
+      .task(id: "\(item.id)|\(imageURL?.absoluteString ?? "")") {
+        let found: URL?
+        if let imageURL { found = imageURL } else { found = await library.artworkURL(for: item, kind, width: 780, height: 1170) }
+        guard let found, !Task.isCancelled else { return }
+        if let hit = ArtColourStore.shared.cached(found) {
+          colour = hit
+          return
+        }
+        let measured = await ArtColourStore.shared.colour(for: found)
+        guard !Task.isCancelled, let measured else { return }
+        colour = measured
+      }
     }
   }
 
@@ -1439,22 +1563,31 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
     }
   }
 
-  /// A round glass icon (Download, My List). KP (2026-11-09): no text under
-  /// it; the title is read out to VoiceOver only.
+  /// A round glass icon with its name under it (KP, 2026-11-26: like Plex's
+  /// card; replaces the 2026-11-09 icon-only circles).
   struct PhoneActionLabel<Icon: View>: View {
     var title: String
     @ViewBuilder var icon: Icon
 
     var body: some View {
-      icon
-        .font(.system(size: 19, weight: .semibold))
-        .foregroundStyle(Astra.Color.ink)
-        .frame(width: PhoneDetail.actionCircle, height: PhoneDetail.actionCircle)
-        .astraGlass(in: Circle(), variant: .regular, interactive: true)
-        .astraGlassEdge(Circle(), strength: 0.6)
-        .frame(width: PhoneDetail.actionColumn)
-        .contentShape(Circle())
-        .accessibilityLabel(title)
+      VStack(spacing: 7) {
+        icon
+          .font(.system(size: 18, weight: .semibold))
+          .foregroundStyle(Astra.Color.ink)
+          .frame(width: PhoneDetail.actionCircle, height: PhoneDetail.actionCircle)
+          .astraGlass(in: Circle(), variant: .regular, interactive: true)
+          .astraGlassEdge(Circle(), strength: 0.6)
+        Text(title)
+          .astraFont(size: 11.5, weight: .medium)
+          .foregroundStyle(Astra.Color.muted)
+          .multilineTextAlignment(.center)
+          .lineLimit(2)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .frame(width: PhoneDetail.actionColumn)
+      .contentShape(Rectangle())
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(title)
     }
   }
 
@@ -1476,7 +1609,7 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
       Button {
         Task { await app.toggleWatchlist(item) }
       } label: {
-        PhoneActionLabel(title: "My List") {
+        PhoneActionLabel(title: on ? "On My List" : "My List") {
           Image(systemName: on ? "bookmark.fill" : "bookmark").contentTransition(.symbolEffect(.replace))
         }
       }
@@ -1502,6 +1635,86 @@ struct SolidCapsuleButtonStyle: ButtonStyle {
         }
         .accessibilityElement()
         .accessibilityLabel("Watched \(Int(value * 100)) percent")
+    }
+  }
+
+  /// Mark as Watched / Watched: a tick in a ring, filled once watched; flips at once.
+  struct PhoneWatchedColumn: View {
+    var library: LibraryStore
+    var item: PlexMetadata
+
+    var body: some View {
+      let on = library.isWatched(item)
+      Button {
+        Task { await library.setWatched(item, watched: !on) }
+      } label: {
+        PhoneActionLabel(title: on ? "Watched" : "Mark as Watched") {
+          Image(systemName: on ? "checkmark.circle.fill" : "checkmark.circle")
+            .contentTransition(.symbolEffect(.replace))
+        }
+      }
+      .buttonStyle(PhoneActionButtonStyle())
+      .sensoryFeedback(.success, trigger: on)
+      .accessibilityLabel(on ? "Mark as Unwatched" : "Mark as Watched")
+    }
+  }
+
+  /// The small ring inside "Resume · 20m left": how much has been watched.
+  struct PhoneProgressRing: View {
+    var value: Double
+
+    var body: some View {
+      ZStack {
+        Circle().stroke(.foreground.opacity(0.2), lineWidth: 2.5)
+        Circle()
+          .trim(from: 0, to: max(0.04, value))
+          .stroke(.foreground, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+          .rotationEffect(.degrees(-90))
+      }
+      .frame(width: 17, height: 17)
+      .accessibilityHidden(true)
+    }
+  }
+
+  /// "Video 1080p (H.264) / Audio English (AC3 5.1) / Subtitles Off", the
+  /// file that will play (Plex's card). Nil for shows and seasons.
+  struct PhoneFileInfo: View {
+    let rows: [(String, String)]
+
+    init?(item: PlexMetadata) {
+      guard item.type == .movie || item.type == .episode, let media = item.media.first else { return nil }
+      let streams = media.parts.first?.streams ?? []
+      func pick(_ type: Int) -> PlexStream? {
+        streams.first { $0.streamType == type && $0.selected == true }
+          ?? streams.first { $0.streamType == type && $0.default == true }
+          ?? (type == 3 ? nil : streams.first { $0.streamType == type })
+      }
+      var rows: [(String, String)] = []
+      let video = pick(1)?.displayTitle
+        ?? [media.videoResolution.map { $0.allSatisfy(\.isNumber) ? "\($0)p" : $0.uppercased() },
+            media.videoCodec.map { "(\($0.uppercased()))" }].compactMap { $0 }.joined(separator: " ").nilIfEmpty
+      if let video { rows.append(("Video", video)) }
+      let audio = pick(2)?.displayTitle
+        ?? [media.audioCodec?.uppercased(), media.audioChannels.map { "\($0)ch" }].compactMap { $0 }
+          .joined(separator: " ").nilIfEmpty
+      if let audio { rows.append(("Audio", audio)) }
+      rows.append(("Subtitles", pick(3)?.displayTitle ?? "Off"))
+      guard rows.count > 1 else { return nil }
+      self.rows = rows
+    }
+
+    var body: some View {
+      Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
+        ForEach(rows, id: \.0) { row in
+          GridRow {
+            Text(row.0).foregroundStyle(Astra.Color.muted)
+            Text(row.1).foregroundStyle(Astra.Color.ink.opacity(0.9)).lineLimit(1)
+          }
+        }
+      }
+      .astraFont(size: 15)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .accessibilityElement(children: .combine)
     }
   }
 

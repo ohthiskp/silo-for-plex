@@ -109,6 +109,9 @@ struct FramedArtwork: View {
   var minTop: CGFloat = 0
   /// A picture to frame instead of the title's artwork (a picked episode's still).
   var imageURL: URL? = nil
+  /// False when the art starts at a card's top edge (iPhone Details, KP
+  /// 2026-11-26, like Plex): sharp right to the top instead of fading in.
+  var fadesTop = true
 
   @State private var url: URL?
   @State private var focus: ArtFocus?
@@ -122,11 +125,13 @@ struct FramedArtwork: View {
         // KP (2026-11-09, "why is the cut off that drastic?"): a blurred copy
         // of the same picture fills the whole hero, so where the sharp art
         // ends its colours carry on, softly, into the page.
+        // The iPhone Details card (fadesTop false) has no blurred copy: its art
+        // fades straight into one colour (KP, 2026-11-26: "too much blur").
         RemoteImage(url: url, contentMode: .fill, placeholder: Color.clear)
           .frame(width: geo.size.width, height: zoneHeight)
           .clipped()
           .blur(radius: 44, opaque: true)
-          .opacity(0.8)
+          .opacity(fadesTop ? 0.8 : 0)
           .mask {
             LinearGradient(
               stops: [
@@ -142,7 +147,7 @@ struct FramedArtwork: View {
           .mask {
             LinearGradient(
               stops: [
-                .init(color: .clear, location: 0), .init(color: .black, location: 0.14),
+                .init(color: fadesTop ? .clear : .black, location: 0), .init(color: .black, location: 0.14),
                 .init(color: .black, location: 0.5), .init(color: .black.opacity(0.8), location: 0.65),
                 .init(color: .black.opacity(0.45), location: 0.8), .init(color: .black.opacity(0.15), location: 0.92),
                 .init(color: .clear, location: 1),

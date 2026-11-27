@@ -94,6 +94,8 @@ struct MainView: View {
         .navigationDestination(for: Route.self) { route in
           switch route {
           case .details(let item):
+            // KP (2026-11-26): a plain card like Plex, no drag-to-close; its X
+            // goes back to whatever was there before.
             DetailView(library: library, seed: item, path: path)
           }
         }

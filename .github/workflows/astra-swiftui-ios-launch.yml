@@ -5,7 +5,7 @@ run-name: SwiftUI iPhone launch check ${{ github.sha }}
 # prints any crash report, so launch crashes can be seen without a phone.
 on:
   push:
-    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s, claude/project-thread-r9sbp7, claude/project-thread-7lc0du, claude/project-thread-98g8ho]
+    branches: [claude/project-thread-otuzui, claude/project-thread-r60y0r, claude/project-thread-g4ga2s, claude/project-thread-r9sbp7, claude/project-thread-7lc0du, claude/project-thread-98g8ho, claude/project-thread-0pae2d]
     paths:
       - "apple/**"
       - ".github/workflows/astra-swiftui-ios-launch.yml"
@@ -163,6 +163,39 @@ jobs:
           done
           [ -z "${KILL_REPORT_MISSING:-}" ]
 
+      - name: Details card drag recording
+        if: always() && env.APP != ''
+        working-directory: apple
+        run: |
+          # KP (2026-11-26): the Details card dragged around to close, recorded
+          # from the simulator's screen and printed small into the log.
+          brew install ffmpeg > /dev/null 2>&1 || true
+          UDID=$(xcrun simctl list devices booted -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];print(next(x["udid"] for v in d.values() for x in v))')
+          xcrun simctl io "$UDID" recordVideo --codec h264 --force "$RUNNER_TEMP/card.mov" > /dev/null 2>&1 &
+          REC=$!
+          sleep 2
+          set +e
+          xcodebuild test-without-building \
+            -project Astra.xcodeproj -scheme AstraiOS -configuration Release \
+            -destination "id=$UDID" -derivedDataPath "$RUNNER_TEMP/dd" \
+            -only-testing:AstraiOSUITests/DetailCardTests \
+            -resultBundlePath "$RUNNER_TEMP/card.xcresult" 2>&1 \
+            | grep -E "Test Case|error:|XCTAssert|\*\* TEST"
+          STATUS=${PIPESTATUS[0]}
+          kill -INT $REC; wait $REC 2>/dev/null
+          mkdir -p "$RUNNER_TEMP/card"
+          ffmpeg -loglevel error -y -i "$RUNNER_TEMP/card.mov" -vf "fps=15,scale=300:-2" -c:v libx264 -crf 30 \
+            -pix_fmt yuv420p -an "$RUNNER_TEMP/card/card-drag.mp4" || true
+          ffmpeg -loglevel error -y -i "$RUNNER_TEMP/card.mov" -vf "fps=4,scale=500:-2" -q:v 6 \
+            "$RUNNER_TEMP/card/frame-%03d.jpg" || true
+          ls -la "$RUNNER_TEMP/card" | head -5
+          if [ -f "$RUNNER_TEMP/card/card-drag.mp4" ]; then
+            echo "ASTRA-VIDEO-BEGIN card-drag"
+            base64 -i "$RUNNER_TEMP/card/card-drag.mp4" | fold -w 4000
+            echo "ASTRA-VIDEO-END"
+          fi
+          exit $STATUS
+
       - name: Player gesture UI tests
         if: always() && env.APP != ''
         working-directory: apple
@@ -176,6 +209,7 @@ jobs:
           TEST_RUNNER_ASTRA_DEMO_VIDEO="$RUNNER_TEMP/demo.mp4" xcodebuild test-without-building \
             -project Astra.xcodeproj -scheme AstraiOS -configuration Release \
             -destination "id=$UDID" -derivedDataPath "$RUNNER_TEMP/dd" \
+            -skip-testing:AstraiOSUITests/DetailCardTests \
             -resultBundlePath "$RUNNER_TEMP/ui.xcresult" 2>&1 | tee "$RUNNER_TEMP/ui.log" \
             | grep -E "Test Case|error:|XCTAssert|TEST (SUCCEEDED|FAILED)|\*\* TEST"
           STATUS=${PIPESTATUS[0]}
@@ -203,3 +237,4 @@ jobs:
             ${{ runner.temp }}/screen.png
             ${{ runner.temp }}/app.log
             ${{ runner.temp }}/shots
+            ${{ runner.temp }}/card
