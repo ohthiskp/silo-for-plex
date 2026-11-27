@@ -380,7 +380,7 @@ struct TVPosterCard: View {
         TVCardArt(width: width, height: width * 1.5) {
           ArtworkImage(library: library, item: item, kind: .poster, width: width, height: width * 1.5)
         }
-        .watchedLook(library.isWatched(item), corner: 12, mark: 30, inset: 16)
+        .watchedLook(library.isWatched(item), corner: 12, mark: 40, inset: 12)
         .overlay(alignment: .bottom) {
           if let progress = item.progress { TVProgressLine(value: progress).padding(10) }
         }

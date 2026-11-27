@@ -550,7 +550,7 @@ private struct TVEpisodeLabel: View {
       EpisodeStill(library: library, item: item, width: size.width, height: size.height, placeholder: Astra.Color.surface)
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: TVLayout.radius, style: .continuous))
-        .watchedLook(library.isWatched(item), corner: TVLayout.radius, mark: 32, inset: 18)
+        .watchedLook(library.isWatched(item), corner: TVLayout.radius, mark: 42, inset: 14)
         .overlay(alignment: .bottom) {
           if let progress = item.progress { TVProgressLine(value: progress).padding(14) }
         }
